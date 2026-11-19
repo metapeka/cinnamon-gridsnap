@@ -6,12 +6,12 @@
 загрузка не открывает X: цикл событий живёт в `serve()` и вызывается только из
 CLI. Реакция на события проверяется через инъекцию зависимостей `Daemon`.
 
-Покрыто: вложение по правилу на MapNotify, игнор override_redirect и диалогов,
-защита от повторного MapNotify, пустой WM_CLASS, tolerant-чтение `[daemon]`,
-reflow=off (ничего не двигает) и reflow=neighbors (сосед расширяется при
-DestroyNotify). Отдельно — разделение DestroyNotify (снять с трекера + reflow)
-и UnmapNotify (no-op: окно остаётся в трекере, соседей не двигаем) и разводка
-событий в `handle_event`.
+Покрыто: вложение по правилу при появлении окна в `_NET_CLIENT_LIST`, игнор
+override_redirect и диалогов, защита от повторного появления, пустой WM_CLASS,
+tolerant-чтение `[daemon]`, `read_client_list` (парсинг xprop), реконсиляция
+списка (добавление/исчезновение, повтор без перечитывания, стабильность при
+сворачивании), reflow=off/neighbors, разводка PropertyNotify (только
+`_NET_CLIENT_LIST`) и цикл `serve()` на фейковом X11.
 
 Запуск:
     python3 tests/test_daemon.py
@@ -23,6 +23,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -52,6 +53,31 @@ TWO_ZONES = (
     "chromium* = right\n"
 )
 ONE_RULE = TWO_ZONES.replace("chromium* = right\n", "")
+
+
+class XPropertyEventRef(ctypes.Structure):
+    """XPropertyEvent из Xlib.h: буфер событий собирается по эталонной структуре."""
+
+    _fields_ = [
+        ("type", ctypes.c_int), ("serial", ctypes.c_ulong),
+        ("send_event", ctypes.c_int), ("display", ctypes.c_void_p),
+        ("window", ctypes.c_ulong), ("atom", ctypes.c_ulong),
+        ("time", ctypes.c_ulong), ("state", ctypes.c_int),
+    ]
+
+
+def property_buffer(atom, window=0x2):
+    """XEvent-буфер с XPropertyEvent для PropertyNotify."""
+    ev = XPropertyEventRef()
+    ctypes.memset(ctypes.byref(ev), 0, ctypes.sizeof(ev))
+    ev.type = zd.PROPERTY_NOTIFY
+    ev.window = window
+    ev.atom = atom
+    ev.time = 123
+    ev.state = 0
+    buf = zd.EVENT_BUFFER()
+    ctypes.memmove(buf, ctypes.byref(ev), ctypes.sizeof(ev))
+    return buf
 
 
 class TestDaemonEvents(unittest.TestCase):
@@ -170,6 +196,97 @@ class TestDaemonEvents(unittest.TestCase):
         d.on_map(0x1)
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {})
+
+    # -- реконсиляция по _NET_CLIENT_LIST
+
+    def test_reconcile_maps_new_windows(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.daemon(TWO_ZONES)
+        d.reconcile([0x1, 0x2])
+        self.assertEqual(d.windows, {0x1: "left", 0x2: "right"})
+        self.assertEqual(d.seen, {0x1, 0x2})
+
+    def test_reconcile_same_list_is_noop(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = self.daemon()
+        d.reconcile([0x1])
+        self.applied.clear()
+        self.reads.clear()
+        d.reconcile([0x1])
+        self.assertEqual(self.applied, [])
+        self.assertEqual(self.reads, [])  # метаданные не перечитывались
+
+    def test_reconcile_removes_disappeared_window(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.daemon(TWO_ZONES)  # reflow off
+        d.reconcile([0x1, 0x2])
+        self.applied.clear()
+        d.reconcile([0x2])  # 0x1 закрылось и ушло из списка
+        self.assertEqual(d.windows, {0x2: "right"})
+        self.assertEqual(d.seen, {0x2})
+        self.assertEqual(self.applied, [])
+
+    def test_reconcile_removal_with_reflow_neighbors(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.reconcile([0x1, 0x2])
+        self.applied.clear()
+        d.reconcile([0x2])
+        self.assertEqual(self.applied, [(0x2, (0, 0, 1000, 1000), "right", True)])
+        self.assertEqual(d.windows, {0x2: "right"})
+
+    def test_reconcile_minimize_keeps_window_and_neighbors(self):
+        # Сворачивание не меняет _NET_CLIENT_LIST -> список тот же, ничего не двигаем.
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.reconcile([0x1, 0x2])
+        self.applied.clear()
+        d.reconcile([0x1, 0x2])
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {0x1: "left", 0x2: "right"})
+
+    def test_reconcile_does_not_recheck_unmatched(self):
+        self.metas[0x1] = self.meta("libreoffice")  # нет правила
+        d = self.daemon()
+        d.reconcile([0x1])
+        self.assertEqual(d.windows, {})
+        self.assertEqual(d.seen, {0x1})
+        self.reads.clear()
+        d.reconcile([0x1])  # тот же список -> метаданные не трогаем
+        self.assertEqual(self.reads, [])
+
+    def test_reconcile_ignored_type_is_seen_but_untracked(self):
+        self.metas[0x1] = self.meta(
+            "firefox-esr", window_type={"_NET_WM_WINDOW_TYPE_DIALOG"}
+        )
+        d = self.daemon()
+        d.reconcile([0x1])
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {})
+        self.assertEqual(d.seen, {0x1})
+
+    def test_reconcile_new_window_occupies_freed_zone_before_reflow(self):
+        # 0x1 закрылось, 0x3 открылось в left: right не должен расширяться.
+        self.metas[0x2] = self.meta("chromium")
+        self.metas[0x3] = self.meta("firefox-esr")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.windows = {0x1: "left", 0x2: "right"}
+        d.seen = {0x1, 0x2}
+        self.applied.clear()
+        d.reconcile([0x2, 0x3])
+        self.assertEqual(self.applied, [(0x3, (0, 0, 500, 1000), "left", True)])
+        self.assertEqual(d.windows, {0x2: "right", 0x3: "left"})
+
+    def test_reconcile_deduplicates_repeated_id(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = self.daemon()
+        d.reconcile([0x1, 0x1])
+        self.assertEqual(len(self.applied), 1)
+        self.assertEqual(self.reads, [0x1])
 
     # -- Destroy: реальное закрытие окна
 
@@ -381,89 +498,189 @@ class TestReadWindowMeta(unittest.TestCase):
         self.assertEqual(calls, [0x1])
 
 
-class TestHandleEventDispatch(unittest.TestCase):
-    """handle_event: MapNotify -> on_map, DestroyNotify -> on_destroy, UnmapNotify -> on_unmap.
+class TestPropertyEvent(unittest.TestCase):
+    """handle_property_event: реконсиляция только на PropertyNotify о _NET_CLIENT_LIST.
 
-    Именно разводка гарантирует, что сворачивание (UnmapNotify) не проходит через
-    reflow-путь, зарезервированный за реальным закрытием (DestroyNotify).
-
-    Буферы событий собираются по эталонным структурам Xlib (не по структурам
-    демона), чтобы тест ловил и разъезд offset'ов относительно X11 ABI.
+    Буфер собран по эталонной XPropertyEventRef (Xlib.h), поэтому тест ловит
+    разъезд offset'ов относительно X11 ABI.
     """
-
-    # Копии Xlib.h: type, serial, send_event, display, event, window[, override].
-    class XMapEventRef(ctypes.Structure):
-        _fields_ = [
-            ("type", ctypes.c_int), ("serial", ctypes.c_ulong),
-            ("send_event", ctypes.c_int), ("display", ctypes.c_void_p),
-            ("event", ctypes.c_ulong), ("window", ctypes.c_ulong),
-            ("override_redirect", ctypes.c_int),
-        ]
-
-    class XUnmapEventRef(ctypes.Structure):
-        _fields_ = [
-            ("type", ctypes.c_int), ("serial", ctypes.c_ulong),
-            ("send_event", ctypes.c_int), ("display", ctypes.c_void_p),
-            ("event", ctypes.c_ulong), ("window", ctypes.c_ulong),
-            ("from_configure", ctypes.c_int),
-        ]
-
-    class XDestroyWindowEventRef(ctypes.Structure):
-        _fields_ = [
-            ("type", ctypes.c_int), ("serial", ctypes.c_ulong),
-            ("send_event", ctypes.c_int), ("display", ctypes.c_void_p),
-            ("event", ctypes.c_ulong), ("window", ctypes.c_ulong),
-        ]
 
     class Stub:
         def __init__(self):
             self.calls = []
 
-        def on_map(self, win, override_redirect=False):
-            self.calls.append(("map", win, override_redirect))
+        def reconcile(self, client_ids):
+            self.calls.append(list(client_ids))
 
-        def on_destroy(self, win):
-            self.calls.append(("destroy", win))
-
-        def on_unmap(self, win):
-            self.calls.append(("unmap", win))
-
-    def event_buffer(self, struct, window, override_redirect=0):
-        ev = struct()
-        ctypes.memset(ctypes.byref(ev), 0, ctypes.sizeof(ev))
-        ev.window = window
-        # `event` (root) заполняется ненулевым: если демон перепутает поля,
-        # тест поймает root вместо окна.
-        ev.event = 0x46F
-        if hasattr(ev, "override_redirect"):
-            ev.override_redirect = override_redirect
-        buf = (ctypes.c_char * zd.EVENT_BUFFER._length_)()
-        ctypes.memmove(buf, ctypes.byref(ev), ctypes.sizeof(ev))
-        return buf
-
-    def test_map_notify_calls_on_map(self):
+    def test_client_list_atom_triggers_reconcile(self):
         dae = self.Stub()
-        buf = self.event_buffer(self.XMapEventRef, 0x11)
-        zd.handle_event(dae, buf, zd.MAP_NOTIFY)
-        self.assertEqual(dae.calls, [("map", 0x11, False)])
+        handled = zd.handle_property_event(
+            dae, property_buffer(0xABC), 0xABC, lambda: [0x9]
+        )
+        self.assertTrue(handled)
+        self.assertEqual(dae.calls, [[0x9]])
 
-    def test_map_notify_forwards_override_redirect(self):
+    def test_other_atom_is_ignored(self):
         dae = self.Stub()
-        buf = self.event_buffer(self.XMapEventRef, 0x12, override_redirect=1)
-        zd.handle_event(dae, buf, zd.MAP_NOTIFY)
-        self.assertEqual(dae.calls, [("map", 0x12, True)])
+        handled = zd.handle_property_event(
+            dae, property_buffer(0xDEF), 0xABC, lambda: [0x9]
+        )
+        self.assertFalse(handled)
+        self.assertEqual(dae.calls, [])
 
-    def test_destroy_notify_calls_on_destroy(self):
-        dae = self.Stub()
-        buf = self.event_buffer(self.XDestroyWindowEventRef, 0x22)
-        zd.handle_event(dae, buf, zd.DESTROY_NOTIFY)
-        self.assertEqual(dae.calls, [("destroy", 0x22)])
 
-    def test_unmap_notify_calls_on_unmap(self):
-        dae = self.Stub()
-        buf = self.event_buffer(self.XUnmapEventRef, 0x33)
-        zd.handle_event(dae, buf, zd.UNMAP_NOTIFY)
-        self.assertEqual(dae.calls, [("unmap", 0x33)])
+class TestReadClientList(unittest.TestCase):
+    """read_client_list: разбор `xprop -root _NET_CLIENT_LIST`."""
+
+    def setUp(self):
+        self._check_output = zd.subprocess.check_output
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        zd.subprocess.check_output = self._check_output
+
+    def test_parses_window_ids(self):
+        zd.subprocess.check_output = lambda *a, **k: (
+            "_NET_CLIENT_LIST(WINDOW): window id # 0x400003, 0x600005\n"
+        )
+        self.assertEqual(zd.read_client_list(), [0x400003, 0x600005])
+
+    def test_asks_for_net_client_list_on_root(self):
+        seen = {}
+
+        def fake(args, **kwargs):
+            seen["args"] = args
+            return "_NET_CLIENT_LIST(WINDOW): window id # 0x1\n"
+
+        zd.subprocess.check_output = fake
+        zd.read_client_list()
+        self.assertEqual(seen["args"], ["xprop", "-root", "_NET_CLIENT_LIST"])
+
+    def test_empty_when_property_missing(self):
+        zd.subprocess.check_output = lambda *a, **k: "_NET_CLIENT_LIST:  not found.\n"
+        self.assertEqual(zd.read_client_list(), [])
+
+    def test_empty_on_error(self):
+        def boom(*args, **kwargs):
+            raise OSError("нет xprop")
+
+        zd.subprocess.check_output = boom
+        self.assertEqual(zd.read_client_list(), [])
+
+
+class _StubFunc:
+    """Обёртка callable с полями argtypes/restype (как у ctypes _FuncPtr)."""
+
+    def __init__(self, fn):
+        self._fn = fn
+        self.argtypes = None
+        self.restype = None
+
+    def __call__(self, *args):
+        return self._fn(*args)
+
+
+class FakeX11:
+    """Мини-заглушка X11: очередь событий и всё, что зовёт `serve`."""
+
+    CLIENT_LIST_ATOM = 0xABC
+
+    def __init__(self, events=(), fd=-1):
+        self.dpy = 0x1
+        self.root = 0x2
+        self._events = list(events)
+        self._fd = fd
+        self.selected = []
+        self.closed = False
+        self.x = types.SimpleNamespace(
+            XSelectInput=_StubFunc(self._select_input),
+            XSync=_StubFunc(lambda dpy, flag: None),
+            XConnectionNumber=_StubFunc(lambda dpy: self._fd),
+            XPending=_StubFunc(lambda dpy: len(self._events)),
+            XNextEvent=_StubFunc(self._next_event),
+            XCloseDisplay=_StubFunc(self._close),
+        )
+
+    def atom(self, name):
+        return self.CLIENT_LIST_ATOM if name == zd.CLIENT_LIST_ATOM else 0xDEF
+
+    def _select_input(self, dpy, win, mask):
+        self.selected.append((dpy, win, mask))
+        return 1
+
+    def _next_event(self, dpy, buf):
+        ev = self._events.pop(0)
+        ctypes.memmove(buf, ev, ctypes.sizeof(ev))
+        return 1
+
+    def _close(self, dpy):
+        self.closed = True
+        return 1
+
+
+class StubDaemon:
+    """Демон-заглушка для serve(): только фиксирует реконсиляции."""
+
+    def __init__(self):
+        self.reconciled = []
+        self.reflow = zd.REFLOW_OFF
+        self.logs = []
+
+    def reconcile(self, client_ids):
+        self.reconciled.append(list(client_ids))
+
+    def log(self, message):
+        self.logs.append(message)
+
+
+class TestServeLoop(unittest.TestCase):
+    """serve(): PropertyChangeMask на root, стартовая реконсиляция и PropertyNotify."""
+
+    def pipe_fd(self):
+        """fd, который никогда не станет читаемым (для таймаута в --once)."""
+        r, w = os.pipe()
+        self.addCleanup(os.close, r)
+        self.addCleanup(os.close, w)
+        return r
+
+    def test_selects_property_change_mask_and_does_initial_reconcile(self):
+        dae = StubDaemon()
+        fake = FakeX11(fd=self.pipe_fd())
+        zd.serve(
+            dae, x11=fake, once=True, read_clients=lambda: [0x11], once_timeout=0.05
+        )
+        self.assertEqual(dae.reconciled, [[0x11]])
+        self.assertEqual(
+            fake.selected, [(fake.dpy, fake.root, zd.PROPERTY_CHANGE_MASK)]
+        )
+        self.assertTrue(fake.closed)
+
+    def test_client_list_property_notify_reconciles(self):
+        dae = StubDaemon()
+        fake = FakeX11(
+            events=[property_buffer(FakeX11.CLIENT_LIST_ATOM)], fd=self.pipe_fd()
+        )
+        zd.serve(
+            dae, x11=fake, once=True, read_clients=lambda: [0x22], once_timeout=0.05
+        )
+        # первая — стартовая, вторая — по PropertyNotify о _NET_CLIENT_LIST
+        self.assertEqual(dae.reconciled, [[0x22], [0x22]])
+        self.assertTrue(fake.closed)
+
+    def test_other_property_notify_is_ignored(self):
+        dae = StubDaemon()
+        fake = FakeX11(events=[property_buffer(0xDEF)], fd=self.pipe_fd())
+        zd.serve(
+            dae, x11=fake, once=True, read_clients=lambda: [0x22], once_timeout=0.05
+        )
+        self.assertEqual(dae.reconciled, [[0x22]])  # только стартовая
+
+    def test_once_without_events_times_out(self):
+        dae = StubDaemon()
+        fake = FakeX11(fd=self.pipe_fd())
+        zd.serve(dae, x11=fake, once=True, read_clients=lambda: [], once_timeout=0.05)
+        self.assertEqual(dae.reconciled, [[]])
+        self.assertTrue(fake.closed)
 
 
 class TestCli(unittest.TestCase):

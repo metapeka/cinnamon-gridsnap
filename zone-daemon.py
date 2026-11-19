@@ -5,9 +5,16 @@ zone-daemon — долгоживущий демон GridSnap: сам вклад�
 по правилам `[rules]` и (опционально) перестраивает раскладку при закрытии окна.
 
 Работает в Cinnamon / Muffin (X11) через тот же ctypes/libX11 и EWMH, что и
-`zone-tiler.py`; внешние утилиты (wmctrl, xdotool) не нужны. Подписка —
-`SubstructureNotifyMask` на root, поэтому клиентские окна muffin приходят как
-прямые дети root: `MapNotify` даёт сразу клиентское окно с `WM_CLASS`.
+`zone-tiler.py`; внешние утилиты (wmctrl, xdotool) не нужны.
+
+Источник истины о клиентах — EWMH-список `_NET_CLIENT_LIST` на root: muffin
+РЕПАРЕНТИТ клиентские окна в frame-окна, поэтому `SubstructureNotify` на root
+даёт `MapNotify` с frame-окном без `WM_CLASS`. Вместо этого демон подписан на
+`PropertyChangeMask` и на каждый `PropertyNotify` про `_NET_CLIENT_LIST` читает
+список через `xprop -root _NET_CLIENT_LIST` и реконсилирует состояние:
+появившиеся окна укладывает по правилам, исчезнувшие снимает (и делает reflow).
+Сворачивание окна из `_NET_CLIENT_LIST` не убирает — поэтому reflow не
+срабатывает, и это желаемое поведение.
 
 Конфиг — тот же `zones.conf` (по умолчанию путь как у раскладчика,
 `zone-tiler.default_conf()`):
@@ -22,7 +29,7 @@ zone-daemon — долгоживущий демон GridSnap: сам вклад�
 Запуск:
   zone-daemon.py                 # слушать события до Ctrl-C
   zone-daemon.py --verbose       # писать в stdout, что делает демон
-  zone-daemon.py --once          # обработать очередную пачку событий и выйти
+  zone-daemon.py --once          # обработать одно изменение _NET_CLIENT_LIST и выйти
   zone-daemon.py --conf PATH
 """
 
@@ -45,7 +52,7 @@ REFLOW_OFF = "off"
 REFLOW_NEIGHBORS = "neighbors"
 
 # Задержка перед единственным повтором чтения метаданных: `_NET_WM_NAME` иногда
-# появляется уже после MapNotify.
+# появляется уже после того, как окно попало в `_NET_CLIENT_LIST`.
 META_RETRY_DELAY = 0.2
 
 # Типы окон, которые демон не трогает: это не самостоятельные «окна-документы»,
@@ -63,12 +70,16 @@ IGNORED_WINDOW_TYPES = frozenset(
 IGNORED_TYPE_TAILS = frozenset(name.rsplit("_", 1)[-1] for name in IGNORED_WINDOW_TYPES)
 
 # Коды событий X11.
-DESTROY_NOTIFY = 17
-UNMAP_NOTIFY = 18
-MAP_NOTIFY = 19
+PROPERTY_NOTIFY = 28
 
-# SubstructureNotifyMask: MapNotify/UnmapNotify/DestroyNotify о детях root.
-SUBSTRUCTURE_NOTIFY_MASK = 1 << 19
+# PropertyChangeMask: PropertyNotify о свойствах root (в т.ч. _NET_CLIENT_LIST).
+PROPERTY_CHANGE_MASK = 1 << 22
+
+# Свойство root со списком управляемых клиентских окон (EWMH).
+CLIENT_LIST_ATOM = "_NET_CLIENT_LIST"
+
+# Таймаут ожидания единственного PropertyNotify в режиме `--once`.
+ONCE_TIMEOUT = 2.0
 
 # XEvent — объединение размером 192 байта на LP64.
 EVENT_BUFFER = ctypes.c_char * 192
@@ -113,7 +124,7 @@ def read_window_meta(win):
     """Метаданные окна по умолчанию: WM_CLASS/_NET_WM_NAME + тип окна.
 
     Если класс или заголовок ещё не появились, один раз перечитывает их после
-    короткой паузы (заголовок порой приходит уже после MapNotify).
+    короткой паузы (заголовок порой приходит уже после появления окна в списке).
     """
     wm_class, wm_title = tiler.window_class_title(win)
     if not wm_class or not wm_title:
@@ -143,6 +154,29 @@ def _type_names(window_type):
         found = re.findall(r"_NET_WM_WINDOW_TYPE_[A-Z_]+", window_type)
         return frozenset(found) if found else frozenset({window_type.strip().upper()})
     return frozenset(window_type)
+
+
+# ----------------------------------------------------- список клиентов (EWMH)
+
+
+def read_client_list():
+    """Клиентские окна из `_NET_CLIENT_LIST` (EWMH) через `xprop -root`.
+
+    Возвращает список id в порядке из свойства (снизу вверх). Любая ошибка
+    (нет xprop/дисплея/свойства) — пустой список. Функцию можно подменить в
+    тестах.
+    """
+    try:
+        out = subprocess.check_output(
+            ["xprop", "-root", CLIENT_LIST_ATOM],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return []
+    # `_NET_CLIENT_LIST(WINDOW): window id # 0x400003, 0x600005`
+    _, _, value = out.partition("#")
+    return [int(h, 16) for h in re.findall(r"0x[0-9a-fA-F]+", value)]
 
 
 # ---------------------------------------------------------------------- конфиг
@@ -195,12 +229,19 @@ class Daemon:
       verbose    — печатать ли, что делает демон.
 
     `windows` — трекер `window id -> имя зоны`: им же отсекаются повторные
-    MapNotify (развернуть/свернуть не переставляют окно).
+    появления окна (свернуть/развернуть не переставляют окно).
+
+    Точка входа из X11-контура — `reconcile(client_ids)`: список id текущих
+    клиентов из `_NET_CLIENT_LIST`. Новые id (которых нет в `seen`) проходят
+    через `on_map`, исчезнувшие из трекера — через `on_destroy`. `seen` хранит
+    все id последнего списка, включая не подошедшие под правила, — тогда их
+    метаданные не перечитываются на каждой реконсиляции.
 
     Закрытие окна (`on_destroy`) снимает его с трекера и, если включён
     `reflow=neighbors`, перестраивает раскладку. Скрытие окна (`on_unmap`:
-    сворачивание, смена воркспейса) — no-op: окно ещё живёт и занимает зону,
-    двигать соседей нельзя.
+    сворачивание, смена воркспейса) в `_NET_CLIENT_LIST` ничего не меняет,
+    поэтому реконсиляция его не видит: окно остаётся в трекере, соседей не
+    двигаем.
     """
 
     def __init__(
@@ -219,6 +260,9 @@ class Daemon:
         self.verbose = verbose
         self.reflow = read_reflow(self.grid.conf)
         self.windows = {}
+        # Все id из последнего `_NET_CLIENT_LIST` (и уложенные, и без правила) —
+        # чтобы не читать метаданные повторно на каждой реконсиляции.
+        self.seen = set()
         self._wa_cache = None
 
     # -- вспомогательное
@@ -238,7 +282,7 @@ class Daemon:
         try:
             self.apply(win, rect, label=zone, quiet=True)
             return True
-        except Exception as exc:  # окно могло исчезнуть между MapNotify и apply
+        except Exception as exc:  # окно могло исчезнуть между появлением в списке и apply
             self.log(f"не удалось вложить окно 0x{win:x} в зону '{zone}': {exc}")
             return False
 
@@ -250,10 +294,28 @@ class Daemon:
 
     # -- события
 
+    def reconcile(self, client_ids):
+        """Свести состояние к списку клиентов `_NET_CLIENT_LIST`.
+
+        Новые окна укладываются по правилам (`on_map`), исчезнувшие снимаются
+        с трекера (`on_destroy`, с reflow). Новые обрабатываются раньше
+        исчезнувших: если новое окно заняло освободившуюся зону, reflow уже
+        увидит её занятой и соседей не сдвинет.
+        """
+        current = set(client_ids)
+        new = [win for win in dict.fromkeys(client_ids) if win not in self.seen]
+        for win in new:
+            self.log(f"новое окно 0x{win:x} в _NET_CLIENT_LIST")
+            self.on_map(win)
+        for win in list(self.windows):
+            if win not in current:
+                self.on_destroy(win)
+        self.seen = current
+
     def on_map(self, win, override_redirect=False):
-        """MapNotify: вложить окно в зону по правилу, если оно подходит."""
+        """Новое клиентское окно: вложить в зону по правилу, если оно подходит."""
         if win in self.windows:
-            return  # повторный MapNotify (развернуть/свернуть) — не переставлять
+            return  # окно уже уложено (повторное появление в списке)
         if override_redirect:
             return  # меню/подсказки WM — не самостоятельные окна
         meta = self.read_meta(win)
@@ -269,12 +331,12 @@ class Daemon:
             return
         rect = self.grid.rect(zone, self._workarea())
         if not self._apply(win, rect, zone):
-            return  # не запоминаем: следующий MapNotify попробует снова
+            return  # не запоминаем: окно не уложено, зону занятой не считаем
         self.windows[win] = zone
         self.log(f"окно 0x{win:x} -> зона '{zone}'")
 
     def on_destroy(self, win):
-        """DestroyNotify: окно закрылось — снять с трекера и, если нужно, reflow."""
+        """Окно исчезло из `_NET_CLIENT_LIST` — снять с трекера и, если нужно, reflow."""
         zone = self.windows.pop(win, None)
         if zone is None:
             return
@@ -295,12 +357,12 @@ class Daemon:
             self.log(f"reflow: окно 0x{target:x} -> зона '{name}'")
 
     def on_unmap(self, win):
-        """UnmapNotify: окно скрыто (свёрнуто/сменился воркспейс) — no-op.
+        """Окно скрыто (свёрнуто/сменился воркспейс) — no-op.
 
-        Окно ещё существует и занимает свою зону, поэтому трекер не трогаем:
-        при возврате `MapNotify` не должен переставлять окно заново, а соседи
-        не должны расширяться на занятую зону. Снятие с трекера и reflow —
-        только в `on_destroy`.
+        В `_NET_CLIENT_LIST` такое окно остаётся, поэтому реконсиляция его не
+        снимает с трекера: при разворачивании окно не переставляется заново, а
+        соседи не расширяются на занятую зону. Снятие с трекера и reflow —
+        только когда окно исчезает из `_NET_CLIENT_LIST` (`on_destroy`).
         """
         self.log(f"окно 0x{win:x} скрыто — оставляем в трекере")
 
@@ -308,59 +370,30 @@ class Daemon:
 # ------------------------------------------------------------------ X11-контур
 
 
-class XMapEvent(ctypes.Structure):
-    # Порядок полей — как в Xlib.h: у XMapEvent `event` идёт перед `window`
-    # (в отличие от XAnyEvent), иначе `ev.window` прочитал бы root.
+class XPropertyEvent(ctypes.Structure):
+    # Порядок и типы полей — как в Xlib.h (XPropertyEvent).
     _fields_ = [
         ("type", ctypes.c_int),
         ("serial", ctypes.c_ulong),
         ("send_event", ctypes.c_int),
         ("display", ctypes.c_void_p),
-        ("event", ctypes.c_ulong),
         ("window", ctypes.c_ulong),
-        ("override_redirect", ctypes.c_int),
+        ("atom", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("state", ctypes.c_int),
     ]
 
 
-class XUnmapEvent(ctypes.Structure):
-    _fields_ = [
-        ("type", ctypes.c_int),
-        ("serial", ctypes.c_ulong),
-        ("send_event", ctypes.c_int),
-        ("display", ctypes.c_void_p),
-        ("event", ctypes.c_ulong),
-        ("window", ctypes.c_ulong),
-        ("from_configure", ctypes.c_int),
-    ]
+def handle_property_event(dae, buf, client_list_atom, read_clients):
+    """PropertyNotify: если изменился `_NET_CLIENT_LIST` — реконсиляция.
 
-
-class XDestroyWindowEvent(ctypes.Structure):
-    _fields_ = [
-        ("type", ctypes.c_int),
-        ("serial", ctypes.c_ulong),
-        ("send_event", ctypes.c_int),
-        ("display", ctypes.c_void_p),
-        ("event", ctypes.c_ulong),
-        ("window", ctypes.c_ulong),
-    ]
-
-
-def handle_event(dae, buf, etype):
-    """Разобрать XEvent из буфера и позвать нужный обработчик демона.
-
-    DestroyNotify — реальное закрытие окна (`on_destroy`, снимает с трекера и
-    делает reflow). UnmapNotify — сворачивание/скрытие/смена воркспейса
-    (`on_unmap`, no-op).
+    Возвращает True, если событие относилось к списку клиентов.
     """
-    if etype == MAP_NOTIFY:
-        ev = ctypes.cast(buf, ctypes.POINTER(XMapEvent)).contents
-        dae.on_map(ev.window, override_redirect=bool(ev.override_redirect))
-    elif etype == DESTROY_NOTIFY:
-        ev = ctypes.cast(buf, ctypes.POINTER(XDestroyWindowEvent)).contents
-        dae.on_destroy(ev.window)
-    elif etype == UNMAP_NOTIFY:
-        ev = ctypes.cast(buf, ctypes.POINTER(XUnmapEvent)).contents
-        dae.on_unmap(ev.window)
+    ev = ctypes.cast(buf, ctypes.POINTER(XPropertyEvent)).contents
+    if ev.atom != client_list_atom:
+        return False
+    dae.reconcile(read_clients())
+    return True
 
 
 def _bind_event_functions(x):
@@ -377,32 +410,50 @@ def _bind_event_functions(x):
     x.XCloseDisplay.restype = ctypes.c_int
 
 
-def serve(dae, x11=None, once=False):
-    """Цикл событий X11: select на fd дисплея -> XPending/XNextEvent -> handle_event.
+def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOUT):
+    """Цикл событий X11: PropertyNotify о `_NET_CLIENT_LIST` -> реконсиляция.
 
-    `DestroyNotify` уходит в `on_destroy` (окно закрылось), `UnmapNotify` — в
-    `on_unmap` (свернулось/скрылось, но живёт).
+    Подписка — `PropertyChangeMask` на root. На старте один раз читается текущий
+    список клиентов и укладываются уже открытые окна; дальше то же происходит на
+    каждый PropertyNotify про `_NET_CLIENT_LIST`.
 
-    `x11` можно подменить (тогда реальный дисплей не нужен). `once=True` —
-    обработать очередную пачку событий и выйти (для smoke-проверок).
+    `x11` и `read_clients` можно подменить (тогда реальный дисплей не нужен).
+    `once=True` — обработать один PropertyNotify и выйти; если событий нет —
+    подождать `once_timeout` секунд и выйти (для smoke-проверок).
     """
     if x11 is None:
         x11 = tiler.X11()
+    if read_clients is None:
+        read_clients = read_client_list
     _bind_event_functions(x11.x)
-    x11.x.XSelectInput(x11.dpy, x11.root, SUBSTRUCTURE_NOTIFY_MASK)
+    x11.x.XSelectInput(x11.dpy, x11.root, PROPERTY_CHANGE_MASK)
     x11.x.XSync(x11.dpy, 0)
+    client_list_atom = x11.atom(CLIENT_LIST_ATOM)
     fd = x11.x.XConnectionNumber(x11.dpy)
     dae.log(f"демон слушает X11 (root 0x{x11.root:x}, reflow={dae.reflow})")
     try:
+        # Раскладываем окна, уже открытые к запуску (вход в готовую сессию).
+        dae.reconcile(read_clients())
         while True:
             if not x11.x.XPending(x11.dpy):
-                select.select([fd], [], [])
+                ready, _, _ = select.select(
+                    [fd], [], [], once_timeout if once else None
+                )
+                if not ready:
+                    break  # once: событий так и не пришло
+            handled = False
             while x11.x.XPending(x11.dpy):
                 buf = EVENT_BUFFER()
                 x11.x.XNextEvent(x11.dpy, ctypes.byref(buf))
                 etype = ctypes.cast(buf, ctypes.POINTER(ctypes.c_int)).contents.value
-                handle_event(dae, buf, etype)
-            if once:
+                if etype == PROPERTY_NOTIFY:
+                    handled = (
+                        handle_property_event(
+                            dae, buf, client_list_atom, read_clients
+                        )
+                        or handled
+                    )
+            if once and handled:
                 break
     except KeyboardInterrupt:
         pass
@@ -423,7 +474,11 @@ def main(argv=None):
         help="путь к zones.conf (по умолчанию XDG/рядом с кодом)",
     )
     ap.add_argument("--verbose", action="store_true", help="печатать, что делает демон")
-    ap.add_argument("--once", action="store_true", help="обработать пачку событий и выйти")
+    ap.add_argument(
+        "--once",
+        action="store_true",
+        help="обработать одно изменение _NET_CLIENT_LIST и выйти",
+    )
     ap.add_argument("--version", action="version", version=f"zone-daemon {VERSION}")
     args = ap.parse_args(argv)
 
