@@ -35,6 +35,6 @@ jobs:
       - name: Зависимости
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb muffin x11-utils xdotool
+          sudo apt-get install -y --no-install-recommends xvfb muffin x11-utils xdotool dbus
       - name: Дымовой тест
-        run: sh tests/smoke.sh
+        run: dbus-run-session -- sh tests/smoke.sh

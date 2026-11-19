@@ -11,6 +11,10 @@
 #
 # Зависимости (Debian): xvfb muffin x11-utils xdotool python3
 # Код возврата: 0 — всё совпало, 1 — есть несовпадения, 2 — нет зависимостей.
+#
+# Готовности ждём опросом (X-сервер, WM, рабочая область, окно), а не фиксированными
+# паузами: на медленных раннерах muffin не успевает стать WM за `sleep`, и раньше это
+# выглядело как «в zones.conf не нашлось ни одной зоны». При сбое печатаем лог muffin.
 
 set -u
 
@@ -18,10 +22,24 @@ DISP=":99"
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TILER="$ROOT/zone-tiler.py"
 
+LOGDIR=$(mktemp -d 2>/dev/null || echo /tmp)
+MUFFIN_LOG="$LOGDIR/gridsnap-smoke-muffin.log"
+
 fails=0
 say() { printf '%s\n' "$1"; }
 ok()  { printf '  \033[32m✔\033[0m %s\n' "$1"; }
 bad() { printf '  \033[31m✖\033[0m %s\n' "$1"; fails=$((fails + 1)); }
+
+# Ждать до $1 полусекундных попыток, пока команда из $2... вернёт 0.
+wait_for() {
+    _left=$1; shift
+    while [ "$_left" -gt 0 ]; do
+        if "$@" >/dev/null 2>&1; then return 0; fi
+        sleep 0.5
+        _left=$((_left - 1))
+    done
+    return 1
+}
 
 for c in Xvfb muffin xmessage xdotool python3; do
     if ! command -v "$c" >/dev/null 2>&1; then
@@ -37,29 +55,47 @@ cleanup() {
     [ -n "$XPID" ] && kill "$XPID" 2>/dev/null
     # если что-то осталось от предыдущего прогона на этом же дисплее
     sleep 1
+    rm -rf "$LOGDIR"
     return 0
 }
 trap cleanup EXIT INT TERM
 
 Xvfb "$DISP" -screen 0 1920x1080x24 >/dev/null 2>&1 &
 XPID=$!
-sleep 3
-if ! kill -0 "$XPID" 2>/dev/null; then
+# Xvfb готов, когда на дисплее отвечает xprop (до ~20 с)
+if ! wait_for 40 env DISPLAY="$DISP" xprop -root; then
     say "Xvfb не поднялся (возможно, дисплей $DISP занят — закройте лишний Xvfb)"
     exit 1
 fi
 
-DISPLAY="$DISP" muffin >/dev/null 2>&1 &
+DISPLAY="$DISP" muffin >"$MUFFIN_LOG" 2>&1 &
 MPID=$!
-sleep 4
+# muffin готов, когда объявил себя оконным менеджером (до ~30 с)
+if ! wait_for 60 sh -c "DISPLAY='$DISP' xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q 'window id # 0x'"; then
+    say "muffin не стал оконным менеджером за 30 с. Его вывод:"
+    sed 's/^/      /' "$MUFFIN_LOG" 2>/dev/null | tail -25
+    exit 1
+fi
+# рабочая область — то, из чего раскладчик считает пиксельные рамки
+if ! wait_for 40 sh -c "DISPLAY='$DISP' xprop -root _NET_WORKAREA 2>/dev/null | grep -q '_NET_WORKAREA(CARDINAL)'"; then
+    say "у muffin нет _NET_WORKAREA — раскладчик не сможет посчитать зоны. Вывод muffin:"
+    sed 's/^/      /' "$MUFFIN_LOG" 2>/dev/null | tail -25
+    exit 1
+fi
 
 DISPLAY="$DISP" xmessage -title "gridsnap-smoke" -buttons OK:0 "тестовое окно" >/dev/null 2>&1 &
 WPID=$!
-sleep 2
 
 export DISPLAY="$DISP"
 
-WIN=$(xdotool search --name "^gridsnap-smoke$" 2>/dev/null | head -1)
+WIN=""
+_left=40
+while [ "$_left" -gt 0 ]; do
+    WIN=$(xdotool search --name "^gridsnap-smoke$" 2>/dev/null | head -1)
+    [ -n "$WIN" ] && break
+    sleep 0.5
+    _left=$((_left - 1))
+done
 if [ -z "$WIN" ]; then
     say "не удалось открыть тестовое окно"
     exit 1
@@ -72,7 +108,8 @@ else
     LIST=$(python3 "$TILER" list 2>/dev/null | awk '{print $1}' | grep -E '^[a-z][a-z0-9_-]*$')
 fi
 if [ -z "$LIST" ]; then
-    say "в zones.conf не нашлось ни одной зоны"
+    say "не удалось получить список зон — вывод 'list' (stderr):"
+    python3 "$TILER" list 2>&1 | sed 's/^/      /' | tail -15
     exit 1
 fi
 
