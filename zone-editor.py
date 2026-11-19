@@ -16,11 +16,8 @@ zone-editor.py — визуальный редактор сетки зон дл�
 """
 
 import argparse
-import configparser
-import importlib.util
 import math
 import os
-import re
 import subprocess
 import sys
 
@@ -31,6 +28,16 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402
+
+from zone_config import (  # noqa: E402
+    Zone,
+    load_extra_sections,
+    load_zones,
+    sanitize_name,
+    save_zones,
+    unique_name,
+    zt,
+)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
@@ -47,72 +54,7 @@ PALETTE = [
 ACCENT = (1.0, 0.71, 0.33)
 
 
-def load_zonetiler():
-    spec = importlib.util.spec_from_file_location("zone_tiler", ZONEBIN)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-zt = load_zonetiler()
 CONF = zt.default_conf()
-
-
-# ------------------------------------------------------------------ данные
-
-
-class Zone:
-    def __init__(self, name, x, y, w, h, binding=""):
-        self.name = name
-        self.x, self.y, self.w, self.h = float(x), float(y), float(w), float(h)
-        self.binding = binding
-
-    def copy(self):
-        return Zone(self.name, self.x, self.y, self.w, self.h, self.binding)
-
-    def as_tuple(self):
-        return (self.x, self.y, self.w, self.h)
-
-    def fmt(self):
-        return ", ".join(f"{v:.4f}".rstrip("0").rstrip(".") for v in self.as_tuple())
-
-
-def load_zones(path):
-    grid = zt.Grid(path)
-    keys = {}
-    if grid.conf.has_section("keys"):
-        keys = {k.strip(): v.strip() for k, v in grid.conf.items("keys")}
-    zones = []
-    for name in grid.zones:
-        x, y, w, h = grid.fractions(name)
-        zones.append(Zone(name, x, y, w, h, keys.get(name, "")))
-    return zones
-
-
-def save_zones(path, zones):
-    lines = [
-        "# Сетка окон для zone-tiler. Файл создан визуальным редактором zone-editor.py.",
-        "# Зона = x,y,w,h в долях рабочей области (0..1), без панели задач.",
-        "# Горячие клавиши — в секции [keys].",
-        "",
-        "[grid]",
-        "cols = 1.0",
-        "rows = 1.0",
-        "",
-        "[zones]",
-    ]
-    for z in zones:
-        lines.append(f"{z.name} = {z.fmt()}")
-    bindings = [z for z in zones if z.binding.strip()]
-    if bindings:
-        lines += ["", "[keys]"]
-        for z in bindings:
-            lines.append(f"{z.name} = {z.binding.strip()}")
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(lines) + "\n")
 
 
 def templates():
@@ -484,6 +426,7 @@ class Editor(Gtk.Window):
         self.monitors = zt.monitors()
         self.monitor_index = 0
         self.zones = load_zones(conf_path)
+        self.extra_sections = load_extra_sections(conf_path)
         self.selected = 0 if self.zones else None
         self.dirty = False
         self._loading = False
@@ -690,7 +633,7 @@ class Editor(Gtk.Window):
         if self._loading or self.selected is None:
             return
         z = self.zones[self.selected]
-        new = re.sub(r"[^0-9A-Za-zА-Яа-я_.-]+", "-", entry.get_text().strip())
+        new = sanitize_name(entry.get_text())
         if not new or any(o.name == new for o in self.zones if o is not z):
             return
         z.name = new
@@ -721,11 +664,7 @@ class Editor(Gtk.Window):
     # ---- действия
 
     def _unique_name(self, base="zone"):
-        names = {z.name for z in self.zones}
-        i = 1
-        while f"{base}{i}" in names:
-            i += 1
-        return f"{base}{i}"
+        return unique_name(self.zones, base)
 
     def add_zone_at(self, fx, fy):
         w = h = 1 / 3
@@ -789,7 +728,7 @@ class Editor(Gtk.Window):
             self.set_status("нет зон — сохранять нечего")
             return
         try:
-            save_zones(self.conf_path, self.zones)
+            save_zones(self.conf_path, self.zones, self.extra_sections)
         except OSError as exc:
             self.set_status(f"ошибка записи: {exc}")
             return
