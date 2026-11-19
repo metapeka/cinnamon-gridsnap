@@ -162,9 +162,12 @@ def _type_names(window_type):
 def read_client_list():
     """Клиентские окна из `_NET_CLIENT_LIST` (EWMH) через `xprop -root`.
 
-    Возвращает список id в порядке из свойства (снизу вверх). Любая ошибка
-    (нет xprop/дисплея/свойства) — пустой список. Функцию можно подменить в
-    тестах.
+    Возвращает список id в порядке из свойства (снизу вверх) или `None`, если
+    список недоступен: нет xprop/дисплея, отсутствует само свойство (xprop 0
+    печатает `no such atom on any window.`) или в выводе нет маркера
+    `window id #`. Пустой список — это валидное состояние «клиентов нет»,
+    его нельзя путать с ошибкой: иначе реконсиляция решит, что все окна
+    закрылись, и переуложит раскладку. Функцию можно подменить в тестах.
     """
     try:
         out = subprocess.check_output(
@@ -173,8 +176,10 @@ def read_client_list():
             stderr=subprocess.DEVNULL,
         )
     except Exception:
-        return []
+        return None
     # `_NET_CLIENT_LIST(WINDOW): window id # 0x400003, 0x600005`
+    if "window id #" not in out:
+        return None
     _, _, value = out.partition("#")
     return [int(h, 16) for h in re.findall(r"0x[0-9a-fA-F]+", value)]
 
@@ -221,8 +226,9 @@ class Daemon:
     дисплея:
 
       conf_path  — путь к zones.conf (по умолчанию — как у раскладчика);
-      apply      — callable(window, rect, label=..., quiet=...) (по умолчанию
-                   `zone-tiler.apply_zone`);
+      apply      — callable(window, rect, label=..., quiet=...) (по умолчанию —
+                   `zone-tiler.apply_zone` с общим соединением `self.x11`,
+                   которое ставит `serve`; переданное чужое не закрывается);
       read_meta  — callable(window) -> Meta (по умолчанию `read_window_meta`);
       workarea   — callable() -> (x, y, w, h) либо сам кортеж (по умолчанию
                    `default_workarea`, вызывается лениво);
@@ -254,7 +260,8 @@ class Daemon:
     ):
         self.conf_path = conf_path or tiler.default_conf()
         self.grid = tiler.Grid(self.conf_path)
-        self.apply = apply or tiler.apply_zone
+        self.x11 = None  # соединение кладёт serve(); чужое для apply
+        self.apply = apply or self._default_apply
         self.read_meta = read_meta or read_window_meta
         self.workarea = workarea if workarea is not None else default_workarea
         self.verbose = verbose
@@ -277,12 +284,26 @@ class Daemon:
             self._wa_cache = tuple(wa)
         return self._wa_cache
 
+    def _default_apply(self, win, rect, label="", quiet=False):
+        """Замыкание по умолчанию: вкладывает окно через общее X-соединение демона.
+
+        `self.x11` может быть задано позже (`serve` ставит его перед
+        реконсиляцией), поэтому берётся из атрибута в момент вызова, а не
+        запоминается. Подменённый `apply` это замыкание не задевает.
+        """
+        tiler.apply_zone(win, rect, label=label, quiet=quiet, x11=self.x11)
+
     def _apply(self, win, rect, zone):
-        """Вложить окно, не уронив долгоживущий демон из-за одной ошибки."""
+        """Вложить окно, не уронив долгоживущий демон из-за одной ошибки.
+
+        Ловим и `SystemExit`: `fail()` в layout-коде бросает его при отказе
+        X-сервера (например, исчерпаны соединения), а он не подкласс
+        `Exception`. `KeyboardInterrupt` не перехватываем.
+        """
         try:
             self.apply(win, rect, label=zone, quiet=True)
             return True
-        except Exception as exc:  # окно могло исчезнуть между появлением в списке и apply
+        except (Exception, SystemExit) as exc:  # окно могло исчезнуть/отказ X
             self.log(f"не удалось вложить окно 0x{win:x} в зону '{zone}': {exc}")
             return False
 
@@ -387,13 +408,30 @@ class XPropertyEvent(ctypes.Structure):
 def handle_property_event(dae, buf, client_list_atom, read_clients):
     """PropertyNotify: если изменился `_NET_CLIENT_LIST` — реконсиляция.
 
-    Возвращает True, если событие относилось к списку клиентов.
+    Возвращает True, если событие относилось к списку клиентов. Если список
+    прочитать не удалось (`read_clients()` дал `None`), реконсиляция
+    пропускается: трекер и `seen` не трогаем.
     """
     ev = ctypes.cast(buf, ctypes.POINTER(XPropertyEvent)).contents
     if ev.atom != client_list_atom:
         return False
-    dae.reconcile(read_clients())
+    client_ids = read_clients()
+    if client_ids is None:
+        log = getattr(dae, "log", None)
+        if log is not None:
+            log("_NET_CLIENT_LIST недоступен — реконсиляцию пропускаю")
+        return True
+    dae.reconcile(client_ids)
     return True
+
+
+def _reconcile_if_known(dae, read_clients):
+    """Прочитать список клиентов и свести состояние; `None` — пропустить."""
+    client_ids = read_clients()
+    if client_ids is None:
+        dae.log("_NET_CLIENT_LIST недоступен — реконсиляцию пропускаю")
+        return
+    dae.reconcile(client_ids)
 
 
 def _bind_event_functions(x):
@@ -418,6 +456,10 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     каждый PropertyNotify про `_NET_CLIENT_LIST`.
 
     `x11` и `read_clients` можно подменить (тогда реальный дисплей не нужен).
+    Своё соединение `serve` кладёт в `dae.x11`, чтобы `apply_zone` переиспользовал
+    его на все окна и не открывал новое на каждый `apply` (утечка соединений).
+    `None`, возвращённое `read_clients` (список недоступен), — сигнал пропустить
+    реконсиляцию, не трогая трекер.
     `once=True` — обработать один PropertyNotify и выйти; если событий нет —
     подождать `once_timeout` секунд и выйти (для smoke-проверок).
     """
@@ -425,6 +467,7 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
         x11 = tiler.X11()
     if read_clients is None:
         read_clients = read_client_list
+    dae.x11 = x11  # общее соединение: apply_zone не должен его закрывать
     _bind_event_functions(x11.x)
     x11.x.XSelectInput(x11.dpy, x11.root, PROPERTY_CHANGE_MASK)
     x11.x.XSync(x11.dpy, 0)
@@ -433,7 +476,7 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     dae.log(f"демон слушает X11 (root 0x{x11.root:x}, reflow={dae.reflow})")
     try:
         # Раскладываем окна, уже открытые к запуску (вход в готовую сессию).
-        dae.reconcile(read_clients())
+        _reconcile_if_known(dae, read_clients)
         while True:
             if not x11.x.XPending(x11.dpy):
                 ready, _, _ = select.select(

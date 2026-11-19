@@ -198,10 +198,25 @@ class FakeX11:
         self.calls.append(("move_resize", win, x, y, w, h))
 
 
+class ClosableX11(FakeX11):
+    """FakeX11 с учётом владения соединением — для проверки отсутствия утечки."""
+
+    instances = []
+
+    def __init__(self):
+        super().__init__()
+        self.closed = False
+        ClosableX11.instances.append(self)
+
+    def close(self):
+        self.closed = True
+
+
 class TestApplyZone(unittest.TestCase):
     def setUp(self):
         self._original = zt.frame_extents
         zt.frame_extents = lambda win: (1, 2, 25, 3)
+        ClosableX11.instances = []
         self.addCleanup(self._restore)
 
     def _restore(self):
@@ -217,6 +232,36 @@ class TestApplyZone(unittest.TestCase):
         self.assertEqual(fake.calls[0][3], "_NET_WM_STATE_MAXIMIZED_VERT")
         self.assertEqual(fake.calls[1][3], "_NET_WM_STATE_FULLSCREEN")
         self.assertEqual(fake.calls[2], ("move_resize", 0x1234, 100, 40, 797, 572))
+
+    def test_apply_zone_closes_connection_it_opened(self):
+        # apply_zone создал соединение сам (x11=None) — обязан его закрыть.
+        original = zt.X11
+        zt.X11 = ClosableX11
+        self.addCleanup(setattr, zt, "X11", original)
+        zt.apply_zone(0x1, (0, 0, 100, 100), x11=None, quiet=True)
+        self.assertEqual(len(ClosableX11.instances), 1)
+        self.assertTrue(ClosableX11.instances[0].closed)
+
+    def test_apply_zone_does_not_close_passed_connection(self):
+        # Переданное чужое соединение (соединение демона) трогать нельзя.
+        fake = ClosableX11()
+        zt.apply_zone(0x1, (0, 0, 100, 100), x11=fake, quiet=True)
+        self.assertFalse(fake.closed)
+
+    def test_apply_zone_closes_even_if_move_resize_fails(self):
+        # Утечка не должна оставаться и на ошибке в середине раскладки.
+        original = zt.X11
+        zt.X11 = ClosableX11
+        self.addCleanup(setattr, zt, "X11", original)
+
+        def boom(self, *a, **k):
+            raise RuntimeError("X-сервер отказал")
+
+        self.addCleanup(setattr, ClosableX11, "move_resize", ClosableX11.move_resize)
+        ClosableX11.move_resize = boom
+        with self.assertRaises(RuntimeError):
+            zt.apply_zone(0x1, (0, 0, 100, 100), x11=None, quiet=True)
+        self.assertTrue(ClosableX11.instances[0].closed)
 
     def test_quiet_suppresses_output(self):
         buf = io.StringIO()

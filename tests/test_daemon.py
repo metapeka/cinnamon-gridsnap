@@ -20,11 +20,13 @@ tolerant-чтение `[daemon]`, `read_client_list` (парсинг xprop), р�
 import ctypes
 import importlib.util
 import os
+import struct
 import subprocess
 import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -55,29 +57,38 @@ TWO_ZONES = (
 ONE_RULE = TWO_ZONES.replace("chromium* = right\n", "")
 
 
-class XPropertyEventRef(ctypes.Structure):
-    """XPropertyEvent из Xlib.h: буфер событий собирается по эталонной структуре."""
-
-    _fields_ = [
-        ("type", ctypes.c_int), ("serial", ctypes.c_ulong),
-        ("send_event", ctypes.c_int), ("display", ctypes.c_void_p),
-        ("window", ctypes.c_ulong), ("atom", ctypes.c_ulong),
-        ("time", ctypes.c_ulong), ("state", ctypes.c_int),
-    ]
+# Ожидаемые смещения XPropertyEvent из Xlib.h на LP64 (тот же ABI, что у
+# `zd.XPropertyEvent`). Зашиты числами, чтобы тест ловил разъезд с ABI, а не
+# повторял ту же структуру, что и проверяемый код.
+XPROPERTY_EVENT_OFFSETS = {
+    "type": 0,
+    "serial": 8,
+    "send_event": 16,
+    "display": 24,
+    "window": 32,
+    "atom": 40,
+    "time": 48,
+    "state": 56,
+}
+XPROPERTY_EVENT_SIZE = 64
 
 
 def property_buffer(atom, window=0x2):
-    """XEvent-буфер с XPropertyEvent для PropertyNotify."""
-    ev = XPropertyEventRef()
-    ctypes.memset(ctypes.byref(ev), 0, ctypes.sizeof(ev))
-    ev.type = zd.PROPERTY_NOTIFY
-    ev.window = window
-    ev.atom = atom
-    ev.time = 123
-    ev.state = 0
-    buf = zd.EVENT_BUFFER()
-    ctypes.memmove(buf, ctypes.byref(ev), ctypes.sizeof(ev))
-    return buf
+    """XEvent-буфер с XPropertyEvent для PropertyNotify.
+
+    Собирается сырыми байтами по ожидаемым смещениям Xlib.h (LP64), а не через
+    копию структуры из проверяемого модуля, — иначе тест повторял бы его ошибки.
+    """
+    raw = bytearray(ctypes.sizeof(zd.EVENT_BUFFER))
+    struct.pack_into("<i", raw, XPROPERTY_EVENT_OFFSETS["type"], zd.PROPERTY_NOTIFY)
+    struct.pack_into("<Q", raw, XPROPERTY_EVENT_OFFSETS["serial"], 0x1234)
+    struct.pack_into("<i", raw, XPROPERTY_EVENT_OFFSETS["send_event"], 0)
+    struct.pack_into("<Q", raw, XPROPERTY_EVENT_OFFSETS["display"], 0xDEAD)
+    struct.pack_into("<Q", raw, XPROPERTY_EVENT_OFFSETS["window"], window)
+    struct.pack_into("<Q", raw, XPROPERTY_EVENT_OFFSETS["atom"], atom)
+    struct.pack_into("<Q", raw, XPROPERTY_EVENT_OFFSETS["time"], 123)
+    struct.pack_into("<i", raw, XPROPERTY_EVENT_OFFSETS["state"], 0)
+    return zd.EVENT_BUFFER.from_buffer_copy(bytes(raw))
 
 
 class TestDaemonEvents(unittest.TestCase):
@@ -374,6 +385,53 @@ class TestDaemonEvents(unittest.TestCase):
         self.assertEqual(d.windows, {0x1: "left"})
         self.assertEqual(len(calls), 2)
 
+    def test_default_apply_reuses_daemon_connection(self):
+        # При дефолтном apply демон передаёт своё X-соединение (чужое не закрыть).
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = zd.Daemon(
+            self.conf(ONE_RULE), read_meta=self.read_meta, workarea=lambda: WA
+        )
+        sentinel = object()
+        d.x11 = sentinel
+        with mock.patch.object(zd.tiler, "apply_zone") as apply_zone:
+            d.on_map(0x1)
+        apply_zone.assert_called_once()
+        self.assertIs(apply_zone.call_args.kwargs["x11"], sentinel)
+        self.assertEqual(d.windows, {0x1: "left"})
+
+    def test_system_exit_from_apply_does_not_kill_daemon(self):
+        # `fail()` в layout-коде бросает SystemExit — демон должен его пережить.
+        self.metas[0x1] = self.meta("firefox-esr")
+
+        def boom(win, rect, label="", quiet=False):
+            raise SystemExit(1)
+
+        d = zd.Daemon(
+            self.conf(ONE_RULE),
+            apply=boom,
+            read_meta=self.read_meta,
+            workarea=lambda: WA,
+        )
+        d.on_map(0x1)  # не должно выбросить SystemExit
+        self.assertEqual(d.windows, {})
+        self.assertEqual(d.seen, set())
+
+    def test_keyboard_interrupt_from_apply_is_not_swallowed(self):
+        # Прерывание с клавиатуры не маскируется под ошибку X.
+        self.metas[0x1] = self.meta("firefox-esr")
+
+        def interrupt(win, rect, label="", quiet=False):
+            raise KeyboardInterrupt()
+
+        d = zd.Daemon(
+            self.conf(ONE_RULE),
+            apply=interrupt,
+            read_meta=self.read_meta,
+            workarea=lambda: WA,
+        )
+        with self.assertRaises(KeyboardInterrupt):
+            d.on_map(0x1)
+
     def test_unknown_window_unmap_is_noop(self):
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.on_unmap(0x999)
@@ -394,7 +452,8 @@ class TestDaemonEvents(unittest.TestCase):
         self.assertEqual(d.windows, {})
         # повторный destroy уже ничего не делает
         d.on_destroy(0x1)
-        self.assertEqual(self.applied[1:], [])
+        self.assertEqual(len(self.applied), 1)
+        self.assertEqual(self.applied[0], (0x1, (0, 0, 500, 1000), "left", True))
 
     def test_reflow_only_moves_remaining_tracked_window(self):
         # freed left занята ещё одним окном -> reflow не должен ничего делать.
@@ -501,7 +560,8 @@ class TestReadWindowMeta(unittest.TestCase):
 class TestPropertyEvent(unittest.TestCase):
     """handle_property_event: реконсиляция только на PropertyNotify о _NET_CLIENT_LIST.
 
-    Буфер собран по эталонной XPropertyEventRef (Xlib.h), поэтому тест ловит
+    Буфер событий собирается сырыми байтами по ожидаемым смещениям XPropertyEvent
+    из Xlib.h (LP64), а не копией структуры из проверяемого модуля: тест ловит
     разъезд offset'ов относительно X11 ABI.
     """
 
@@ -512,6 +572,11 @@ class TestPropertyEvent(unittest.TestCase):
         def reconcile(self, client_ids):
             self.calls.append(list(client_ids))
 
+    def test_xproperty_event_offsets_match_xlib_abi(self):
+        fields = {name: getattr(zd.XPropertyEvent, name).offset for name, _ in zd.XPropertyEvent._fields_}
+        self.assertEqual(fields, XPROPERTY_EVENT_OFFSETS)
+        self.assertEqual(ctypes.sizeof(zd.XPropertyEvent), XPROPERTY_EVENT_SIZE)
+
     def test_client_list_atom_triggers_reconcile(self):
         dae = self.Stub()
         handled = zd.handle_property_event(
@@ -519,6 +584,14 @@ class TestPropertyEvent(unittest.TestCase):
         )
         self.assertTrue(handled)
         self.assertEqual(dae.calls, [[0x9]])
+
+    def test_unreadable_list_skips_reconcile(self):
+        dae = self.Stub()
+        handled = zd.handle_property_event(
+            dae, property_buffer(0xABC), 0xABC, lambda: None
+        )
+        self.assertTrue(handled)  # событие про наш атом
+        self.assertEqual(dae.calls, [])  # но реконсиляции нет
 
     def test_other_atom_is_ignored(self):
         dae = self.Stub()
@@ -557,15 +630,35 @@ class TestReadClientList(unittest.TestCase):
         self.assertEqual(seen["args"], ["xprop", "-root", "_NET_CLIENT_LIST"])
 
     def test_empty_when_property_missing(self):
+        # xprop при отсутствии свойства печатает сообщение и выходит с кодом 0 —
+        # это не «клиентов нет», а «список недоступен».
         zd.subprocess.check_output = lambda *a, **k: "_NET_CLIENT_LIST:  not found.\n"
+        self.assertIsNone(zd.read_client_list())
+
+    def test_none_when_no_such_atom(self):
+        zd.subprocess.check_output = lambda *a, **k: (
+            "no such atom on any window.\n"
+        )
+        self.assertIsNone(zd.read_client_list())
+
+    def test_none_without_window_id_marker(self):
+        # Вывод без маркера `window id #` не разбирается как список окон.
+        zd.subprocess.check_output = lambda *a, **k: "_NET_CLIENT_LIST(WINDOW): \n"
+        self.assertIsNone(zd.read_client_list())
+
+    def test_empty_list_when_property_present_but_no_windows(self):
+        # Валидное состояние «клиентов нет» — это [], а не None.
+        zd.subprocess.check_output = lambda *a, **k: (
+            "_NET_CLIENT_LIST(WINDOW): window id #\n"
+        )
         self.assertEqual(zd.read_client_list(), [])
 
-    def test_empty_on_error(self):
+    def test_none_on_error(self):
         def boom(*args, **kwargs):
             raise OSError("нет xprop")
 
         zd.subprocess.check_output = boom
-        self.assertEqual(zd.read_client_list(), [])
+        self.assertIsNone(zd.read_client_list())
 
 
 class _StubFunc:
@@ -653,7 +746,33 @@ class TestServeLoop(unittest.TestCase):
         self.assertEqual(
             fake.selected, [(fake.dpy, fake.root, zd.PROPERTY_CHANGE_MASK)]
         )
+        # serve() передаёт соединение демону, чтобы apply_zone переиспользовал его
+        self.assertIs(dae.x11, fake)
         self.assertTrue(fake.closed)
+
+    def test_unreadable_list_skips_initial_reconcile(self):
+        dae = StubDaemon()
+        fake = FakeX11(fd=self.pipe_fd())
+        zd.serve(
+            dae, x11=fake, once=True, read_clients=lambda: None, once_timeout=0.05
+        )
+        self.assertEqual(dae.reconciled, [])
+        self.assertTrue(fake.closed)
+
+    def test_unreadable_list_keeps_tracker_on_property_notify(self):
+        dae = StubDaemon()
+        dae.windows = {0x1: "left"}
+        dae.seen = {0x1}
+        fake = FakeX11(
+            events=[property_buffer(FakeX11.CLIENT_LIST_ATOM)], fd=self.pipe_fd()
+        )
+        zd.serve(
+            dae, x11=fake, once=True, read_clients=lambda: None, once_timeout=0.05
+        )
+        # список не прочитался — ни реконсиляции, ни изменений трекера
+        self.assertEqual(dae.reconciled, [])
+        self.assertEqual(dae.windows, {0x1: "left"})
+        self.assertEqual(dae.seen, {0x1})
 
     def test_client_list_property_notify_reconciles(self):
         dae = StubDaemon()

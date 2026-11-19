@@ -177,9 +177,21 @@ class Grid:
                 self.zones[name.strip()] = self._parse_zone(name, spec)
         if not self.zones:
             fail("zone-tiler: в zones.conf нет ни одной зоны в секции [zones]", EXIT_CONFIG)
+        # `[rules]` читается отдельным парсером: ConfigParser по умолчанию
+        # приводит ключи к нижнему регистру (optionxform=str.lower), из-за чего
+        # селектор `re:\S+Deploy\S*` превратился бы в `re:\s+deploy\s*` —
+        # `\S` (непробел) стал бы `\s` (пробел), и правило молча не срабатывало
+        # бы. Секции `[zones]`/`[keys]` остаются у нижнерегистрового `cp`.
+        rules_cp = configparser.ConfigParser(
+            interpolation=None,
+            inline_comment_prefixes=("#", ";"),
+            delimiters=("=",),
+        )
+        rules_cp.optionxform = str  # сохранить регистр селектора (в т.ч. `re:`)
+        rules_cp.read(path, encoding="utf-8")
         self.rules = []
-        if cp.has_section("rules"):
-            for selector, zone in cp.items("rules"):
+        if rules_cp.has_section("rules"):
+            for selector, zone in rules_cp.items("rules"):
                 selector, zone = selector.strip(), zone.strip()
                 if zone not in self.zones:
                     fail(
@@ -389,6 +401,14 @@ class X11:
         ]
         self.x.XFlush.argtypes = [ctypes.c_void_p]
         self.x.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        self.x.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        self.x.XCloseDisplay.restype = ctypes.c_int
+
+    def close(self):
+        """Закрыть X-соединение (парно `XOpenDisplay`). Идемпотентно."""
+        if getattr(self, "dpy", None):
+            self.x.XCloseDisplay(self.dpy)
+            self.dpy = None
 
     def atom(self, name):
         return self.x.XInternAtom(self.dpy, name.encode(), 0)
@@ -451,31 +471,40 @@ def apply_zone(window, rect, label="", x11=None, verify=False, quiet=False):
     """Вложить окно в пиксельную рамку rect=(x, y, w, h). Без глобального состояния.
 
     Снимает максимизацию/фуллскрин и компенсирует рамку WM. `x11` можно подменить
-    (в тестах) — тогда X-сервер не нужен. При `verify` возвращает фактическую рамку.
+    (в тестах) — тогда X-сервер не нужен. Соединение, открытое самой функцией
+    (`x11 is None`), она же и закрывает; переданное чужое — не трогает, им
+    владеет вызывающий (долгоживущий демон переиспользует одно соединение).
+    При `verify` возвращает фактическую рамку.
     """
     x, y, w, h = rect
     extents = frame_extents(window)
-    if x11 is None:
+    own = x11 is None
+    if own:
         x11 = X11()
-    # снять максимизацию/фуллскрин/половинное тайлирование, иначе WM вернёт своё
-    x11.set_state(window, 0, "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ")
-    x11.set_state(window, 0, "_NET_WM_STATE_FULLSCREEN", "_NET_WM_STATE_FULLSCREEN")
-    time.sleep(0.05)
-    x11.move_resize(window, *client_size(rect, extents))
-    time.sleep(0.05)
-    if not quiet:
-        where = f"зона '{label}'" if label else "зона"
-        print(f"окно 0x{window:x} -> {where}: x={x} y={y} {w}x{h}")
-    if verify:
-        try:
-            actual = read_frame(window, extents)
-        except Exception:
-            return None
+    try:
+        # снять максимизацию/фуллскрин/половинное тайлирование, иначе WM вернёт своё
+        x11.set_state(window, 0, "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ")
+        x11.set_state(window, 0, "_NET_WM_STATE_FULLSCREEN", "_NET_WM_STATE_FULLSCREEN")
+        time.sleep(0.05)
+        x11.move_resize(window, *client_size(rect, extents))
+        time.sleep(0.05)
         if not quiet:
-            mark = "— совпало с зоной" if actual == (x, y, w, h) else "— не совпало!"
-            print(f"рамка по факту: x={actual[0]} y={actual[1]} {actual[2]}x{actual[3]} {mark}")
-        return actual
-    return None
+            where = f"зона '{label}'" if label else "зона"
+            print(f"окно 0x{window:x} -> {where}: x={x} y={y} {w}x{h}")
+        if verify:
+            try:
+                actual = read_frame(window, extents)
+            except Exception:
+                return None
+            if not quiet:
+                mark = "— совпало с зоной" if actual == (x, y, w, h) else "— не совпало!"
+                print(f"рамка по факту: x={actual[0]} y={actual[1]} {actual[2]}x{actual[3]} {mark}")
+            return actual
+        return None
+    finally:
+        # чужое соединение не закрываем: им владеет вызывающий (демон)
+        if own:
+            x11.close()
 
 
 def cmd_apply(grid, args):

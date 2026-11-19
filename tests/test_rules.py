@@ -139,8 +139,31 @@ class TestGridRules(ConfMixin, unittest.TestCase):
         grid = zt.Grid(path)
         self.assertEqual(
             grid.rules,
-            [("chrome", "main"), ("re:^(navigator|firefox)", "top-right")],
+            [("Chrome", "main"), ("re:^(Navigator|firefox)", "top-right")],
         )
+
+    def test_rules_selector_case_is_preserved(self):
+        # ConfigParser по умолчанию приводит ключи к нижнему регистру, из-за чего
+        # `re:\S+Deploy\S*` мутирует в `\s+deploy\s*` (\S -> \s), и правило
+        # молча не срабатывает. Селектор должен сохраниться дословно.
+        selector = r"re:\S+Deploy\S*"
+        path = self.conf(BASE_GRID + ZONES + f"[rules]\n{selector} = main\n")
+        grid = zt.Grid(path)
+        self.assertEqual(grid.rules, [(selector, "main")])
+
+    def test_regex_escape_class_stays_uppercase_and_matches(self):
+        # `\S+Deploy\S*` должен матчить не-пробелы вокруг Deploy; если бы регистр
+        # упал, `\s+deploy\s*` требовал бы пробелы и не совпал бы.
+        path = self.conf(BASE_GRID + ZONES + "[rules]\nre:\\S+Deploy\\S* = main\n")
+        grid = zt.Grid(path)
+        self.assertEqual(zt.match_rules(grid.rules, "xterm", "webDeployProd"), "main")
+        self.assertIsNone(zt.match_rules(grid.rules, "xterm", "  deploy  "))
+
+    def test_glob_selector_case_is_preserved(self):
+        path = self.conf(BASE_GRID + ZONES + "[rules]\nFireFox* = main\n")
+        grid = zt.Grid(path)
+        self.assertEqual(grid.rules, [("FireFox*", "main")])
+        self.assertEqual(zt.match_rules(grid.rules, "firefox-esr", ""), "main")
 
     def test_no_rules_section_gives_empty_list(self):
         path = self.conf(BASE_GRID + ZONES)
