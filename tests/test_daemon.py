@@ -11,8 +11,8 @@ override_redirect и диалогов, защита от повторного п
 tolerant-чтение `[daemon]`, `read_client_list` (парсинг xprop), реконсиляция
 списка (добавление/исчезновение, повтор без перечитывания, стабильность при
 сворачивании), reflow=off/neighbors, возврат расширенной зоны, когда
-освобождённую занимает новое окно, разводка PropertyNotify (только
-`_NET_CLIENT_LIST`) и цикл `serve()` на фейковом X11.
+освобождённую занимает новое окно, выбор монитора окна (мультимониторность),
+разводка PropertyNotify (только `_NET_CLIENT_LIST`) и цикл `serve()` на фейковом X11.
 
 Запуск:
     python3 tests/test_daemon.py
@@ -45,6 +45,7 @@ def load_daemon():
 zd = load_daemon()
 
 WA = (0, 0, 1000, 1000)
+WA1 = (1000, 0, 800, 600)
 
 # Две соседние зоны: left примыкает к right по вертикальному ребру длиной 1.
 TWO_ZONES = (
@@ -98,6 +99,7 @@ class TestDaemonEvents(unittest.TestCase):
         self.applied = []
         self.metas = {}
         self.reads = []
+        self.centers = {}
 
     # -- обвязка
 
@@ -117,6 +119,18 @@ class TestDaemonEvents(unittest.TestCase):
             apply=self.apply,
             read_meta=self.read_meta,
             workarea=lambda: WA,
+        )
+
+    def multi_daemon(self, text=TWO_ZONES, reflow=None, monitors=(WA, WA1)):
+        """Демон с двумя мониторами; монитор окна — по self.centers."""
+        if reflow is not None:
+            text = text + f"[daemon]\nreflow = {reflow}\n"
+        return zd.Daemon(
+            self.conf(text),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            monitors=lambda: list(monitors),
+            window_center=lambda win: self.centers[win],
         )
 
     def apply(self, win, rect, label="", quiet=False):
@@ -435,8 +449,8 @@ class TestDaemonEvents(unittest.TestCase):
             d.on_map(0x1)
 
     def test_system_exit_from_workarea_does_not_kill_daemon(self):
-        # `default_workarea` -> `tiler.monitors()` -> `fail()` бросает SystemExit
-        # при отказе X: получение рабочей области не должно ронять демон.
+        # Провайдер рабочей области бросает SystemExit при отказе X: получение
+        # рабочей области не должно ронять демон.
         self.metas[0x1] = self.meta("firefox-esr")
 
         def boom():
@@ -454,7 +468,7 @@ class TestDaemonEvents(unittest.TestCase):
         self.assertEqual(d.seen, set())
 
     def test_keyboard_interrupt_from_workarea_is_not_swallowed(self):
-        # `_workarea` ловит (Exception, SystemExit), но не BaseException.
+        # `_forced_workarea` ловит (Exception, SystemExit), но не BaseException.
         self.metas[0x1] = self.meta("firefox-esr")
 
         def interrupt():
@@ -469,19 +483,13 @@ class TestDaemonEvents(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt):
             d.on_map(0x1)
 
-    def test_system_exit_from_workarea_during_reflow_does_not_kill_daemon(self):
-        # Тот же отказ X при reflow: трекер чистится, но соседей не двигаем и не падаем.
-        def boom():
-            raise SystemExit(1)
-
-        d = zd.Daemon(
-            self.conf(TWO_ZONES + "[daemon]\nreflow = neighbors\n"),
-            apply=self.apply,
-            read_meta=self.read_meta,
-            workarea=boom,
-        )
+    def test_reflow_skipped_when_monitor_unknown(self):
+        # Монитор ушедшего окна не запомнен (трекер восстановлен вручную):
+        # reflow пропускается, а не падает.
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.windows = {0x1: "left", 0x2: "right"}
-        d.on_destroy(0x1)  # wa недоступна -> reflow пропускается
+        d.win_monitor = {0x2: WA}
+        d.on_destroy(0x1)
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {0x2: "right"})
 
@@ -535,7 +543,7 @@ class TestDaemonEvents(unittest.TestCase):
         d.on_map(0x1)
         d.on_map(0x2)
         d.on_destroy(0x1)
-        self.assertEqual(d.filled, {"left": "right"})
+        self.assertEqual(d.filled, {(WA, "left"): 0x2})
         self.applied.clear()
         d.on_map(0x3)
         self.assertEqual(
@@ -560,7 +568,7 @@ class TestDaemonEvents(unittest.TestCase):
         self.applied.clear()
         d.on_map(0x3)
         self.assertEqual(self.applied, [])
-        self.assertEqual(d.filled, {"left": "right"})
+        self.assertEqual(d.filled, {(WA, "left"): 0x2})
 
     def test_reflow_off_never_expands_nor_restores(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -580,7 +588,7 @@ class TestDaemonEvents(unittest.TestCase):
         self.metas[0x3] = self.meta("firefox-esr")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.windows = {}
-        d.filled = {"left": "right"}
+        d.filled = {(WA, "left"): 0x2}
         d.on_map(0x3)
         self.assertEqual(self.applied, [(0x3, (0, 0, 500, 1000), "left", True)])
         self.assertEqual(d.filled, {})
@@ -592,7 +600,7 @@ class TestDaemonEvents(unittest.TestCase):
         d.on_map(0x1)
         d.on_map(0x2)
         d.on_destroy(0x1)
-        self.assertEqual(d.filled, {"left": "right"})
+        self.assertEqual(d.filled, {(WA, "left"): 0x2})
         d.on_destroy(0x2)  # держатель исчез — возвращать некого
         self.assertEqual(d.filled, {})
 
@@ -622,7 +630,7 @@ class TestDaemonEvents(unittest.TestCase):
         d.on_map(0x3)  # новое окно встало, но вернуть соседа не удалось
         self.assertEqual(d.windows, {0x2: "right", 0x3: "left"})
         self.assertEqual(calls[-1][0], 0x2)  # попытка возврата была
-        self.assertEqual(d.filled, {"left": "right"})  # запись осталась
+        self.assertEqual(d.filled, {(WA, "left"): 0x2})  # запись осталась
 
     def test_reconcile_restores_neighbor_when_new_window_fills_freed_zone(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -631,7 +639,7 @@ class TestDaemonEvents(unittest.TestCase):
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.reconcile([0x1, 0x2])
         d.reconcile([0x2])  # 0x1 закрылось -> right расширился на left
-        self.assertEqual(d.filled, {"left": "right"})
+        self.assertEqual(d.filled, {(WA, "left"): 0x2})
         self.applied.clear()
         d.reconcile([0x2, 0x3])  # 0x3 открылось в left
         self.assertEqual(
@@ -642,6 +650,92 @@ class TestDaemonEvents(unittest.TestCase):
             ],
         )
         self.assertEqual(d.filled, {})
+
+    # -- несколько мониторов
+
+    def test_window_on_second_monitor_uses_its_workarea(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.centers[0x1] = (1400, 300)
+        d = self.multi_daemon()
+        d.on_map(0x1)
+        self.assertEqual(self.applied, [(0x1, (1000, 0, 400, 600), "left", True)])
+        self.assertEqual(d.win_monitor, {0x1: WA1})
+
+    def test_window_center_outside_monitors_picks_nearest(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.centers[0x1] = (1400, 700)  # ниже монитора 1, ближе к нему
+        d = self.multi_daemon()
+        d.on_map(0x1)
+        self.assertEqual(self.applied, [(0x1, (1000, 0, 400, 600), "left", True)])
+
+    def test_unknown_window_center_skips_placement(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.centers[0x1] = None
+        d = self.multi_daemon()
+        d.on_map(0x1)
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {})
+
+    def test_monitors_unavailable_skips_placement(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.centers[0x1] = (250, 500)
+
+        def boom():
+            raise SystemExit(1)
+
+        d = zd.Daemon(
+            self.conf(ONE_RULE),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            monitors=boom,
+            window_center=lambda win: self.centers[win],
+        )
+        d.on_map(0x1)  # отказ X при получении мониторов не должен уронить демон
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {})
+
+    def test_reflow_expands_neighbor_on_same_monitor(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.centers[0x1] = (1200, 300)
+        self.centers[0x2] = (1600, 300)
+        d = self.multi_daemon(reflow="neighbors")
+        d.on_map(0x1)
+        d.on_map(0x2)
+        self.applied.clear()
+        d.on_destroy(0x1)
+        self.assertEqual(self.applied, [(0x2, (1000, 0, 800, 600), "right", True)])
+        self.assertEqual(d.filled, {(WA1, "left"): 0x2})
+
+    def test_reflow_does_not_cross_monitors(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.centers[0x1] = (250, 500)
+        self.centers[0x2] = (1600, 300)
+        d = self.multi_daemon(reflow="neighbors")
+        d.on_map(0x1)
+        d.on_map(0x2)
+        self.applied.clear()
+        d.on_destroy(0x1)
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.filled, {})
+
+    def test_reflow_expands_holder_on_the_same_monitor(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.metas[0x3] = self.meta("chromium")
+        self.centers[0x1] = (250, 500)
+        self.centers[0x2] = (1600, 300)
+        self.centers[0x3] = (750, 500)
+        d = self.multi_daemon(reflow="neighbors")
+        d.on_map(0x1)
+        d.on_map(0x2)
+        d.on_map(0x3)
+        self.applied.clear()
+        d.on_destroy(0x1)
+        # right на мониторе 0 расширяется окном 0x3; окно 0x2 с другого экрана не трогаем
+        self.assertEqual(self.applied, [(0x3, (0, 0, 1000, 1000), "right", True)])
+        self.assertEqual(d.filled, {(WA, "left"): 0x3})
 
     # -- tolerant-чтение [daemon]
 
@@ -686,6 +780,53 @@ class TestFractionsToPixels(unittest.TestCase):
         x, y, w, h = zd.fractions_to_pixels(0.0, 0.0, 0.0001, 0.0001, WA)
         self.assertGreaterEqual(w, 1)
         self.assertGreaterEqual(h, 1)
+
+
+class TestMonitorForPoint(unittest.TestCase):
+    def test_point_inside_first(self):
+        self.assertEqual(zd.monitor_for_point([WA, WA1], (250, 500)), WA)
+
+    def test_point_inside_second(self):
+        self.assertEqual(zd.monitor_for_point([WA, WA1], (1400, 300)), WA1)
+
+    def test_point_outside_picks_nearest_center(self):
+        self.assertEqual(zd.monitor_for_point([WA, WA1], (1400, 700)), WA1)
+
+    def test_right_edge_belongs_to_next_monitor(self):
+        self.assertEqual(zd.monitor_for_point([WA, WA1], (1000, 500)), WA1)
+
+
+class TestReadWindowCenter(unittest.TestCase):
+    def test_parses_xwininfo_output(self):
+        out = (
+            'xwininfo: Window id: 0x400003 "x"\n\n'
+            "  Absolute upper-left X:  100\n"
+            "  Absolute upper-left Y:  50\n"
+            "  Width: 400\n"
+            "  Height: 300\n"
+        )
+        with mock.patch.object(zd.subprocess, "check_output", return_value=out):
+            self.assertEqual(zd.read_window_center(0x400003), (300, 200))
+
+    def test_parses_negative_coordinates(self):
+        out = (
+            "  Absolute upper-left X:  -1200\n"
+            "  Absolute upper-left Y:  0\n"
+            "  Width: 400\n"
+            "  Height: 300\n"
+        )
+        with mock.patch.object(zd.subprocess, "check_output", return_value=out):
+            self.assertEqual(zd.read_window_center(0x1), (-1000, 150))
+
+    def test_missing_field_returns_none(self):
+        with mock.patch.object(zd.subprocess, "check_output", return_value="Width: 10\n"):
+            self.assertIsNone(zd.read_window_center(0x1))
+
+    def test_xwininfo_failure_returns_none(self):
+        with mock.patch.object(
+            zd.subprocess, "check_output", side_effect=OSError("нет xwininfo")
+        ):
+            self.assertIsNone(zd.read_window_center(0x1))
 
 
 class TestReadWindowMeta(unittest.TestCase):
