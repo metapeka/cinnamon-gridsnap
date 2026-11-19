@@ -1,0 +1,28 @@
+# Образец XDG-автозапуска демона GridSnap для Cinnamon (X11).
+#
+# Именно такой файл ставит `install-daemon.sh` в
+# `~/.config/autostart/gridsnap-daemon.desktop` (в Exec подставляется
+# абсолютный путь к репозиторию). Здесь путь показан условно.
+#
+# В Cinnamon `systemd --user` не поднимает `graphical-session.target`,
+# поэтому используется штатный XDG-автозапуск: файлы из `~/.config/autostart`
+# запускаются вместе с рабочим столом (аналог `ru-keyboard.desktop`).
+#
+# Запуск вручную:
+#   python3 "<репозиторий>/zone-daemon.py"
+# Демон сам берёт конфиг из XDG: `~/.config/gridsnap/zones.conf`.
+
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=GridSnap daemon
+Name[ru]=Демон GridSnap
+Comment=Auto-tile new windows into zones (Cinnamon/X11)
+Comment[ru]=Автоукладка новых окон по зонам (Cinnamon/X11)
+Exec=python3 /path/to/gridsnap/zone-daemon.py
+Icon=gridsnap
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=3
+X-GNOME-Autostart-Phase=Applications
+Hidden=false

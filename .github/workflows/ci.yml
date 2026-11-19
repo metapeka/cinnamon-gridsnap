@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: "3.x"
       - name: Компиляция
-        run: python3 -m compileall -q zone-tiler.py zone-editor.py setup-hotkeys.py make-icon.py tests
+        run: python3 -m compileall -q zone-tiler.py zone-editor.py zone_reflow.py zone_config.py zone-daemon.py setup-hotkeys.py make-icon.py tests
       - name: Юнит-тесты
         run: python3 -m unittest discover -s tests -v
 
