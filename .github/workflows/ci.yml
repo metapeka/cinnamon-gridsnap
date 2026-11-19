@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Юнит-тесты (без X)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Компиляция
+        run: python3 -m compileall -q zone-tiler.py zone-editor.py setup-hotkeys.py make-icon.py tests
+      - name: Юнит-тесты
+        run: python3 -m unittest discover -s tests -v
+
+  smoke:
+    name: Дымовой тест (Xvfb + muffin)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Зависимости
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb muffin x11-utils xdotool
+      - name: Дымовой тест
+        run: sh tests/smoke.sh

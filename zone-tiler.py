@@ -34,7 +34,46 @@ import subprocess
 import sys
 import time
 
-CONF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zones.conf")
+VERSION = "0.1.0"
+
+# Коды возврата CLI: 0 — успех, 1 — ошибка выполнения, 2 — ошибка аргументов,
+# 3 — ошибка конфига (argparse и сам сообщает об ошибках аргументов кодом 2).
+EXIT_OK = 0
+EXIT_FAIL = 1
+EXIT_USAGE = 2
+EXIT_CONFIG = 3
+
+
+def fail(message, code=EXIT_FAIL):
+    """Сообщить об ошибке в stderr и завершить процесс нужным кодом."""
+    print(message, file=sys.stderr)
+    sys.exit(code)
+
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+LEGACY_CONF = os.path.join(HERE, "zones.conf")
+
+
+def config_home():
+    """Каталог конфигурации XDG (его уважает и Cinnamon, и остальные утилиты)."""
+    return os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+
+
+def xdg_conf():
+    return os.path.join(config_home(), "gridsnap", "zones.conf")
+
+
+def default_conf():
+    """Путь к zones.conf.
+
+    Приоритет — ~/.config/gridsnap/zones.conf; если его нет, читаем/пишем файл рядом
+    с кодом (совместимость с рабочими установками). Переопределяется флагом --conf.
+    """
+    path = xdg_conf()
+    return path if os.path.exists(path) else LEGACY_CONF
+
+
+CONF = default_conf()
 
 # ---------------------------------------------------------------- конфиг сетки
 
@@ -45,7 +84,7 @@ class Grid:
             interpolation=None, inline_comment_prefixes=("#", ";")
         )
         if not cp.read(path, encoding="utf-8"):
-            sys.exit(f"zone-tiler: не найден конфиг {path}")
+            fail(f"zone-tiler: не найден конфиг {path}", EXIT_CONFIG)
         self.conf = cp
         self.cols = self._numlist(cp.get("grid", "cols", fallback="1.0"))
         self.rows = self._numlist(cp.get("grid", "rows", fallback="1.0"))
@@ -54,16 +93,16 @@ class Grid:
             for name, spec in cp.items("zones"):
                 self.zones[name.strip()] = self._parse_zone(name, spec)
         if not self.zones:
-            sys.exit("zone-tiler: в zones.conf нет ни одной зоны в секции [zones]")
+            fail("zone-tiler: в zones.conf нет ни одной зоны в секции [zones]", EXIT_CONFIG)
 
     @staticmethod
     def _numlist(value):
         nums = [float(x) for x in re.split(r"[,;\s]+", value.strip()) if x]
         if not nums or abs(nums[-1] - 1.0) > 1e-6:
-            sys.exit("zone-tiler: последняя линия в cols/rows должна быть 1.0")
+            fail("zone-tiler: последняя линия в cols/rows должна быть 1.0", EXIT_CONFIG)
         lines = [0.0] + nums
         if any(b <= a for a, b in zip(lines, lines[1:])):
-            sys.exit("zone-tiler: линии в cols/rows должны возрастать")
+            fail("zone-tiler: линии в cols/rows должны возрастать", EXIT_CONFIG)
         return lines
 
     def _parse_zone(self, name, spec):
@@ -74,14 +113,16 @@ class Grid:
                 c0, c1 = (int(v) for v in cols_part.split(":"))
                 r0, r1 = (int(v) for v in rows_part.split(":"))
             except Exception:
-                sys.exit(
-                    f"zone-tiler: зона '{name}' должна быть 'c0:c1, r0:r1' или 'x,y,w,h'"
+                fail(
+                    f"zone-tiler: зона '{name}' должна быть 'c0:c1, r0:r1' или 'x,y,w,h'",
+                    EXIT_CONFIG,
                 )
             ncols, nrows = len(self.cols) - 1, len(self.rows) - 1
             if not (0 <= c0 < c1 <= ncols and 0 <= r0 < r1 <= nrows):
-                sys.exit(
+                fail(
                     f"zone-tiler: зона '{name}' выходит за сетку "
-                    f"({ncols} колонок, {nrows} строк)"
+                    f"({ncols} колонок, {nrows} строк)",
+                    EXIT_CONFIG,
                 )
             return ("grid", c0, c1, r0, r1)
         # зона как свободный прямоугольник в долях: "x,y,w,h"
@@ -89,8 +130,9 @@ class Grid:
         try:
             x, y, w, h = (float(v) for v in nums)
         except Exception:
-            sys.exit(
-                f"zone-tiler: зона '{name}' должна быть 'c0:c1, r0:r1' или 'x,y,w,h'"
+            fail(
+                f"zone-tiler: зона '{name}' должна быть 'c0:c1, r0:r1' или 'x,y,w,h'",
+                EXIT_CONFIG,
             )
         if not (
             0 <= x < 1
@@ -100,7 +142,7 @@ class Grid:
             and x + w <= 1.0001
             and y + h <= 1.0001
         ):
-            sys.exit(f"zone-tiler: зона '{name}' выходит за пределы экрана (доли 0..1)")
+            fail(f"zone-tiler: зона '{name}' выходит за пределы экрана (доли 0..1)", EXIT_CONFIG)
         return ("rect", x, y, w, h)
 
     def fractions(self, zone):
@@ -163,7 +205,7 @@ def monitors():
             return [tuple(nums)]
     except Exception:
         pass
-    sys.exit("zone-tiler: не удалось определить рабочую область экрана")
+    fail("zone-tiler: не удалось определить рабочую область экрана", EXIT_FAIL)
 
 
 def frame_extents(win):
@@ -182,16 +224,27 @@ def frame_extents(win):
     return (0, 0, 0, 0)
 
 
+def client_size(rect, extents):
+    """Геометрия клиента внутри целевой рамки окна (компенсация рамки WM).
+
+    WM рисует рамку/титлбар вокруг клиента, поэтому клиенту выдаётся зона минус
+    _NET_FRAME_EXTENTS. Ширина и высота не меньше 1 px. Чистая функция — под тесты.
+    """
+    x, y, w, h = rect
+    left, right, top, bottom = extents
+    return (x, y, max(1, w - left - right), max(1, h - top - bottom))
+
+
 def active_window():
     try:
         txt = subprocess.check_output(
             ["xprop", "-root", "_NET_ACTIVE_WINDOW"], text=True, stderr=subprocess.DEVNULL
         )
     except Exception:
-        sys.exit("zone-tiler: xprop не найден (пакет x11-utils)")
+        fail("zone-tiler: xprop не найден (пакет x11-utils)", EXIT_FAIL)
     m = re.search(r"(0x[0-9a-fA-F]+)", txt)
     if not m or int(m.group(1), 16) == 0:
-        sys.exit("zone-tiler: нет активного окна")
+        fail("zone-tiler: нет активного окна", EXIT_FAIL)
     return int(m.group(1), 16)
 
 
@@ -228,7 +281,7 @@ class X11:
         dpy_name = (os.environ.get("DISPLAY") or "").encode() or None
         self.dpy = self.x.XOpenDisplay(dpy_name)
         if not self.dpy:
-            sys.exit("zone-tiler: не удалось подключиться к X-серверу (DISPLAY)")
+            fail("zone-tiler: не удалось подключиться к X-серверу (DISPLAY)", EXIT_FAIL)
         self.x.XDefaultRootWindow.restype = ctypes.c_ulong
         self.x.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
         self.root = self.x.XDefaultRootWindow(self.dpy)
@@ -283,46 +336,70 @@ def cmd_list(grid, mon_index):
         print(f"  {name:<{width}}  x={x:<5} y={y:<5} {w}x{h}")
 
 
+def read_frame(window, extents):
+    """Фактическая рамка окна (x, y, w, h) по xwininfo с учётом рамки WM."""
+    out = subprocess.check_output(
+        ["xwininfo", "-id", hex(window)], text=True, stderr=subprocess.DEVNULL
+    )
+    geom = {
+        k: int(re.search(rf"{k}:\s+(-?\d+)", out).group(1))
+        for k in ("Absolute upper-left X", "Absolute upper-left Y", "Width", "Height")
+    }
+    left, right, top, bottom = extents
+    return (
+        geom["Absolute upper-left X"] - left,
+        geom["Absolute upper-left Y"] - top,
+        geom["Width"] + left + right,
+        geom["Height"] + top + bottom,
+    )
+
+
+def apply_zone(window, rect, label="", x11=None, verify=False, quiet=False):
+    """Вложить окно в пиксельную рамку rect=(x, y, w, h). Без глобального состояния.
+
+    Снимает максимизацию/фуллскрин и компенсирует рамку WM. `x11` можно подменить
+    (в тестах) — тогда X-сервер не нужен. При `verify` возвращает фактическую рамку.
+    """
+    x, y, w, h = rect
+    extents = frame_extents(window)
+    if x11 is None:
+        x11 = X11()
+    # снять максимизацию/фуллскрин/половинное тайлирование, иначе WM вернёт своё
+    x11.set_state(window, 0, "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ")
+    x11.set_state(window, 0, "_NET_WM_STATE_FULLSCREEN", "_NET_WM_STATE_FULLSCREEN")
+    time.sleep(0.05)
+    x11.move_resize(window, *client_size(rect, extents))
+    time.sleep(0.05)
+    if not quiet:
+        where = f"зона '{label}'" if label else "зона"
+        print(f"окно 0x{window:x} -> {where}: x={x} y={y} {w}x{h}")
+    if verify:
+        try:
+            actual = read_frame(window, extents)
+        except Exception:
+            return None
+        if not quiet:
+            mark = "— совпало с зоной" if actual == (x, y, w, h) else "— не совпало!"
+            print(f"рамка по факту: x={actual[0]} y={actual[1]} {actual[2]}x{actual[3]} {mark}")
+        return actual
+    return None
+
+
 def cmd_apply(grid, args):
     try:
         wa = monitors()[args.monitor]
     except IndexError:
-        sys.exit(f"zone-tiler: монитора {args.monitor} нет")
-    x, y, w, h = grid.rect(args.zone, wa)
+        fail(f"zone-tiler: монитора {args.monitor} нет", EXIT_USAGE)
+    rect = grid.rect(args.zone, wa)
     if args.dry_run:
+        x, y, w, h = rect
         print(f"{args.zone}: x={x} y={y} {w}x{h} (монитор {args.monitor})")
         return
-    win = args.window or active_window()
-    # рамка окна рисуется WM: компенсируем её, чтобы зона совпала с рамкой, а не с клиентом
-    left, right, top, bottom = frame_extents(win)
-    x11 = X11()
-    # снять максимизацию/фуллскрин/половинное тайлирование, иначе WM вернёт своё
-    x11.set_state(win, 0, "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ")
-    x11.set_state(win, 0, "_NET_WM_STATE_FULLSCREEN", "_NET_WM_STATE_FULLSCREEN")
-    time.sleep(0.05)
-    x11.move_resize(win, x, y, max(1, w - left - right), max(1, h - top - bottom))
-    time.sleep(0.05)
-    if args.quiet:
-        return
-    print(f"окно 0x{win:x} -> зона '{args.zone}': x={x} y={y} {w}x{h}")
-    if args.verify:
-        try:
-            out = subprocess.check_output(
-                ["xwininfo", "-id", hex(win)], text=True, stderr=subprocess.DEVNULL
-            )
-            g = {k: int(re.search(rf"{k}:\s+(-?\d+)", out).group(1))
-                 for k in ("Absolute upper-left X", "Absolute upper-left Y", "Width", "Height")}
-            fx = g["Absolute upper-left X"] - left
-            fy = g["Absolute upper-left Y"] - top
-            fw = g["Width"] + left + right
-            fh = g["Height"] + top + bottom
-            ok = (fx, fy, fw, fh) == (x, y, w, h)
-            print(f"рамка по факту: x={fx} y={fy} {fw}x{fh} " + ("— совпало с зоной" if ok else "— не совпало!"))
-        except Exception:
-            pass
+    window = args.window or active_window()
+    apply_zone(window, rect, label=args.zone, verify=args.verify, quiet=args.quiet)
 
 
-def cmd_keys(grid, args):
+def cmd_keys(grid):
     """Печатает пары 'зона<TAB>сочетание' из секции [keys] (для setup-hotkeys.py)."""
     if not grid.conf.has_section("keys"):
         return
@@ -335,7 +412,7 @@ def cmd_keys(grid, args):
             print(f"{zone}\t{binding}")
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="Раскладка окон по зонам сетки (Cinnamon/X11)")
     ap.add_argument("command", choices=["list", "apply", "keys"])
     ap.add_argument("zone", nargs="?", help="имя зоны для apply")
@@ -345,23 +422,26 @@ def main():
     ap.add_argument("--verify", action="store_true", help="перечитать реальную геометрию")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--conf", default=CONF)
-    args = ap.parse_args()
+    ap.add_argument("--version", action="version", version=f"zone-tiler {VERSION}")
+    args = ap.parse_args(argv)
 
     grid = Grid(args.conf)
     if args.command == "list":
         cmd_list(grid, args.monitor)
-        return
+        return EXIT_OK
     if args.command == "keys":
-        cmd_keys(grid, args)
-        return
+        cmd_keys(grid)
+        return EXIT_OK
     if not args.zone:
-        sys.exit("zone-tiler: укажите зону, например: zone-tiler.py apply left")
+        fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)
     if args.zone not in grid.zones:
-        sys.exit(
-            f"zone-tiler: нет зоны '{args.zone}'. Есть: " + ", ".join(sorted(grid.zones))
+        fail(
+            f"zone-tiler: нет зоны '{args.zone}'. Есть: " + ", ".join(sorted(grid.zones)),
+            EXIT_USAGE,
         )
     cmd_apply(grid, args)
+    return EXIT_OK
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

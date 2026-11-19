@@ -33,7 +33,6 @@ gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CONF = os.path.join(HERE, "zones.conf")
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 HOTKEYS = os.path.join(HERE, "setup-hotkeys.py")
 
@@ -56,6 +55,7 @@ def load_zonetiler():
 
 
 zt = load_zonetiler()
+CONF = zt.default_conf()
 
 
 # ------------------------------------------------------------------ данные
@@ -108,6 +108,9 @@ def save_zones(path, zones):
         lines += ["", "[keys]"]
         for z in bindings:
             lines.append(f"{z.name} = {z.binding.strip()}")
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
 
