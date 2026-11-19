@@ -18,6 +18,11 @@
 
 set -u
 
+# muffin (Mutter) выбирает бэкенд по logind/$XDG_SESSION_TYPE. На CI без logind-сессии
+# он пишет «Unsupported session type» и не становится оконным менеджером — задаём X11 явно.
+export XDG_SESSION_TYPE=x11
+unset WAYLAND_DISPLAY 2>/dev/null || true
+
 DISP=":99"
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TILER="$ROOT/zone-tiler.py"
