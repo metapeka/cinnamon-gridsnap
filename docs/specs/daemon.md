@@ -1,7 +1,7 @@
 ---
 id: gridsnap-daemon
 type: module-design
-status: draft
+status: active
 title: "Модуль: демон автоукладки zone-daemon"
 parent: gridsnap-architecture
 depends-on: [zone-tiler]

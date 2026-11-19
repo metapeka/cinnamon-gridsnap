@@ -1,7 +1,7 @@
 ---
 id: zone-reflow
 type: submodule-design
-status: draft
+status: active
 title: "Подмодуль: чистая геометрия reflow"
 parent: gridsnap-daemon
 ---
