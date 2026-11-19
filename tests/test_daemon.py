@@ -8,12 +8,16 @@ CLI. Реакция на события проверяется через инъ
 
 Покрыто: вложение по правилу на MapNotify, игнор override_redirect и диалогов,
 защита от повторного MapNotify, пустой WM_CLASS, tolerant-чтение `[daemon]`,
-reflow=off (ничего не двигает) и reflow=neighbors (сосед расширяется).
+reflow=off (ничего не двигает) и reflow=neighbors (сосед расширяется при
+DestroyNotify). Отдельно — разделение DestroyNotify (снять с трекера + reflow)
+и UnmapNotify (no-op: окно остаётся в трекере, соседей не двигаем) и разводка
+событий в `handle_event`.
 
 Запуск:
     python3 tests/test_daemon.py
 """
 
+import ctypes
 import importlib.util
 import os
 import subprocess
@@ -167,7 +171,7 @@ class TestDaemonEvents(unittest.TestCase):
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {})
 
-    # -- Unmap/Destroy
+    # -- Destroy: реальное закрытие окна
 
     def test_destroy_with_reflow_off_moves_nothing(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -176,7 +180,7 @@ class TestDaemonEvents(unittest.TestCase):
         d.on_map(0x1)
         d.on_map(0x2)
         self.applied.clear()
-        d.on_unmap(0x1)
+        d.on_destroy(0x1)
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {0x2: "right"})
 
@@ -187,20 +191,50 @@ class TestDaemonEvents(unittest.TestCase):
         d.on_map(0x1)
         d.on_map(0x2)
         self.applied.clear()
-        d.on_unmap(0x1)
+        d.on_destroy(0x1)
         # left освободилась, right расширяется на всю рабочую область
         self.assertEqual(self.applied, [(0x2, (0, 0, 1000, 1000), "right", True)])
         self.assertEqual(d.windows, {0x2: "right"})
 
-    def test_unmap_uses_same_reflow_path_as_destroy(self):
+    # -- Unmap: сворачивание/скрытие/смена воркспейса -> no-op
+
+    def test_unmap_with_reflow_neighbors_moves_nothing(self):
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.on_map(0x1)
         d.on_map(0x2)
         self.applied.clear()
-        d.on_unmap(0x1)  # UnmapNotify обрабатывается так же, как DestroyNotify
+        d.on_unmap(0x1)  # окно свёрнуто, но ещё живо
+        self.assertEqual(self.applied, [])  # соседей не двигаем
+
+    def test_unmap_keeps_window_in_tracker(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.on_map(0x1)
+        d.on_unmap(0x1)
+        self.assertEqual(d.windows, {0x1: "left"})
+
+    def test_map_after_unmap_does_not_reapply(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.on_map(0x1)
+        d.on_unmap(0x1)   # свернули
+        d.on_map(0x1)     # развернули обратно
         self.assertEqual(len(self.applied), 1)
+        self.assertEqual(self.reads, [0x1])  # повторно метаданные не читали
+        self.assertEqual(d.windows, {0x1: "left"})
+
+    def test_unmap_then_destroy_still_reflows(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.on_map(0x1)
+        d.on_map(0x2)
+        d.on_unmap(0x1)  # свернули — трекер и раскладка на месте
+        self.applied.clear()
+        d.on_destroy(0x1)  # действительно закрыли
+        self.assertEqual(self.applied, [(0x2, (0, 0, 1000, 1000), "right", True)])
 
     def test_apply_failure_does_not_track_and_retries(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -227,15 +261,22 @@ class TestDaemonEvents(unittest.TestCase):
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.on_unmap(0x999)
         self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {})
+
+    def test_unknown_window_destroy_is_noop(self):
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.on_destroy(0x999)
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {})
 
     def test_reflow_off_removes_from_tracker(self):
         self.metas[0x1] = self.meta("firefox-esr")
         d = self.daemon()
         d.on_map(0x1)
-        d.on_unmap(0x1)
+        d.on_destroy(0x1)
         self.assertEqual(d.windows, {})
-        # повторный unmap уже ничего не делает
-        d.on_unmap(0x1)
+        # повторный destroy уже ничего не делает
+        d.on_destroy(0x1)
         self.assertEqual(self.applied[1:], [])
 
     def test_reflow_only_moves_remaining_tracked_window(self):
@@ -248,7 +289,7 @@ class TestDaemonEvents(unittest.TestCase):
         d.on_map(0x2)  # оба окна замаплены в left; трекер хранит оба
         d.on_map(0x3)
         self.applied.clear()
-        d.on_unmap(0x1)
+        d.on_destroy(0x1)
         # left всё ещё занята окном 0x2 -> reflow возвращает {}
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {0x2: "left", 0x3: "right"})
@@ -338,6 +379,91 @@ class TestReadWindowMeta(unittest.TestCase):
         meta = zd.read_window_meta(0x1)
         self.assertEqual((meta.wm_class, meta.wm_title), ("firefox-esr", "T"))
         self.assertEqual(calls, [0x1])
+
+
+class TestHandleEventDispatch(unittest.TestCase):
+    """handle_event: MapNotify -> on_map, DestroyNotify -> on_destroy, UnmapNotify -> on_unmap.
+
+    Именно разводка гарантирует, что сворачивание (UnmapNotify) не проходит через
+    reflow-путь, зарезервированный за реальным закрытием (DestroyNotify).
+
+    Буферы событий собираются по эталонным структурам Xlib (не по структурам
+    демона), чтобы тест ловил и разъезд offset'ов относительно X11 ABI.
+    """
+
+    # Копии Xlib.h: type, serial, send_event, display, event, window[, override].
+    class XMapEventRef(ctypes.Structure):
+        _fields_ = [
+            ("type", ctypes.c_int), ("serial", ctypes.c_ulong),
+            ("send_event", ctypes.c_int), ("display", ctypes.c_void_p),
+            ("event", ctypes.c_ulong), ("window", ctypes.c_ulong),
+            ("override_redirect", ctypes.c_int),
+        ]
+
+    class XUnmapEventRef(ctypes.Structure):
+        _fields_ = [
+            ("type", ctypes.c_int), ("serial", ctypes.c_ulong),
+            ("send_event", ctypes.c_int), ("display", ctypes.c_void_p),
+            ("event", ctypes.c_ulong), ("window", ctypes.c_ulong),
+            ("from_configure", ctypes.c_int),
+        ]
+
+    class XDestroyWindowEventRef(ctypes.Structure):
+        _fields_ = [
+            ("type", ctypes.c_int), ("serial", ctypes.c_ulong),
+            ("send_event", ctypes.c_int), ("display", ctypes.c_void_p),
+            ("event", ctypes.c_ulong), ("window", ctypes.c_ulong),
+        ]
+
+    class Stub:
+        def __init__(self):
+            self.calls = []
+
+        def on_map(self, win, override_redirect=False):
+            self.calls.append(("map", win, override_redirect))
+
+        def on_destroy(self, win):
+            self.calls.append(("destroy", win))
+
+        def on_unmap(self, win):
+            self.calls.append(("unmap", win))
+
+    def event_buffer(self, struct, window, override_redirect=0):
+        ev = struct()
+        ctypes.memset(ctypes.byref(ev), 0, ctypes.sizeof(ev))
+        ev.window = window
+        # `event` (root) заполняется ненулевым: если демон перепутает поля,
+        # тест поймает root вместо окна.
+        ev.event = 0x46F
+        if hasattr(ev, "override_redirect"):
+            ev.override_redirect = override_redirect
+        buf = (ctypes.c_char * zd.EVENT_BUFFER._length_)()
+        ctypes.memmove(buf, ctypes.byref(ev), ctypes.sizeof(ev))
+        return buf
+
+    def test_map_notify_calls_on_map(self):
+        dae = self.Stub()
+        buf = self.event_buffer(self.XMapEventRef, 0x11)
+        zd.handle_event(dae, buf, zd.MAP_NOTIFY)
+        self.assertEqual(dae.calls, [("map", 0x11, False)])
+
+    def test_map_notify_forwards_override_redirect(self):
+        dae = self.Stub()
+        buf = self.event_buffer(self.XMapEventRef, 0x12, override_redirect=1)
+        zd.handle_event(dae, buf, zd.MAP_NOTIFY)
+        self.assertEqual(dae.calls, [("map", 0x12, True)])
+
+    def test_destroy_notify_calls_on_destroy(self):
+        dae = self.Stub()
+        buf = self.event_buffer(self.XDestroyWindowEventRef, 0x22)
+        zd.handle_event(dae, buf, zd.DESTROY_NOTIFY)
+        self.assertEqual(dae.calls, [("destroy", 0x22)])
+
+    def test_unmap_notify_calls_on_unmap(self):
+        dae = self.Stub()
+        buf = self.event_buffer(self.XUnmapEventRef, 0x33)
+        zd.handle_event(dae, buf, zd.UNMAP_NOTIFY)
+        self.assertEqual(dae.calls, [("unmap", 0x33)])
 
 
 class TestCli(unittest.TestCase):

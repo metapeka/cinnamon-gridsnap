@@ -181,7 +181,7 @@ def default_workarea():
 
 
 class Daemon:
-    """Ядро демона без X: вся реакция на события — в `on_map`/`on_unmap`.
+    """Ядро демона без X: вся реакция на события — в `on_map`/`on_destroy`/`on_unmap`.
 
     Зависимости инъектируются, поэтому сценарии гоняются юнит-тестами без
     дисплея:
@@ -196,6 +196,11 @@ class Daemon:
 
     `windows` — трекер `window id -> имя зоны`: им же отсекаются повторные
     MapNotify (развернуть/свернуть не переставляют окно).
+
+    Закрытие окна (`on_destroy`) снимает его с трекера и, если включён
+    `reflow=neighbors`, перестраивает раскладку. Скрытие окна (`on_unmap`:
+    сворачивание, смена воркспейса) — no-op: окно ещё живёт и занимает зону,
+    двигать соседей нельзя.
     """
 
     def __init__(
@@ -268,8 +273,8 @@ class Daemon:
         self.windows[win] = zone
         self.log(f"окно 0x{win:x} -> зона '{zone}'")
 
-    def on_unmap(self, win):
-        """UnmapNotify/DestroyNotify: снять с трекера и, если нужно, сделать reflow."""
+    def on_destroy(self, win):
+        """DestroyNotify: окно закрылось — снять с трекера и, если нужно, reflow."""
         zone = self.windows.pop(win, None)
         if zone is None:
             return
@@ -289,18 +294,30 @@ class Daemon:
             self._apply(target, fractions_to_pixels(*frac, wa), name)
             self.log(f"reflow: окно 0x{target:x} -> зона '{name}'")
 
+    def on_unmap(self, win):
+        """UnmapNotify: окно скрыто (свёрнуто/сменился воркспейс) — no-op.
+
+        Окно ещё существует и занимает свою зону, поэтому трекер не трогаем:
+        при возврате `MapNotify` не должен переставлять окно заново, а соседи
+        не должны расширяться на занятую зону. Снятие с трекера и reflow —
+        только в `on_destroy`.
+        """
+        self.log(f"окно 0x{win:x} скрыто — оставляем в трекере")
+
 
 # ------------------------------------------------------------------ X11-контур
 
 
 class XMapEvent(ctypes.Structure):
+    # Порядок полей — как в Xlib.h: у XMapEvent `event` идёт перед `window`
+    # (в отличие от XAnyEvent), иначе `ev.window` прочитал бы root.
     _fields_ = [
         ("type", ctypes.c_int),
         ("serial", ctypes.c_ulong),
         ("send_event", ctypes.c_int),
         ("display", ctypes.c_void_p),
-        ("window", ctypes.c_ulong),
         ("event", ctypes.c_ulong),
+        ("window", ctypes.c_ulong),
         ("override_redirect", ctypes.c_int),
     ]
 
@@ -329,12 +346,20 @@ class XDestroyWindowEvent(ctypes.Structure):
 
 
 def handle_event(dae, buf, etype):
-    """Разобрать XEvent из буфера и позвать нужный обработчик демона."""
+    """Разобрать XEvent из буфера и позвать нужный обработчик демона.
+
+    DestroyNotify — реальное закрытие окна (`on_destroy`, снимает с трекера и
+    делает reflow). UnmapNotify — сворачивание/скрытие/смена воркспейса
+    (`on_unmap`, no-op).
+    """
     if etype == MAP_NOTIFY:
         ev = ctypes.cast(buf, ctypes.POINTER(XMapEvent)).contents
         dae.on_map(ev.window, override_redirect=bool(ev.override_redirect))
-    elif etype in (UNMAP_NOTIFY, DESTROY_NOTIFY):
+    elif etype == DESTROY_NOTIFY:
         ev = ctypes.cast(buf, ctypes.POINTER(XDestroyWindowEvent)).contents
+        dae.on_destroy(ev.window)
+    elif etype == UNMAP_NOTIFY:
+        ev = ctypes.cast(buf, ctypes.POINTER(XUnmapEvent)).contents
         dae.on_unmap(ev.window)
 
 
@@ -354,6 +379,9 @@ def _bind_event_functions(x):
 
 def serve(dae, x11=None, once=False):
     """Цикл событий X11: select на fd дисплея -> XPending/XNextEvent -> handle_event.
+
+    `DestroyNotify` уходит в `on_destroy` (окно закрылось), `UnmapNotify` — в
+    `on_unmap` (свернулось/скрылось, но живёт).
 
     `x11` можно подменить (тогда реальный дисплей не нужен). `once=True` —
     обработать очередную пачку событий и выйти (для smoke-проверок).
