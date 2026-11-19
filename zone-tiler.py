@@ -28,6 +28,7 @@ import argparse
 import configparser
 import ctypes
 import ctypes.util
+import fnmatch
 import os
 import re
 import subprocess
@@ -75,13 +76,95 @@ def default_conf():
 
 CONF = default_conf()
 
+# ------------------------------------------------------------ правила окон
+
+
+def _xprop_props(text):
+    """Разобрать вывод xprop в {имя_свойства: [строки значения]}.
+
+    Строки продолжения (значение перенесено на следующую строку) приклеиваются
+    к текущему свойству, чтобы один и тот же разбор годился и для однострочной
+    формы `WM_CLASS(STRING) = "a", "b"`, и для многострочной.
+    """
+    props = {}
+    current = None
+    for raw in text.splitlines():
+        m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\([^)]*\)\s*=\s*(.*)$", raw)
+        if m:
+            current = m.group(1)
+            props.setdefault(current, []).append(m.group(2))
+        elif current is not None and raw.strip():
+            props[current].append(raw.strip())
+    return props
+
+
+def _strings(value):
+    """Строки из значения xprop: в кавычках — как есть, иначе — по запятой."""
+    quoted = re.findall(r'"((?:[^"\\]|\\.)*)"', value)
+    if quoted:
+        return [re.sub(r"\\(.)", r"\1", s) for s in quoted]
+    return [s.strip() for s in value.split(",") if s.strip()]
+
+
+def window_class_title(win):
+    """WM_CLASS (class, вторая строка) и заголовок окна через xprop.
+
+    Заголовок берётся из _NET_WM_NAME, при его отсутствии — из WM_NAME. Любая
+    ошибка (нет xprop, окна, доступа) даёт ("", "") — вызывающий просто не найдёт
+    совпадений. Чистый разбор вывода вынесен в _xprop_props/_strings.
+    """
+    try:
+        out = subprocess.check_output(
+            ["xprop", "-id", hex(win), "WM_CLASS", "_NET_WM_NAME", "WM_NAME"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        props = _xprop_props(out)
+        wm_class = ""
+        classes = _strings(" ".join(props.get("WM_CLASS", [])))
+        if len(classes) >= 2:
+            wm_class = classes[1]  # instance, class -> берём class
+        elif classes:
+            wm_class = classes[0]
+        wm_title = ""
+        for prop in ("_NET_WM_NAME", "WM_NAME"):
+            names = _strings(" ".join(props.get(prop, [])))
+            if names and names[0]:
+                wm_title = names[0]
+                break
+        return (wm_class, wm_title)
+    except Exception:
+        return ("", "")
+
+
+def match_rules(rules, wm_class, wm_title):
+    """Первая подходящая зона для окна или None. Чистая функция — под тесты.
+
+    Селектор `re:<regex>` ищется в строке `class|title` без учёта регистра;
+    обычный селектор — это glob по WM_CLASS (тоже без учёта регистра).
+    """
+    haystack = f"{wm_class}|{wm_title}"
+    for selector, zone in rules:
+        if selector.lower().startswith("re:"):
+            try:
+                if re.search(selector[3:], haystack, re.IGNORECASE):
+                    return zone
+            except re.error:
+                continue
+        elif fnmatch.fnmatch(wm_class.lower(), selector.lower()):
+            return zone
+    return None
+
+
 # ---------------------------------------------------------------- конфиг сетки
 
 
 class Grid:
     def __init__(self, path=CONF):
         cp = configparser.ConfigParser(
-            interpolation=None, inline_comment_prefixes=("#", ";")
+            interpolation=None,
+            inline_comment_prefixes=("#", ";"),
+            delimiters=("=",),  # ключ `re:<regex>` содержит ':', разделитель только '='
         )
         if not cp.read(path, encoding="utf-8"):
             fail(f"zone-tiler: не найден конфиг {path}", EXIT_CONFIG)
@@ -94,6 +177,16 @@ class Grid:
                 self.zones[name.strip()] = self._parse_zone(name, spec)
         if not self.zones:
             fail("zone-tiler: в zones.conf нет ни одной зоны в секции [zones]", EXIT_CONFIG)
+        self.rules = []
+        if cp.has_section("rules"):
+            for selector, zone in cp.items("rules"):
+                selector, zone = selector.strip(), zone.strip()
+                if zone not in self.zones:
+                    fail(
+                        f"zone-tiler: правило '{selector}' ссылается на неизвестную зону '{zone}'",
+                        EXIT_CONFIG,
+                    )
+                self.rules.append((selector, zone))
 
     @staticmethod
     def _numlist(value):
