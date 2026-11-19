@@ -33,6 +33,7 @@ from zone_config import (  # noqa: E402
     Zone,
     load_extra_sections,
     load_zones,
+    missing_rule_targets,
     sanitize_name,
     save_zones,
     unique_name,
@@ -84,6 +85,20 @@ def templates():
         ]),
         "чистый лист": [],
     }
+
+
+# ------------------------------------------------------- проверка правил
+
+DANGLING_SHOWN = 3  # сколько висячих правил перечислять в статусе, остальные — счётом
+
+
+def _dangling_rules_status(dangling):
+    """Текст статуса: почему не сохраняем и какие правила мешают."""
+    shown = ", ".join(f"{sel} → {zone}" for sel, zone in dangling[:DANGLING_SHOWN])
+    rest = len(dangling) - DANGLING_SHOWN
+    tail = f" и ещё {rest}" if rest > 0 else ""
+    return ("не сохраняю: правила из [rules] ссылаются на отсутствующие зоны — "
+            f"{shown}{tail}. Верните зоны или поправьте [rules] в zones.conf.")
 
 
 # -------------------------------------------------------------- рисование
@@ -724,20 +739,27 @@ class Editor(Gtk.Window):
         self.set_status(f"шаблон «{name}»: {len(self.zones)} зон (не забудьте сохранить)")
 
     def on_save(self):
+        """Сохранить раскладку. ``False`` — конфиг не записан (нет зон или висячие правила)."""
         if not self.zones:
             self.set_status("нет зон — сохранять нечего")
-            return
+            return False
+        dangling = missing_rule_targets(self.extra_sections, {z.name for z in self.zones})
+        if dangling:
+            self.set_status(_dangling_rules_status(dangling))
+            return False
         try:
             save_zones(self.conf_path, self.zones, self.extra_sections)
         except OSError as exc:
             self.set_status(f"ошибка записи: {exc}")
-            return
+            return False
         self.set_dirty(False)
         self.set_status(f"сохранено: {self.conf_path} ({len(self.zones)} зон). "
                         "Клавиши применяются кнопкой «сочетания клавиш».")
+        return True
 
     def on_hotkeys(self):
-        self.on_save()
+        if not self.on_save():
+            return
         r = subprocess.run([sys.executable, HOTKEYS], text=True, capture_output=True)
         msg = (r.stdout or r.stderr).strip().splitlines()
         self.set_status(f"сочетания: {msg[0] if msg else 'без вывода'}")
@@ -746,7 +768,8 @@ class Editor(Gtk.Window):
         if self.selected is None:
             self.set_status("выберите зону")
             return
-        self.on_save()
+        if not self.on_save():
+            return
         z = self.zones[self.selected]
         r = subprocess.run(
             [sys.executable, ZONEBIN, "apply", z.name, "--verify"],

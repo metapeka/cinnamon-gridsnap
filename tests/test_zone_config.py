@@ -222,6 +222,49 @@ class TestExtraSections(ConfMixin, unittest.TestCase):
         self.assertEqual(sections_in(text), ["grid", "zones", "rules"])
 
 
+class TestMissingRuleTargets(unittest.TestCase):
+    def test_finds_dangling_targets(self):
+        extra = {"rules": ["Chrome = main", "re:^(Navigator|firefox) = top-right"]}
+        self.assertEqual(
+            zc.missing_rule_targets(extra, ["main"]),
+            [("re:^(Navigator|firefox)", "top-right")],
+        )
+
+    def test_no_dangling_when_all_targets_exist(self):
+        extra = {"rules": ["Chrome = main", "re:^firefox = top-right"]}
+        self.assertEqual(zc.missing_rule_targets(extra, {"main", "top-right"}), [])
+
+    def test_empty_without_rules_section(self):
+        self.assertEqual(zc.missing_rule_targets({}, ["main"]), [])
+        self.assertEqual(zc.missing_rule_targets({"daemon": ["reflow = off"]}, ["main"]), [])
+        self.assertEqual(zc.missing_rule_targets({"rules": []}, ["main"]), [])
+        self.assertEqual(zc.missing_rule_targets(None, ["main"]), [])
+
+    def test_order_and_multiple_dangling(self):
+        extra = {"rules": ["a = gone1", "re:^b = gone2"]}
+        self.assertEqual(
+            zc.missing_rule_targets(extra, ["other"]),
+            [("a", "gone1"), ("re:^b", "gone2")],
+        )
+
+    def test_skips_comments_and_inline_comments(self):
+        extra = {"rules": ["# правило", "", "Chrome = main  # браузер", " ; too",
+                            "Navigator = gone ; старая зона"]}
+        self.assertEqual(zc.missing_rule_targets(extra, ["main"]), [("Navigator", "gone")])
+
+    def test_accepts_tuple_pairs(self):
+        extra = {"rules": [("Chrome", "main"), ("re:^firefox", "top-right")]}
+        self.assertEqual(zc.missing_rule_targets(extra, ["main"]), [("re:^firefox", "top-right")])
+
+    def test_zone_names_may_be_zone_objects(self):
+        extra = {"rules": ["Chrome = main"]}
+        self.assertEqual(zc.missing_rule_targets(extra, [zc.Zone("main", 0, 0, 1, 1)]), [])
+
+    def test_section_name_is_case_insensitive(self):
+        self.assertEqual(zc.missing_rule_targets({"Rules": ["a = gone"]}, ["main"]),
+                         [("a", "gone")])
+
+
 class TestNames(unittest.TestCase):
     def test_sanitize_keeps_allowed(self):
         self.assertEqual(zc.sanitize_name("main"), "main")

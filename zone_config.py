@@ -184,6 +184,52 @@ def save_zones(path, zones, extra=None):
         fh.write("\n".join(lines) + "\n")
 
 
+# ------------------------------------------------- проверка правил [rules]
+
+# Инлайн-комментарий: ` # ...` или ` ; ...`, как у ConfigParser (нужен пробел перед знаком).
+_INLINE_COMMENT_RE = re.compile(r"\s[#;].*$")
+
+
+def _rule_pairs(body):
+    """Пары ``(selector, zone)`` из тела секции ``[rules]`` в порядке появления."""
+    pairs = []
+    for item in body or []:
+        if isinstance(item, (tuple, list)) and len(item) == 2:
+            selector, zone = str(item[0]).strip(), str(item[1]).strip()
+        else:
+            line = str(item).strip()
+            if not line or line[0] in "#;":
+                continue
+            line = _INLINE_COMMENT_RE.sub("", line)
+            if "=" not in line:
+                continue
+            selector, zone = (part.strip() for part in line.split("=", 1))
+        if selector:
+            pairs.append((selector, zone))
+    return pairs
+
+
+def missing_rule_targets(extra_sections, zone_names):
+    """Правила ``[rules]``, ссылающиеся на отсутствующие зоны.
+
+    Возвращает список пар ``(selector, отсутствующая_зона)`` в порядке, в
+    котором правила записаны (первое совпадение важнее в ``match_rules``).
+    Пустой список, если секции ``[rules]`` нет или все её цели на месте.
+    Повторяет семантику ``zone-tiler.Grid``: тело секции — строки вида
+    ``selector = zone``, инлайн-комментарии после пробела отбрасываются,
+    имя зоны сверяется точно. Модуль остаётся чистым — без GTK.
+    """
+    body = None
+    for key, value in (extra_sections or {}).items():
+        if str(key).strip().lower() == "rules":
+            body = value
+            break
+    if not body:
+        return []
+    names = {getattr(name, "name", name) for name in zone_names}
+    return [(sel, zone) for sel, zone in _rule_pairs(body) if zone not in names]
+
+
 # ------------------------------------------------------- имена зон (чистые)
 
 
