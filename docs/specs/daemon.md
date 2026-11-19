@@ -76,6 +76,11 @@ Cinnamon/muffin (X11) тем же ctypes/libX11 и EWMH, что и раскла�
 - `Daemon._apply` ловит `Exception` **и** `SystemExit`: `fail()` в layout-коде бросает `SystemExit` при
   отказе X-сервера, а он не подкласс `Exception`, — иначе одно неудачное вложение уронило бы демон.
   `KeyboardInterrupt` не перехватывается.
+- `Daemon._workarea()` тоже устойчив: получение рабочей области (по умолчанию `default_workarea` =
+  `tiler.monitors()[0]`, а `fail()` в `monitors()` бросает `SystemExit`) ловит `Exception` и
+  `SystemExit`, логирует и возвращает `None`. При `None` `on_map` не вкладывает окно, а reflow не
+  двигает соседей — демон не падает, а слушает события дальше. Неудачный результат не кэшируется:
+  следующий вызов пробует получить рабочую область снова. `KeyboardInterrupt` не перехватывается.
 
 ## Reflow
 

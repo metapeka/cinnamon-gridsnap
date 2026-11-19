@@ -277,6 +277,34 @@ class TestApplyZone(unittest.TestCase):
         self.assertIn("0x1", buf.getvalue())
 
 
+class TestX11Close(unittest.TestCase):
+    """Реальный `X11.close()` без X-сервера: закрывает `dpy` ровно один раз.
+
+    Тесты утечки выше подменяют `close()` собственным стабом `ClosableX11`, поэтому
+    реальное поведение `X11.close()` (вызов `XCloseDisplay` и `dpy = None`) там
+    не закреплено. Здесь объект создаётся в обход `__init__` (`object.__new__`),
+    а LibX11-функция `XCloseDisplay` подменяется записывающей заглушкой.
+    """
+
+    class _FakeLib:
+        def __init__(self):
+            self.closed = []
+
+        def XCloseDisplay(self, dpy):
+            self.closed.append(dpy)
+            return 1
+
+    def test_close_calls_xclosedisplay_once_and_clears_dpy(self):
+        obj = object.__new__(zt.X11)
+        obj.x = self._FakeLib()
+        obj.dpy = 0x1234
+        obj.close()
+        self.assertEqual(obj.x.closed, [0x1234])  # первый close — ровно один вызов
+        self.assertIsNone(obj.dpy)
+        obj.close()  # повторный close — no-op
+        self.assertEqual(obj.x.closed, [0x1234])
+
+
 class TestCli(ConfMixin, unittest.TestCase):
     def run_cli(self, *args):
         return subprocess.run(

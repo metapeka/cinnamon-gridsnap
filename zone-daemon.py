@@ -279,9 +279,21 @@ class Daemon:
             print(message, flush=True)
 
     def _workarea(self):
+        """Рабочая область, закэшированная; `None`, если её не удалось получить.
+
+        `default_workarea` зовёт `tiler.monitors()`, а тот через `fail()` бросает
+        `SystemExit` при отказе X-сервера — это не подкласс `Exception`. Ошибку
+        получения области демон переживает: логирует и возвращает `None`, а
+        вызывающий пропускает применение. Неудачу не кэшируем: следующий вызов
+        попробует снова. `KeyboardInterrupt` не перехватывается.
+        """
         if self._wa_cache is None:
-            wa = self.workarea() if callable(self.workarea) else self.workarea
-            self._wa_cache = tuple(wa)
+            try:
+                wa = self.workarea() if callable(self.workarea) else self.workarea
+                self._wa_cache = tuple(wa)
+            except (Exception, SystemExit) as exc:
+                self.log(f"не удалось получить рабочую область: {exc}")
+                return None
         return self._wa_cache
 
     def _default_apply(self, win, rect, label="", quiet=False):
@@ -350,7 +362,10 @@ class Daemon:
         )
         if zone is None:
             return
-        rect = self.grid.rect(zone, self._workarea())
+        wa = self._workarea()
+        if wa is None:
+            return  # рабочая область недоступна: не падаем и окно не трогаем
+        rect = self.grid.rect(zone, wa)
         if not self._apply(win, rect, zone):
             return  # не запоминаем: окно не уложено, зону занятой не считаем
         self.windows[win] = zone
@@ -370,6 +385,8 @@ class Daemon:
         if not changes:
             return
         wa = self._workarea()
+        if wa is None:
+            return  # рабочая область недоступна: соседей не двигаем
         for name, frac in changes.items():
             target = self._window_for_zone(name)
             if target is None:

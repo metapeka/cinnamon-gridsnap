@@ -432,6 +432,57 @@ class TestDaemonEvents(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt):
             d.on_map(0x1)
 
+    def test_system_exit_from_workarea_does_not_kill_daemon(self):
+        # `default_workarea` -> `tiler.monitors()` -> `fail()` бросает SystemExit
+        # при отказе X: получение рабочей области не должно ронять демон.
+        self.metas[0x1] = self.meta("firefox-esr")
+
+        def boom():
+            raise SystemExit(1)
+
+        d = zd.Daemon(
+            self.conf(ONE_RULE),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            workarea=boom,
+        )
+        d.on_map(0x1)  # не должно выбросить SystemExit
+        self.assertEqual(self.applied, [])  # окно не уложено
+        self.assertEqual(d.windows, {})
+        self.assertEqual(d.seen, set())
+
+    def test_keyboard_interrupt_from_workarea_is_not_swallowed(self):
+        # `_workarea` ловит (Exception, SystemExit), но не BaseException.
+        self.metas[0x1] = self.meta("firefox-esr")
+
+        def interrupt():
+            raise KeyboardInterrupt()
+
+        d = zd.Daemon(
+            self.conf(ONE_RULE),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            workarea=interrupt,
+        )
+        with self.assertRaises(KeyboardInterrupt):
+            d.on_map(0x1)
+
+    def test_system_exit_from_workarea_during_reflow_does_not_kill_daemon(self):
+        # Тот же отказ X при reflow: трекер чистится, но соседей не двигаем и не падаем.
+        def boom():
+            raise SystemExit(1)
+
+        d = zd.Daemon(
+            self.conf(TWO_ZONES + "[daemon]\nreflow = neighbors\n"),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            workarea=boom,
+        )
+        d.windows = {0x1: "left", 0x2: "right"}
+        d.on_destroy(0x1)  # wa недоступна -> reflow пропускается
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {0x2: "right"})
+
     def test_unknown_window_unmap_is_noop(self):
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.on_unmap(0x999)
@@ -729,6 +780,14 @@ class StubDaemon:
 class TestServeLoop(unittest.TestCase):
     """serve(): PropertyChangeMask на root, стартовая реконсиляция и PropertyNotify."""
 
+    def conf(self, text):
+        fd, path = tempfile.mkstemp(suffix=".conf", text=True)
+        os.close(fd)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        self.addCleanup(os.unlink, path)
+        return path
+
     def pipe_fd(self):
         """fd, который никогда не станет читаемым (для таймаута в --once)."""
         r, w = os.pipe()
@@ -760,7 +819,9 @@ class TestServeLoop(unittest.TestCase):
         self.assertTrue(fake.closed)
 
     def test_unreadable_list_keeps_tracker_on_property_notify(self):
-        dae = StubDaemon()
+        # Настоящий Daemon (а не заглушка со своим reconcile): пропущенная
+        # реконсиляция не должна трогать ни трекер, ни `seen`.
+        dae = zd.Daemon(self.conf(ONE_RULE), workarea=lambda: WA)
         dae.windows = {0x1: "left"}
         dae.seen = {0x1}
         fake = FakeX11(
@@ -770,7 +831,6 @@ class TestServeLoop(unittest.TestCase):
             dae, x11=fake, once=True, read_clients=lambda: None, once_timeout=0.05
         )
         # список не прочитался — ни реконсиляции, ни изменений трекера
-        self.assertEqual(dae.reconciled, [])
         self.assertEqual(dae.windows, {0x1: "left"})
         self.assertEqual(dae.seen, {0x1})
 
