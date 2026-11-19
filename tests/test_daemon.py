@@ -10,7 +10,8 @@ CLI. Реакция на события проверяется через инъ
 override_redirect и диалогов, защита от повторного появления, пустой WM_CLASS,
 tolerant-чтение `[daemon]`, `read_client_list` (парсинг xprop), реконсиляция
 списка (добавление/исчезновение, повтор без перечитывания, стабильность при
-сворачивании), reflow=off/neighbors, разводка PropertyNotify (только
+сворачивании), reflow=off/neighbors, возврат расширенной зоны, когда
+освобождённую занимает новое окно, разводка PropertyNotify (только
 `_NET_CLIENT_LIST`) и цикл `serve()` на фейковом X11.
 
 Запуск:
@@ -35,6 +36,7 @@ DAEMON = os.path.join(ROOT, "zone-daemon.py")
 
 def load_daemon():
     spec = importlib.util.spec_from_file_location("zone_daemon_under_test", DAEMON)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -521,6 +523,126 @@ class TestDaemonEvents(unittest.TestCase):
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {0x2: "left", 0x3: "right"})
 
+    # -- возврат расширенной зоны, когда новое окно встаёт в освобождённую
+
+    def test_new_window_in_freed_zone_restores_expanded_neighbor(self):
+        # 0x1 закрылось, right расширился на left; новое окно 0x3 в left
+        # возвращает right к его рамке из конфига.
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.metas[0x3] = self.meta("firefox-esr")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.on_map(0x1)
+        d.on_map(0x2)
+        d.on_destroy(0x1)
+        self.assertEqual(d.filled, {"left": "right"})
+        self.applied.clear()
+        d.on_map(0x3)
+        self.assertEqual(
+            self.applied,
+            [
+                (0x3, (0, 0, 500, 1000), "left", True),
+                (0x2, (500, 0, 500, 1000), "right", True),
+            ],
+        )
+        self.assertEqual(d.filled, {})
+        self.assertEqual(d.windows, {0x2: "right", 0x3: "left"})
+
+    def test_window_without_rule_does_not_restore_neighbor(self):
+        # Окно без правила освобождённую зону не занимает — возвращать нечего.
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.metas[0x3] = self.meta("libreoffice")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.on_map(0x1)
+        d.on_map(0x2)
+        d.on_destroy(0x1)
+        self.applied.clear()
+        d.on_map(0x3)
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.filled, {"left": "right"})
+
+    def test_reflow_off_never_expands_nor_restores(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.metas[0x3] = self.meta("firefox-esr")
+        d = self.daemon(TWO_ZONES)  # reflow off
+        d.on_map(0x1)
+        d.on_map(0x2)
+        d.on_destroy(0x1)
+        self.assertEqual(d.filled, {})
+        self.applied.clear()
+        d.on_map(0x3)
+        self.assertEqual(self.applied, [(0x3, (0, 0, 500, 1000), "left", True)])
+
+    def test_missing_holder_record_is_dropped(self):
+        # Держателя уже нет в трекере: запись снимается, падения нет.
+        self.metas[0x3] = self.meta("firefox-esr")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.windows = {}
+        d.filled = {"left": "right"}
+        d.on_map(0x3)
+        self.assertEqual(self.applied, [(0x3, (0, 0, 500, 1000), "left", True)])
+        self.assertEqual(d.filled, {})
+
+    def test_holder_destroy_clears_covered_zones(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.on_map(0x1)
+        d.on_map(0x2)
+        d.on_destroy(0x1)
+        self.assertEqual(d.filled, {"left": "right"})
+        d.on_destroy(0x2)  # держатель исчез — возвращать некого
+        self.assertEqual(d.filled, {})
+
+    def test_failed_restore_keeps_record_for_retry(self):
+        calls = []
+        fail = {"restore": False}
+
+        def apply(win, rect, label="", quiet=False):
+            calls.append((win, rect, label, quiet))
+            if fail["restore"] and label == "right":
+                raise RuntimeError("окно не переехало")
+
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.metas[0x3] = self.meta("firefox-esr")
+        d = zd.Daemon(
+            self.conf(TWO_ZONES + "[daemon]\nreflow = neighbors\n"),
+            apply=apply,
+            read_meta=self.read_meta,
+            workarea=lambda: WA,
+        )
+        d.on_map(0x1)
+        d.on_map(0x2)
+        d.on_destroy(0x1)
+        calls.clear()
+        fail["restore"] = True
+        d.on_map(0x3)  # новое окно встало, но вернуть соседа не удалось
+        self.assertEqual(d.windows, {0x2: "right", 0x3: "left"})
+        self.assertEqual(calls[-1][0], 0x2)  # попытка возврата была
+        self.assertEqual(d.filled, {"left": "right"})  # запись осталась
+
+    def test_reconcile_restores_neighbor_when_new_window_fills_freed_zone(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.metas[0x3] = self.meta("firefox-esr")
+        d = self.daemon(TWO_ZONES, reflow="neighbors")
+        d.reconcile([0x1, 0x2])
+        d.reconcile([0x2])  # 0x1 закрылось -> right расширился на left
+        self.assertEqual(d.filled, {"left": "right"})
+        self.applied.clear()
+        d.reconcile([0x2, 0x3])  # 0x3 открылось в left
+        self.assertEqual(
+            self.applied,
+            [
+                (0x3, (0, 0, 500, 1000), "left", True),
+                (0x2, (500, 0, 500, 1000), "right", True),
+            ],
+        )
+        self.assertEqual(d.filled, {})
+
     # -- tolerant-чтение [daemon]
 
     def test_reflow_defaults_to_off(self):
@@ -571,15 +693,15 @@ class TestReadWindowMeta(unittest.TestCase):
 
     def setUp(self):
         self._class = zd.tiler.window_class_title
-        self._types = zd.window_types
         self._sleep = zd.time.sleep
+        self._types = mock.patch.object(zd, "window_types", lambda _win: frozenset())
+        self._types.start()
         zd.time.sleep = lambda _s: None
-        zd.window_types = lambda _win: frozenset()
         self.addCleanup(self._restore)
 
     def _restore(self):
         zd.tiler.window_class_title = self._class
-        zd.window_types = self._types
+        self._types.stop()
         zd.time.sleep = self._sleep
 
     def test_retries_once_when_title_arrives_late(self):
@@ -769,6 +891,7 @@ class StubDaemon:
         self.reconciled = []
         self.reflow = zd.REFLOW_OFF
         self.logs = []
+        self.x11 = None
 
     def reconcile(self, client_ids):
         self.reconciled.append(list(client_ids))

@@ -43,6 +43,7 @@ import select
 import subprocess
 import sys
 import time
+from typing import cast
 
 VERSION = "0.1.0"
 
@@ -89,6 +90,8 @@ def _load_sibling(name, filename):
     """Загрузить соседний hyphen-модуль (zone-tiler.py) без зависимости от sys.path."""
     path = os.path.join(HERE, filename)
     spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"не удалось загрузить модуль {path}")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
     spec.loader.exec_module(mod)
@@ -267,6 +270,10 @@ class Daemon:
         self.verbose = verbose
         self.reflow = read_reflow(self.grid.conf)
         self.windows = {}
+        # Зоны, которые сейчас покрывает расширенный сосед (reflow=neighbors):
+        # освобождённая зона -> имя соседа. Нужно, чтобы вернуть соседа к
+        # исходной рамке, когда освобождённую зону займёт новое окно.
+        self.filled = {}
         # Все id из последнего `_NET_CLIENT_LIST` (и уложенные, и без правила) —
         # чтобы не читать метаданные повторно на каждой реконсиляции.
         self.seen = set()
@@ -290,7 +297,7 @@ class Daemon:
         if self._wa_cache is None:
             try:
                 wa = self.workarea() if callable(self.workarea) else self.workarea
-                self._wa_cache = tuple(wa)
+                self._wa_cache = tuple(cast("tuple[int, int, int, int]", wa))
             except (Exception, SystemExit) as exc:
                 self.log(f"не удалось получить рабочую область: {exc}")
                 return None
@@ -324,6 +331,24 @@ class Daemon:
             if occupied == zone:
                 return win
         return None
+
+    def _restore_holder(self, zone, wa):
+        """Вернуть соседа, расширившегося на `zone`, к его рамке из конфига.
+
+        `zone` занята новым окном, поэтому покрытие больше не нужно. Если окна-
+        держателя уже нет в трекере, запись снимается без перемещений. При
+        неудачном `apply` запись остаётся: попробуем при следующем окне.
+        """
+        holder = self.filled.get(zone)
+        if holder is None:
+            return
+        target = self._window_for_zone(holder)
+        if target is None:
+            del self.filled[zone]
+            return
+        if self._apply(target, self.grid.rect(holder, wa), holder):
+            del self.filled[zone]
+            self.log(f"возвращаю зону '{holder}' к исходной рамке")
 
     # -- события
 
@@ -370,6 +395,8 @@ class Daemon:
             return  # не запоминаем: окно не уложено, зону занятой не считаем
         self.windows[win] = zone
         self.log(f"окно 0x{win:x} -> зона '{zone}'")
+        # Зона снова занята — расширившийся на неё сосед больше не нужен.
+        self._restore_holder(zone, wa)
 
     def on_destroy(self, win):
         """Окно исчезло из `_NET_CLIENT_LIST` — снять с трекера и, если нужно, reflow."""
@@ -377,6 +404,10 @@ class Daemon:
         if zone is None:
             return
         self.log(f"окно 0x{win:x} ушло из зоны '{zone}'")
+        # Держатель исчез: снять записи о зонах, которые он покрывал.
+        for freed, holder in list(self.filled.items()):
+            if holder == zone:
+                del self.filled[freed]
         if self.reflow != REFLOW_NEIGHBORS:
             return
         occupied = set(self.windows.values())
@@ -391,7 +422,10 @@ class Daemon:
             target = self._window_for_zone(name)
             if target is None:
                 continue
-            self._apply(target, fractions_to_pixels(*frac, wa), name)
+            fx, fy, fw, fh = frac
+            if not self._apply(target, fractions_to_pixels(fx, fy, fw, fh, wa), name):
+                continue  # окно не переехало: зону покрытой не считаем
+            self.filled[zone] = name
             self.log(f"reflow: окно 0x{target:x} -> зона '{name}'")
 
     def on_unmap(self, win):
