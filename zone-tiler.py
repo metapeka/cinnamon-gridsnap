@@ -405,11 +405,12 @@ class Grid:
         if spec is None:
             spec = self.zones.get(zone)
         if spec is None:
-            where = f"монитора '{monitor_name}'" if monitor_name else "общего набора"
-            fail(
-                f"zone-tiler: зоны '{zone}' нет в наборе {where} и в [zones]",
-                EXIT_CONFIG,
+            where = (
+                f"ни в наборе монитора '{monitor_name}', ни в [zones]"
+                if monitor_name
+                else "в [zones] и ни в одном наборе мониторов"
             )
+            fail(f"zone-tiler: зоны '{zone}' нет {where}", EXIT_CONFIG)
         return spec
 
     @staticmethod

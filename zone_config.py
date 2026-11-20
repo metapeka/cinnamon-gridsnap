@@ -69,9 +69,10 @@ class _SpecParser:
     """Разбор спецификаций зон правилами ``zone-tiler.Grid`` без X и GTK.
 
     У ``Grid`` берутся только чистые методы: ``_parse_zone`` (формы ``x,y,w,h``
-    и ``c0:c1, r0:r1`` с проверками) и ``fractions``, — поэтому правила разбора
-    и сообщения об ошибках не расходятся с раскладчиком. Своё состояние
-    (``cols``/``rows`` и разобранные ``zones``) держит сам, конфига не читает.
+    и ``c0:c1, r0:r1`` с проверками), ``zone_spec`` и ``fractions``, — поэтому
+    правила разбора и сообщения об ошибках не расходятся с раскладчиком. Своё
+    состояние (``cols``/``rows`` и разобранные ``zones``) держит сам, конфига не
+    читает.
     """
 
     _parse_zone = zt.Grid._parse_zone
@@ -91,6 +92,19 @@ class _SpecParser:
     def fractions_of(self, name):
         """``(x, y, w, h)`` в долях рабочей области для разобранной зоны."""
         return self.fractions(name)
+
+    def zone_spec(self, zone, monitor_name=None):
+        """Описание зоны из уже собранного набора.
+
+        У ``Grid`` этот метод ищет сначала в наборе монитора, потом в общем
+        ``[zones]``. Здесь набор собран из нужной секции заранее, так что
+        искать больше негде; ``monitor_name`` принимается ради совместимости
+        сигнатуры (``Grid.fractions`` вызывает ``self.zone_spec``).
+        """
+        spec = self.zones.get(zone)
+        if spec is None:
+            zt.fail(f"zone-tiler: зоны '{zone}' нет в наборе", zt.EXIT_CONFIG)
+        return spec
 
 
 def _clean_monitor(monitor):
