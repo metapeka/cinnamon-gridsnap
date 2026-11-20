@@ -1,0 +1,4 @@
+#!/bin/sh
+# Обёртка GridSnap: запускает zone-editor.py из /usr/lib/gridsnap.
+# Сгенерирована пакетом Debian (debian/bin/gridsnap-editor); правьте её в debian/bin/.
+exec python3 /usr/lib/gridsnap/zone-editor.py "$@"

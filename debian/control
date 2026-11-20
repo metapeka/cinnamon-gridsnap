@@ -1,0 +1,29 @@
+Source: gridsnap
+Section: utils
+Priority: optional
+Maintainer: metapeka <188594035+metapeka@users.noreply.github.com>
+Homepage: https://github.com/metapeka/cinnamon-gridsnap
+Vcs-Git: https://github.com/metapeka/cinnamon-gridsnap.git
+Vcs-Browser: https://github.com/metapeka/cinnamon-gridsnap
+Build-Depends: debhelper-compat (= 13), dh-exec
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: gridsnap
+Architecture: all
+Depends: ${misc:Depends},
+         python3,
+         python3-gi,
+         gir1.2-gtk-3.0,
+         libx11-6,
+         x11-utils
+Suggests: python3-cairo
+Description: раскладка окон по зонам для Cinnamon/X11
+ GridSnap — визуальный редактор зон рабочей области и раскладчик окон
+ для Cinnamon на X11. Активное окно вкладывается в зону горячей клавишей;
+ необязательный демон gridsnap-daemon автоматически укладывает новые
+ окна по правилам. Работает поверх muffin через EWMH, рамка окна
+ совпадает с зоной.
+ .
+ Сборка штатным пакетом Debian (debhelper): код — в /usr/lib/gridsnap,
+ запускалки — в /usr/bin, ярлык и иконки — в /usr/share.

@@ -1,0 +1,27 @@
+#!/usr/bin/make -f
+# Сборка штатным пакетом Debian (debhelper, compat 13).
+#
+# Компилировать нечего: Python-код и данные кладутся как есть по debian/install
+# и debian/docs. Цели dh_auto_* заглушены нарочно — иначе debhelper подхватил бы
+# корневой Makefile и запустил его цели сборки релизных tar.gz/deb.
+#
+#   dpkg-buildpackage -b -us -uc     # собрать .deb
+#   debuild -b -us -uc               # то же через devscripts
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	:
+
+override_dh_auto_build:
+	:
+
+override_dh_auto_test:
+	:
+
+override_dh_auto_install:
+	:
+
+override_dh_auto_clean:
+	:

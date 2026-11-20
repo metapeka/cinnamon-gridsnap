@@ -1,0 +1,8 @@
+gridsnap (0.1.0-1) unstable; urgency=medium
+
+  * Первая сборка штатным пакетом Debian (debian/ + debhelper):
+    debian/install раскладывает код в /usr/lib/gridsnap, запускалки
+    gridsnap-tiler/gridsnap-daemon/gridsnap-editor/setup-hotkeys — в /usr/bin,
+    ярлык и иконки — в /usr/share. Состав пакета совпадает с целью `make deb`.
+
+ -- metapeka <188594035+metapeka@users.noreply.github.com>  Fri, 20 Nov 2026 04:00:00 +0300
