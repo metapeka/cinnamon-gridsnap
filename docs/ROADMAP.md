@@ -19,8 +19,13 @@ EWMH, компенсирует рамку окна (`_NET_FRAME_EXTENTS`), по�
 - [x] **CLI и API.** Единые `--help`/`--version`, коды возврата и внятные сообщения об ошибках;
       отдельная функция `apply_zone(window, rect)` без глобального состояния (плюс чистая `client_size`) —
       под тесты и будущий демон.
-- [ ] **Пакетирование.** `deb` (или `.tar.gz` + `install.sh`), AUR-рецепт, ярлык и иконки уже есть
-      (`icons/`, `install-launcher.sh`). Отдельный пункт: разнести «установка для себя» и «установка пакетом».
+- [x] **Пакетирование.** «Установка для себя» (`install-launcher.sh`, `install-daemon.sh`) и
+      «установка пакетом» разведены. Собраны релизный `.tar.gz` с кодом и `install.sh` (префикс, по
+      умолчанию `~/.local`; ярлык по желанию), `deb` через штатный `dpkg-deb` (без debhelper: код в
+      `/usr/lib/gridsnap`, запускалки `gridsnap-tiler`/`gridsnap-daemon`/`gridsnap-editor`/`setup-hotkeys`
+      в `/usr/bin`, `.desktop` и иконки в `/usr/share`) и AUR-рецепт `PKGBUILD`. Всё собирается `Makefile`
+      (`make tarball`, `make deb`, `make aur`), версия — из `VERSION` в `zone-tiler.py`/`zone-daemon.py`.
+      Раздел README «Установка» описывает оба пути.
 
 ## Волна 1. От зон к тайлингу (то, за чем люди уходят в i3)
 

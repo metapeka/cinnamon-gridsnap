@@ -6,6 +6,66 @@
 
 ![Редактор сетки](docs/editor.png)
 
+## Установка
+
+Два независимых пути: **для себя** (из этого каталога, без пакетного менеджера) и **пакетом**
+(`.deb` для Debian/Ubuntu, AUR-рецепт для Arch; релизный `.tar.gz` — для любой системы).
+Оба ставят один и тот же код; версия берётся из `VERSION` в `zone-tiler.py`/`zone-daemon.py`.
+
+### Для себя (из репозитория)
+
+Ничего не требуется, кроме `python3`, PyGObject и `libX11` (в Debian уже стоят):
+
+```bash
+./install-launcher.sh             # ярлык Gridsnap в меню + иконки
+./install-launcher.sh --desktop   # ещё и ярлык на рабочем столе
+./install-daemon.sh               # автозапуск демона автоукладки (--list / --remove)
+python3 setup-hotkeys.py          # сочетания клавиш в Cinnamon
+```
+
+Ярлык ссылается на абсолютный путь к `zone-editor.py`; если каталог переехал — перезапустите
+`./install-launcher.sh`. Это тот путь, которым пользуется сам автор на своей машине.
+
+### Пакетом
+
+Собрать артефакты (нужны `make` и `dpkg-deb` из штатного `dpkg` — без debhelper и новых зависимостей):
+
+```bash
+make tarball      # dist/gridsnap-<версия>.tar.gz
+make deb          # dist/gridsnap_<версия>_all.deb
+make aur          # рецепт AUR в dist/PKGBUILD
+```
+
+`deb` ставит код в `/usr/lib/gridsnap`, команды `gridsnap-tiler`, `gridsnap-daemon`,
+`gridsnap-editor`, `setup-hotkeys` — в `/usr/bin`, ярлык и иконки — в `/usr/share`:
+
+```bash
+sudo apt install ./dist/gridsnap_<версия>_all.deb
+```
+
+`tar.gz` ставится в префикс скриптом `install.sh` (по умолчанию `$HOME/.local`):
+
+```bash
+tar -xzf gridsnap-<версия>.tar.gz && cd gridsnap-<версия>
+./install.sh                    # ~/.local: код, команды, ярлык в меню, иконки
+./install.sh --prefix /usr/local
+./install.sh --no-launcher      # только код и команды, без ярлыка и иконок
+./install.sh --uninstall        # убрать поставленное из этого префикса
+```
+
+AUR-рецепт (`PKGBUILD`) — для Arch: положите его в каталог пакета и соберите `makepkg -si`.
+
+Конфиг и там, и там ищется сначала в `~/.config/gridsnap/zones.conf`, а если его нет — рядом с кодом.
+Каталог кода системного пакета доступен только на чтение, поэтому для правки сетки под `deb`
+скопируйте конфиг в XDG:
+
+```bash
+mkdir -p ~/.config/gridsnap && cp /usr/lib/gridsnap/zones.conf ~/.config/gridsnap/
+```
+
+> «Для себя» и «пакетом» не мешают друг другу, но и не синхронизируются: `install-launcher.sh`
+> и `install-daemon.sh` работают с каталогом репозитория, а пакет — со своими путями `/usr`.
+
 ## 1. Что есть в Cinnamon из коробки
 
 Встроенного редактора сетки (как FancyZones в Windows) в Cinnamon **нет**. Есть только
@@ -210,4 +270,7 @@ python3 setup-hotkeys.py --remove   # удалить все сочетания z
 * свободные прямоугольные зоны (`x,y,w,h`) — тоже точное совпадение;
 * мышь в редакторе: перемещение, resize за край, минимальный размер, прилипание к краю
   экрана и к соседней зоне, двойной клик, `Delete`, шаблоны, сохранение и повторное чтение;
-* запуск ярлыка, поиск иконки темой GTK, `desktop-file-validate`.
+* запуск ярлыка, поиск иконки темой GTK, `desktop-file-validate`;
+* пакеты: `make tarball` (распаковка и `./install.sh --prefix ...`) и `make deb`
+  (`dpkg-deb -I`, `dpkg-deb -c`, распаковка и `zone-tiler.py --version` из пакета); это же
+  прогоняется отдельной стадией CI (`.github/workflows/ci.yml`).
