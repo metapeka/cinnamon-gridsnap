@@ -16,6 +16,7 @@ PYTHON ?= python3
 PKG     := gridsnap
 VERSION := $(shell sed -n 's/^VERSION = "\([^"]*\)"/\1/p' zone-tiler.py | head -n1)
 DAEMON_VERSION := $(shell sed -n 's/^VERSION = "\([^"]*\)"/\1/p' zone-daemon.py | head -n1)
+CTL_VERSION := $(shell sed -n 's/^VERSION = "\([^"]*\)"/\1/p' gridsnap-ctl | head -n1)
 AUR_VERSION := $(shell sed -n 's/^pkgver=//p' PKGBUILD | head -n1)
 
 DIST  := dist
@@ -27,9 +28,11 @@ DATADIR := /usr/lib/gridsnap
 BINDIR  := /usr/bin
 
 MODULES := zone-tiler.py zone-daemon.py zone-editor.py zone_config.py \
-           zone_geom.py zone_reflow.py zone-picker.py zone_picker_nav.py setup-hotkeys.py make-icon.py
+           zone_geom.py zone_reflow.py zone-picker.py zone_picker_nav.py \
+           zone_ipc.py setup-hotkeys.py make-icon.py
+CLIENTS := gridsnap-ctl
 INSTALL_SH := install.sh install-launcher.sh install-daemon.sh
-RELEASE_FILES := $(MODULES) $(INSTALL_SH) zones.conf README.md SPEC.md Makefile PKGBUILD
+RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.md Makefile PKGBUILD
 RELEASE_DIRS := icons docs contrib
 ICON_SIZES := 16 22 24 32 48 64 128 256 512
 ICON_RECIPES := $(foreach s,$(ICON_SIZES),install -Dm0644 "icons/gridsnap-$(s).png" "$(DEBROOT)/usr/share/icons/hicolor/$(s)x$(s)/apps/gridsnap.png";)
@@ -44,6 +47,9 @@ check-version:
 	@test -n "$(VERSION)" || { echo "make: не нашёл VERSION в zone-tiler.py" >&2; exit 1; }
 	@test "$(VERSION)" = "$(DAEMON_VERSION)" || { \
 		echo "make: VERSION расходится: zone-tiler.py=$(VERSION), zone-daemon.py=$(DAEMON_VERSION)" >&2; \
+		exit 1; }
+	@test "$(VERSION)" = "$(CTL_VERSION)" || { \
+		echo "make: VERSION расходится: zone-tiler.py=$(VERSION), gridsnap-ctl=$(CTL_VERSION)" >&2; \
 		exit 1; }
 	@test -n "$(AUR_VERSION)" || { echo "make: в PKGBUILD нет pkgver" >&2; exit 1; }
 	@test "$(AUR_VERSION)" = "$(VERSION)" || { \
@@ -60,7 +66,8 @@ tarball: check-version
 	@mkdir -p "$(TARDIR)" "$(DIST)"
 	@cp -a $(RELEASE_FILES) "$(TARDIR)/"
 	@cp -a $(RELEASE_DIRS) "$(TARDIR)/"
-	@chmod 0755 "$(TARDIR)"/$(INSTALL_SH) "$(TARDIR)"/setup-hotkeys.py "$(TARDIR)"/make-icon.py
+	@chmod 0755 "$(TARDIR)"/$(INSTALL_SH) "$(TARDIR)"/setup-hotkeys.py "$(TARDIR)"/make-icon.py \
+		"$(TARDIR)"/$(CLIENTS)
 	@tar -C "$(BUILD)" -czf "$(DIST)/$(PKG)-$(VERSION).tar.gz" "$(PKG)-$(VERSION)"
 	@echo "собран $(DIST)/$(PKG)-$(VERSION).tar.gz:"
 	@tar -tzf "$(DIST)/$(PKG)-$(VERSION).tar.gz" | sed 's/^/  /'
@@ -79,6 +86,7 @@ deb: check-version
 	          "$(DEBROOT)$(BINDIR)" "$(DEBROOT)/usr/share/applications" \
 	          "$(DEBROOT)/usr/share/doc/$(PKG)"
 	@install -m 0644 $(MODULES) "$(DEBROOT)$(DATADIR)/"
+	@install -m 0644 $(CLIENTS) "$(DEBROOT)$(DATADIR)/"
 	@install -m 0644 zones.conf "$(DEBROOT)$(DATADIR)/zones.conf"
 	@install -m 0755 install-launcher.sh install-daemon.sh "$(DEBROOT)$(DATADIR)/"
 	@cp -a icons "$(DEBROOT)$(DATADIR)/icons"
@@ -89,6 +97,7 @@ deb: check-version
 	@$(call deb_wrapper,zone-daemon.py,gridsnap-daemon)
 	@$(call deb_wrapper,zone-editor.py,gridsnap-editor)
 	@$(call deb_wrapper,zone-picker.py,gridsnap-picker)
+	@$(call deb_wrapper,gridsnap-ctl,gridsnap-ctl)
 	@$(call deb_wrapper,setup-hotkeys.py,setup-hotkeys)
 
 	@$(ICON_RECIPES)

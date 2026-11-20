@@ -50,8 +50,8 @@ make aur          # рецепт AUR в dist/PKGBUILD
 ```
 
 Оба пути ставят одно и то же: код в `/usr/lib/gridsnap`, команды `gridsnap-tiler`, `gridsnap-daemon`,
-`gridsnap-editor`, `gridsnap-picker`, `setup-hotkeys` — в `/usr/bin`, ярлык и иконки — в `/usr/share`.
-Установка `make deb`:
+`gridsnap-editor`, `gridsnap-picker`, `gridsnap-ctl`, `setup-hotkeys` — в `/usr/bin`, ярлык и иконки —
+в `/usr/share`. Установка `make deb`:
 
 ```bash
 sudo apt install ./dist/gridsnap_<версия>_all.deb
@@ -245,9 +245,11 @@ python3 zone-tiler.py --version             # версия раскладчик�
 Чтобы окно вставало в зону само (по правилу), запустите демон:
 
 ```bash
-python3 zone-daemon.py             # слушать события до Ctrl-C
+python3 zone-daemon.py             # слушать события до Ctrl-C (и поднять IPC-сокет)
 python3 zone-daemon.py --verbose   # показывать, что делает
 python3 zone-daemon.py --once      # обработать одно изменение списка окон и выйти
+python3 zone-daemon.py --no-socket # без IPC, только автоукладка
+python3 zone-daemon.py --socket /путь/daemon.sock
 python3 zone-daemon.py --version
 ```
 
@@ -287,6 +289,27 @@ reflow = neighbors   # off (по умолчанию) | neighbors
 
 Скрипт кладёт `~/.config/autostart/gridsnap-daemon.desktop` с `Exec=python3 <каталог>/zone-daemon.py`.
 Демон читает тот же `zones.conf` (сначала XDG, затем рядом с кодом); путь можно задать `--conf`.
+
+### 5.1. IPC: управление демоном через `gridsnap-ctl`
+
+Пока демон работает, он слушает локальный UNIX-сокет (`$XDG_RUNTIME_DIR/gridsnap/daemon.sock`, права
+`0600`; флаг `--socket PATH` у демона и клиента, `--no-socket` — выключить IPC). Отдельный клиент
+`gridsnap-ctl` (Python, без зависимостей) говорит с ним по JSON:
+
+```bash
+python3 gridsnap-ctl status                      # зоны, окно→зона, монитор, reflow (JSON)
+python3 gridsnap-ctl apply main                  # вложить активное окно в зону main
+python3 gridsnap-ctl apply main --window 0x1a00007
+python3 gridsnap-ctl apply top-right --monitor 1
+python3 gridsnap-ctl reload                      # демон перечитает zones.conf
+python3 gridsnap-ctl quit                        # остановить демон
+```
+
+Протокол — одна JSON-строка на команду, ответ — тоже JSON (`{"ok": true, ...}` или
+`{"ok": false, "error": "..."}`); сокет только локальный, TCP нет. Ошибка сокета (битая строка,
+обрыв) демон не роняет — логирует и продолжает следить за окнами. `apply` пишется в трекер демона,
+поэтому закрытие окна затем штатно запускает reflow. Для пакетных установок клиент доступен как
+`gridsnap-ctl` (в `.deb` и через `install.sh` — команда в `$PREFIX/bin`).
 
 ## 6. Визуальный выбор зоны: `Super+Z`
 
@@ -377,8 +400,8 @@ cinnamon-settings applets        # включить GridSnap в списке а�
 
 ## 10. Проверки, которые прогонялись
 
-* юнит-тесты без X (парсер, правила, reflow, демон, конфиг-слой, arrange/undo, геометрия
-  редактора `zone_geom`, навигация выбора зоны `zone_picker_nav`):
+* юнит-тесты без X (парсер, правила, reflow, демон, IPC `zone_ipc`, конфиг-слой, arrange/undo,
+  геометрия редактора `zone_geom`, навигация выбора зоны `zone_picker_nav`):
   `python3 -m unittest discover -s tests -v`;
 * дымовой тест на своём Xvfb: `sh tests/smoke.sh` (окно встаёт в зону пиксель в пиксель);
 * дымовой тест arrange+undo: `sh tests/smoke-arrange.sh` (три окна раскладываются и возвращаются);
