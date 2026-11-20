@@ -14,6 +14,7 @@ jobs:
   unit:
     name: Юнит-тесты (без X)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,6 +33,7 @@ jobs:
   package:
     name: Сборка пакетов
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Собрать tar.gz и deb
@@ -68,6 +70,7 @@ jobs:
   debian:
     name: Штатный пакет Debian (debian/)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -96,6 +99,9 @@ jobs:
   smoke:
     name: Дымовой тест (Xvfb + muffin)
     runs-on: ubuntu-latest
+    # Дедлайн вместо дефолтных 360 минут GitHub: зависший job (нет раннера, шаг
+    # повис) убивается сам, а не держит прогон и PR в «ожидании».
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       # Без actions/setup-python: PyGObject и cairo для оверлея берём из
@@ -107,9 +113,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             xvfb muffin x11-utils xdotool dbus cinnamon-settings-daemon \
             python3-gi gir1.2-gtk-3.0 gir1.2-pango-1.0 python3-cairo
+      # Дымовые сценарии поднимают Xvfb и muffin: в CI окно иногда не успевает
+      # получить геометрию от оконного менеджера, и проверка падает на тайминге,
+      # а не на коде (локально тот же коммит проходит). run-smoke.sh даёт одну
+      # повторную попытку: настоящая поломка упадёт обе.
       - name: Дымовой тест
-        run: dbus-run-session -- sh tests/smoke.sh
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke.sh
       - name: Дымовой тест arrange+undo
-        run: dbus-run-session -- sh tests/smoke-arrange.sh
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-arrange.sh
       - name: Дымовой тест выбора зоны
-        run: dbus-run-session -- sh tests/smoke-picker.sh
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-picker.sh
