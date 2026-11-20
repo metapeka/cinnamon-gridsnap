@@ -22,18 +22,31 @@ zone-tiler — раскладывает активное окно по зона�
   zone-tiler.py apply left --dry-run      # только посчитать рамку
   zone-tiler.py apply left --monitor 1    # зона на другом мониторе
   zone-tiler.py apply left --window 0x3400007
+  zone-tiler.py arrange                   # разложить окна по зонам (по правилам и остатку)
+  zone-tiler.py arrange --by order        # разложить окна по зонам по порядку списка
+  zone-tiler.py stack main                # собрать окна в зону main стопкой (каскадом)
+  zone-tiler.py undo                      # вернуть окна из последней операции
+  zone-tiler.py undo --all                # откатить всю историю раскладок
+
+История раскладок — JSON в XDG-состоянии (`~/.local/state/gridsnap/history.json`),
+её читает и пишет каждая команда отдельным процессом (подробности — в --help и в
+`docs/specs/zone-tiler.md`).
 """
 
 import argparse
+import collections
 import configparser
+import contextlib
 import ctypes
 import ctypes.util
 import fnmatch
+import json
 import os
 import re
 import subprocess
 import sys
 import time
+from typing import NoReturn
 
 VERSION = "0.1.0"
 
@@ -45,7 +58,7 @@ EXIT_USAGE = 2
 EXIT_CONFIG = 3
 
 
-def fail(message, code=EXIT_FAIL):
+def fail(message, code=EXIT_FAIL) -> NoReturn:
     """Сообщить об ошибке в stderr и завершить процесс нужным кодом."""
     print(message, file=sys.stderr)
     sys.exit(code)
@@ -156,6 +169,110 @@ def match_rules(rules, wm_class, wm_title):
     return None
 
 
+# --------------------------------------------------- фильтры «какие окна двигать»
+
+# Свойство root со списком управляемых клиентских окон (EWMH).
+CLIENT_LIST_ATOM = "_NET_CLIENT_LIST"
+
+# Типы окон, которые не трогают ни демон, ни команды arrange/stack: это не
+# самостоятельные «окна-документы», а всплывающие/служебные поверхности.
+IGNORED_WINDOW_TYPES = frozenset(
+    {
+        "_NET_WM_WINDOW_TYPE_DIALOG",
+        "_NET_WM_WINDOW_TYPE_SPLASH",
+        "_NET_WM_WINDOW_TYPE_TOOLTIP",
+        "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU",
+        "_NET_WM_WINDOW_TYPE_UTILITY",
+    }
+)
+# Короткие имена тех же типов — на случай, если xprop/тест отдал их без префикса.
+IGNORED_TYPE_TAILS = frozenset(name.rsplit("_", 1)[-1] for name in IGNORED_WINDOW_TYPES)
+
+# Метаданные окна, нужные фильтрам и раскладке.
+# `window_type` — набор имён `_NET_WM_WINDOW_TYPE_*` (может быть пустым).
+WindowMeta = collections.namedtuple("WindowMeta", "wm_class wm_title window_type")
+
+
+def _type_names(window_type):
+    """Имена типов окна из набора/строки; короткое имя поднимается как есть."""
+    if not window_type:
+        return frozenset()
+    if isinstance(window_type, str):
+        found = re.findall(r"_NET_WM_WINDOW_TYPE_[A-Z_]+", window_type)
+        return frozenset(found) if found else frozenset({window_type.strip().upper()})
+    return frozenset(window_type)
+
+
+def is_ignored_type(window_type):
+    """True, если среди типов окна есть служебный (диалог, сплэш и т. п.).
+
+    Общий фильтр раскладчика и демона. Принимает набор имён
+    `_NET_WM_WINDOW_TYPE_*`, строку с ними или короткое имя (`DIALOG`, ...).
+    Пустое значение — не служебное окно.
+    """
+    names = _type_names(window_type)
+    if names & IGNORED_WINDOW_TYPES:
+        return True
+    return bool({name.rsplit("_", 1)[-1] for name in names} & IGNORED_TYPE_TAILS)
+
+
+def window_types(win):
+    """Набор `_NET_WM_WINDOW_TYPE` окна через xprop (пустой при ошибке)."""
+    try:
+        out = subprocess.check_output(
+            ["xprop", "-id", hex(win), "_NET_WM_WINDOW_TYPE"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return frozenset()
+    return frozenset(re.findall(r"_NET_WM_WINDOW_TYPE_[A-Z_]+", out))
+
+
+# Задержка перед единственным повтором чтения метаданных: `_NET_WM_NAME` иногда
+# появляется уже после того, как окно попало в `_NET_CLIENT_LIST`.
+META_RETRY_DELAY = 0.2
+
+
+def read_window_meta(win):
+    """Метаданные окна: `WM_CLASS`/`_NET_WM_NAME` + тип окна.
+
+    Если класс или заголовок ещё не появились, один раз перечитывает их после
+    короткой паузы (заголовок порой приходит уже после появления окна).
+    """
+    wm_class, wm_title = window_class_title(win)
+    if not wm_class or not wm_title:
+        time.sleep(META_RETRY_DELAY)
+        wm_class2, wm_title2 = window_class_title(win)
+        wm_class = wm_class or wm_class2
+        wm_title = wm_title or wm_title2
+    return WindowMeta(wm_class, wm_title, window_types(win))
+
+
+def read_client_list():
+    """Клиентские окна из `_NET_CLIENT_LIST` (EWMH) через `xprop -root`.
+
+    Возвращает список id в порядке свойства (снизу вверх) или `None`, если
+    список недоступен: нет xprop/дисплея, отсутствует само свойство (xprop
+    печатает `no such atom on any window.`) или в выводе нет маркера
+    `window id #`. Пустой список — валидное состояние «клиентов нет», его
+    нельзя путать с ошибкой. Функцию можно подменить в тестах.
+    """
+    try:
+        out = subprocess.check_output(
+            ["xprop", "-root", CLIENT_LIST_ATOM],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return None
+    # `_NET_CLIENT_LIST(WINDOW): window id # 0x400003, 0x600005`
+    if "window id #" not in out:
+        return None
+    _, _, value = out.partition("#")
+    return [int(h, 16) for h in re.findall(r"0x[0-9a-fA-F]+", value)]
+
+
 # ---------------------------------------------------------------- конфиг сетки
 
 
@@ -187,7 +304,7 @@ class Grid:
             inline_comment_prefixes=("#", ";"),
             delimiters=("=",),
         )
-        rules_cp.optionxform = str  # сохранить регистр селектора (в т.ч. `re:`)
+        rules_cp.optionxform = str  # type: ignore  # сохранить регистр селектора (`re:`)
         rules_cp.read(path, encoding="utf-8")
         self.rules = []
         if rules_cp.has_section("rules"):
@@ -284,12 +401,79 @@ class Grid:
 # ------------------------------------------------------------- мониторы (Gdk)
 
 
+def read_window_center(win):
+    """Центр окна (px, py) по абсолютной геометрии `xwininfo`; None при ошибке.
+
+    Нужен только чтобы выбрать монитор окна, поэтому берётся клиентская
+    геометрия целиком: рамка WM сдвигает её на считаные пиксели и на выбор
+    монитора не влияет.
+    """
+    try:
+        out = subprocess.check_output(
+            ["xwininfo", "-id", hex(win)], text=True, stderr=subprocess.DEVNULL
+        )
+    except Exception:
+        return None
+
+    def num(label):
+        found = re.search(rf"{label}:\s+(-?\d+)", out)
+        return int(found.group(1)) if found else None
+
+    x = num("Absolute upper-left X")
+    y = num("Absolute upper-left Y")
+    w = num("Width")
+    h = num("Height")
+    if x is None or y is None or w is None or h is None:
+        return None
+    return (x + w // 2, y + h // 2)
+
+
+def monitor_for_point(monitors, point):
+    """Рабочая область монитора, содержащего точку; иначе ближайшая по центру.
+
+    Точка может не попасть ни в одну область (окно под панелью, в щели между
+    мониторами) — тогда берётся область с ближайшим центром, а не монитор 0.
+    `monitors` — непустой список прямоугольников (x, y, w, h).
+    """
+    px, py = point
+    for wa in monitors:
+        x, y, w, h = wa
+        if x <= px < x + w and y <= py < y + h:
+            return wa
+    return min(
+        monitors,
+        key=lambda wa: (wa[0] + wa[2] / 2 - px) ** 2 + (wa[1] + wa[3] / 2 - py) ** 2,
+    )
+
+
+def window_monitor(win, mons):
+    """Рабочая область монитора окна или None, если её не определить."""
+    point = read_window_center(win)
+    if point is None:
+        return None
+    return monitor_for_point(mons, point)
+
+
+def window_workspace(win):
+    """Номер виртуального рабочего стола окна (`_NET_WM_DESKTOP`) или None."""
+    try:
+        out = subprocess.check_output(
+            ["xprop", "-id", hex(win), "_NET_WM_DESKTOP"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return None
+    found = re.search(r"=\s*(-?\d+)", out)
+    return int(found.group(1)) if found else None
+
+
 def monitors():
     try:
         import gi
 
         gi.require_version("Gdk", "3.0")
-        from gi.repository import Gdk
+        from gi.repository import Gdk  # type: ignore
 
         dpy = Gdk.Display.get_default()
         out = []
@@ -426,15 +610,232 @@ class X11:
         self.x.XSendEvent(self.dpy, self.root, 0, SUBSTRUCTURE_MASK, ctypes.byref(ev))
         self.x.XSync(self.dpy, 0)
 
-    def set_state(self, win, action, first, second=0):
-        """action: 0 = снять, 1 = добавить, 2 = переключить."""
+    def set_state(self, win, action, first, second=None):
+        """action: 0 = снять, 1 = добавить, 2 = переключить.
+
+        `second` — второе свойство состояния (например
+        `_NET_WM_STATE_MAXIMIZED_HORZ`); пустое — без него.
+        """
         self.send(
-            win, "_NET_WM_STATE", [action, self.atom(first), self.atom(second) or 0, SOURCE_PAGER, 0]
+            win,
+            "_NET_WM_STATE",
+            [action, self.atom(first), self.atom(second) if second else 0, SOURCE_PAGER, 0],
         )
 
     def move_resize(self, win, x, y, w, h):
         flags = (SOURCE_PAGER << 12) | (X_FLAGS << 8) | GRAVITY_NORTH_WEST
         self.send(win, "_NET_MOVERESIZE_WINDOW", [flags, x, y, w, h])
+
+
+# --------------------------------------------- раскладка и история (без X)
+
+# Сколько последних операций хранить в истории раскладок.
+HISTORY_LIMIT = 20
+
+
+def movable_windows(client_ids, metas):
+    """id окон, которые можно двигать, в порядке `_NET_CLIENT_LIST`.
+
+    Те же фильтры, что у демона: нужен непустой `WM_CLASS` и не служебный тип
+    окна. `override_redirect` окон в списке клиентов EWMH нет, поэтому там такой
+    проверки не требуется. Чистая функция — под тесты.
+    """
+    out = []
+    for win in client_ids:
+        meta = metas.get(win)
+        if meta is None:
+            continue
+        if not meta.wm_class or is_ignored_type(meta.window_type):
+            continue
+        out.append(win)
+    return out
+
+
+def choose_assignments(client_ids, metas, zones, rules, by="auto"):
+    """Сопоставить окна зонам. Чистая функция — под тесты.
+
+    client_ids — id в порядке `_NET_CLIENT_LIST` (снизу вверх);
+    metas — {id: WindowMeta};
+    zones — имена зон в порядке файла (важен для order/auto);
+    rules — [(селектор, зона)] из `[rules]`;
+    by — режим:
+      `rules` — только окна со сработавшим правилом, каждое в свою зону;
+      `order` — все подвижные окна по порядку в зоны по порядку; лишним окнам
+                (сверх числа зон) достаётся последняя зона (там они — стопкой);
+      `auto`  — сначала правила, затем свободные (никем не занятые по правилу)
+                зоны по порядку для окон без правила; лишние не трогаются.
+
+    Возвращает список (id, зона) в порядке укладки; неназначенные окна в него
+    не попадают.
+    """
+    windows = movable_windows(client_ids, metas)
+    if by == "rules":
+        result = []
+        for win in windows:
+            zone = match_rules(rules, metas[win].wm_class, metas[win].wm_title)
+            if zone is not None:
+                result.append((win, zone))
+        return result
+    if by == "order":
+        if not zones:
+            return []
+        return [
+            (win, zones[i] if i < len(zones) else zones[-1])
+            for i, win in enumerate(windows)
+        ]
+    # auto
+    by_rule = {}
+    used = set()
+    for win in windows:
+        zone = match_rules(rules, metas[win].wm_class, metas[win].wm_title)
+        if zone is not None:
+            by_rule[win] = zone
+            used.add(zone)
+    free = [zone for zone in zones if zone not in used]
+    result = []
+    nxt = 0
+    for win in windows:
+        if win in by_rule:
+            result.append((win, by_rule[win]))
+        elif nxt < len(free):
+            result.append((win, free[nxt]))
+            nxt += 1
+    return result
+
+
+def cascade_rect(base, index, step, bounds):
+    """Рамка `index`-го окна стопки: `base` сдвинута на `index*step` вниз-вправо.
+
+    Окно не уменьшается и не прижимается к зоне: так у каждого окна остаётся
+    виден заголовок (обычно вверху-слева), даже если само окно частично уйдёт
+    за правый/нижний край зоны или рабочей области. Левый верхний угол при этом
+    не выпускается за `bounds` (рабочую область), чтобы окно вообще не уехало с
+    экрана. `step <= 0` отключает каскад. Чистая функция — под тесты.
+    """
+    x, y, w, h = base
+    bx, by, bw, bh = bounds
+    shift = max(0, index) * max(0, step)
+    max_dx = max(0, bx + bw - 1 - x)
+    max_dy = max(0, by + bh - 1 - y)
+    return (x + min(shift, max_dx), y + min(shift, max_dy), w, h)
+
+
+def state_home():
+    """XDG-каталог состояния (не конфиг и не кэш)."""
+    return os.environ.get("XDG_STATE_HOME") or os.path.join(
+        os.path.expanduser("~"), ".local", "state"
+    )
+
+
+def history_path():
+    """Путь к файлу истории раскладок.
+
+    История — это состояние: undo запускается отдельным процессом, поэтому она
+    должна пережить выход; но это не конфиг и не то, что вправе вычистить
+    чистильщик кэша. Отсюда XDG_STATE_HOME
+    (`~/.local/state/gridsnap/history.json`) — место именно для такого состояния.
+    """
+    return os.path.join(state_home(), "gridsnap", "history.json")
+
+
+class History:
+    """Персистентная история операций раскладки (JSON, до HISTORY_LIMIT штук)."""
+
+    def __init__(self, path=None, limit=HISTORY_LIMIT):
+        self.path = path or history_path()
+        self.limit = max(1, int(limit))
+
+    def load(self):
+        """Операции из файла (старые → новые). Битый/чужой файл — пустой список."""
+        try:
+            with open(self.path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            return []
+        ops = data.get("operations") if isinstance(data, dict) else None
+        if not isinstance(ops, list):
+            return []
+        return [op for op in ops if isinstance(op, dict)]
+
+    def save(self, operations):
+        """Записать операции, обрезав до предела, атомарно. Райзит OSError."""
+        ops = list(operations)[-self.limit :]
+        directory = os.path.dirname(self.path)
+        tmp = f"{self.path}.tmp"
+        try:
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump({"version": 1, "operations": ops}, fh, ensure_ascii=False, indent=2)
+                fh.write("\n")
+            os.replace(tmp, self.path)
+        except OSError:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
+
+    def record(self, operation):
+        """Дописать операцию, обрезав историю до предела. Райзит OSError."""
+        ops = self.load()
+        ops.append(operation)
+        self.save(ops)
+
+
+def undo_targets(operations, all_=False):
+    """Какие окна и в какие рамки возвращать. Чистая функция — под тесты.
+
+    `all_=False` — последняя операция; `all_=True` — вся история, причём для
+    каждого окна берётся рамка из самой ранней операции, где оно встречается
+    (так окно возвращается в состояние «до всех раскладок»). Возвращает список
+    `(id, frame, wm_class)` в порядке первого появления окон.
+    """
+    if not operations:
+        return []
+    ops = operations if all_ else operations[-1:]
+    first = {}
+    order = []
+    for op in ops:
+        for item in op.get("windows") or []:
+            if not isinstance(item, dict):
+                continue
+            win = item.get("id")
+            frame = item.get("frame")
+            if win is None or not isinstance(frame, (list, tuple)) or len(frame) != 4:
+                continue
+            if win not in first:
+                first[win] = (list(frame), item.get("wm_class"))
+                order.append(win)
+    return [(win, first[win][0], first[win][1]) for win in order]
+
+
+def remember(kind, records, quiet=False):
+    """Записать операцию в историю, не ломая раскладку из-за ошибки записи."""
+    if not records:
+        return
+    operation = {"op": kind, "time": time.time(), "windows": records}
+    try:
+        History().record(operation)
+    except OSError as exc:
+        if not quiet:
+            print(f"zone-tiler: не удалось сохранить историю: {exc}", file=sys.stderr)
+
+
+def snapshot_window(win, zone=None):
+    """Снимок окна для истории: прежняя рамка, класс, воркспейс.
+
+    Райзит исключение, если геометрию не прочитать (окно исчезло) — вызывающий
+    решает, записывать ли операцию.
+    """
+    extents = frame_extents(win)
+    frame = read_frame(win, extents)
+    wm_class, _ = window_class_title(win)
+    return {
+        "id": win,
+        "frame": list(frame),
+        "wm_class": wm_class,
+        "workspace": window_workspace(win),
+        "zone": zone,
+    }
 
 
 # -------------------------------------------------------------------- команды
@@ -454,8 +855,15 @@ def read_frame(window, extents):
     out = subprocess.check_output(
         ["xwininfo", "-id", hex(window)], text=True, stderr=subprocess.DEVNULL
     )
+
+    def num(label):
+        found = re.search(rf"{label}:\s+(-?\d+)", out)
+        if found is None:
+            raise ValueError(f"xwininfo: нет поля '{label}'")
+        return int(found.group(1))
+
     geom = {
-        k: int(re.search(rf"{k}:\s+(-?\d+)", out).group(1))
+        k: num(k)
         for k in ("Absolute upper-left X", "Absolute upper-left Y", "Width", "Height")
     }
     left, right, top, bottom = extents
@@ -518,7 +926,161 @@ def cmd_apply(grid, args):
         print(f"{args.zone}: x={x} y={y} {w}x{h} (монитор {args.monitor})")
         return
     window = args.window or active_window()
+    before = None
+    try:
+        before = snapshot_window(window, zone=args.zone)
+    except Exception:
+        before = None  # геометрию не прочитать — без записи в историю
     apply_zone(window, rect, label=args.zone, verify=args.verify, quiet=args.quiet)
+    if before is not None:
+        remember("apply", [before], quiet=args.quiet)
+
+
+def cmd_arrange(grid, args):
+    """Разложить клиентские окна `_NET_CLIENT_LIST` по зонам.
+
+    Режим `--by` (auto/rules/order) выбирает окна чистой `choose_assignments`;
+    каждое окно ставится на мониторе, где оно находится. Несколько окон,
+    попавших в одну зону одного монитора, ложатся туда стопкой со сдвигом
+    `--offset`. Прежние рамки записываются в историю для `undo`.
+    """
+    client_ids = read_client_list()
+    if client_ids is None:
+        fail("zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)", EXIT_FAIL)
+    metas = {win: read_window_meta(win) for win in client_ids}
+    assignments = choose_assignments(client_ids, metas, list(grid.zones), grid.rules, args.by)
+    if not assignments:
+        if not args.quiet:
+            print("zone-tiler: нет окон, подходящих под раскладку")
+        return
+    mons = monitors()
+    x11 = None if args.dry_run else X11()
+    counts = {}
+    records = []
+    try:
+        for win, zone in assignments:
+            wa = window_monitor(win, mons)
+            if wa is None:
+                if not args.quiet:
+                    print(f"окно 0x{win:x}: не удалось определить монитор — пропускаю", file=sys.stderr)
+                continue
+            key = (wa, zone)
+            index = counts.get(key, 0)
+            counts[key] = index + 1
+            base = grid.rect(zone, wa)
+            rect = base if index == 0 else cascade_rect(base, index, args.offset, wa)
+            if args.dry_run:
+                x, y, w, h = rect
+                print(f"окно 0x{win:x} -> зона '{zone}': x={x} y={y} {w}x{h}")
+                continue
+            try:
+                before = snapshot_window(win, zone=zone)
+            except Exception:
+                before = None
+            try:
+                apply_zone(win, rect, label=zone, x11=x11, quiet=args.quiet, verify=args.verify)
+            except Exception as exc:
+                if not args.quiet:
+                    print(f"окно 0x{win:x}: не удалось переставить ({exc})", file=sys.stderr)
+                continue
+            if before is not None:
+                records.append(before)
+    finally:
+        if x11 is not None:
+            x11.close()
+    if not args.dry_run:
+        remember("arrange", records, quiet=args.quiet)
+
+
+def cmd_stack(grid, args):
+    """Собрать подвижные клиентские окна в одну зону стопкой (каскадом)."""
+    client_ids = read_client_list()
+    if client_ids is None:
+        fail("zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)", EXIT_FAIL)
+    metas = {win: read_window_meta(win) for win in client_ids}
+    windows = movable_windows(client_ids, metas)
+    if not windows:
+        if not args.quiet:
+            print("zone-tiler: нет окон для стопки")
+        return
+    try:
+        wa = monitors()[args.monitor]
+    except IndexError:
+        fail(f"zone-tiler: монитора {args.monitor} нет", EXIT_USAGE)
+    base = grid.rect(args.zone, wa)
+    x11 = None if args.dry_run else X11()
+    records = []
+    try:
+        for index, win in enumerate(windows):
+            rect = base if index == 0 else cascade_rect(base, index, args.offset, wa)
+            if args.dry_run:
+                x, y, w, h = rect
+                print(f"окно 0x{win:x} -> зона '{args.zone}' (стопка {index + 1}): x={x} y={y} {w}x{h}")
+                continue
+            try:
+                before = snapshot_window(win, zone=args.zone)
+            except Exception:
+                before = None
+            try:
+                apply_zone(win, rect, label=args.zone, x11=x11, quiet=args.quiet, verify=args.verify)
+            except Exception as exc:
+                if not args.quiet:
+                    print(f"окно 0x{win:x}: не удалось положить в стопку ({exc})", file=sys.stderr)
+                continue
+            if before is not None:
+                records.append(before)
+    finally:
+        if x11 is not None:
+            x11.close()
+    if not args.dry_run:
+        remember("stack", records, quiet=args.quiet)
+
+
+def cmd_undo(grid, args):
+    """Вернуть окна на прежние рамки из истории (последнюю или всю)."""
+    history = History()
+    operations = history.load()
+    if not operations:
+        if not args.quiet:
+            print("zone-tiler: история раскладок пуста")
+        return
+    targets = undo_targets(operations, all_=args.all)
+    x11 = X11() if targets else None
+    restored = 0
+    skipped = 0
+
+    def warn(message):
+        nonlocal skipped
+        skipped += 1
+        if not args.quiet:
+            print(message, file=sys.stderr)
+
+    try:
+        for win, frame, wm_class in targets:
+            current_class, _ = window_class_title(win)
+            if wm_class and current_class and current_class != wm_class:
+                # id мог переиспользоваться другим приложением после выхода старого
+                warn(f"окно 0x{win:x}: класс не совпал ({current_class} ≠ {wm_class}) — пропускаю")
+                continue
+            if wm_class and not current_class:
+                warn(f"окно 0x{win:x}: уже не существует — пропускаю")
+                continue
+            try:
+                apply_zone(win, tuple(frame), x11=x11, quiet=args.quiet, verify=args.verify)
+                restored += 1
+            except (Exception, SystemExit) as exc:
+                warn(f"окно 0x{win:x}: не удалось вернуть ({exc})")
+    finally:
+        if x11 is not None:
+            x11.close()
+    try:
+        history.save([] if args.all else operations[:-1])
+    except OSError as exc:
+        if not args.quiet:
+            print(f"zone-tiler: не удалось обновить историю: {exc}", file=sys.stderr)
+    if not args.quiet:
+        tail = f", пропущено: {skipped}" if skipped else ""
+        print(f"zone-tiler: возвращено окон: {restored}{tail}")
 
 
 def cmd_keys(grid):
@@ -535,11 +1097,37 @@ def cmd_keys(grid):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Раскладка окон по зонам сетки (Cinnamon/X11)")
-    ap.add_argument("command", choices=["list", "apply", "keys"])
-    ap.add_argument("zone", nargs="?", help="имя зоны для apply")
+    ap = argparse.ArgumentParser(
+        description="Раскладка окон по зонам сетки (Cinnamon/X11)",
+        epilog=(
+            "Примеры: zone-tiler.py arrange --by order; zone-tiler.py stack main; "
+            "zone-tiler.py undo --all"
+        ),
+    )
+    ap.add_argument(
+        "command",
+        choices=["list", "apply", "keys", "arrange", "stack", "undo"],
+        help=(
+            "list/apply/keys — как раньше; arrange — разложить окна по зонам; "
+            "stack — собрать окна в зону стопкой; undo — вернуть рамки из истории"
+        ),
+    )
+    ap.add_argument("zone", nargs="?", help="имя зоны для apply/stack")
     ap.add_argument("--monitor", type=int, default=0, help="номер монитора (по умолчанию 0)")
     ap.add_argument("--window", type=lambda s: int(s, 0), help="id окна (по умолчанию активное)")
+    ap.add_argument(
+        "--by",
+        choices=["auto", "rules", "order"],
+        default="auto",
+        help="arrange: выбор окон — правила и остаток (auto), только правила, или по порядку",
+    )
+    ap.add_argument(
+        "--offset",
+        type=int,
+        default=20,
+        help="сдвиг окна в стопке/каскаде, px (по умолчанию 20; 0 — без сдвига)",
+    )
+    ap.add_argument("--all", action="store_true", help="undo: откатить всю историю, а не последнюю операцию")
     ap.add_argument("--dry-run", action="store_true", help="только посчитать рамку")
     ap.add_argument("--verify", action="store_true", help="перечитать реальную геометрию")
     ap.add_argument("--quiet", action="store_true")
@@ -554,6 +1142,12 @@ def main(argv=None):
     if args.command == "keys":
         cmd_keys(grid)
         return EXIT_OK
+    if args.command == "arrange":
+        cmd_arrange(grid, args)
+        return EXIT_OK
+    if args.command == "undo":
+        cmd_undo(grid, args)
+        return EXIT_OK
     if not args.zone:
         fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)
     if args.zone not in grid.zones:
@@ -561,6 +1155,9 @@ def main(argv=None):
             f"zone-tiler: нет зоны '{args.zone}'. Есть: " + ", ".join(sorted(grid.zones)),
             EXIT_USAGE,
         )
+    if args.command == "stack":
+        cmd_stack(grid, args)
+        return EXIT_OK
     cmd_apply(grid, args)
     return EXIT_OK
 
