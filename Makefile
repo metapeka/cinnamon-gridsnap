@@ -7,8 +7,9 @@
 #   make version   # только версия из zone-tiler.py
 #   make clean
 #
-# Никаких новых зависимостей: make, tar, dpkg-deb (пакет dpkg), sh.
-# Версия берётся из VERSION в zone-tiler.py; zone-daemon.py обязан совпадать.
+# Никаких новых зависимостей: make, tar, dpkg-deb (пакет dpkg), gzip, sh.
+# Версия берётся из VERSION в zone-tiler.py; zone-daemon.py обязан совпадать,
+# как и версия в .TH man/gridsnap.1 (это проверяет `make check-version`).
 
 SHELL  := /bin/sh
 PYTHON ?= python3
@@ -18,6 +19,7 @@ VERSION := $(shell sed -n 's/^VERSION = "\([^"]*\)"/\1/p' zone-tiler.py | head -
 DAEMON_VERSION := $(shell sed -n 's/^VERSION = "\([^"]*\)"/\1/p' zone-daemon.py | head -n1)
 CTL_VERSION := $(shell sed -n 's/^VERSION = "\([^"]*\)"/\1/p' gridsnap-ctl | head -n1)
 AUR_VERSION := $(shell sed -n 's/^pkgver=//p' PKGBUILD | head -n1)
+MAN_VERSION := $(shell sed -n 's/^\.TH GRIDSNAP 1 "[^"]*" "gridsnap \([^"]*\)".*/\1/p' man/gridsnap.1 | head -n1)
 
 DIST  := dist
 BUILD := build
@@ -33,9 +35,12 @@ MODULES := zone-tiler.py zone-daemon.py zone-editor.py zone_config.py \
 CLIENTS := gridsnap-ctl
 INSTALL_SH := install.sh install-launcher.sh install-daemon.sh
 RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.md Makefile PKGBUILD
-RELEASE_DIRS := icons docs contrib
+RELEASE_DIRS := icons docs contrib man
+MANPAGES := gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
+            gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1
 ICON_SIZES := 16 22 24 32 48 64 128 256 512
 ICON_RECIPES := $(foreach s,$(ICON_SIZES),install -Dm0644 "icons/gridsnap-$(s).png" "$(DEBROOT)/usr/share/icons/hicolor/$(s)x$(s)/apps/gridsnap.png";)
+MAN_RECIPES := $(foreach p,$(MANPAGES),install -Dm0644 "man/$(p)" "$(DEBROOT)/usr/share/man/man1/$(p)";)
 
 .PHONY: all tarball deb aur version clean check-version
 
@@ -54,6 +59,12 @@ check-version:
 	@test -n "$(AUR_VERSION)" || { echo "make: в PKGBUILD нет pkgver" >&2; exit 1; }
 	@test "$(AUR_VERSION)" = "$(VERSION)" || { \
 		echo "make: PKGBUILD pkgver=$(AUR_VERSION) не совпадает с VERSION=$(VERSION)" >&2; \
+		exit 1; }
+	@test -n "$(MAN_VERSION)" || { \
+		echo "make: в .TH man/gridsnap.1 нет версии вида \"gridsnap $(VERSION)\"" >&2; \
+		exit 1; }
+	@test "$(MAN_VERSION)" = "$(VERSION)" || { \
+		echo "make: man/gridsnap.1: версия $(MAN_VERSION) не совпадает с VERSION=$(VERSION)" >&2; \
 		exit 1; }
 
 version:
@@ -80,6 +91,8 @@ define deb_wrapper
 	chmod 0755 '$(DEBROOT)/$(BINDIR)/$(2)'
 endef
 
+# man-страницы: в debian/ их сжимает dh_compress, а здесь debhelper нет, поэтому
+# gzip -9n из обязательного пакета gzip (в .deb страницы лежат .gz).
 deb: check-version
 	@rm -rf "$(DEBROOT)"
 	@mkdir -p "$(DEBROOT)/DEBIAN" "$(DEBROOT)$(DATADIR)" \
@@ -92,6 +105,9 @@ deb: check-version
 	@cp -a icons "$(DEBROOT)$(DATADIR)/icons"
 	@cp -a docs "$(DEBROOT)/usr/share/doc/$(PKG)/docs"
 	@install -m 0644 README.md SPEC.md "$(DEBROOT)/usr/share/doc/$(PKG)/"
+
+	@$(MAN_RECIPES)
+	@cd "$(DEBROOT)/usr/share/man/man1" && gzip -9n *.1
 
 	@$(call deb_wrapper,zone-tiler.py,gridsnap-tiler)
 	@$(call deb_wrapper,zone-daemon.py,gridsnap-daemon)

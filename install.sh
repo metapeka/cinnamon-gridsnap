@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # install.sh — установка GridSnap из релизного tar.gz в префикс.
 #
-#   ./install.sh                    # в ~/.local: код, команды, ярлык в меню, иконки
+#   ./install.sh                    # в ~/.local: код, команды, man-страницы, ярлык в меню, иконки
 #   ./install.sh --prefix /usr/local
 #   ./install.sh --prefix /usr      # системно (нужен root)
-#   ./install.sh --no-launcher      # только код и команды, без ярлыка и иконок
+#   ./install.sh --no-launcher      # только код, команды и man-страницы, без ярлыка и иконок
 #   ./install.sh --uninstall        # убрать установленное (по тем же путям)
 #   ./install.sh --help
 #
@@ -21,6 +21,8 @@ LAUNCHER=1
 ACTION="install"
 
 SIZES="16 22 24 32 48 64 128 256 512"
+MANPAGES="gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1
+           gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1"
 
 usage() {
     cat <<EOF
@@ -32,13 +34,14 @@ $PROG — установка GridSnap в префикс (по умолчанию
 
 Ключи:
   --prefix КАТАЛОГ  куда ставить (по умолчанию \$HOME/.local)
-  --no-launcher     не ставить ярлык в меню и иконки
+  --no-launcher     не ставить ярлык в меню и иконки (man-страницы ставятся всё равно)
   --uninstall       удалить файлы, поставленные в этот префикс
   -h, --help        эта справка
 
 Раскладка установки:
   КАТАЛОГ/lib/gridsnap/   код, zones.conf, иконки, install-*.sh
   КАТАЛОГ/bin/            gridsnap-tiler, gridsnap-daemon, gridsnap-editor, gridsnap-ctl, setup-hotkeys
+  КАТАЛОГ/share/man/man1/ man-страницы (маны ставятся всегда: это документация, а не ярлык)
   КАТАЛОГ/share/...       ярлык, иконки, документация (если не --no-launcher)
 EOF
 }
@@ -74,6 +77,7 @@ BIN="$PREFIX/bin"
 APPS="$PREFIX/share/applications"
 ICONS="$PREFIX/share/icons/hicolor"
 DOC="$PREFIX/share/doc/gridsnap"
+MANDIR="$PREFIX/share/man/man1"
 
 MODULES="zone-tiler.py zone-daemon.py zone-editor.py zone_config.py zone_geom.py
          zone_reflow.py zone-picker.py zone_picker_nav.py zone_ipc.py setup-hotkeys.py make-icon.py"
@@ -93,6 +97,10 @@ if [ "$ACTION" = "uninstall" ]; then
         rm -f "$ICONS/${size}x${size}/apps/gridsnap.png"
     done
     rm -f "$ICONS/scalable/apps/gridsnap.svg"
+    for page in $MANPAGES; do
+        rm -f "$MANDIR/$page"
+    done
+    rmdir "$MANDIR" 2>/dev/null || true   # только если каталог опустел
     rm -rf "$LIB" "$DOC"
     refresh_caches
     echo "GridSnap удалён из $PREFIX"
@@ -111,6 +119,13 @@ rm -rf "$LIB/icons" "$LIB/docs"
 cp -a "$SRC/icons" "$LIB/icons"
 cp -a "$SRC/docs" "$DOC/docs"
 install -m 0644 "$SRC/README.md" "$SRC/SPEC.md" "$DOC/"
+
+# --- man-страницы ----------------------------------------------------------
+# Документация, а не часть ярлыка: ставится и при --no-launcher.
+mkdir -p "$MANDIR"
+for page in $MANPAGES; do
+    install -m 0644 "$SRC/man/$page" "$MANDIR/"
+done
 
 # --- команды-запускалки ----------------------------------------------------
 wrapper() {  # $1 = имя команды, $2 = модуль в lib/gridsnap
@@ -165,6 +180,7 @@ fi
 echo "GridSnap установлен в $PREFIX"
 echo "  код:      $LIB"
 echo "  команды:  $BIN/gridsnap-tiler, $BIN/gridsnap-daemon, $BIN/gridsnap-editor, $BIN/gridsnap-ctl, $BIN/setup-hotkeys"
+echo "  справка:  man -M $PREFIX/share/man gridsnap";
 if [ "$LAUNCHER" -eq 1 ]; then
     echo "  ярлык:    $APPS/gridsnap.desktop"
     echo "  иконки:   $ICONS"
