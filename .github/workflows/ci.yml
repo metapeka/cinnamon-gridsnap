@@ -23,6 +23,7 @@ jobs:
         run: |
           python3 -m compileall -q \
             zone-tiler.py zone-editor.py zone_reflow.py zone_config.py \
+            zone-picker.py zone_picker_nav.py \
             zone-daemon.py setup-hotkeys.py make-icon.py tests
       - name: Юнит-тесты
         run: python3 -m unittest discover -s tests -v
@@ -62,15 +63,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
+      # Без actions/setup-python: PyGObject и cairo для оверлея берём из
+      # apt и запускаем системным python3, а не сборкой из hostedtoolcache,
+      # которая этих модулей не видит.
       - name: Зависимости
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            xvfb muffin x11-utils xdotool dbus cinnamon-settings-daemon
+            xvfb muffin x11-utils xdotool dbus cinnamon-settings-daemon \
+            python3-gi gir1.2-gtk-3.0 gir1.2-pango-1.0 python3-cairo
       - name: Дымовой тест
         run: dbus-run-session -- sh tests/smoke.sh
       - name: Дымовой тест arrange+undo
         run: dbus-run-session -- sh tests/smoke-arrange.sh
+      - name: Дымовой тест выбора зоны
+        run: dbus-run-session -- sh tests/smoke-picker.sh

@@ -27,7 +27,7 @@ DATADIR := /usr/lib/gridsnap
 BINDIR  := /usr/bin
 
 MODULES := zone-tiler.py zone-daemon.py zone-editor.py zone_config.py \
-           zone_reflow.py setup-hotkeys.py make-icon.py
+           zone_reflow.py zone-picker.py zone_picker_nav.py setup-hotkeys.py make-icon.py
 INSTALL_SH := install.sh install-launcher.sh install-daemon.sh
 RELEASE_FILES := $(MODULES) $(INSTALL_SH) zones.conf README.md SPEC.md Makefile PKGBUILD
 RELEASE_DIRS := icons docs contrib
@@ -88,6 +88,7 @@ deb: check-version
 	@$(call deb_wrapper,zone-tiler.py,gridsnap-tiler)
 	@$(call deb_wrapper,zone-daemon.py,gridsnap-daemon)
 	@$(call deb_wrapper,zone-editor.py,gridsnap-editor)
+	@$(call deb_wrapper,zone-picker.py,gridsnap-picker)
 	@$(call deb_wrapper,setup-hotkeys.py,setup-hotkeys)
 
 	@$(ICON_RECIPES)

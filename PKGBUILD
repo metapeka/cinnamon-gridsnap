@@ -22,8 +22,8 @@ sha256sums=('SKIP')
 package() {
     install -d "$pkgdir/usr/lib/gridsnap"
     install -m 0644 \
-        zone-tiler.py zone-daemon.py zone-editor.py \
-        zone_config.py zone_reflow.py setup-hotkeys.py make-icon.py \
+        zone-tiler.py zone-daemon.py zone-editor.py zone-picker.py \
+        zone_config.py zone_picker_nav.py zone_reflow.py setup-hotkeys.py make-icon.py \
         zones.conf \
         "$pkgdir/usr/lib/gridsnap/"
     install -m 0755 install-launcher.sh install-daemon.sh "$pkgdir/usr/lib/gridsnap/"
@@ -34,6 +34,7 @@ package() {
     for m in "zone-tiler.py:gridsnap-tiler" \
              "zone-daemon.py:gridsnap-daemon" \
              "zone-editor.py:gridsnap-editor" \
+             "zone-picker.py:gridsnap-picker" \
              "setup-hotkeys.py:setup-hotkeys"; do
         c="${m#*:}"
         printf '#!/bin/sh\nexec python3 /usr/lib/gridsnap/%s "$@"\n' "${m%%:*}" \
