@@ -69,7 +69,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            debhelper dh-exec lintian
+            build-essential debhelper dh-exec lintian
       - name: Собрать dpkg-buildpackage
         run: |
           set -e
