@@ -72,3 +72,5 @@ jobs:
             xvfb muffin x11-utils xdotool dbus cinnamon-settings-daemon
       - name: Дымовой тест
         run: dbus-run-session -- sh tests/smoke.sh
+      - name: Дымовой тест arrange+undo
+        run: dbus-run-session -- sh tests/smoke-arrange.sh

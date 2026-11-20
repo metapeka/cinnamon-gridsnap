@@ -29,6 +29,8 @@ TILER="$ROOT/zone-tiler.py"
 
 LOGDIR=$(mktemp -d 2>/dev/null || echo /tmp)
 MUFFIN_LOG="$LOGDIR/gridsnap-smoke-muffin.log"
+# История undo — во временном каталоге, чтобы не трогать состояние владельца.
+export XDG_STATE_HOME="$LOGDIR/state"
 
 fails=0
 say() { printf '%s\n' "$1"; }

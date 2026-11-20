@@ -805,7 +805,7 @@ class TestReadWindowCenter(unittest.TestCase):
             "  Width: 400\n"
             "  Height: 300\n"
         )
-        with mock.patch.object(zd.subprocess, "check_output", return_value=out):
+        with mock.patch.object(zd.tiler.subprocess, "check_output", return_value=out):
             self.assertEqual(zd.read_window_center(0x400003), (300, 200))
 
     def test_parses_negative_coordinates(self):
@@ -815,16 +815,16 @@ class TestReadWindowCenter(unittest.TestCase):
             "  Width: 400\n"
             "  Height: 300\n"
         )
-        with mock.patch.object(zd.subprocess, "check_output", return_value=out):
+        with mock.patch.object(zd.tiler.subprocess, "check_output", return_value=out):
             self.assertEqual(zd.read_window_center(0x1), (-1000, 150))
 
     def test_missing_field_returns_none(self):
-        with mock.patch.object(zd.subprocess, "check_output", return_value="Width: 10\n"):
+        with mock.patch.object(zd.tiler.subprocess, "check_output", return_value="Width: 10\n"):
             self.assertIsNone(zd.read_window_center(0x1))
 
     def test_xwininfo_failure_returns_none(self):
         with mock.patch.object(
-            zd.subprocess, "check_output", side_effect=OSError("нет xwininfo")
+            zd.tiler.subprocess, "check_output", side_effect=OSError("нет xwininfo")
         ):
             self.assertIsNone(zd.read_window_center(0x1))
 
@@ -920,14 +920,14 @@ class TestReadClientList(unittest.TestCase):
     """read_client_list: разбор `xprop -root _NET_CLIENT_LIST`."""
 
     def setUp(self):
-        self._check_output = zd.subprocess.check_output
+        self._check_output = zd.tiler.subprocess.check_output
         self.addCleanup(self._restore)
 
     def _restore(self):
-        zd.subprocess.check_output = self._check_output
+        zd.tiler.subprocess.check_output = self._check_output
 
     def test_parses_window_ids(self):
-        zd.subprocess.check_output = lambda *a, **k: (
+        zd.tiler.subprocess.check_output = lambda *a, **k: (
             "_NET_CLIENT_LIST(WINDOW): window id # 0x400003, 0x600005\n"
         )
         self.assertEqual(zd.read_client_list(), [0x400003, 0x600005])
@@ -939,30 +939,30 @@ class TestReadClientList(unittest.TestCase):
             seen["args"] = args
             return "_NET_CLIENT_LIST(WINDOW): window id # 0x1\n"
 
-        zd.subprocess.check_output = fake
+        zd.tiler.subprocess.check_output = fake
         zd.read_client_list()
         self.assertEqual(seen["args"], ["xprop", "-root", "_NET_CLIENT_LIST"])
 
     def test_empty_when_property_missing(self):
         # xprop при отсутствии свойства печатает сообщение и выходит с кодом 0 —
         # это не «клиентов нет», а «список недоступен».
-        zd.subprocess.check_output = lambda *a, **k: "_NET_CLIENT_LIST:  not found.\n"
+        zd.tiler.subprocess.check_output = lambda *a, **k: "_NET_CLIENT_LIST:  not found.\n"
         self.assertIsNone(zd.read_client_list())
 
     def test_none_when_no_such_atom(self):
-        zd.subprocess.check_output = lambda *a, **k: (
+        zd.tiler.subprocess.check_output = lambda *a, **k: (
             "no such atom on any window.\n"
         )
         self.assertIsNone(zd.read_client_list())
 
     def test_none_without_window_id_marker(self):
         # Вывод без маркера `window id #` не разбирается как список окон.
-        zd.subprocess.check_output = lambda *a, **k: "_NET_CLIENT_LIST(WINDOW): \n"
+        zd.tiler.subprocess.check_output = lambda *a, **k: "_NET_CLIENT_LIST(WINDOW): \n"
         self.assertIsNone(zd.read_client_list())
 
     def test_empty_list_when_property_present_but_no_windows(self):
         # Валидное состояние «клиентов нет» — это [], а не None.
-        zd.subprocess.check_output = lambda *a, **k: (
+        zd.tiler.subprocess.check_output = lambda *a, **k: (
             "_NET_CLIENT_LIST(WINDOW): window id #\n"
         )
         self.assertEqual(zd.read_client_list(), [])
@@ -971,7 +971,7 @@ class TestReadClientList(unittest.TestCase):
         def boom(*args, **kwargs):
             raise OSError("нет xprop")
 
-        zd.subprocess.check_output = boom
+        zd.tiler.subprocess.check_output = boom
         self.assertIsNone(zd.read_client_list())
 
 

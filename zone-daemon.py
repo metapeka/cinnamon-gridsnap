@@ -38,9 +38,7 @@ import collections
 import ctypes
 import importlib.util
 import os
-import re
 import select
-import subprocess
 import sys
 import time
 from typing import cast
@@ -56,28 +54,11 @@ REFLOW_NEIGHBORS = "neighbors"
 # появляется уже после того, как окно попало в `_NET_CLIENT_LIST`.
 META_RETRY_DELAY = 0.2
 
-# Типы окон, которые демон не трогает: это не самостоятельные «окна-документы»,
-# а всплывающие/служебные поверхности.
-IGNORED_WINDOW_TYPES = frozenset(
-    {
-        "_NET_WM_WINDOW_TYPE_DIALOG",
-        "_NET_WM_WINDOW_TYPE_SPLASH",
-        "_NET_WM_WINDOW_TYPE_TOOLTIP",
-        "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU",
-        "_NET_WM_WINDOW_TYPE_UTILITY",
-    }
-)
-# Короткие имена тех же типов — на случай, если xprop/тест отдал их без префикса.
-IGNORED_TYPE_TAILS = frozenset(name.rsplit("_", 1)[-1] for name in IGNORED_WINDOW_TYPES)
-
 # Коды событий X11.
 PROPERTY_NOTIFY = 28
 
 # PropertyChangeMask: PropertyNotify о свойствах root (в т.ч. _NET_CLIENT_LIST).
 PROPERTY_CHANGE_MASK = 1 << 22
-
-# Свойство root со списком управляемых клиентских окон (EWMH).
-CLIENT_LIST_ATOM = "_NET_CLIENT_LIST"
 
 # Таймаут ожидания единственного PropertyNotify в режиме `--once`.
 ONCE_TIMEOUT = 2.0
@@ -105,22 +86,20 @@ zone_reflow = _load_sibling("gridsnap_zone_reflow", "zone_reflow.py")
 # ------------------------------------------------------------------ метаданные
 
 
+# Общие с раскладчиком фильтры и чтение EWMH — один источник истины, чтобы
+# `arrange`/`stack` в zone-tiler.py и демон отсеивали окна одинаково.
+IGNORED_WINDOW_TYPES = tiler.IGNORED_WINDOW_TYPES
+IGNORED_TYPE_TAILS = tiler.IGNORED_TYPE_TAILS
+CLIENT_LIST_ATOM = tiler.CLIENT_LIST_ATOM
+window_types = tiler.window_types
+is_ignored_type = tiler.is_ignored_type
+read_client_list = tiler.read_client_list
+read_window_center = tiler.read_window_center
+monitor_for_point = tiler.monitor_for_point
+
 # Метаданные окна, которые нужны демону. `window_type` — набор имён
 # `_NET_WM_WINDOW_TYPE_*` (может быть пустым). Namedtuple: и кортеж, и атрибуты.
 Meta = collections.namedtuple("Meta", "wm_class wm_title window_type")
-
-
-def window_types(win):
-    """Набор `_NET_WM_WINDOW_TYPE` окна через xprop (пустой при ошибке)."""
-    try:
-        out = subprocess.check_output(
-            ["xprop", "-id", hex(win), "_NET_WM_WINDOW_TYPE"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        return frozenset()
-    return frozenset(re.findall(r"_NET_WM_WINDOW_TYPE_[A-Z_]+", out))
 
 
 def read_window_meta(win):
@@ -136,55 +115,6 @@ def read_window_meta(win):
         wm_class = wm_class or wm_class2
         wm_title = wm_title or wm_title2
     return Meta(wm_class, wm_title, window_types(win))
-
-
-def is_ignored_type(window_type):
-    """True, если среди типов окна есть служебный (диалог, сплэш и т. п.).
-
-    Принимает набор имён `_NET_WM_WINDOW_TYPE_*`, строку с ними или короткое
-    имя (`DIALOG`, ...). Пустое значение — не служебное окно.
-    """
-    names = _type_names(window_type)
-    if names & IGNORED_WINDOW_TYPES:
-        return True
-    return bool({name.rsplit("_", 1)[-1] for name in names} & IGNORED_TYPE_TAILS)
-
-
-def _type_names(window_type):
-    if not window_type:
-        return frozenset()
-    if isinstance(window_type, str):
-        found = re.findall(r"_NET_WM_WINDOW_TYPE_[A-Z_]+", window_type)
-        return frozenset(found) if found else frozenset({window_type.strip().upper()})
-    return frozenset(window_type)
-
-
-# ----------------------------------------------------- список клиентов (EWMH)
-
-
-def read_client_list():
-    """Клиентские окна из `_NET_CLIENT_LIST` (EWMH) через `xprop -root`.
-
-    Возвращает список id в порядке из свойства (снизу вверх) или `None`, если
-    список недоступен: нет xprop/дисплея, отсутствует само свойство (xprop 0
-    печатает `no such atom on any window.`) или в выводе нет маркера
-    `window id #`. Пустой список — это валидное состояние «клиентов нет»,
-    его нельзя путать с ошибкой: иначе реконсиляция решит, что все окна
-    закрылись, и переуложит раскладку. Функцию можно подменить в тестах.
-    """
-    try:
-        out = subprocess.check_output(
-            ["xprop", "-root", CLIENT_LIST_ATOM],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        return None
-    # `_NET_CLIENT_LIST(WINDOW): window id # 0x400003, 0x600005`
-    if "window id #" not in out:
-        return None
-    _, _, value = out.partition("#")
-    return [int(h, 16) for h in re.findall(r"0x[0-9a-fA-F]+", value)]
 
 
 # ---------------------------------------------------------------------- конфиг
@@ -212,51 +142,6 @@ def fractions_to_pixels(fx, fy, fw, fh, wa):
     x1, x2 = wx + round(ww * fx), wx + round(ww * (fx + fw))
     y1, y2 = wy + round(wh * fy), wy + round(wh * (fy + fh))
     return (x1, y1, max(1, x2 - x1), max(1, y2 - y1))
-
-
-def read_window_center(win):
-    """Центр окна (px, py) по абсолютной геометрии `xwininfo`; None при ошибке.
-
-    Нужен только чтобы выбрать монитор окна, поэтому берётся клиентская
-    геометрия целиком: рамка WM сдвигает её на считаные пиксели и на выбор
-    монитора не влияет. `xwininfo` уже требуется раскладчику для `--verify`.
-    """
-    try:
-        out = subprocess.check_output(
-            ["xwininfo", "-id", hex(win)], text=True, stderr=subprocess.DEVNULL
-        )
-    except Exception:
-        return None
-
-    def num(label):
-        found = re.search(rf"{label}:\s+(-?\d+)", out)
-        return int(found.group(1)) if found else None
-
-    x = num("Absolute upper-left X")
-    y = num("Absolute upper-left Y")
-    w = num("Width")
-    h = num("Height")
-    if x is None or y is None or w is None or h is None:
-        return None
-    return (x + w // 2, y + h // 2)
-
-
-def monitor_for_point(monitors, point):
-    """Рабочая область монитора, содержащего точку; иначе ближайшая по центру.
-
-    Точка может не попасть ни в одну область (окно под панелью, в щели между
-    мониторами) — тогда берётся область с ближайшим центром, а не монитор 0.
-    `monitors` — непустой список прямоугольников (x, y, w, h).
-    """
-    px, py = point
-    for wa in monitors:
-        x, y, w, h = wa
-        if x <= px < x + w and y <= py < y + h:
-            return wa
-    return min(
-        monitors,
-        key=lambda wa: (wa[0] + wa[2] / 2 - px) ** 2 + (wa[1] + wa[3] / 2 - py) ** 2,
-    )
 
 
 # ----------------------------------------------------------------------- демон
