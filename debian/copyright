@@ -1,0 +1,15 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: gridsnap
+Source: https://github.com/metapeka/cinnamon-gridsnap
+
+Files: *
+Copyright: 2026 metapeka <188594035+metapeka@users.noreply.github.com>
+License: custom
+ В репозитории GridSnap лицензия не объявлена: ни файла LICENSE, ни
+ раздела «Лицензия» в README.md, ни поля license в PKGBUILD (там указано
+ `custom`). Пока лицензия не объявлена явно, авторские права сохраняются
+ за автором, а любые права на распространение и модификацию не предоставлены.
+ .
+ Этот файл создан для сборки штатного пакета Debian и не меняет
+ лицензионный статус исходников. Если автор объявит лицензию (например,
+ MIT или GPL-3+), этот раздел нужно заменить на её текст.

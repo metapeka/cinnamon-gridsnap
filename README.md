@@ -32,7 +32,16 @@ python3 setup-hotkeys.py          # сочетания клавиш в Cinnamon
 
 ### Пакетом
 
-Собрать артефакты (нужны `make` и `dpkg-deb` из штатного `dpkg` — без debhelper и новых зависимостей):
+**Штатным пакетом Debian.** В каталоге есть `debian/` (debhelper, compat 13, плюс `dh-exec`
+для переименования иконок); зависимости сборки — только из `main` тризки:
+
+```bash
+sudo apt install debhelper dh-exec    # разовые зависимости сборки
+dpkg-buildpackage -b -us -uc          # соберёт ../gridsnap_<версия>-1_all.deb
+sudo apt install ../gridsnap_<версия>-1_all.deb
+```
+
+**Через `Makefile`** (без debhelper): нужны `make` и `dpkg-deb` из штатного `dpkg`.
 
 ```bash
 make tarball      # dist/gridsnap-<версия>.tar.gz
@@ -40,8 +49,9 @@ make deb          # dist/gridsnap_<версия>_all.deb
 make aur          # рецепт AUR в dist/PKGBUILD
 ```
 
-`deb` ставит код в `/usr/lib/gridsnap`, команды `gridsnap-tiler`, `gridsnap-daemon`,
-`gridsnap-editor`, `gridsnap-picker`, `setup-hotkeys` — в `/usr/bin`, ярлык и иконки — в `/usr/share`:
+Оба пути ставят одно и то же: код в `/usr/lib/gridsnap`, команды `gridsnap-tiler`, `gridsnap-daemon`,
+`gridsnap-editor`, `gridsnap-picker`, `setup-hotkeys` — в `/usr/bin`, ярлык и иконки — в `/usr/share`.
+Установка `make deb`:
 
 ```bash
 sudo apt install ./dist/gridsnap_<версия>_all.deb

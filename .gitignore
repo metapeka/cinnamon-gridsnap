@@ -4,3 +4,11 @@ __pycache__/
 *.bak
 dist/
 build/
+
+# артефакты сборки штатного пакета debian/ (dpkg-buildpackage)
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.substvars
+debian/gridsnap/
+debian/tmp/

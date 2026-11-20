@@ -26,6 +26,12 @@ EWMH, компенсирует рамку окна (`_NET_FRAME_EXTENTS`), по�
       в `/usr/bin`, `.desktop` и иконки в `/usr/share`) и AUR-рецепт `PKGBUILD`. Всё собирается `Makefile`
       (`make tarball`, `make deb`, `make aur`), версия — из `VERSION` в `zone-tiler.py`/`zone-daemon.py`.
       Раздел README «Установка» описывает оба пути.
+- [x] **Штатный пакет Debian.** Каталог `debian/` (`control`, `rules`, `changelog`, `copyright`,
+      `install`, `source/format`) собирает тот же пакет настоящим инструментарием Debian:
+      `dpkg-buildpackage -b -us -uc` (debhelper compat 13 + `dh-exec` для переименования иконок).
+      `debian/install` раскладывает код в `/usr/lib/gridsnap`, запускалки в `/usr/bin`, ярлык и иконки
+      в `/usr/share` — ровно как `make deb`. `lintian` без ошибок (остаются только `no-manual-page`
+      и `initial-upload-closes-no-bugs`). См. README, «Установка → Пакетом».
 
 ## Волна 1. От зон к тайлингу (то, за чем люди уходят в i3)
 
@@ -88,6 +94,9 @@ EWMH, компенсирует рамку окна (`_NET_FRAME_EXTENTS`), по�
 - [ ] **Wayland-бэкенд (отдельный слой).** Под niri/Hyprland/sway уже есть IPC (`niri msg`, `hyprctl`,
       `swaymsg`) — раскладчик может стать кросс-композиторным, а зоны — общим UI.
 - [ ] **Пакет в Debian** (после стабилизации) — как у любого уважающего себя инструмента.
+  - Собирается штатным `debian/` (`dpkg-buildpackage`), но до архива Debian ещё далеко: нужны
+    ITP-баг, спонсор, объявленная лицензия (сейчас её нет) и ревью. Пункт остаётся открытым —
+    это про попадание в архив, а не про умение собрать `.deb`.
 
 ## Чего не делаем (anti-goals)
 

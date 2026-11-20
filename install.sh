@@ -75,8 +75,8 @@ APPS="$PREFIX/share/applications"
 ICONS="$PREFIX/share/icons/hicolor"
 DOC="$PREFIX/share/doc/gridsnap"
 
-MODULES="zone-tiler.py zone-daemon.py zone-editor.py zone_config.py zone_reflow.py
-         zone-picker.py zone_picker_nav.py setup-hotkeys.py make-icon.py"
+MODULES="zone-tiler.py zone-daemon.py zone-editor.py zone_config.py zone_geom.py
+         zone_reflow.py zone-picker.py zone_picker_nav.py setup-hotkeys.py make-icon.py"
 
 refresh_caches() {
     command -v gtk-update-icon-cache >/dev/null 2>&1 && \

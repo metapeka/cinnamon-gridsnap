@@ -1,0 +1,4 @@
+#!/bin/sh
+# Обёртка GridSnap: запускает setup-hotkeys.py из /usr/lib/gridsnap.
+# Сгенерирована пакетом Debian (debian/bin/setup-hotkeys); правьте её в debian/bin/.
+exec python3 /usr/lib/gridsnap/setup-hotkeys.py "$@"

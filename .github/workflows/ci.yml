@@ -43,6 +43,7 @@ jobs:
           deb="$(ls dist/gridsnap_*.deb)"
           dpkg-deb -I "$deb"
           dpkg-deb -c "$deb" | grep -q usr/lib/gridsnap/zone-tiler.py
+          dpkg-deb -c "$deb" | grep -q usr/lib/gridsnap/zone_geom.py
           dpkg-deb -c "$deb" | grep -q usr/bin/gridsnap-tiler
           dpkg-deb -c "$deb" | grep -q usr/share/applications/gridsnap.desktop
           tmp="$(mktemp -d)"
@@ -57,6 +58,34 @@ jobs:
           root="$(ls -d "$tmp"/gridsnap-*/)"
           "$root/install.sh" --prefix "$tmp/prefix" --no-launcher
           "$tmp/prefix/bin/gridsnap-tiler" --version
+
+  debian:
+    name: Штатный пакет Debian (debian/)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Зависимости сборки
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential debhelper dh-exec lintian
+      - name: Собрать dpkg-buildpackage
+        run: |
+          set -e
+          dpkg-buildpackage -b -us -uc
+          deb="$(ls ../gridsnap_*.deb | head -n1)"
+          dpkg-deb -I "$deb"
+          dpkg-deb -c "$deb" > /tmp/deb.list
+          grep -q usr/lib/gridsnap/zone-tiler.py /tmp/deb.list
+          grep -q usr/lib/gridsnap/zone_geom.py /tmp/deb.list
+          grep -q usr/bin/gridsnap-tiler /tmp/deb.list
+          grep -q usr/bin/gridsnap-daemon /tmp/deb.list
+          grep -q usr/bin/gridsnap-editor /tmp/deb.list
+          grep -q usr/bin/setup-hotkeys /tmp/deb.list
+          grep -q usr/share/applications/gridsnap.desktop /tmp/deb.list
+          grep -q icons/hicolor/256x256/apps/gridsnap.png /tmp/deb.list
+          lintian "$deb"
 
   smoke:
     name: Дымовой тест (Xvfb + muffin)

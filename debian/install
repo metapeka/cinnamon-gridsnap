@@ -1,0 +1,45 @@
+#!/usr/bin/dh-exec
+# Раскладка пакета — та же, что в цели `make deb` Makefile и в install.sh
+# (код в /usr/lib/gridsnap, запускалки в /usr/bin, ярлык и иконки в /usr/share).
+#
+# «=>» — это dh-exec: он позволяет ставить файл под другим именем
+# (в исходниках иконки названы gridsnap-<размер>.png, а теме нужен gridsnap.png).
+
+# --- код, конфиг и вспомогательные скрипты ---
+zone-tiler.py => /usr/lib/gridsnap/zone-tiler.py
+zone-daemon.py => /usr/lib/gridsnap/zone-daemon.py
+zone-editor.py => /usr/lib/gridsnap/zone-editor.py
+zone_config.py => /usr/lib/gridsnap/zone_config.py
+zone_geom.py => /usr/lib/gridsnap/zone_geom.py
+zone_reflow.py => /usr/lib/gridsnap/zone_reflow.py
+zone-picker.py => /usr/lib/gridsnap/zone-picker.py
+zone_picker_nav.py => /usr/lib/gridsnap/zone_picker_nav.py
+setup-hotkeys.py => /usr/lib/gridsnap/setup-hotkeys.py
+make-icon.py => /usr/lib/gridsnap/make-icon.py
+zones.conf => /usr/lib/gridsnap/zones.conf
+install-launcher.sh => /usr/lib/gridsnap/install-launcher.sh
+install-daemon.sh => /usr/lib/gridsnap/install-daemon.sh
+# Каталог иконок рядом с кодом: install-launcher.sh берёт их по $DIR/icons.
+icons usr/lib/gridsnap
+
+# --- ярлык ---
+contrib/gridsnap.desktop => /usr/share/applications/gridsnap.desktop
+
+# --- иконки темы hicolor ---
+icons/gridsnap-16.png => /usr/share/icons/hicolor/16x16/apps/gridsnap.png
+icons/gridsnap-22.png => /usr/share/icons/hicolor/22x22/apps/gridsnap.png
+icons/gridsnap-24.png => /usr/share/icons/hicolor/24x24/apps/gridsnap.png
+icons/gridsnap-32.png => /usr/share/icons/hicolor/32x32/apps/gridsnap.png
+icons/gridsnap-48.png => /usr/share/icons/hicolor/48x48/apps/gridsnap.png
+icons/gridsnap-64.png => /usr/share/icons/hicolor/64x64/apps/gridsnap.png
+icons/gridsnap-128.png => /usr/share/icons/hicolor/128x128/apps/gridsnap.png
+icons/gridsnap-256.png => /usr/share/icons/hicolor/256x256/apps/gridsnap.png
+icons/gridsnap-512.png => /usr/share/icons/hicolor/512x512/apps/gridsnap.png
+icons/gridsnap.svg => /usr/share/icons/hicolor/scalable/apps/gridsnap.svg
+
+# --- команды-запускалки (имена те же, что в Makefile/install.sh/PKGBUILD) ---
+debian/bin/gridsnap-tiler => /usr/bin/gridsnap-tiler
+debian/bin/gridsnap-daemon => /usr/bin/gridsnap-daemon
+debian/bin/gridsnap-editor => /usr/bin/gridsnap-editor
+debian/bin/gridsnap-picker => /usr/bin/gridsnap-picker
+debian/bin/setup-hotkeys => /usr/bin/setup-hotkeys

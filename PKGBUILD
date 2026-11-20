@@ -23,7 +23,7 @@ package() {
     install -d "$pkgdir/usr/lib/gridsnap"
     install -m 0644 \
         zone-tiler.py zone-daemon.py zone-editor.py zone-picker.py \
-        zone_config.py zone_picker_nav.py zone_reflow.py setup-hotkeys.py make-icon.py \
+        zone_config.py zone_geom.py zone_picker_nav.py zone_reflow.py setup-hotkeys.py make-icon.py \
         zones.conf \
         "$pkgdir/usr/lib/gridsnap/"
     install -m 0755 install-launcher.sh install-daemon.sh "$pkgdir/usr/lib/gridsnap/"
