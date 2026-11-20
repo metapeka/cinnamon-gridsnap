@@ -9,9 +9,9 @@ EWMH, компенсирует рамку окна (`_NET_FRAME_EXTENTS`), по�
 
 ## Волна 0. Гигиена проекта (без новых фич)
 
-- [x] **Тесты.** Есть `tests/smoke.sh` (Xvfb + muffin, «окно совпало с зоной») и `tests/test_zone_tiler.py` —
-      юнит-тесты парсера `zones.conf` и раскладки без X. Осталось: проверка геометрии редактора по расчётам
-      (перемещение, resize, прилипание, границы) — этот код пока не отделён от событий GTK.
+- [x] **Тесты.** Есть `tests/smoke.sh` (Xvfb + muffin, «окно совпало с зоной») и юнит-тесты без X:
+      парсер `zones.conf`, раскладка, геометрия редактора (`tests/test_zone_geom.py` — перемещение, resize,
+      прилипание, границы) после выноса расчётов в чистый `zone_geom.py`.
 - [x] **CI.** `.github/workflows/ci.yml`: `python3 -m compileall` + юнит-тесты (без X) и дымовой тест
       (Xvfb + muffin) на Ubuntu.
 - [x] **Конфиг в XDG.** `~/.config/gridsnap/zones.conf` (с учётом `XDG_CONFIG_HOME`), а при его
