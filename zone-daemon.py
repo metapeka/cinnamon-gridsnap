@@ -214,9 +214,49 @@ def fractions_to_pixels(fx, fy, fw, fh, wa):
     return (x1, y1, max(1, x2 - x1), max(1, y2 - y1))
 
 
-def default_workarea():
-    """Рабочая область монитора 0 (Gdk, резерв — EWMH)."""
-    return tiler.monitors()[0]
+def read_window_center(win):
+    """Центр окна (px, py) по абсолютной геометрии `xwininfo`; None при ошибке.
+
+    Нужен только чтобы выбрать монитор окна, поэтому берётся клиентская
+    геометрия целиком: рамка WM сдвигает её на считаные пиксели и на выбор
+    монитора не влияет. `xwininfo` уже требуется раскладчику для `--verify`.
+    """
+    try:
+        out = subprocess.check_output(
+            ["xwininfo", "-id", hex(win)], text=True, stderr=subprocess.DEVNULL
+        )
+    except Exception:
+        return None
+
+    def num(label):
+        found = re.search(rf"{label}:\s+(-?\d+)", out)
+        return int(found.group(1)) if found else None
+
+    x = num("Absolute upper-left X")
+    y = num("Absolute upper-left Y")
+    w = num("Width")
+    h = num("Height")
+    if x is None or y is None or w is None or h is None:
+        return None
+    return (x + w // 2, y + h // 2)
+
+
+def monitor_for_point(monitors, point):
+    """Рабочая область монитора, содержащего точку; иначе ближайшая по центру.
+
+    Точка может не попасть ни в одну область (окно под панелью, в щели между
+    мониторами) — тогда берётся область с ближайшим центром, а не монитор 0.
+    `monitors` — непустой список прямоугольников (x, y, w, h).
+    """
+    px, py = point
+    for wa in monitors:
+        x, y, w, h = wa
+        if x <= px < x + w and y <= py < y + h:
+            return wa
+    return min(
+        monitors,
+        key=lambda wa: (wa[0] + wa[2] / 2 - px) ** 2 + (wa[1] + wa[3] / 2 - py) ** 2,
+    )
 
 
 # ----------------------------------------------------------------------- демон
@@ -233,12 +273,19 @@ class Daemon:
                    `zone-tiler.apply_zone` с общим соединением `self.x11`,
                    которое ставит `serve`; переданное чужое не закрывается);
       read_meta  — callable(window) -> Meta (по умолчанию `read_window_meta`);
-      workarea   — callable() -> (x, y, w, h) либо сам кортеж (по умолчанию
-                   `default_workarea`, вызывается лениво);
+      workarea   — принудительная одна рабочая область: callable() -> (x, y, w, h)
+                   либо сам кортеж (одноэкранный режим и тесты). При `None`
+                   монитор окна определяется по `monitors` и `window_center`;
+      monitors   — callable() -> список (x, y, w, h) рабочих областей мониторов
+                   (по умолчанию `tiler.monitors`, вызывается лениво);
+      window_center — callable(window) -> (px, py) либо None (по умолчанию
+                   `read_window_center`, вызывается лениво);
       verbose    — печатать ли, что делает демон.
 
     `windows` — трекер `window id -> имя зоны`: им же отсекаются повторные
-    появления окна (свернуть/развернуть не переставляют окно).
+    появления окна (свернуть/развернуть не переставляют окно). `win_monitor`
+    хранит рабочую область, на которой окно уложено; `filled` — покрытые зоны
+    по мониторам.
 
     Точка входа из X11-контура — `reconcile(client_ids)`: список id текущих
     клиентов из `_NET_CLIENT_LIST`. Новые id (которых нет в `seen`) проходят
@@ -259,6 +306,8 @@ class Daemon:
         apply=None,
         read_meta=None,
         workarea=None,
+        monitors=None,
+        window_center=None,
         verbose=False,
     ):
         self.conf_path = conf_path or tiler.default_conf()
@@ -266,18 +315,24 @@ class Daemon:
         self.x11 = None  # соединение кладёт serve(); чужое для apply
         self.apply = apply or self._default_apply
         self.read_meta = read_meta or read_window_meta
-        self.workarea = workarea if workarea is not None else default_workarea
+        self.workarea = workarea
+        self.monitors = monitors if monitors is not None else tiler.monitors
+        self.window_center = window_center or read_window_center
         self.verbose = verbose
         self.reflow = read_reflow(self.grid.conf)
         self.windows = {}
-        # Зоны, которые сейчас покрывает расширенный сосед (reflow=neighbors):
-        # освобождённая зона -> имя соседа. Нужно, чтобы вернуть соседа к
-        # исходной рамке, когда освобождённую зону займёт новое окно.
+        # Рабочая область, на которой уложено окно: window id -> (x, y, w, h).
+        # Нужна reflow, чтобы не расширять соседа с другого монитора.
+        self.win_monitor = {}
+        # Зоны, покрытые расширенным соседом (reflow=neighbors): пара
+        # (рабочая область, освобождённая зона) -> окно-держатель. Покрытие
+        # ключуется монитором: одна и та же зона на двух экранах независима.
         self.filled = {}
         # Все id из последнего `_NET_CLIENT_LIST` (и уложенные, и без правила) —
         # чтобы не читать метаданные повторно на каждой реконсиляции.
         self.seen = set()
         self._wa_cache = None
+        self._mons_cache = None
 
     # -- вспомогательное
 
@@ -285,15 +340,8 @@ class Daemon:
         if self.verbose:
             print(message, flush=True)
 
-    def _workarea(self):
-        """Рабочая область, закэшированная; `None`, если её не удалось получить.
-
-        `default_workarea` зовёт `tiler.monitors()`, а тот через `fail()` бросает
-        `SystemExit` при отказе X-сервера — это не подкласс `Exception`. Ошибку
-        получения области демон переживает: логирует и возвращает `None`, а
-        вызывающий пропускает применение. Неудачу не кэшируем: следующий вызов
-        попробует снова. `KeyboardInterrupt` не перехватывается.
-        """
+    def _forced_workarea(self):
+        """Принудительная одна рабочая область; `None`, если её не получить."""
         if self._wa_cache is None:
             try:
                 wa = self.workarea() if callable(self.workarea) else self.workarea
@@ -302,6 +350,48 @@ class Daemon:
                 self.log(f"не удалось получить рабочую область: {exc}")
                 return None
         return self._wa_cache
+
+    def _monitors(self):
+        """Список рабочих областей мониторов, закэшированный.
+
+        `tiler.monitors()` через `fail()` бросает `SystemExit` при отказе
+        X-сервера — это не подкласс `Exception`. Ошибку демон переживает:
+        логирует и возвращает `None`, а вызывающий пропускает применение.
+        Неудачу не кэсим, успех — кэсим. `KeyboardInterrupt` не перехватывается.
+        """
+        if self._mons_cache is None:
+            try:
+                mons = cast(
+                    "list[tuple[int, int, int, int]]",
+                    self.monitors() if callable(self.monitors) else self.monitors,
+                )
+                self._mons_cache = [tuple(wa) for wa in mons]
+            except (Exception, SystemExit) as exc:
+                self.log(f"не удалось получить мониторы: {exc}")
+                return None
+        return self._mons_cache
+
+    def _monitor_of(self, win):
+        """Рабочая область монитора окна; `None`, если её не определить.
+
+        При заданном `workarea` всегда возвращается она (одноэкранный режим).
+        Иначе берётся область, содержащая центр окна; если центр не попал ни в
+        одну — ближайшая по центру. Неизвестное положение окна (`xwininfo`
+        не ответил) даёт `None`: лучше не трогать окно, чем угадать монитор 0.
+        """
+        if self.workarea is not None:
+            return self._forced_workarea()
+        monitors = self._monitors()
+        if not monitors:
+            return None
+        try:
+            point = self.window_center(win)
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось определить положение окна 0x{win:x}: {exc}")
+            return None
+        if point is None:
+            return None
+        return monitor_for_point(monitors, point)
 
     def _default_apply(self, win, rect, label="", quiet=False):
         """Замыкание по умолчанию: вкладывает окно через общее X-соединение демона.
@@ -326,29 +416,34 @@ class Daemon:
             self.log(f"не удалось вложить окно 0x{win:x} в зону '{zone}': {exc}")
             return False
 
-    def _window_for_zone(self, zone):
+    def _window_for_zone(self, zone, wa=None):
+        """Окно в зоне `zone`; при `wa` — именно на этой рабочей области."""
         for win, occupied in self.windows.items():
-            if occupied == zone:
+            if occupied != zone:
+                continue
+            if wa is None or self.win_monitor.get(win) == wa:
                 return win
         return None
 
-    def _restore_holder(self, zone, wa):
+    def _restore_holder(self, wa, zone):
         """Вернуть соседа, расширившегося на `zone`, к его рамке из конфига.
 
-        `zone` занята новым окном, поэтому покрытие больше не нужно. Если окна-
-        держателя уже нет в трекере, запись снимается без перемещений. При
-        неудачном `apply` запись остаётся: попробуем при следующем окне.
+        `zone` на рабочей области `wa` занята новым окном, поэтому покрытие
+        больше не нужно. Если окна-держателя уже нет в трекере, запись снимается
+        без перемещений. При неудачном `apply` запись остаётся: попробуем при
+        следующем окне.
         """
-        holder = self.filled.get(zone)
+        key = (wa, zone)
+        holder = self.filled.get(key)
         if holder is None:
             return
-        target = self._window_for_zone(holder)
-        if target is None:
-            del self.filled[zone]
+        holder_zone = self.windows.get(holder)
+        if holder_zone is None:
+            del self.filled[key]
             return
-        if self._apply(target, self.grid.rect(holder, wa), holder):
-            del self.filled[zone]
-            self.log(f"возвращаю зону '{holder}' к исходной рамке")
+        if self._apply(holder, self.grid.rect(holder_zone, wa), holder_zone):
+            del self.filled[key]
+            self.log(f"возвращаю зону '{holder_zone}' к исходной рамке")
 
     # -- события
 
@@ -387,45 +482,50 @@ class Daemon:
         )
         if zone is None:
             return
-        wa = self._workarea()
+        wa = self._monitor_of(win)
         if wa is None:
-            return  # рабочая область недоступна: не падаем и окно не трогаем
+            return  # монитор окна недоступен: не падаем и окно не трогаем
         rect = self.grid.rect(zone, wa)
         if not self._apply(win, rect, zone):
             return  # не запоминаем: окно не уложено, зону занятой не считаем
         self.windows[win] = zone
+        self.win_monitor[win] = wa
         self.log(f"окно 0x{win:x} -> зона '{zone}'")
         # Зона снова занята — расширившийся на неё сосед больше не нужен.
-        self._restore_holder(zone, wa)
+        self._restore_holder(wa, zone)
 
     def on_destroy(self, win):
         """Окно исчезло из `_NET_CLIENT_LIST` — снять с трекера и, если нужно, reflow."""
         zone = self.windows.pop(win, None)
         if zone is None:
             return
+        wa = self.win_monitor.pop(win, None)
         self.log(f"окно 0x{win:x} ушло из зоны '{zone}'")
         # Держатель исчез: снять записи о зонах, которые он покрывал.
-        for freed, holder in list(self.filled.items()):
-            if holder == zone:
-                del self.filled[freed]
-        if self.reflow != REFLOW_NEIGHBORS:
+        for key, holder in list(self.filled.items()):
+            if holder == win:
+                del self.filled[key]
+        if self.reflow != REFLOW_NEIGHBORS or wa is None:
             return
-        occupied = set(self.windows.values())
+        # reflow — в пределах монитора ушедшего окна: окна на других экранах в
+        # занятых зонах не учитываются, соседа с другого монитора не двигаем.
+        occupied = {
+            other_zone
+            for other, other_zone in self.windows.items()
+            if self.win_monitor.get(other) == wa
+        }
         zones = {name: self.grid.fractions(name) for name in self.grid.zones}
         changes = zone_reflow.reflow(zones, zone, occupied)
         if not changes:
             return
-        wa = self._workarea()
-        if wa is None:
-            return  # рабочая область недоступна: соседей не двигаем
         for name, frac in changes.items():
-            target = self._window_for_zone(name)
+            target = self._window_for_zone(name, wa)
             if target is None:
                 continue
             fx, fy, fw, fh = frac
             if not self._apply(target, fractions_to_pixels(fx, fy, fw, fh, wa), name):
                 continue  # окно не переехало: зону покрытой не считаем
-            self.filled[zone] = name
+            self.filled[(wa, zone)] = target
             self.log(f"reflow: окно 0x{target:x} -> зона '{name}'")
 
     def on_unmap(self, win):
