@@ -349,8 +349,25 @@ python3 setup-hotkeys.py --remove   # удалить все сочетания z
 Команда сама перепишет `[zones]`/`[rules]`/`[keys]` в вашем `zones.conf` из выбранного профиля. Если
 нужно, чтобы после переключения сразу работали новые клавиши зон, оставьте вызов `setup-hotkeys.py`
 (он идёт по умолчанию) или нажмите «сочетания клавиш» в редакторе.
+## 8. Апплет Cinnamon: доступ к GridSnap из панели
 
-## 8. Если окно не встаёт на место
+В каталоге `contrib/applet/` лежит панельный апплет `gridsnap@metapeka`: иконка (и по желанию
+надпись) в панели, меню по левому и правому клику — открыть редактор, применить сочетания, список
+зон (клик кладёт активное окно в зону), сводка по рабочим областям, `arrange` и `undo`. Апплет —
+тонкая обёртка над теми же скриптами, своей логики раскладки в нём нет; каталог GridSnap задаётся
+в его настройках (по умолчанию `~/thinkrail/gridsnape`).
+
+Установка:
+
+```bash
+mkdir -p ~/.local/share/cinnamon/applets
+cp -r contrib/applet/gridsnap@metapeka ~/.local/share/cinnamon/applets/
+cinnamon-settings applets        # включить GridSnap в списке апплетов
+```
+
+Что в меню, какие настройки и ограничения — в `contrib/applet/README.md`.
+
+## 9. Если окно не встаёт на место
 
 * приложение само задаёт размер (терминал с шагом символа) — возможна разница в пару пикселей;
 * зона с нулевой площадью не сохранится: минимальный размер 5 % экрана;
@@ -358,7 +375,7 @@ python3 setup-hotkeys.py --remove   # удалить все сочетания z
 * после правки `zones.conf` руками перезапустите `setup-hotkeys.py`, иначе новые имена зон
   не будут связаны с клавишами.
 
-## 9. Проверки, которые прогонялись
+## 10. Проверки, которые прогонялись
 
 * юнит-тесты без X (парсер, правила, reflow, демон, конфиг-слой, arrange/undo, геометрия
   редактора `zone_geom`, навигация выбора зоны `zone_picker_nav`):
@@ -377,4 +394,7 @@ python3 setup-hotkeys.py --remove   # удалить все сочетания z
 * запуск ярлыка, поиск иконки темой GTK, `desktop-file-validate`;
 * пакеты: `make tarball` (распаковка и `./install.sh --prefix ...`) и `make deb`
   (`dpkg-deb -I`, `dpkg-deb -c`, распаковка и `zone-tiler.py --version` из пакета); это же
-  прогоняется отдельной стадией CI (`.github/workflows/ci.yml`).
+  прогоняется отдельной стадией CI (`.github/workflows/ci.yml`);
+* апплет Cinnamon: `python3 -m json.tool` для `metadata.json` и `settings-schema.json`,
+  `node --check applet.js`, загрузка в живом Cinnamon (headless `Xvfb` + приватный dbus) —
+  `Loaded applet gridsnap@metapeka`, на панели ровно он (`contrib/applet/check-cinnamon.sh`).

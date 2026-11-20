@@ -1,0 +1,9 @@
+{
+    "uuid": "gridsnap@metapeka",
+    "name": "GridSnap",
+    "description": "Быстрый доступ к GridSnap: список зон, применение зоны к активному окну, редактор, сочетания клавиш и рабочие области.",
+    "icon": "view-grid-symbolic",
+    "version": "0.1.0",
+    "cinnamon-version": ["6.0", "6.2", "6.4"],
+    "max-instances": 1
+}
