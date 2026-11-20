@@ -20,9 +20,42 @@ jobs:
         with:
           python-version: "3.x"
       - name: Компиляция
-        run: python3 -m compileall -q zone-tiler.py zone-editor.py zone_reflow.py zone_config.py zone-daemon.py setup-hotkeys.py make-icon.py tests
+        run: |
+          python3 -m compileall -q \
+            zone-tiler.py zone-editor.py zone_reflow.py zone_config.py \
+            zone-daemon.py setup-hotkeys.py make-icon.py tests
       - name: Юнит-тесты
         run: python3 -m unittest discover -s tests -v
+
+  package:
+    name: Сборка пакетов
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Собрать tar.gz и deb
+        run: |
+          make tarball
+          make deb
+      - name: Проверить deb
+        run: |
+          set -e
+          deb="$(ls dist/gridsnap_*.deb)"
+          dpkg-deb -I "$deb"
+          dpkg-deb -c "$deb" | grep -q usr/lib/gridsnap/zone-tiler.py
+          dpkg-deb -c "$deb" | grep -q usr/bin/gridsnap-tiler
+          dpkg-deb -c "$deb" | grep -q usr/share/applications/gridsnap.desktop
+          tmp="$(mktemp -d)"
+          dpkg-deb -x "$deb" "$tmp"
+          python3 "$tmp/usr/lib/gridsnap/zone-tiler.py" --version
+      - name: Проверить tar.gz и install.sh
+        run: |
+          set -e
+          tb="$(ls dist/gridsnap-*.tar.gz)"
+          tmp="$(mktemp -d)"
+          tar -xzf "$tb" -C "$tmp"
+          root="$(ls -d "$tmp"/gridsnap-*/)"
+          "$root/install.sh" --prefix "$tmp/prefix" --no-launcher
+          "$tmp/prefix/bin/gridsnap-tiler" --version
 
   smoke:
     name: Дымовой тест (Xvfb + muffin)
@@ -35,6 +68,7 @@ jobs:
       - name: Зависимости
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb muffin x11-utils xdotool dbus cinnamon-settings-daemon
+          sudo apt-get install -y --no-install-recommends \
+            xvfb muffin x11-utils xdotool dbus cinnamon-settings-daemon
       - name: Дымовой тест
         run: dbus-run-session -- sh tests/smoke.sh
