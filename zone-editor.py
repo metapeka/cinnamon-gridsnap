@@ -32,10 +32,15 @@ from gi.repository import Gdk, Gtk, Pango, PangoCairo  # noqa: E402  # type: ign
 import zone_geom as geom  # noqa: E402
 from zone_config import (  # noqa: E402
     Zone,
+    list_profiles,
     load_extra_sections,
     load_zones,
     missing_rule_targets,
+    read_profile,
+    remove_profile,
     sanitize_name,
+    sanitize_profile_name,
+    save_profile,
     save_zones,
     unique_name,
     zt,
@@ -421,6 +426,18 @@ class Editor(Gtk.Window):
         item = Gtk.ToolItem()
         item.add(self.tpl_btn)
         bar.insert(item, -1)
+        self.prof_btn = Gtk.MenuButton()
+        self.prof_btn.set_tooltip_text("Профили раскладок (зоны + правила + клавиши)")
+        self.prof_btn.set_label("Профили")
+        self.prof_pop = Gtk.Popover()
+        self.prof_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.prof_box.set_border_width(8)
+        self.prof_pop.add(self.prof_box)
+        self.prof_btn.set_popover(self.prof_pop)
+        self.prof_btn.connect("clicked", lambda _b: self.rebuild_profiles_menu())
+        pitem = Gtk.ToolItem()
+        pitem.add(self.prof_btn)
+        bar.insert(pitem, -1)
         root.pack_start(bar, False, False, 0)
 
         body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -666,6 +683,119 @@ class Editor(Gtk.Window):
         self.canvas.queue_draw()
         self.set_status(f"шаблон «{name}»: {len(self.zones)} зон (не забудьте сохранить)")
 
+    # ---- профили
+
+    def rebuild_profiles_menu(self):
+        """Пересобрать меню «Профили»: список сохранённых плюс сохранение и удаление."""
+        for child in self.prof_box.get_children():
+            self.prof_box.remove(child)
+        names = list_profiles(self.conf_path)
+        for name in names:
+            b = Gtk.ModelButton()
+            b.set_label(name)
+            b.connect("clicked", lambda _w, n=name: self.load_profile(n))
+            self.prof_box.pack_start(b, False, False, 0)
+        if names:
+            self.prof_box.pack_start(Gtk.Separator(), False, False, 2)
+        save_btn = Gtk.ModelButton()
+        save_btn.set_label("Сохранить текущую раскладку как профиль…")
+        save_btn.connect("clicked", lambda _w: self.save_profile_dialog())
+        self.prof_box.pack_start(save_btn, False, False, 0)
+        if names:
+            rm_btn = Gtk.ModelButton()
+            rm_btn.set_label("Удалить профиль…")
+            rm_btn.connect("clicked", lambda _w: self.remove_profile_dialog())
+            self.prof_box.pack_start(rm_btn, False, False, 0)
+        self.prof_box.show_all()
+
+    def _ask_text(self, title, label, initial=""):
+        dlg = Gtk.Dialog(title=title, transient_for=self, modal=True)
+        dlg.add_button("Отмена", Gtk.ResponseType.CANCEL)
+        dlg.add_button("Сохранить", Gtk.ResponseType.OK)
+        dlg.set_default_response(Gtk.ResponseType.OK)
+        box = dlg.get_content_area()
+        box.set_border_width(10)
+        box.add(Gtk.Label(label=label, xalign=0))
+        entry = Gtk.Entry()
+        entry.set_text(initial)
+        entry.set_activates_default(True)
+        box.add(entry)
+        dlg.show_all()
+        resp = dlg.run()
+        text = entry.get_text()
+        dlg.destroy()
+        return text.strip() if resp == Gtk.ResponseType.OK else ""
+
+    def _ask_choice(self, title, label, options):
+        dlg = Gtk.Dialog(title=title, transient_for=self, modal=True)
+        dlg.add_button("Отмена", Gtk.ResponseType.CANCEL)
+        dlg.add_button("Удалить", Gtk.ResponseType.OK)
+        dlg.set_default_response(Gtk.ResponseType.OK)
+        box = dlg.get_content_area()
+        box.set_border_width(10)
+        box.add(Gtk.Label(label=label, xalign=0))
+        combo = Gtk.ComboBoxText()
+        for opt in options:
+            combo.append_text(opt)
+        combo.set_active(0)
+        box.add(combo)
+        dlg.show_all()
+        resp = dlg.run()
+        text = combo.get_active_text() or ""
+        dlg.destroy()
+        return text if resp == Gtk.ResponseType.OK else ""
+
+    def load_profile(self, name):
+        """Загрузить зоны, правила и клавиши профиля в холст как черновик."""
+        try:
+            zones, rules = read_profile(name, self.conf_path)
+        except (ValueError, OSError, SystemExit) as exc:
+            self.set_status(f"профиль не прочитан: {exc}")
+            return
+        self.zones = [z.copy() for z in zones]
+        self.selected = 0 if self.zones else None
+        if rules:
+            self.extra_sections["rules"] = rules
+        else:
+            self.extra_sections.pop("rules", None)
+        self.select(self.selected)
+        self.set_dirty(True)
+        self.canvas.queue_draw()
+        self.set_status(f"профиль «{name}»: {len(self.zones)} зон (не забудьте сохранить)")
+
+    def save_profile_dialog(self):
+        if not self.zones:
+            self.set_status("нет зон — сохранять нечего")
+            return
+        name = self._ask_text("Сохранить профиль", "Имя профиля")
+        if not name:
+            return
+        safe = sanitize_profile_name(name)
+        if not safe:
+            self.set_status("пустое имя профиля")
+            return
+        rules = self.extra_sections.get("rules", [])
+        try:
+            path = save_profile(safe, self.zones, rules, self.conf_path)
+        except (ValueError, OSError) as exc:
+            self.set_status(f"профиль не сохранён: {exc}")
+            return
+        self.set_status(f"профиль «{safe}» сохранён: {path}")
+
+    def remove_profile_dialog(self):
+        names = list_profiles(self.conf_path)
+        if not names:
+            return
+        name = self._ask_choice("Удалить профиль", "Профиль", names)
+        if not name:
+            return
+        try:
+            remove_profile(name, self.conf_path)
+        except (ValueError, OSError) as exc:
+            self.set_status(f"профиль не удалён: {exc}")
+            return
+        self.set_status(f"профиль «{name}» удалён")
+
     def on_save(self):
         """Сохранить раскладку. ``False`` — конфиг не записан (нет зон или висячие правила)."""
         if not self.zones:
@@ -688,7 +818,11 @@ class Editor(Gtk.Window):
     def on_hotkeys(self):
         if not self.on_save():
             return
-        r = subprocess.run([sys.executable, HOTKEYS], text=True, capture_output=True)
+        r = subprocess.run(
+            [sys.executable, HOTKEYS, "--conf", self.conf_path],
+            text=True,
+            capture_output=True,
+        )
         msg = (r.stdout or r.stderr).strip().splitlines()
         self.set_status(f"сочетания: {msg[0] if msg else 'без вывода'}")
 
