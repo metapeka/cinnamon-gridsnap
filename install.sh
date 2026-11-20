@@ -76,7 +76,7 @@ ICONS="$PREFIX/share/icons/hicolor"
 DOC="$PREFIX/share/doc/gridsnap"
 
 MODULES="zone-tiler.py zone-daemon.py zone-editor.py zone_config.py zone_reflow.py
-         setup-hotkeys.py make-icon.py"
+         zone-picker.py zone_picker_nav.py setup-hotkeys.py make-icon.py"
 
 refresh_caches() {
     command -v gtk-update-icon-cache >/dev/null 2>&1 && \
@@ -87,7 +87,7 @@ refresh_caches() {
 
 if [ "$ACTION" = "uninstall" ]; then
     rm -f "$BIN/gridsnap-tiler" "$BIN/gridsnap-daemon" \
-          "$BIN/gridsnap-editor" "$BIN/setup-hotkeys"
+          "$BIN/gridsnap-editor" "$BIN/gridsnap-picker" "$BIN/setup-hotkeys"
     rm -f "$APPS/gridsnap.desktop"
     for size in $SIZES; do
         rm -f "$ICONS/${size}x${size}/apps/gridsnap.png"
@@ -124,6 +124,7 @@ EOF
 wrapper gridsnap-tiler  zone-tiler.py
 wrapper gridsnap-daemon zone-daemon.py
 wrapper gridsnap-editor zone-editor.py
+wrapper gridsnap-picker zone-picker.py
 wrapper setup-hotkeys   setup-hotkeys.py
 
 # --- ярлык и иконки --------------------------------------------------------
