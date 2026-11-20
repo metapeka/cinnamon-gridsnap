@@ -122,8 +122,20 @@ fi
 
 say "дисплей $DISP, тестовое окно $WIN"
 say "проверяю зоны: $(printf '%s ' $LIST)"
+# Окно передаём явно: в headless Xvfb muffin не всегда успевает выставить
+# _NET_ACTIVE_WINDOW, и тест падал «нет активного окна». Несовпадение рамки
+# перепроверяем с паузой — muffin на медленном раннере не успевает применить
+# EWMH-перемещение к моменту первого чтения (--verify).
 for zone in $LIST; do
-    out=$(python3 "$TILER" apply "$zone" --verify 2>&1)
+    out=""
+    attempt=0
+    while :; do
+        out=$(python3 "$TILER" apply "$zone" --window "$WIN" --verify 2>&1)
+        printf '%s' "$out" | grep -q "совпало с зоной" && break
+        attempt=$((attempt + 1))
+        [ "$attempt" -ge 3 ] && break
+        sleep 0.5
+    done
     if printf '%s' "$out" | grep -q "совпало с зоной"; then
         ok "$(printf '%s' "$out" | tail -1 | sed 's/^рамка по факту: //')  [$zone]"
     else
