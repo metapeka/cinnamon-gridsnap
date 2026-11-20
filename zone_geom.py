@@ -7,6 +7,12 @@
 
 Модуль не импортирует ни GTK, ни `zone_config`: он работает с чем угодно, у чего
 есть атрибуты `x, y, w, h`, и с кортежами `(x, y, w, h)`.
+
+Здесь же лежат чистые правила наборов зон на монитор: какой набор показать для
+монитора (`set_for_monitor`), что писать в статусе (`set_origin_text`) и какие
+секции `[zones:<выход>]` записать (`save_plan`). Они не про пиксели, но живут в
+этом модуле по той же причине: `zone-editor.py` тянет GTK, а эти решения нужны
+юнит-тестам без X и без GTK.
 """
 
 MIN_SIZE = 0.05          # минимальный размер зоны (доля экрана)
@@ -161,3 +167,182 @@ def hit_test(px, py, screen, zones, edge_px=EDGE_PX, slack_px=SLACK_PX):
                 return i, ("resize" if edges else "move"), edges
             return i, "move", set()
     return None, "", set()
+
+
+# ------------------------------------------------- наборы зон на монитор
+#
+# Набор по умолчанию живёт в `[zones]`, набор монитора — в `[zones:<выход>]`.
+# Монитор без своей секции наследует общий набор, поэтому секция нужна только
+# там, где набор реально отличается (иначе файл обрастает копиями `[zones]`).
+
+SIG_DIGITS = 4           # точность сравнения геометрии — как у Zone.fmt()
+
+
+def _zone_fields(zone):
+    """`(имя, x, y, w, h, привязка)` зоны или кортежа — без требований к типу."""
+    if hasattr(zone, "name"):
+        return (
+            str(zone.name),
+            float(zone.x),
+            float(zone.y),
+            float(zone.w),
+            float(zone.h),
+            str(getattr(zone, "binding", "") or ""),
+        )
+    values = tuple(zone)
+    if len(values) < 4:
+        raise ValueError(f"zone_geom: в наборе не зона, а {zone!r}")
+    name = str(values[0]) if len(values) > 4 else ""
+    x, y, w, h = values[-4], values[-3], values[-2], values[-1]
+    return name, float(x), float(y), float(w), float(h), ""
+
+
+def zone_set_signature(zones):
+    """Отпечаток набора для сравнения: имена и геометрия в порядке файла.
+
+    Привязки в отпечаток не входят: `[keys]` общая на файл и живёт по имени
+    зоны, так что набор с теми же зонами и другими клавишами — тот же набор.
+    """
+    out = []
+    for zone in zones:
+        name, x, y, w, h, _binding = _zone_fields(zone)
+        out.append((name, round(x, SIG_DIGITS), round(y, SIG_DIGITS),
+                    round(w, SIG_DIGITS), round(h, SIG_DIGITS)))
+    return tuple(out)
+
+
+def set_for_monitor(monitor, monitor_sets, default_zones):
+    """Набор, который показать для монитора: ``(зоны, своя ли секция)``.
+
+    Есть набор монитора — его копия и ``True`` (свой); нет — копия общего
+    ``[zones]`` и ``False`` (наследует). Копии обязательны: правка холста одного
+    монитора не должна молча менять набор другого.
+    """
+    own = (monitor_sets or {}).get(monitor)
+    if own:
+        return [zone.copy() for zone in own], True
+    return [zone.copy() for zone in default_zones], False
+
+
+def set_origin_text(monitor, own, shared=False, offline=False):
+    """Что показано на холсте — одной строкой для статуса редактора.
+
+    ``shared`` — это общий набор `[zones]`, ``own`` — своя секция монитора,
+    иначе набор унаследован. Отключённый выход помечается отдельно.
+    """
+    if shared:
+        text = "общий набор [zones] — его наследуют остальные мониторы"
+    elif own:
+        text = f"свой набор [zones:{monitor}]"
+    else:
+        text = "наследует [zones]"
+    return f"{text} · нет на экране" if offline else text
+
+
+def _binding_of(zone):
+    """Привязка зоны (``[keys]``) как строка; у кортежа её нет."""
+    return str(getattr(zone, "binding", "") or "").strip()
+
+
+def _without_seen_bindings(zones, seen):
+    """Копии зон, у которых имя уже встречалось в `[keys]`: привязка гасится.
+
+    `[keys]` одна на файл, поэтому две секции с зоной одного имени не должны
+    писать клавишу дважды. Сами наборы не меняются — пишутся копии.
+    """
+    out = []
+    for zone in zones:
+        copy = zone.copy()
+        if copy.name in seen:
+            copy.binding = ""
+        elif _binding_of(copy):
+            seen.add(copy.name)
+        out.append(copy)
+    return out
+
+
+def save_plan(default_zones, monitor_sets, edited=(), onscreen=None, existing=None):
+    """План записи: ``({монитор: зоны}, [монитор])`` — что писать и что удалять.
+
+    Секция ``[zones:<монитор>]`` пишется, если набор монитора отличается от
+    общего ``[zones]`` или монитор правили явно (``edited``); секции, где набор
+    совпал с общим и правок не было, удаляются — но только у мониторов на
+    экране (``onscreen``) и только если секция уже есть в файле (``existing``).
+    Отключённый выход не удаляется никогда: его секцию либо пишем как есть
+    (если правили), либо не трогаем. Пустой набор монитора не пишется.
+
+    Зоны возвращаются копиями: у зон, чьё имя уже есть в общем наборе, гасится
+    привязка — `[keys]` общая, и дублей в ней быть не должно.
+    """
+    default_sig = zone_set_signature(default_zones)
+    onscreen = None if onscreen is None else set(onscreen)
+    existing = set(existing or ())
+    seen = {zone.name for zone in default_zones if _binding_of(zone)}
+    write, drop = {}, []
+    for monitor, zones in (monitor_sets or {}).items():
+        if not zones:
+            continue
+        if monitor in edited or zone_set_signature(zones) != default_sig:
+            write[monitor] = _without_seen_bindings(zones, seen)
+        elif (onscreen is None or monitor in onscreen) and monitor in existing:
+            drop.append(monitor)
+    return write, drop
+
+
+def dedupe_key_lines(text):
+    """Текст конфига без повторов в `[keys]`: одна клавиша на имя зоны.
+
+    `zone_config.save_zones` собирает `[keys]` из всех записанных наборов, а при
+    чтении раздаёт привязки всем наборам — поэтому зона, которая есть и в
+    `[zones]`, и в `[zones:<выход>]`, попадает в `[keys]` дважды, и такой файл
+    больше не читается (ConfigParser падает на повторной опции). Оставляем первую
+    строку: общий набор пишется первым, его клавиша и главная. Остальной текст не
+    меняется.
+    """
+    lines, section, seen = [], None, set()
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            section = stripped[1:-1].strip().lower()
+        elif section == "keys" and "=" in stripped and stripped[:1] not in ("#", ";"):
+            name = stripped.split("=", 1)[0].strip()
+            if name in seen:
+                continue
+            seen.add(name)
+        lines.append(line)
+    return "\n".join(lines) + "\n"
+
+
+def _save_section(path, zones, extra, monitor=None):
+    """Один шаг записи: `save_zones` и чистка повторов в `[keys]` (см. выше)."""
+    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, см. apply_save_plan
+
+    zc.save_zones(path, list(zones), extra, monitor=monitor)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        fixed = dedupe_key_lines(text)
+        if fixed != text:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(fixed)
+    except OSError as exc:
+        raise OSError(f"не удалось почистить [keys] в {path}: {exc}") from exc
+
+
+def apply_save_plan(path, default_zones, plan, extra=None):
+    """Записать `zones.conf` по плану :func:`save_plan`; возвращает путь.
+
+    ``zone_config`` импортируется здесь, а не наверху модуля: геометрия не
+    должна тянуть конфиг-слой и `zone-tiler.py` только ради импорта. Запись идёт
+    через публичный `save_zones`: сначала общий ``[zones]``, затем удаление
+    лишних секций (пустой набор), затем секции мониторов. Чужие секции самого
+    файла (`[rules]`, `[daemon]`, `[zones:*]` отключённых выходов) при этом
+    сохраняются — их берёт из файла сам `save_zones`.
+    """
+    write, drop = plan
+    _save_section(path, default_zones, extra)
+    for monitor in drop:
+        _save_section(path, [], extra, monitor=monitor)
+    for monitor, zones in write.items():
+        _save_section(path, zones, extra, monitor=monitor)
+    return path
