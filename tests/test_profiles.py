@@ -39,6 +39,13 @@ PROFILE_ZONES = [
     zc.Zone("right", 0.5, 0, 0.5, 1, "<Super><Alt>2"),
 ]
 PROFILE_RULES = ["Firefox = right", "re:^VLC = left"]
+MONITOR_ZONES = [zc.Zone("top", 0, 0, 1, 0.5), zc.Zone("bottom", 0, 0.5, 1, 0.5)]
+ACTIVE_SETS = (
+    "[grid]\ncols = 1.0\nrows = 1.0\n"
+    "[zones]\nmain = 0, 0, 0.5, 1\n"
+    "[zones:HDMI-1]\nwide = 0, 0, 1, 1\n"
+    "[daemon]\nreflow = off   # off | neighbors\n"
+)
 
 
 class ConfMixin:
@@ -189,6 +196,80 @@ class TestApplyProfile(ConfMixin, unittest.TestCase):
         zc.apply_profile("work", self.conf)
         once = self.read_conf()
         zc.apply_profile("work", self.conf)
+        self.assertEqual(self.read_conf(), once)
+
+
+class TestProfileZoneSets(ConfMixin, unittest.TestCase):
+    """Профиль переносит все наборы зон: ``[zones]`` и ``[zones:<монитор>]``."""
+
+    def test_save_profile_with_two_sets(self):
+        zc.save_profile("multi", PROFILE_ZONES, PROFILE_RULES, self.conf,
+                        monitor_sets={"HDMI-1": MONITOR_ZONES})
+        text = zc.profile_text("multi", self.conf)
+        self.assertEqual(sections_in(text), ["zones", "zones:HDMI-1", "rules", "keys"])
+        self.assertIn("top = 0, 0, 1, 0.5", text)
+        self.assertNotIn("grid", sections_in(text))
+
+    def test_read_profile_sets_returns_all_sets(self):
+        zc.save_profile("multi", PROFILE_ZONES, PROFILE_RULES, self.conf,
+                        monitor_sets={"HDMI-1": MONITOR_ZONES})
+        zones, rules, monitor_sets = zc.read_profile_sets("multi", self.conf)
+        self.assertEqual([z.name for z in zones], ["left", "right"])
+        self.assertEqual(rules, PROFILE_RULES)
+        self.assertEqual([z.name for z in monitor_sets["HDMI-1"]], ["top", "bottom"])
+
+    def test_read_profile_keeps_two_value_contract(self):
+        # редактор распаковывает ``zones, rules = read_profile(...)`` — две величины
+        zc.save_profile("multi", PROFILE_ZONES, PROFILE_RULES, self.conf,
+                        monitor_sets={"HDMI-1": MONITOR_ZONES})
+        zones, rules = zc.read_profile("multi", self.conf)
+        self.assertEqual([z.name for z in zones], ["left", "right"])
+        self.assertEqual(rules, PROFILE_RULES)
+
+    def test_profile_may_have_only_monitor_sets(self):
+        zc.save_profile("monitors", [], None, self.conf, monitor_sets={"HDMI-1": MONITOR_ZONES})
+        self.assertEqual(sections_in(zc.profile_text("monitors", self.conf)), ["zones:HDMI-1"])
+        self.assertEqual(zc.read_profile("monitors", self.conf), ([], []))
+
+    def test_profile_without_any_zones_rejected(self):
+        for monitor_sets in (None, {}, {"HDMI-1": []}):
+            with self.assertRaises(ValueError):
+                zc.save_profile("empty", [], None, self.conf, monitor_sets=monitor_sets)
+
+    def test_apply_profile_brings_all_sets_and_keeps_grid_daemon(self):
+        self.write_conf(ACTIVE_SETS)
+        zc.save_profile("multi", PROFILE_ZONES, PROFILE_RULES, self.conf,
+                        monitor_sets={"DP-2": MONITOR_ZONES})
+        zones = zc.apply_profile("multi", self.conf)
+        self.assertEqual([z.name for z in zones], ["left", "right"])
+        text = self.read_conf()
+        self.assertEqual(
+            zc.list_zone_sets(self.conf),
+            {None: ["left", "right"], "DP-2": ["top", "bottom"]},
+        )
+        self.assertNotIn("zones:HDMI-1", sections_in(text))  # наборы конфига заменены набором профиля
+        self.assertIn("[grid]", text)
+        self.assertIn("reflow = off   # off | neighbors", text)
+        self.assertIn("Firefox = right", text)
+        self.assertNotIn("main = 0, 0, 0.5, 1", text)
+
+    def test_apply_profile_keeps_active_monitor_sets_when_profile_has_theirs(self):
+        self.write_conf(ACTIVE_SETS)
+        zc.save_profile("multi", PROFILE_ZONES, [], self.conf,
+                        monitor_sets={"HDMI-1": MONITOR_ZONES})
+        zc.apply_profile("multi", self.conf)
+        self.assertEqual(
+            zc.list_zone_sets(self.conf),
+            {None: ["left", "right"], "HDMI-1": ["top", "bottom"]},
+        )
+
+    def test_apply_profile_is_idempotent_with_sets(self):
+        self.write_conf(ACTIVE_SETS)
+        zc.save_profile("multi", PROFILE_ZONES, PROFILE_RULES, self.conf,
+                        monitor_sets={"DP-2": MONITOR_ZONES})
+        zc.apply_profile("multi", self.conf)
+        once = self.read_conf()
+        zc.apply_profile("multi", self.conf)
         self.assertEqual(self.read_conf(), once)
 
 

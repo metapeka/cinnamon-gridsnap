@@ -5,12 +5,15 @@
 Здесь живёт всё, что редактор зон (``zone-editor.py``) делает с конфигом:
 модель зоны, загрузка раскладки через ``zone-tiler.py``, сохранение в
 каноническом виде и перенос «чужих» секций (``[rules]``, ``[daemon]``, …)
-дословно.
+дословно. Наборы зон на монитор живут в секциях ``[zones]`` (по умолчанию) и
+``[zones:<имя выхода>]`` (например ``[zones:HDMI-1]``); модуль знает оба вида
+и не теряет соседние наборы при сохранении одного.
 
 Модуль намеренно не импортирует gi/GTK: его можно и нужно тестировать
 обычными юнит-тестами в CI, где ``python3-gi`` не установлен.
 """
 
+import configparser
 import importlib.util
 import os
 import re
@@ -20,6 +23,10 @@ ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 
 # Секции, которыми управляет сам редактор: их нельзя переносить как «чужие».
 RESERVED_SECTIONS = frozenset({"grid", "zones", "keys"})
+
+# Набор зон монитора: ``[zones:<имя выхода>]``. Имя выхода (eDP-1, HDMI-1) —
+# не имя зоны, поэтому в кавычки/дефисы оно не приводится.
+MONITOR_SECTION_PREFIX = "zones:"
 
 # Порядок «чужих» секций при сохранении: [rules] до [keys], [daemon] после.
 BEFORE_KEYS = ("rules",)
@@ -58,17 +65,192 @@ class Zone:
         return ", ".join(f"{v:.4f}".rstrip("0").rstrip(".") for v in self.as_tuple())
 
 
-def load_zones(path):
-    """Зоны из ``[zones]`` с привязками из ``[keys]``. Райзит SystemExit на битом конфиге."""
+class _SpecParser:
+    """Разбор спецификаций зон правилами ``zone-tiler.Grid`` без X и GTK.
+
+    У ``Grid`` берутся только чистые методы: ``_parse_zone`` (формы ``x,y,w,h``
+    и ``c0:c1, r0:r1`` с проверками), ``zone_spec`` и ``fractions``, — поэтому
+    правила разбора и сообщения об ошибках не расходятся с раскладчиком. Своё
+    состояние (``cols``/``rows`` и разобранные ``zones``) держит сам, конфига не
+    читает.
+    """
+
+    _parse_zone = zt.Grid._parse_zone
+    fractions = zt.Grid.fractions
+
+    def __init__(self, cols, rows):
+        self.cols = cols
+        self.rows = rows
+        self.zones = {}
+
+    def add(self, name, spec):
+        """Разобрать зону пары ``имя = спецификация``; возвращает имя как в файле."""
+        key = name.strip()
+        self.zones[key] = self._parse_zone(key, spec)
+        return key
+
+    def fractions_of(self, name):
+        """``(x, y, w, h)`` в долях рабочей области для разобранной зоны."""
+        return self.fractions(name)
+
+    def zone_spec(self, zone, monitor_name=None):
+        """Описание зоны из уже собранного набора.
+
+        У ``Grid`` этот метод ищет сначала в наборе монитора, потом в общем
+        ``[zones]``. Здесь набор собран из нужной секции заранее, так что
+        искать больше негде; ``monitor_name`` принимается ради совместимости
+        сигнатуры (``Grid.fractions`` вызывает ``self.zone_spec``).
+        """
+        spec = self.zones.get(zone)
+        if spec is None:
+            zt.fail(f"zone-tiler: зоны '{zone}' нет в наборе", zt.EXIT_CONFIG)
+        return spec
+
+
+def _clean_monitor(monitor):
+    """Имя выхода из аргумента; ``None``/пусто — набор по умолчанию."""
+    name = str(monitor or "").strip()
+    return name or None
+
+
+def _zone_section_name(monitor):
+    """Имя секции набора: ``zones`` или ``zones:<монитор>``."""
+    name = _clean_monitor(monitor)
+    return "zones" if name is None else MONITOR_SECTION_PREFIX + name
+
+
+def _monitor_of(section):
+    """Монитор из имени секции ``zones:<выход>``; ``None`` — секция не набор монитора.
+
+    Пустое имя (``[zones:]``) — ошибка конфига: сообщение подсказывает форму
+    записи. Регистр имени выхода сохраняется: это имя выхода X11, а не зоны.
+    """
+    name = str(section)
+    if name[: len(MONITOR_SECTION_PREFIX)].lower() != MONITOR_SECTION_PREFIX:
+        return None
+    monitor = name[len(MONITOR_SECTION_PREFIX):].strip()
+    if not monitor:
+        zt.fail(
+            f"zone_config: пустое имя монитора в секции [{name}]: "
+            "пишите [zones:<имя выхода>], например [zones:HDMI-1]",
+            zt.EXIT_CONFIG,
+        )
+    return monitor
+
+
+def _read_conf(path, missing_ok=False):
+    """``ConfigParser`` того же вида, что у ``Grid``; нет файла — ``None`` или SystemExit."""
+    cp = configparser.ConfigParser(
+        interpolation=None,
+        inline_comment_prefixes=("#", ";"),
+        delimiters=("=",),
+    )
+    if not cp.read(path, encoding="utf-8"):
+        if missing_ok:
+            return None
+        zt.fail(f"zone_config: не найден конфиг {path}", zt.EXIT_CONFIG)
+    return cp
+
+
+def _zone_bindings(cp):
+    """Привязки зон из ``[keys]`` (пустой словарь, если секции нет)."""
+    if not cp.has_section("keys"):
+        return {}
+    return {k.strip(): v.strip() for k, v in cp.items("keys")}
+
+
+def _with_bindings(zones, keys):
+    """Проставить зонам привязки из ``[keys]`` по имени зоны."""
+    for zone in zones:
+        zone.binding = keys.get(zone.name, "")
+    return zones
+
+
+def _zone_set(cp, section):
+    """Зоны секции ``section`` в порядке файла; ``None`` — секции нет."""
+    if not cp.has_section(section):
+        return None
+    parser = _SpecParser(
+        zt.Grid._numlist(cp.get("grid", "cols", fallback="1.0")),
+        zt.Grid._numlist(cp.get("grid", "rows", fallback="1.0")),
+    )
+    for name, spec in cp.items(section):
+        parser.add(name, spec)
+    if not parser.zones:
+        zt.fail(f"zone_config: в секции [{section}] нет ни одной зоны", zt.EXIT_CONFIG)
+    return [Zone(name, *parser.fractions_of(name)) for name in parser.zones]
+
+
+def _zone_sets(path):
+    """Все наборы файла: ``(набор по умолчанию или None, {монитор: [Zone]})``.
+
+    Порядок мониторов — как секции в файле; привязки ``[keys]`` проставлены
+    всем наборам. Нет файла — ``(None, {})``.
+    """
+    cp = _read_conf(path, missing_ok=True)
+    if cp is None:
+        return None, {}
+    keys = _zone_bindings(cp)
+    default = _zone_set(cp, "zones")
+    if default is not None:
+        _with_bindings(default, keys)
+    monitors = {}
+    for section in cp.sections():
+        monitor = _monitor_of(section)
+        if monitor is not None:
+            monitors[monitor] = _with_bindings(_zone_set(cp, section), keys)
+    return default, monitors
+
+
+def load_zone_sets(path):
+    """Все наборы зон файла: ``{монитор: [Zone]}``, ключ ``None`` — по умолчанию.
+
+    Ключ ``None`` есть только если в файле есть секция ``[zones]``; порядок —
+    ``[zones]``, затем секции мониторов в порядке файла. Нет файла — ``{}``.
+    """
+    default, monitors = _zone_sets(path)
+    sets = {}
+    if default is not None:
+        sets[None] = default
+    sets.update(monitors)
+    return sets
+
+
+def list_zone_sets(path):
+    """Какие наборы зон есть в файле: ``{монитор: [имена зон]}``.
+
+    Ключ ``None`` — набор по умолчанию из ``[zones]`` (есть только если секция
+    в файле есть), остальные ключи — имена выходов из ``[zones:<выход>]``
+    в порядке файла. Нет файла — ``{}``.
+    """
+    return {monitor: [z.name for z in zones] for monitor, zones in load_zone_sets(path).items()}
+
+
+def _default_zones(path):
+    """Зоны ``[zones]`` с привязками ``[keys]`` — прежний путь через ``Grid``."""
     grid = zt.Grid(path)
-    keys = {}
-    if grid.conf.has_section("keys"):
-        keys = {k.strip(): v.strip() for k, v in grid.conf.items("keys")}
+    keys = _zone_bindings(grid.conf)
     zones = []
     for name in grid.zones:
         x, y, w, h = grid.fractions(name)
         zones.append(Zone(name, x, y, w, h, keys.get(name, "")))
     return zones
+
+
+def load_zones(path, monitor=None):
+    """Зоны набора с привязками из ``[keys]``. Райзит SystemExit на битом конфиге.
+
+    Без ``monitor`` (или с пустым) — набор по умолчанию из ``[zones]``, как
+    раньше. С ``monitor="HDMI-1"`` — набор из ``[zones:HDMI-1]``; если такой
+    секции нет, откат на набор по умолчанию (неизвестный монитор не ошибка).
+    """
+    name = _clean_monitor(monitor)
+    if name is not None:
+        cp = _read_conf(path)
+        zones = _zone_set(cp, _zone_section_name(name))
+        if zones is not None:
+            return _with_bindings(zones, _zone_bindings(cp))
+    return _default_zones(path)
 
 
 # ------------------------------------------------- перенос «чужих» секций
@@ -105,8 +287,17 @@ def load_extra_sections(path, sections=None):
             match = _SECTION_RE.match(line)
             if match:
                 current = match.group(1).strip().lower()
-                if current not in RESERVED_SECTIONS and (wanted is None or current in wanted):
+                # Наборы мониторов (`[zones:*]`) ведёт сам редактор: как «чужие»
+                # их не переносим, иначе имя выхода потеряет регистр и задвоится.
+                is_zone_set = _monitor_of(current) is not None
+                if (
+                    not is_zone_set
+                    and current not in RESERVED_SECTIONS
+                    and (wanted is None or current in wanted)
+                ):
                     result.setdefault(current, [])
+                else:
+                    current = None
                 continue
             if current is not None and current in result:
                 result[current].append(line)
@@ -131,27 +322,40 @@ def _section_lines(body):
     return out
 
 
-def save_zones(path, zones, extra=None):
-    """Записать ``zones.conf``: канонические ``[grid]``/``[zones]``/``[keys]`` плюс чужие секции.
+def _zone_lines(zones):
+    """Строки тела секции набора зон: ``имя = x, y, w, h``."""
+    return [f"{z.name} = {z.fmt()}" for z in zones]
 
-    ``extra`` — словарь вида :func:`load_extra_sections` (``{секция: [строки]}``);
-    секции, которых в нём нет, в файл не попадают. Порядок: ``[grid]``,
-    ``[zones]``, ``[rules]``, ``[keys]``, ``[daemon]``, остальные — после.
+
+def _write_config(path, default_zones, monitor_sets=None, extra=None):
+    """Записать ``zones.conf``: ``[grid]``, наборы зон, ``[keys]`` и чужие секции.
+
+    ``default_zones=None`` — секции ``[zones]`` в файле не будет (набор по
+    умолчанию не задан). Привязки ``[keys]`` собираются со всех записанных
+    наборов, поэтому горячие клавиши соседних мониторов не теряются.
     """
     extra = {str(k).strip().lower(): list(v) for k, v in (extra or {}).items()}
     lines = [
         "# Сетка окон для zone-tiler. Файл создан визуальным редактором zone-editor.py.",
         "# Зона = x,y,w,h в долях рабочей области (0..1), без панели задач.",
         "# Горячие клавиши — в секции [keys].",
+        "# Набор монитора — секция вида zones:<имя выхода>, например zones:HDMI-1.",
         "",
         "[grid]",
         "cols = 1.0",
         "rows = 1.0",
-        "",
-        "[zones]",
     ]
-    for z in zones:
-        lines.append(f"{z.name} = {z.fmt()}")
+    written_zones = []
+    if default_zones is not None:
+        lines += ["", "[zones]"]
+        lines += _zone_lines(default_zones)
+        written_zones += list(default_zones)
+    for monitor, zones in (monitor_sets or {}).items():
+        if not zones:
+            continue
+        lines += ["", f"[{_zone_section_name(monitor)}]"]
+        lines += _zone_lines(zones)
+        written_zones += list(zones)
 
     def append_section(name):
         body = extra.get(name)
@@ -164,7 +368,7 @@ def save_zones(path, zones, extra=None):
     for name in BEFORE_KEYS:
         append_section(name)
 
-    bindings = [z for z in zones if z.binding.strip()]
+    bindings = [z for z in written_zones if z.binding.strip()]
     if bindings:
         lines += ["", "[keys]"]
         for z in bindings:
@@ -175,7 +379,7 @@ def save_zones(path, zones, extra=None):
         append_section(name)
         written.add(name)
     for name in extra:
-        if name in written or name in RESERVED_SECTIONS:
+        if name in written or name in RESERVED_SECTIONS or _monitor_of(name) is not None:
             continue
         append_section(name)
 
@@ -184,6 +388,27 @@ def save_zones(path, zones, extra=None):
         os.makedirs(directory, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
+
+
+def save_zones(path, zones, extra=None, monitor=None):
+    """Записать набор зон: ``[zones]`` без ``monitor``, ``[zones:<монитор>]`` с ним.
+
+    ``extra`` — словарь вида :func:`load_extra_sections` (``{секция: [строки]}``);
+    секции, которых в нём нет, в файл не попадают. Остальные наборы мониторов
+    берутся из текущего файла, поэтому сохранение одного набора не теряет
+    соседние (и их привязки в ``[keys]``). Пустой набор монитора удаляет его
+    секцию: набор без зон — невалидный конфиг. Порядок: ``[grid]``, ``[zones]``,
+    ``[zones:*]``, ``[rules]``, ``[keys]``, ``[daemon]``, остальные — после.
+    """
+    target = _clean_monitor(monitor)
+    default, monitors = _zone_sets(path)
+    if target is None:
+        default = list(zones)
+    elif zones:
+        monitors[target] = list(zones)
+    else:
+        monitors.pop(target, None)
+    _write_config(path, default, monitors, extra)
 
 
 # ------------------------------------------------- проверка правил [rules]
@@ -321,37 +546,66 @@ def profile_text(name, conf_path=None):
         raise _profile_missing(sanitize_profile_name(name)) from exc
 
 
-def read_profile(name, conf_path=None):
-    """``(зоны, строки [rules])`` профиля; зоны несут привязки из ``[keys]``."""
+def read_profile_sets(name, conf_path=None):
+    """``(зоны [zones], строки [rules], {монитор: [Zone]})`` профиля.
+
+    Зоны несут привязки из ``[keys]``; набор по умолчанию — всегда список
+    (пустой, если секции ``[zones]`` в профиле нет), наборы мониторов — в
+    порядке секций файла.
+    """
     path = profile_path(name, conf_path)
     if not os.path.exists(path):
         raise _profile_missing(sanitize_profile_name(name))
-    zones = load_zones(path)
+    default, monitors = _zone_sets(path)
     rules = load_extra_sections(path, sections=["rules"]).get("rules") or []
+    return (default or []), rules, monitors
+
+
+def read_profile(name, conf_path=None):
+    """``(зоны, строки [rules])`` профиля; зоны несут привязки из ``[keys]``.
+
+    Это только набор по умолчанию (``[zones]``) — ради совместимости с
+    редактором; все наборы отдаёт :func:`read_profile_sets`.
+    """
+    zones, rules, _monitors = read_profile_sets(name, conf_path)
     return zones, rules
 
 
-def save_profile(name, zones, rules=None, conf_path=None):
-    """Записать профиль: ``[zones]`` + ``[rules]`` + ``[keys]``, без ``[grid]``/``[daemon]``.
+def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None):
+    """Записать профиль: ``[zones]``, ``[zones:*]``, ``[rules]``, ``[keys]``.
 
-    Чужие секции в профиль не тащим — он и есть только раскладка. Возвращает путь.
+    ``[grid]``/``[daemon]`` и прочие чужие секции в профиль не тащим — он и
+    есть только раскладка. ``monitor_sets`` — ``{имя выхода: [Zone]}``;
+    ключи ``None``/пустые игнорируются (набор по умолчанию — ``zones``).
+    Возвращает путь.
     """
-    if not zones:
+    sets = {}
+    for monitor, monitor_zones in (monitor_sets or {}).items():
+        clean = _clean_monitor(monitor)
+        if clean is not None and monitor_zones:
+            sets[clean] = list(monitor_zones)
+    if not zones and not sets:
         raise ValueError("профиль без зон сохранять нечего")
     path = profile_path(name, conf_path)
     safe = sanitize_profile_name(name)
     lines = [
         f"# Профиль раскладки GridSnap: {safe}.",
-        "# Секции [zones], [rules], [keys]; активация — zone-tiler.py profile use <имя>.",
-        "",
-        "[zones]",
+        "# Секции [zones], [zones:<монитор>], [rules], [keys]; "
+        "активация — zone-tiler.py profile use <имя>.",
     ]
-    for z in zones:
-        lines.append(f"{z.name} = {z.fmt()}")
+    written = []
+    if zones:
+        lines += ["", "[zones]"]
+        lines += _zone_lines(zones)
+        written += list(zones)
+    for monitor, monitor_zones in sets.items():
+        lines += ["", f"[{_zone_section_name(monitor)}]"]
+        lines += _zone_lines(monitor_zones)
+        written += list(monitor_zones)
     if rules:
         lines += ["", "[rules]"]
         lines.extend(_section_lines(rules))
-    bindings = [z for z in zones if z.binding.strip()]
+    bindings = [z for z in written if z.binding.strip()]
     if bindings:
         lines += ["", "[keys]"]
         for z in bindings:
@@ -382,15 +636,17 @@ def remove_profile(name, conf_path=None):
 def apply_profile(name, conf_path=None):
     """Активировать профиль в ``zones.conf``.
 
-    Секции ``[zones]``/``[rules]``/``[keys]`` берутся из профиля (``[keys]`` — из
-    привязок зон), ``[grid]``, ``[daemon]`` и прочие секции активного конфига
-    сохраняются как есть. Возвращает зоны профиля.
+    Наборы зон ``[zones]``/``[zones:*]``, ``[rules]`` и ``[keys]`` берутся из
+    профиля (``[keys]`` — из привязок зон) и заменяют наборы активного конфига
+    целиком: наборов мониторов, которых в профиле нет, в конфиге не останется.
+    ``[grid]``, ``[daemon]`` и прочие секции активного конфига сохраняются.
+    Возвращает зоны набора по умолчанию (пустой список, если его в профиле нет).
     """
-    zones, rules = read_profile(name, conf_path)
+    zones, rules, monitor_sets = read_profile_sets(name, conf_path)
     extra = load_extra_sections(conf_path)
     if rules:
         extra["rules"] = rules
     else:
         extra.pop("rules", None)
-    save_zones(conf_path, zones, extra)
+    _write_config(conf_path, zones or None, monitor_sets, extra)
     return zones
