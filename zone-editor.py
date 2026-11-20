@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 zone-editor.py — визуальный редактор сетки зон для zone-tiler (Cinnamon, X11).
 
@@ -27,8 +26,10 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")
-from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402
+# PyGObject не поставляет стабы для проверки типов — импорт без проверки.
+from gi.repository import Gdk, Gtk, Pango, PangoCairo  # noqa: E402  # type: ignore
 
+import zone_geom as geom  # noqa: E402
 from zone_config import (  # noqa: E402
     Zone,
     load_extra_sections,
@@ -44,9 +45,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 HOTKEYS = os.path.join(HERE, "setup-hotkeys.py")
 
-MIN_SIZE = 0.05          # минимальный размер зоны (доля экрана)
-SNAP_PX = 9              # прилипание, пикселей
-GUIDES = [0.0, 0.25, 1 / 3, 0.5, 2 / 3, 0.75, 1.0]
 PALETTE = [
     (0.36, 0.62, 0.92), (0.42, 0.78, 0.58), (0.92, 0.66, 0.36),
     (0.80, 0.50, 0.85), (0.42, 0.80, 0.85), (0.92, 0.52, 0.52),
@@ -59,7 +57,7 @@ CONF = zt.default_conf()
 
 
 def templates():
-    L, T, Q = "zone", "top", "q"
+    Q = "q"
 
     def mk(spec):
         out = []
@@ -133,74 +131,24 @@ class Canvas(Gtk.DrawingArea):
         self.drag = None  # (index, mode, edges, start_rect, start_frac)
         self.hover = (None, "")
 
-    # ---- геометрия
+    # ---- геометрия (расчёты — в zone_geom, без GTK)
 
     def screen_rect(self):
         a = self.get_allocation()
-        _, _, mw, mh = self.editor.workarea()
-        avail_w = max(50, a.width - 2 * self.MARGIN)
-        avail_h = max(50, a.height - 2 * self.MARGIN)
-        scale = min(avail_w / mw, avail_h / mh)
-        w, h = mw * scale, mh * scale
-        return ((a.width - w) / 2, (a.height - h) / 2, w, h)
+        return geom.screen_rect(a.width, a.height, self.editor.workarea(), self.MARGIN)
 
     def to_px(self, z):
-        sx, sy, sw, sh = self.screen_rect()
-        return (sx + z.x * sw, sy + z.y * sh, z.w * sw, z.h * sh)
+        return geom.to_px(self.screen_rect(), z)
 
     def to_frac(self, px, py):
-        sx, sy, sw, sh = self.screen_rect()
-        return ((px - sx) / sw, (py - sy) / sh)
-
-    def snap_frac(self, frac, axis, skip):
-        _, _, sw, sh = self.screen_rect()
-        tol = SNAP_PX / (sw if axis == "x" else sh)
-        cand = list(GUIDES)
-        for z in self.editor.zones:
-            if z is skip:
-                continue
-            if axis == "x":
-                cand += [z.x, z.x + z.w]
-            else:
-                cand += [z.y, z.y + z.h]
-        best = None
-        for c in cand:
-            d = abs(c - frac)
-            if d <= tol and (best is None or d < abs(best - frac)):
-                best = c
-        return frac if best is None else best
-
-    def _snap_move(self, pos, size, axis, skip):
-        left = self.snap_frac(pos, axis, skip)
-        if abs(left - pos) > 1e-9:
-            return min(max(0.0, left), 1.0 - size)
-        right = self.snap_frac(pos + size, axis, skip)
-        if abs(right - (pos + size)) > 1e-9:
-            return min(max(0.0, right - size), 1.0 - size)
-        return pos
+        return geom.to_frac(self.screen_rect(), px, py)
 
     def hit(self, px, py):
-        for i in reversed(range(len(self.editor.zones))):
-            x, y, w, h = self.to_px(self.editor.zones[i])
-            if x - 4 <= px <= x + w + 4 and y - 4 <= py <= y + h + 4:
-                edges = set()
-                if abs(px - x) <= 7:
-                    edges.add("l")
-                if abs(px - (x + w)) <= 7:
-                    edges.add("r")
-                if abs(py - y) <= 7:
-                    edges.add("t")
-                if abs(py - (y + h)) <= 7:
-                    edges.add("b")
-                if x <= px <= x + w and y <= py <= y + h:
-                    return i, ("resize" if edges else "move"), edges
-                return i, "move", set()
-        return None, "", set()
+        return geom.hit_test(px, py, self.screen_rect(), self.editor.zones)
 
     # ---- события
 
     def on_draw(self, widget, cr):
-        a = widget.get_allocation()
         cr.set_source_rgb(0.11, 0.12, 0.14)
         cr.paint()
 
@@ -212,7 +160,7 @@ class Canvas(Gtk.DrawingArea):
 
         # подсказки-линии
         cr.set_line_width(1)
-        for g in GUIDES[1:-1]:
+        for g in geom.GUIDES[1:-1]:
             cr.set_source_rgba(1, 1, 1, 0.05)
             cr.move_to(sx + g * sw, sy)
             cr.line_to(sx + g * sw, sy + sh)
@@ -331,28 +279,12 @@ class Canvas(Gtk.DrawingArea):
         if self.drag is None:
             return False
         idx, mode, edges, start, start_f = self.drag
+        screen = self.screen_rect()
         z = self.editor.zones[idx]
-        dx, dy = fx - start_f[0], fy - start_f[1]
-
-        if mode == "move":
-            nx = min(max(0.0, start.x + dx), 1.0 - start.w)
-            ny = min(max(0.0, start.y + dy), 1.0 - start.h)
-            z.x = self._snap_move(nx, start.w, "x", z)
-            z.y = self._snap_move(ny, start.h, "y", z)
-        else:
-            x1, y1 = start.x, start.y
-            x2, y2 = start.x + start.w, start.y + start.h
-            if "l" in edges:
-                x1 = min(self.snap_frac(x1 + dx, "x", z), x2 - MIN_SIZE)
-            if "r" in edges:
-                x2 = max(self.snap_frac(x2 + dx, "x", z), x1 + MIN_SIZE)
-            if "t" in edges:
-                y1 = min(self.snap_frac(y1 + dy, "y", z), y2 - MIN_SIZE)
-            if "b" in edges:
-                y2 = max(self.snap_frac(y2 + dy, "y", z), y1 + MIN_SIZE)
-            x1, y1 = max(0.0, x1), max(0.0, y1)
-            x2, y2 = min(1.0, x2), min(1.0, y2)
-            z.x, z.y, z.w, z.h = x1, y1, x2 - x1, y2 - y1
+        z.x, z.y, z.w, z.h = geom.drag_rect(
+            start, mode, edges, start_f, (fx, fy), self.editor.zones,
+            geom.snap_tol(screen, "x"), geom.snap_tol(screen, "y"), skip=idx,
+        )
         self.editor.update_geom_label()
         self.queue_draw()
         return True
@@ -403,12 +335,8 @@ class Canvas(Gtk.DrawingArea):
             z = ed.zones[ed.selected]
             dx = -step if ev.keyval == Gdk.KEY_Left else step if ev.keyval == Gdk.KEY_Right else 0
             dy = -step if ev.keyval == Gdk.KEY_Up else step if ev.keyval == Gdk.KEY_Down else 0
-            if ev.state & Gdk.ModifierType.CONTROL_MASK:
-                z.w = min(1 - z.x, max(MIN_SIZE, z.w + dx))
-                z.h = min(1 - z.y, max(MIN_SIZE, z.h + dy))
-            else:
-                z.x = min(max(0.0, z.x + dx), 1.0 - z.w)
-                z.y = min(max(0.0, z.y + dy), 1.0 - z.h)
+            resize = bool(ev.state & Gdk.ModifierType.CONTROL_MASK)
+            z.x, z.y, z.w, z.h = geom.nudge((z.x, z.y, z.w, z.h), dx, dy, resize=resize)
             ed.refresh_panel()
             ed.set_dirty(True)
             self.queue_draw()
@@ -424,7 +352,7 @@ class Canvas(Gtk.DrawingArea):
             d = 0.01 if ev.delta_y < 0 else -0.01
         else:
             d = 0.01 if ev.direction == Gdk.ScrollDirection.UP else -0.01
-        z.w = min(1 - z.x, max(MIN_SIZE, z.w + d))
+        z.x, z.y, z.w, z.h = geom.scroll_resize((z.x, z.y, z.w, z.h), d)
         self.editor.set_dirty(True)
         self.queue_draw()
         return True
