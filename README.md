@@ -80,6 +80,14 @@ mkdir -p ~/.config/gridsnap && cp /usr/lib/gridsnap/zones.conf ~/.config/gridsna
 > «Для себя» и «пакетом» не мешают друг другу, но и не синхронизируются: `install-launcher.sh`
 > и `install-daemon.sh` работают с каталогом репозитория, а пакет — со своими путями `/usr`.
 
+### Справка
+
+man-страницы входят в пакет (`/usr/share/man/man1`), а `install.sh` кладёт их в
+`ПРЕФИКС/share/man/man1` — в том числе при `--no-launcher`: это документация, а не часть ярлыка.
+`man gridsnap` — команды пакета, `zones.conf`, файлы и коды возврата; `man gridsnap-tiler` —
+та же страница (как и `man gridsnap-daemon`, `man gridsnap-editor`, `man gridsnap-picker`,
+`man gridsnap-ctl`, `man setup-hotkeys`).
+
 ## 1. Что есть в Cinnamon из коробки
 
 Встроенного редактора сетки (как FancyZones в Windows) в Cinnamon **нет**. Есть только

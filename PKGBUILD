@@ -1,7 +1,8 @@
 # Maintainer: metapeka <188594035+metapeka@users.noreply.github.com>
 #
 # Рецепт AUR для GridSnap. Ставит то же, что и .deb: код в /usr/lib/gridsnap,
-# команды-запускалки в /usr/bin и ярлык в /usr/share/applications.
+# команды-запускалки в /usr/bin, ярлык в /usr/share/applications и man-страницы
+# в /usr/share/man/man1 (для Arch — сжатыми gzip).
 # Собирать не обязательно — это рецепт для Arch; версия обязана совпадать с
 # VERSION в zone-tiler.py (make aur это проверяет).
 #
@@ -61,4 +62,14 @@ package() {
     install -d "$pkgdir/usr/share/doc/$pkgname"
     install -m 0644 README.md SPEC.md "$pkgdir/usr/share/doc/$pkgname/"
     cp -a docs "$pkgdir/usr/share/doc/$pkgname/docs"
+
+    # man-страницы: в Arch их принято ставить сжатыми (.gz); -n — без имени
+    # и времени файла, чтобы сборка была воспроизводимой.
+    install -d "$pkgdir/usr/share/man/man1"
+    local page
+    for page in gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 \
+                gridsnap-editor.1 gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1; do
+        gzip -9n -c "man/$page" > "$pkgdir/usr/share/man/man1/$page.gz"
+        chmod 0644 "$pkgdir/usr/share/man/man1/$page.gz"
+    done
 }

@@ -1,6 +1,7 @@
 #!/usr/bin/dh-exec
 # Раскладка пакета — та же, что в цели `make deb` Makefile и в install.sh
-# (код в /usr/lib/gridsnap, запускалки в /usr/bin, ярлык и иконки в /usr/share).
+# (код в /usr/lib/gridsnap, запускалки в /usr/bin, ярлык и иконки в /usr/share,
+# man-страницы в /usr/share/man/man1).
 #
 # «=>» — это dh-exec: он позволяет ставить файл под другим именем
 # (в исходниках иконки названы gridsnap-<размер>.png, а теме нужен gridsnap.png).
@@ -26,6 +27,16 @@ icons usr/lib/gridsnap
 
 # --- ярлык ---
 contrib/gridsnap.desktop => /usr/share/applications/gridsnap.desktop
+
+# --- man-страницы (сжимает dh_compress; здесь они кладутся как есть) ---
+# Семь файлов: полная страница gridsnap.1 и шесть псевдонимов (.so man1/gridsnap.1).
+man/gridsnap.1 => /usr/share/man/man1/gridsnap.1
+man/gridsnap-tiler.1 => /usr/share/man/man1/gridsnap-tiler.1
+man/gridsnap-daemon.1 => /usr/share/man/man1/gridsnap-daemon.1
+man/gridsnap-editor.1 => /usr/share/man/man1/gridsnap-editor.1
+man/gridsnap-picker.1 => /usr/share/man/man1/gridsnap-picker.1
+man/gridsnap-ctl.1 => /usr/share/man/man1/gridsnap-ctl.1
+man/setup-hotkeys.1 => /usr/share/man/man1/setup-hotkeys.1
 
 # --- иконки темы hicolor ---
 icons/gridsnap-16.png => /usr/share/icons/hicolor/16x16/apps/gridsnap.png

@@ -75,6 +75,9 @@ mkdir -p ~/.config/gridsnap && cp /usr/lib/gridsnap/zones.conf ~/.config/gridsna
 > synchronized either: `install-launcher.sh` and `install-daemon.sh` work with the repository
 > directory, while the package works with its own `/usr` paths.
 
+Man pages (`man gridsnap`, `man gridsnap-tiler`) come with the package in `/usr/share/man/man1`
+and `install.sh` puts them into `PREFIX/share/man/man1` even with `--no-launcher`.
+
 ## 1. What Cinnamon has out of the box
 
 Cinnamon has **no** built-in grid editor (like FancyZones in Windows). There is only a fixed set

@@ -1,0 +1,377 @@
+.\" gridsnap.1 — man-страница пакета GridSnap (раскладка окон по зонам, Cinnamon/X11).
+.\" Исходник — этот файл, без генерации из Markdown. Правьте его и проверяйте:
+.\"   man --warnings -E UTF-8 -l man/gridsnap.1
+.\" Дата и версия в .TH: версия обязана совпадать с VERSION в zone-tiler.py
+.\" (это проверяет `make check-version`).
+.TH GRIDSNAP 1 "2026-11-21" "gridsnap 0.1.0" "Пользовательские команды"
+.SH NAME
+gridsnap, gridsnap\-tiler, gridsnap\-daemon, gridsnap\-editor, gridsnap\-picker, gridsnap\-ctl, setup\-hotkeys \- раскладка окон по зонам для Cinnamon/X11
+.SH SYNOPSIS
+.B gridsnap\-tiler
+[\fB\-\-monitor\fP \fIN\fP] [\fB\-\-conf\fP \fIПУТЬ\fP]
+{\fBlist\fP | \fBapply\fP \fIЗОНА\fP | \fBkeys\fP | \fBarrange\fP | \fBstack\fP \fIЗОНА\fP | \fBundo\fP | \fBprofile\fP}
+[\fB\-\-dry\-run\fP] [\fB\-\-verify\fP] [\fB\-\-quiet\fP] ...
+.br
+.B gridsnap\-daemon
+[\fB\-\-conf\fP \fIПУТЬ\fP] [\fB\-\-verbose\fP] [\fB\-\-once\fP] [\fB\-\-socket\fP \fIПУТЬ\fP | \fB\-\-no\-socket\fP]
+.br
+.B gridsnap\-editor
+[\fB\-\-conf\fP \fIПУТЬ\fP] [\fB\-\-monitor\fP \fIN\fP] [\fB\-\-shot\fP \fIФАЙЛ.png\fP]
+.br
+.B gridsnap\-picker
+[\fB\-\-conf\fP \fIПУТЬ\fP] [\fB\-\-monitor\fP \fIN\fP] [\fB\-\-window\fP \fIXID\fP] [\fB\-\-select\fP \fIЗОНА\fP]
+[\fB\-\-dry\-run\fP] [\fB\-\-verify\fP] [\fB\-\-quiet\fP] [\fB\-\-shot\fP \fIФАЙЛ.png\fP]
+.br
+.B gridsnap\-ctl
+[\fB\-\-socket\fP \fIПУТЬ\fP] [\fB\-\-window\fP \fIXID\fP] [\fB\-\-monitor\fP \fIN\fP]
+{\fBstatus\fP | \fBapply\fP \fIЗОНА\fP | \fBreload\fP | \fBquit\fP} [\fB\-\-raw\fP] [\fB\-\-quiet\fP]
+.br
+.B setup\-hotkeys
+[\fB\-\-list\fP | \fB\-\-remove\fP] [\fB\-\-conf\fP \fIПУТЬ\fP]
+.SH DESCRIPTION
+GridSnap — визуальный редактор зон рабочей области и раскладчик окон для Cinnamon на X11.
+Зона задаётся долями рабочей области монитора (без панелей), окно ставится через EWMH-сообщения
+muffin с компенсацией рамки окна, поэтому рамка окна совпадает с зоной, а не клиентская часть.
+Раскладка работает поверх штатного оконного менеджера и не подменяет управление окнами.
+.PP
+Пакет ставит шесть команд:
+\fBgridsnap\-tiler\fP (раскладчик по зонам, \fIzone\-tiler.py\fP),
+\fBgridsnap\-daemon\fP (автоукладка новых окон по правилам, \fIzone\-daemon.py\fP),
+\fBgridsnap\-editor\fP (визуальный редактор зон, \fIzone\-editor.py\fP),
+\fBgridsnap\-picker\fP (оверлей выбора зоны стрелками, \fIzone\-picker.py\fP),
+\fBgridsnap\-ctl\fP (клиент IPC-сокета демона, \fIgridsnap\-ctl\fP) и
+\fBsetup\-hotkeys\fP (сочетания клавиш Cinnamon, \fIsetup\-hotkeys.py\fP).
+Все команды описаны на этой странице; страницы \fBgridsnap\-tiler\fP(1),
+\fBgridsnap\-daemon\fP(1), \fBgridsnap\-editor\fP(1), \fBgridsnap\-picker\fP(1),
+\fBgridsnap\-ctl\fP(1) и \fBsetup\-hotkeys\fP(1) — псевдонимы этой (roff \fB.so\fP).
+.PP
+Нужен X11 и EWMH-совместимый оконный менеджер (Cinnamon/muffin); под Wayland без XWayland
+раскладка не работает. Горячие клавиши и редактор — часть Cinnamon.
+.SH КОМАНДЫ
+.SS "gridsnap\-tiler — раскладчик"
+Основная команда: читает \fIzones.conf\fP и двигает окна. Первый аргумент — команда.
+.TP
+.B list
+Печатает рабочую область монитора (\fB\-\-monitor\fP, по умолчанию 0) и для каждой зоны её
+пиксельную рамку в виде \fIx=… y=… ШxВ\fP; зоны идут по алфавиту. Окна не трогает.
+.TP
+.B apply \fIЗОНА\fP
+Вкладывает окно в зону: по умолчанию активное, \fB\-\-window\fP \fIXID\fP задаёт окно вручную.
+Окну снимаются максимизация и полноэкранный режим, затем уходит \fI_NET_MOVERESIZE_WINDOW\fP;
+рамка окна компенсируется по \fI_NET_FRAME_EXTENTS\fP.
+\fB\-\-dry\-run\fP только печатает рамку, окно не двигает и в историю не пишет.
+\fB\-\-verify\fP перечитывает фактическую геометрию через \fBxwininfo\fP(1) и дописывает
+«совпало с зоной» или «не совпало!». Удачное \fBapply\fP (кроме \fB\-\-dry\-run\fP) пишется
+в историю для \fBundo\fP.
+.TP
+.B keys
+Печатает пары «зона, табуляция, сочетание» из секции \fB[keys]\fP. Это источник для
+\fBsetup\-hotkeys\fP. Зона из \fB[keys]\fP, которой нет в \fB[zones]\fP, пропускается
+с сообщением в stderr.
+.TP
+.B arrange
+Берёт клиентские окна из EWMH-списка \fI_NET_CLIENT_LIST\fP и раскладывает их по зонам.
+Двигаются только подвижные окна: нужен непустой \fIWM_CLASS\fP, диалоги, splash и прочие
+служебные типы не трогаются. Режим выбирает \fB\-\-by\fP:
+.RS
+.TP
+.B auto
+(по умолчанию) сначала окна, для которых сработало правило \fB[rules]\fP, затем окна без
+правила по порядку заполняют свободные (никем не занятые по правилу) зоны в порядке файла;
+лишние окна остаются на месте.
+.TP
+.B rules
+Только окна со сработавшим правилом, каждое в свою зону; остальные не трогаются.
+.TP
+.B order
+Все подвижные окна в порядке \fI_NET_CLIENT_LIST\fP (снизу вверх) получают зоны в порядке
+секции \fB[zones]\fP; если окон больше, чем зон, лишним достаётся последняя зона и они лягут
+стопкой.
+.RE
+.IP
+Каждое окно ставится на том мониторе, где оно находится. Несколько окон, попавших в одну зону
+одного монитора, ложатся каскадом: первое — ровно по зоне, каждое следующее сдвинуто на
+\fB\-\-offset\fP px (по умолчанию 20) вниз-вправо, окно не уменьшается. Прежние рамки пишутся
+в историю. \fB\-\-dry\-run\fP печатает \fIокно \-> зона: x=… y=… ШxВ\fP и ничего не двигает.
+Если подходящих окон нет, команда завершается успешно.
+.TP
+.B stack \fIЗОНА\fP
+Частный случай \fBarrange\fP: собирает все подвижные клиентские окна в одну зону монитора
+(\fB\-\-monitor\fP, по умолчанию 0) тем же каскадом со сдвигом \fB\-\-offset\fP.
+.TP
+.B undo
+Возвращает окна на прежние рамки из истории: без флагов — последнюю операцию,
+\fB\-\-all\fP — всю историю, причём для каждого окна берётся рамка из самой ранней операции,
+где оно встречается. Перед возвратом сверяется текущий \fIWM_CLASS\fP окна с записанным:
+если XID переиспользован другим приложением или окна уже нет, оно пропускается (это не ошибка).
+Восстанавливается только геометрия, не состояние максимизации; рабочий стол запоминается,
+но окна между рабочими столами не переносятся. Откаченная операция снимается с истории
+(\fB\-\-all\fP очищает историю). Пустая история — успех.
+.TP
+.B profile \fIДЕЙСТВИЕ\fP [\fIИМЯ\fP]
+Профили раскладок: полный набор зон, правил и сочетаний клавиш. Профиль — отдельный файл
+\fI<templates>/<имя>.conf\fP; в него входят только секции \fB[zones]\fP (с привязками из
+\fB[keys]\fP) и \fB[rules]\fP, без \fB[grid]\fP и \fB[daemon]\fP. Имя санируется тем же
+правилом, что имена зон; путь не может выйти за каталог профилей.
+.RS
+.TP
+.B list
+Имена сохранённых профилей по алфавиту.
+.TP
+.B show \fIИМЯ\fP
+Содержимое файла профиля дословно.
+.TP
+.B save \fIИМЯ\fP
+Сохранить зоны текущего \fIzones.conf\fP (с привязками) и его \fB[rules]\fP как профиль.
+Пустой набор зон не сохраняется (код 2).
+.TP
+.B use \fIИМЯ\fP
+Перезаписать в активном \fIzones.conf\fP секции \fB[zones]\fP, \fB[rules]\fP и \fB[keys]\fP
+содержимым профиля, сохранив \fB[grid]\fP, \fB[daemon]\fP и прочие секции. После записи
+запускается \fBsetup\-hotkeys.py\fP с тем же \fB\-\-conf\fP, чтобы новые сочетания заработали;
+\fB\-\-no\-hotkeys\fP это отключает.
+.TP
+.B rm \fIИМЯ\fP
+Удалить профиль.
+.RE
+.SS "gridsnap\-daemon — автоукладка новых окон"
+Необязательный долгоживущий демон: подписывается на \fIPropertyNotify\fP по
+\fI_NET_CLIENT_LIST\fP на root, читает список через \fBxprop\fP(1) \fB\-root\fP и приводит
+раскладку в соответствие. Появившиеся окна укладывает по правилам \fB[rules]\fP на том мониторе,
+где они находятся; исчезнувшие снимает с учёта.
+.PP
+При \fB[daemon] reflow = neighbors\fP освободившаяся зона расширяется соседней занятой зоной
+в пределах того же монитора, а когда в неё снова встаёт окно по правилу — сосед возвращается
+на исходную рамку. Свёрнутое окно из \fI_NET_CLIENT_LIST\fP не исчезает, поэтому reflow
+не срабатывает.
+.PP
+По умолчанию демон поднимает IPC-сокет (\fB\-\-socket\fP \fIПУТЬ\fP меняет путь,
+\fB\-\-no\-socket\fP отключает IPC). \fB\-\-verbose\fP печатает, что делает демон.
+\fB\-\-once\fP обрабатывает одно изменение списка и выходит; если события не пришло, ждёт
+2 секунды и выходит (для дымовых проверок). Останов — Ctrl-C (\fBSIGINT\fP) или
+\fBgridsnap\-ctl quit\fP.
+.SS "gridsnap\-editor — визуальный редактор зон"
+Окно GTK 3 с рабочей областью монитора в натуральном масштабе. Зону можно таскать мышью и
+тянуть за край или угол; прилипание — к краям экрана, к соседним зонам и к линиям 1/4, 1/3,
+1/2, 2/3, 3/4. Двойной клик по пустому месту создаёт зону, \fIDelete\fP удаляет; есть шаблоны
+раскладок (2 колонки, 1 + 2, 2 × 2, 3 колонки, главное + стек, чистый лист), имя и сочетание клавиш на каждую
+зону, меню «Профили» (сохранить, загрузить черновиком, удалить), сохранение в \fIzones.conf\fP,
+кнопка регистрации сочетаний и кнопка проверки «вложить активное окно в зону».
+Минимальный размер зоны — 5 % экрана; зона нулевой площади не сохраняется.
+\fB\-\-monitor\fP \fIN\fP выбирает монитор, \fB\-\-shot\fP \fIФАЙЛ.png\fP сохраняет снимок
+интерфейса и выходит (для проверок).
+.SS "gridsnap\-picker — оверлей выбора зоны"
+Показывает поверх рабочего стола зоны активного монитора. Зона под курсором и текущее
+выделение подсвечиваются; стрелки двигают выделение по геометрии зон, \fIEnter\fP вкладывает
+активное окно в выбранную зону (и пишет операцию в историю), \fIEsc\fP отменяет; левый клик
+вкладывает, правый отменяет. Клавиатуру оверлей захватывает сам, поэтому стрелки не уходят
+в другое окно.
+.PP
+\fB\-\-select\fP \fIЗОНА\fP задаёт начальное выделение, \fB\-\-monitor\fP \fIN\fP — монитор
+(по умолчанию монитор активного окна, иначе под курсором), \fB\-\-window\fP \fIXID\fP — окно
+для вложения, \fB\-\-dry\-run\fP только печатает целевую рамку, \fB\-\-verify\fP сверяет рамку
+после вложения, \fB\-\-quiet\fP не печатает строку о вложении, \fB\-\-shot\fP \fIФАЙЛ.png\fP
+рисует оверлей в PNG и выходит без интерактива.
+.SS "gridsnap\-ctl — клиент IPC демона"
+Говорит с UNIX-сокетом \fBgridsnap\-daemon\fP: одна JSON-команда на соединение, ответ — тоже
+JSON-строка. Команды:
+.TP
+.B status
+Состояние демона: \fIconf\fP, \fIversion\fP, \fIreflow\fP, \fIprofile\fP (пока \fInull\fP),
+\fImonitors\fP (рабочие области), \fIzones\fP (доли 0..1), \fIzones_px\fP (пиксельные рамки
+на каждый монитор), \fIwindows\fP (окно, зона, монитор) и \fIfilled\fP (расширенные соседи
+reflow).
+.TP
+.B apply \fIЗОНА\fP
+Вложить окно в зону: \fB\-\-window\fP \fIXID\fP (по умолчанию активное окно),
+\fB\-\-monitor\fP \fIN\fP. Успех записывается в трекер демона, поэтому закрытие окна затем
+штатно запускает reflow.
+.TP
+.B reload
+Перечитать \fIzones.conf\fP (сетка, правила, reflow); кэш мониторов сбрасывается.
+.TP
+.B quit
+Попросить демон завершиться после текущего события.
+.PP
+\fB\-\-socket\fP \fIПУТЬ\fP задаёт путь сокета, \fB\-\-raw\fP печатает ответ одной строкой,
+\fB\-\-quiet\fP ничего не печатает при успехе.
+.SS "setup\-hotkeys — сочетания клавиш Cinnamon"
+Читает \fB[keys]\fP через \fBgridsnap\-tiler keys\fP и создаёт пользовательские сочетания
+Cinnamon (схемы \fIorg.cinnamon.desktop.keybindings\fP) с именем «zone-tiler: <зона>» и
+командой \fBpython3 <каталог кода>/zone\-tiler.py apply <зона> \-\-quiet\fP (с \fB\-\-conf\fP,
+если он задан). Сочетания, поставленные прошлыми запусками (по префиксу имени), сначала
+снимаются, чтобы не осталось мусора.
+\fB\-\-list\fP только показывает план, \fB\-\-remove\fP удаляет сочетания GridSnap и ничего
+не ставит, \fB\-\-conf\fP \fIПУТЬ\fP указывает конфиг.
+.SH ПАРАМЕТРЫ
+Ключи \fBgridsnap\-tiler\fP (общие для всех его команд, если не сказано иное):
+.TP
+.B \-h, \-\-help
+Справка по аргументам и выход.
+.TP
+.BI \-\-conf " ПУТЬ"
+Файл конфигурации. По умолчанию \fI$XDG_CONFIG_HOME/gridsnap/zones.conf\fP, а если его нет —
+\fIzones.conf\fP рядом с кодом. Флаг уводит за собой и каталог профилей.
+.TP
+.BI \-\-monitor " N"
+Номер монитора (по умолчанию 0). Используется командами \fBlist\fP, \fBapply\fP и
+\fBstack\fP.
+.TP
+.BI \-\-window " XID"
+Идентификатор окна для \fBapply\fP: десятичный или \fI0x…\fP. По умолчанию активное окно.
+.TP
+.BI \-\-by " auto|rules|order"
+Способ выбора окон для \fBarrange\fP (по умолчанию \fIauto\fP), см. выше.
+.TP
+.BI \-\-offset " N"
+Сдвиг окна в стопке и каскаде, px (по умолчанию 20; 0 — без сдвига). Для \fBarrange\fP и
+\fBstack\fP.
+.TP
+.B \-\-all
+\fBundo\fP: откатить всю историю, а не последнюю операцию.
+.TP
+.B \-\-no\-hotkeys
+\fBprofile use\fP: не регистрировать сочетания клавиш после активации профиля.
+.TP
+.B \-\-dry\-run
+Только посчитать рамку: окно не двигать, в историю не писать.
+.TP
+.B \-\-verify
+Перечитать реальную геометрию окна после раскладки и сравнить с зоной.
+.TP
+.B \-\-quiet
+Не печатать сообщения об успехе (в справке \fB\-\-help\fP описание не выводится).
+.TP
+.B \-\-version
+Печатает \fIzone-tiler 0.1.0\fP и выходит.
+.PP
+Ключи остальных команд перечислены в разделе КОМАНДЫ; у каждой есть также \fB\-h\fP и
+\fB\-\-version\fP.
+.SH КОНФИГУРАЦИЯ
+Конфигурация — один INI-файл UTF-8 \fIzones.conf\fP. По умолчанию берётся
+\fI$XDG_CONFIG_HOME/gridsnap/zones.conf\fP (обычно \fI~/.config/gridsnap/zones.conf\fP);
+если его нет — файл \fIzones.conf\fP рядом с кодом (\fI/usr/lib/gridsnap/zones.conf\fP
+у системного пакета). \fB\-\-conf\fP \fIПУТЬ\fP отменяет выбор. Комментарии — \fI#\fP и
+\fI;\fP (в том числе в конце строки после пробела); разделитель — только \fI=\fP, поэтому
+ключ \fIre:<regex>\fP не разрезается по двоеточию.
+.SS "[grid]"
+Линии сетки: \fBcols\fP и \fBrows\fP — возрастающие списки долей через запятую, пробел или
+точку с запятой; последняя линия обязана быть \fI1.0\fP. Нужны только зонам-диапазонам.
+.SS "[zones]"
+Имя зоны = одна из двух форм (имена зон приводятся к нижнему регистру — так работает
+ConfigParser):
+.RS
+.TP
+.B x, y, w, h
+Свободный прямоугольник в долях рабочей области: \fI0 <= x < 1\fP, \fI0 <= y < 1\fP,
+\fIw > 0\fP, \fIh > 0\fP, \fIx+w <= 1\fP, \fIy+h <= 1\fP. Это каноническая форма, в ней
+файл сохраняет редактор.
+.TP
+.B c0:c1, r0:r1
+Диапазон ячеек сетки: индексы линий \fBcols\fP и \fBrows\fP (\fI0 <= c0 < c1 <= число
+колонок\fP). Читается для совместимости.
+.RE
+.IP
+Хотя бы одна зона обязательна.
+.SS "[rules]"
+Секция необязательна. Правила автоукладки: \fIселектор = имя зоны\fP. Селектор — glob по \fIWM_CLASS\fP без учёта
+регистра или \fIre:<regex>\fP — регулярка (\fIre.search\fP, без учёта регистра) по строке
+\fIкласс|заголовок\fP. Порядок строк значим: выигрывает первое совпадение. Правило на зону,
+которой нет в \fB[zones]\fP, — ошибка конфига; некорректная регулярка просто никогда
+не совпадает. Регистр ключей в этой секции сохраняется.
+.SS "[keys]"
+Привязки клавиш: \fIимя зоны = сочетание\fP Cinnamon, например \fI<Super><Alt>1\fP.
+.SS "[daemon]"
+Секция необязательна. \fBreflow = off | neighbors\fP (по умолчанию \fIoff\fP; регистр и пробелы не важны,
+неизвестное значение трактуется как \fIoff\fP). Режим \fIneighbors\fP описан в разделе
+КОМАНДЫ.
+.SH ПРИМЕРЫ
+.nf
+gridsnap\-tiler list
+gridsnap\-tiler apply main \-\-dry\-run
+gridsnap\-tiler apply bottom \-\-monitor 1 \-\-verify
+gridsnap\-tiler arrange \-\-by order
+gridsnap\-tiler stack main \-\-offset 0
+gridsnap\-tiler undo \-\-all
+gridsnap\-tiler profile save work
+gridsnap\-tiler profile use work \-\-no\-hotkeys
+gridsnap\-tiler keys
+gridsnap\-daemon \-\-verbose
+gridsnap\-daemon \-\-once \-\-conf ~/.config/gridsnap/zones.conf
+gridsnap\-ctl status
+gridsnap\-ctl apply main \-\-monitor 1
+setup\-hotkeys \-\-list
+gridsnap\-picker \-\-select top\-right
+gridsnap\-editor \-\-conf ~/.config/gridsnap/zones.conf
+.fi
+.SH "ГОРЯЧИЕ КЛАВИШИ"
+Сочетания задаются в секции \fB[keys]\fP файла \fIzones.conf\fP и регистрируются в Cinnamon
+командой \fBsetup\-hotkeys\fP (или кнопкой в редакторе) как пользовательские сочетания с именем
+«zone-tiler: <зона>», выполняющие \fBgridsnap\-tiler apply <зона> \-\-quiet\fP. После правки
+\fB[keys]\fP вручную нужно перезапустить \fBsetup\-hotkeys\fP, иначе новые имена зон не будут
+связаны с клавишами.
+.PP
+В поставляемом \fIzones.conf\fP четыре зоны и четыре сочетания: \fImain\fP — \fI<Super><Alt>1\fP,
+\fItop\-right\fP — \fI<Super><Alt>2\fP, \fItop\-far\fP — \fI<Super><Alt>3\fP,
+\fIbottom\fP — \fI<Super><Alt>4\fP.
+.PP
+Смена профиля одной клавишей — обычное пользовательское сочетание Cinnamon, вызывающее
+\fBgridsnap\-tiler profile use <имя>\fP: своих клавиш для профилей проект не заводит.
+Сочетание для \fBgridsnap\-picker\fP (например, \fISuper+Z\fP) пользователь заводит сам —
+\fBsetup\-hotkeys\fP ставит только клавиши зон из \fB[keys]\fP.
+.SH ФАЙЛЫ
+.TP
+.I ~/.config/gridsnap/zones.conf
+Активный конфиг (с учётом \fI$XDG_CONFIG_HOME\fP). Если файла нет, читается и пишется
+\fIzones.conf\fP рядом с кодом (\fI/usr/lib/gridsnap/zones.conf\fP).
+.TP
+.I ~/.local/state/gridsnap/history.json
+История раскладок (с учётом \fI$XDG_STATE_HOME\fP): JSON, последние 20 операций, запись
+атомарная. Нужна \fBundo\fP в отдельном процессе.
+.TP
+.I $XDG_RUNTIME_DIR/gridsnap/daemon.sock
+UNIX-сокет демона (права 0600, каталог 0700). Без \fI$XDG_RUNTIME_DIR\fP —
+\fI/tmp/gridsnap\-<uid>/daemon.sock\fP.
+.TP
+.I ~/.config/gridsnap/templates/*.conf
+Профили раскладок (с учётом \fI$XDG_CONFIG_HOME\fP; с \fB\-\-conf\fP \fIПУТЬ\fP — каталог
+\fItemplates\fP рядом с этим файлом).
+.TP
+.I /usr/lib/gridsnap
+Код пакета: \fIzone\-tiler.py\fP, \fIzone\-daemon.py\fP, \fIzone\-editor.py\fP,
+\fIzone\-picker.py\fP, \fIgridsnap\-ctl\fP, \fIsetup\-hotkeys.py\fP и вспомогательные модули,
+а также поставляемый \fIzones.conf\fP.
+.TP
+.I /usr/bin/gridsnap\-tiler
+Запускалки команд (\fIgridsnap\-tiler\fP, \fIgridsnap\-daemon\fP, \fIgridsnap\-editor\fP,
+\fIgridsnap\-picker\fP, \fIgridsnap\-ctl\fP, \fIsetup\-hotkeys\fP) — обёртки над кодом
+в \fI/usr/lib/gridsnap\fP.
+.SH "КОДЫ ВОЗВРАТА"
+.TP
+.B 0
+Успех. У \fBarrange\fP и \fBstack\fP без подходящих окон и у \fBundo\fP с пустой историей —
+тоже 0.
+.TP
+.B 1
+Ошибка выполнения: нет дисплея или активного окна, не прочитан \fI_NET_CLIENT_LIST\fP,
+не удалось поднять IPC-сокет (демон), нет связи с демоном или отказ команды
+(\fBgridsnap\-ctl\fP), ошибка \fBgsettings\fP(1) (\fBsetup\-hotkeys\fP).
+.TP
+.B 2
+Ошибка аргументов: неизвестная команда или зона, плохое имя профиля, неверный флаг.
+Сообщает её \fBargparse\fP или сама команда.
+.TP
+.B 3
+Ошибка конфига: файла нет, нет ни одной зоны, кривые числа, доли вне 0..1, правило на
+неизвестную зону, отсутствующий или битый профиль. Так отвечают \fBgridsnap\-tiler\fP
+и \fBgridsnap\-daemon\fP; \fBgridsnap\-picker\fP в тех же случаях выходит с кодом 1.
+.PP
+У \fBgridsnap\-ctl\fP коды 0, 1 и 2; у \fBgridsnap\-daemon\fP — 0, 1 (сокет) и 3 (конфиг);
+у \fBgridsnap\-editor\fP и \fBgridsnap\-picker\fP — 0 и 1 (плюс 2 от \fBargparse\fP);
+у \fBsetup\-hotkeys\fP — 0, 1 и 2.
+.SH "СМОТРИ ТАКЖЕ"
+\fBgridsnap\-tiler\fP(1), \fBgridsnap\-daemon\fP(1), \fBgridsnap\-editor\fP(1),
+\fBgridsnap\-picker\fP(1), \fBgridsnap\-ctl\fP(1), \fBsetup\-hotkeys\fP(1),
+\fBman\fP(1), \fBxprop\fP(1), \fBxwininfo\fP(1), \fBgsettings\fP(1).
+.PP
+Документация пакета — \fI/usr/share/doc/gridsnap/\fP (README, SPEC и \fIdocs/\fP).
