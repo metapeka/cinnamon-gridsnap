@@ -16,11 +16,21 @@ zone-tiler — раскладывает активное окно по зона�
   left      = 0:1, 0:2       # колонки 0..1, строки 0..2
   top-right = 1:3, 0:1
 
+Зоны можно задать на каждый монитор отдельно — секцией `[zones:<выход>]`:
+
+  [zones:HDMI-1]
+  main = 0, 0, 0.6, 1
+
+Имя выхода берётся из `xrandr --listmonitors` (`eDP-1`, `HDMI-1`) и стабильно
+между перезагрузками и переподключениями кабеля; `[zones]` обязательна и служит
+набором по умолчанию для мониторов без своей секции. `[rules]` и `[keys]` общие.
+
 Команды:
   zone-tiler.py list                      # показать зоны и их пиксельные рамки
   zone-tiler.py apply left                # вложить активное окно в зону "left"
   zone-tiler.py apply left --dry-run      # только посчитать рамку
   zone-tiler.py apply left --monitor 1    # зона на другом мониторе
+  zone-tiler.py apply left --monitor HDMI-1   # или по имени выхода (приоритетнее номера)
   zone-tiler.py apply left --window 0x3400007
   zone-tiler.py arrange                   # разложить окна по зонам (по правилам и остатку)
   zone-tiler.py arrange --by order        # разложить окна по зонам по порядку списка
@@ -302,7 +312,29 @@ class Grid:
         if cp.has_section("zones"):
             for name, spec in cp.items("zones"):
                 self.zones[name.strip()] = self._parse_zone(name, spec)
+        # Зоны на каждый монитор: [zones:<выход xrandr>], например [zones:HDMI-1].
+        # Имя секции регистрозависимо (ConfigParser секции не приводит к нижнему
+        # регистру), чтобы совпадать с именем выхода как его печатает xrandr.
+        self.monitor_zones = {}
+        for section in cp.sections():
+            if not section.startswith("zones:"):
+                continue
+            output = section.split(":", 1)[1].strip()
+            if not output:
+                fail(f"zone-tiler: пустое имя монитора в секции [{section}]", EXIT_CONFIG)
+            zones = {}
+            for name, spec in cp.items(section):
+                zones[name.strip()] = self._parse_zone(name, spec)
+            if not zones:
+                fail(f"zone-tiler: в секции [{section}] нет ни одной зоны", EXIT_CONFIG)
+            self.monitor_zones[output] = zones
         if not self.zones:
+            if self.monitor_zones:
+                fail(
+                    "zone-tiler: есть только секции [zones:<выход>], а обязательной [zones] нет; "
+                    "[zones] задаёт набор зон по умолчанию",
+                    EXIT_CONFIG,
+                )
             fail("zone-tiler: в zones.conf нет ни одной зоны в секции [zones]", EXIT_CONFIG)
         # `[rules]` читается отдельным парсером: ConfigParser по умолчанию
         # приводит ключи к нижнему регистру (optionxform=str.lower), из-за чего
@@ -317,15 +349,68 @@ class Grid:
         rules_cp.optionxform = str  # type: ignore  # сохранить регистр селектора (`re:`)
         rules_cp.read(path, encoding="utf-8")
         self.rules = []
+        # Правило проверяется по объединению наборов: зона может быть описана
+        # только для части мониторов (тогда на остальных берётся общий [zones]).
+        known = set(self.all_zone_names())
         if rules_cp.has_section("rules"):
             for selector, zone in rules_cp.items("rules"):
                 selector, zone = selector.strip(), zone.strip()
-                if zone not in self.zones:
+                if zone not in known:
                     fail(
                         f"zone-tiler: правило '{selector}' ссылается на неизвестную зону '{zone}'",
                         EXIT_CONFIG,
                     )
                 self.rules.append((selector, zone))
+
+    def all_zone_names(self):
+        """Имена зон в объединении всех наборов (общий и по мониторам).
+
+        Порядок — сначала `[zones]` как в файле, затем зоны из `[zones:<выход>]`,
+        которых в общем наборе нет. Нужен для проверки правил/клавиш и выбора
+        `--monitor` по имени.
+        """
+        names = list(self.zones)
+        seen = set(names)
+        for zones in self.monitor_zones.values():
+            for name in zones:
+                if name not in seen:
+                    seen.add(name)
+                    names.append(name)
+        return names
+
+    def zones_for(self, monitor_name=None):
+        """Набор зон монитора: `[zones:<выход>]` или общий `[zones]`.
+
+        Имя выхода сравнивается как есть, а при промахе — без учёта регистра
+        (в конфиге легко написать `[zones:hdmi-1]`). Нет секции для монитора —
+        возвращается набор по умолчанию, то есть прежнее поведение.
+        """
+        if monitor_name:
+            zones = self.monitor_zones.get(monitor_name)
+            if zones is not None:
+                return zones
+            for output, zones in self.monitor_zones.items():
+                if output.casefold() == str(monitor_name).casefold():
+                    return zones
+        return self.zones
+
+    def zone_spec(self, zone, monitor_name=None):
+        """Описание зоны с учётом монитора: набор монитора, иначе общий `[zones]`.
+
+        Правило/клавиша может ссылаться на зону, которой нет в наборе
+        конкретного монитора; тогда при укладке на этом мониторе берётся зона из
+        общего набора. Нет ни там, ни там — ошибка конфига, а не трейсбек.
+        """
+        spec = self.zones_for(monitor_name).get(zone)
+        if spec is None:
+            spec = self.zones.get(zone)
+        if spec is None:
+            where = f"монитора '{monitor_name}'" if monitor_name else "общего набора"
+            fail(
+                f"zone-tiler: зоны '{zone}' нет в наборе {where} и в [zones]",
+                EXIT_CONFIG,
+            )
+        return spec
 
     @staticmethod
     def _numlist(value):
@@ -377,9 +462,9 @@ class Grid:
             fail(f"zone-tiler: зона '{name}' выходит за пределы экрана (доли 0..1)", EXIT_CONFIG)
         return ("rect", x, y, w, h)
 
-    def fractions(self, zone):
+    def fractions(self, zone, monitor_name=None):
         """Зона в долях рабочей области: (x, y, w, h)."""
-        spec = self.zones[zone]
+        spec = self.zone_spec(zone, monitor_name)
         if spec[0] == "rect":
             return spec[1:]
         _, c0, c1, r0, r1 = spec
@@ -390,9 +475,13 @@ class Grid:
             self.rows[r1] - self.rows[r0],
         )
 
-    def rect(self, zone, wa):
-        """Пиксельная рамка зоны внутри рабочей области wa=(x,y,w,h)."""
-        spec = self.zones[zone]
+    def rect(self, zone, wa, monitor_name=None):
+        """Пиксельная рамка зоны внутри рабочей области wa=(x,y,w,h).
+
+        `monitor_name` — имя выхода: у монитора может быть свой набор зон
+        (`[zones:<выход>]`), тогда берётся описание оттуда.
+        """
+        spec = self.zone_spec(zone, monitor_name)
         if spec[0] == "rect":
             _, fx, fy, fw, fh = spec
             return self._px(wa, fx, fy, fx + fw, fy + fh)
@@ -505,6 +594,127 @@ def monitors():
     except Exception:
         pass
     fail("zone-tiler: не удалось определить рабочую область экрана", EXIT_FAIL)
+
+
+def monitor_outputs():
+    """[(имя выхода, (x, y, w, h))] — по одному на монитор.
+
+    Имя (`eDP-1`, `HDMI-1`) стабильно между перезагрузками и переподключениями
+    кабеля, поэтому именно оно адресует набор зон (`[zones:<выход>]`) и `--monitor`.
+    Геометрия — прежняя GDK `get_workarea()` (в ней уже вычтена панель), а не
+    геометрия xrandr: xrandr даёт полный экран выхода, без панелей.
+    """
+    return stitch_monitor_names(xrandr_monitors(), monitors())
+
+
+# Строка `xrandr --listmonitors`: ` 0: +*eDP-1 1920/344x1080/194+0+0  eDP-1`.
+# Флаги `+*` относятся к состоянию монитора (`+` — авто, `*` — основной) и
+# частью имени не являются.
+_XRANDR_MONITOR_RE = re.compile(
+    r"^\s*\d+:\s+[+*]*(?P<fallback>\S+)\s+"
+    r"(?P<w>\d+)/\d+x(?P<h>\d+)/\d+\+(?P<x>-?\d+)\+(?P<y>-?\d+)"
+    r"(?:\s+(?P<name>\S+))?\s*$"
+)
+
+
+def parse_xrandr_monitors(text):
+    """[(имя, (x, y, w, h))] из вывода `xrandr --listmonitors`, в его порядке.
+
+    Имя — последнее поле строки (` 0: +*eDP-1 1920/344x1080/194+0+0  eDP-1`).
+    Если имени в строке нет (старый xrandr), берётся поле после `N:` без флагов
+    `+*`. Строки без геометрии (заголовок `Monitors:`, мусор) пропускаются.
+    Чистая функция — под тесты.
+    """
+    out = []
+    for raw in text.splitlines():
+        m = _XRANDR_MONITOR_RE.match(raw)
+        if not m:
+            continue
+        name = (m.group("name") or m.group("fallback") or "").lstrip("+*")
+        if not name:
+            continue
+        rect = (
+            int(m.group("x")),
+            int(m.group("y")),
+            int(m.group("w")),
+            int(m.group("h")),
+        )
+        out.append((name, rect))
+    return out
+
+
+def xrandr_monitors():
+    """Мониторы из `xrandr --listmonitors`; [] если утилиты нет или она упала."""
+    try:
+        text = subprocess.check_output(
+            ["xrandr", "--listmonitors"], text=True, stderr=subprocess.DEVNULL
+        )
+    except Exception:
+        return []
+    return parse_xrandr_monitors(text)
+
+
+def overlap_area(a, b):
+    """Площадь пересечения прямоугольников a и b (0, если не пересекаются)."""
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    w = min(ax + aw, bx + bw) - max(ax, bx)
+    h = min(ay + ah, by + bh) - max(ay, by)
+    return w * h if w > 0 and h > 0 else 0
+
+
+def stitch_monitor_names(outputs, areas):
+    """Сшить имена выходов с рабочими областями: [(имя, область)].
+
+    Совпало количество — имена по порядку: у GDK и xrandr один и тот же порядок
+    мониторов. Иначе — по максимальному пересечению площадей (GDK может отдать
+    одну область на несколько выходов или наоборот), а области без пересечения
+    получают имя `monitor-<i>`. Без имён (нет xrandr) — только `monitor-<i>`, то
+    есть прежнее поведение. Чистая функция — под тесты.
+    """
+    if not outputs:
+        return [(f"monitor-{i}", wa) for i, wa in enumerate(areas)]
+    if len(outputs) == len(areas):
+        return [(outputs[i][0], areas[i]) for i in range(len(areas))]
+    stitched = []
+    used = set()
+    for i, wa in enumerate(areas):
+        best = None
+        best_area = 0
+        for j, (_, rect) in enumerate(outputs):
+            if j in used:
+                continue
+            area = overlap_area(wa, rect)
+            if area > best_area:
+                best, best_area = j, area
+        if best is None:
+            stitched.append((f"monitor-{i}", wa))
+        else:
+            used.add(best)
+            stitched.append((outputs[best][0], wa))
+    return stitched
+
+
+def resolve_monitor(spec, outputs=None):
+    """(индекс, имя) монитора по `--monitor`: имя выхода приоритетнее номера.
+
+    `spec` — имя (`HDMI-1`) или номер (`1`); `outputs` — результат
+    `monitor_outputs()` (можно подменить в тестах). Неизвестное имя или
+    несуществующий номер — ошибка аргументов с перечнем доступных мониторов.
+    """
+    outputs = monitor_outputs() if outputs is None else outputs
+    text = "" if spec is None else str(spec).strip()
+    for index, (name, _) in enumerate(outputs):
+        if name == text:
+            return index, name
+    number = int(text) if re.fullmatch(r"[+-]?\d+", text) else None
+    if number is not None and 0 <= number < len(outputs):
+        return number, outputs[number][0]
+    available = ", ".join(f"{i} — {name}" for i, (name, _) in enumerate(outputs))
+    fail(
+        f"zone-tiler: монитора '{text}' нет. Доступны: {available or 'нет'}",
+        EXIT_USAGE,
+    )
 
 
 def frame_extents(win):
@@ -851,12 +1061,18 @@ def snapshot_window(win, zone=None):
 # -------------------------------------------------------------------- команды
 
 
-def cmd_list(grid, mon_index):
-    wa = monitors()[mon_index]
-    print(f"рабочая область монитора {mon_index}: {wa[0]},{wa[1]} {wa[2]}x{wa[3]}")
-    width = max(len(z) for z in grid.zones)
-    for name in sorted(grid.zones):
-        x, y, w, h = grid.rect(name, wa)
+def cmd_list(grid, args):
+    outputs = monitor_outputs()
+    index, output = resolve_monitor(args.monitor, outputs)
+    wa = outputs[index][1]
+    # Строка рабочей области начинается так же, как раньше: её разбирает апплет
+    # Cinnamon (регулярка `рабочая область монитора N: ...`).
+    note = "" if output == f"monitor-{index}" else f"  (выход {output})"
+    print(f"рабочая область монитора {index}: {wa[0]},{wa[1]} {wa[2]}x{wa[3]}{note}")
+    zones = grid.zones_for(output)
+    width = max(len(z) for z in zones)
+    for name in sorted(zones):
+        x, y, w, h = grid.rect(name, wa, monitor_name=output)
         print(f"  {name:<{width}}  x={x:<5} y={y:<5} {w}x{h}")
 
 
@@ -926,14 +1142,13 @@ def apply_zone(window, rect, label="", x11=None, verify=False, quiet=False):
 
 
 def cmd_apply(grid, args):
-    try:
-        wa = monitors()[args.monitor]
-    except IndexError:
-        fail(f"zone-tiler: монитора {args.monitor} нет", EXIT_USAGE)
-    rect = grid.rect(args.zone, wa)
+    outputs = monitor_outputs()
+    index, output = resolve_monitor(args.monitor, outputs)
+    wa = outputs[index][1]
+    rect = grid.rect(args.zone, wa, monitor_name=output)
     if args.dry_run:
         x, y, w, h = rect
-        print(f"{args.zone}: x={x} y={y} {w}x{h} (монитор {args.monitor})")
+        print(f"{args.zone}: x={x} y={y} {w}x{h} (монитор {index}: {output})")
         return
     window = args.window or active_window()
     before = None
@@ -946,11 +1161,30 @@ def cmd_apply(grid, args):
         remember("apply", [before], quiet=args.quiet)
 
 
+def group_windows_by_monitor(client_ids, outputs):
+    """[(имя, область, [id окон])] — окна по мониторам, порядок сохранён.
+
+    Монитор окна — по его центру (та же `window_monitor`, что у демона). Окна
+    без центра/монитора в результат не попадают. Нужна, чтобы применять зоны
+    своего монитора (`[zones:<выход>]`) в пределах группы.
+    """
+    areas = [wa for _, wa in outputs]
+    groups = collections.OrderedDict()
+    for win in client_ids:
+        wa = window_monitor(win, areas)
+        if wa is None:
+            continue
+        groups.setdefault(wa, []).append(win)
+    name_of = {wa: name for name, wa in outputs}
+    return [(name_of.get(wa), wa, wins) for wa, wins in groups.items()]
+
+
 def cmd_arrange(grid, args):
     """Разложить клиентские окна `_NET_CLIENT_LIST` по зонам.
 
     Режим `--by` (auto/rules/order) выбирает окна чистой `choose_assignments`;
-    каждое окно ставится на мониторе, где оно находится. Несколько окон,
+    окна группируются по монитору, и в каждой группе работает набор зон этого
+    монитора (`[zones:<выход>]`) или общий `[zones]`. Несколько окон,
     попавших в одну зону одного монитора, ложатся туда стопкой со сдвигом
     `--offset`. Прежние рамки записываются в историю для `undo`.
     """
@@ -958,26 +1192,30 @@ def cmd_arrange(grid, args):
     if client_ids is None:
         fail("zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)", EXIT_FAIL)
     metas = {win: read_window_meta(win) for win in client_ids}
-    assignments = choose_assignments(client_ids, metas, list(grid.zones), grid.rules, args.by)
+    outputs = monitor_outputs()
+    groups = group_windows_by_monitor(client_ids, outputs)
+    assignments = []
+    for output, wa, wins in groups:
+        zones = list(grid.zones_for(output))
+        for win, zone in choose_assignments(wins, metas, zones, grid.rules, args.by):
+            assignments.append((win, zone, output, wa))
+    if not groups:
+        if not args.quiet:
+            print("zone-tiler: не удалось определить монитор ни для одного окна", file=sys.stderr)
+        return
     if not assignments:
         if not args.quiet:
             print("zone-tiler: нет окон, подходящих под раскладку")
         return
-    mons = monitors()
     x11 = None if args.dry_run else X11()
     counts = {}
     records = []
     try:
-        for win, zone in assignments:
-            wa = window_monitor(win, mons)
-            if wa is None:
-                if not args.quiet:
-                    print(f"окно 0x{win:x}: не удалось определить монитор — пропускаю", file=sys.stderr)
-                continue
+        for win, zone, output, wa in assignments:
             key = (wa, zone)
             index = counts.get(key, 0)
             counts[key] = index + 1
-            base = grid.rect(zone, wa)
+            base = grid.rect(zone, wa, monitor_name=output)
             rect = base if index == 0 else cascade_rect(base, index, args.offset, wa)
             if args.dry_run:
                 x, y, w, h = rect
@@ -1013,11 +1251,10 @@ def cmd_stack(grid, args):
         if not args.quiet:
             print("zone-tiler: нет окон для стопки")
         return
-    try:
-        wa = monitors()[args.monitor]
-    except IndexError:
-        fail(f"zone-tiler: монитора {args.monitor} нет", EXIT_USAGE)
-    base = grid.rect(args.zone, wa)
+    outputs = monitor_outputs()
+    mon_index, output = resolve_monitor(args.monitor, outputs)
+    wa = outputs[mon_index][1]
+    base = grid.rect(args.zone, wa, monitor_name=output)
     x11 = None if args.dry_run else X11()
     records = []
     try:
@@ -1094,13 +1331,22 @@ def cmd_undo(grid, args):
 
 
 def cmd_keys(grid):
-    """Печатает пары 'зона<TAB>сочетание' из секции [keys] (для setup-hotkeys.py)."""
+    """Печатает пары 'зона<TAB>сочетание' из секции [keys] (для setup-hotkeys.py).
+
+    `[keys]` общая для всех мониторов, а зона может быть описана только в
+    секции конкретного монитора — поэтому проверка идёт по объединению наборов.
+    """
     if not grid.conf.has_section("keys"):
         return
+    known = set(grid.all_zone_names())
     for zone, binding in grid.conf.items("keys"):
         zone, binding = zone.strip(), binding.strip()
-        if zone not in grid.zones:
-            print(f"zone-tiler: в [keys] зона '{zone}' отсутствует в [zones]", file=sys.stderr)
+        if zone not in known:
+            print(
+                f"zone-tiler: в [keys] зона '{zone}' отсутствует в [zones] "
+                f"и в [zones:<выход>]",
+                file=sys.stderr,
+            )
             continue
         if binding:
             print(f"{zone}\t{binding}")
@@ -1192,7 +1438,11 @@ def main(argv=None):
     )
     ap.add_argument("zone", nargs="?", help="имя зоны для apply/stack или действие profile")
     ap.add_argument("name", nargs="?", help="имя профиля для profile show/save/use/rm")
-    ap.add_argument("--monitor", type=int, default=0, help="номер монитора (по умолчанию 0)")
+    ap.add_argument(
+        "--monitor",
+        default="0",
+        help="монитор для list/apply/stack: имя выхода (HDMI-1) или номер (по умолчанию 0)",
+    )
     ap.add_argument("--window", type=lambda s: int(s, 0), help="id окна (по умолчанию активное)")
     ap.add_argument(
         "--by",
@@ -1225,7 +1475,7 @@ def main(argv=None):
 
     grid = Grid(args.conf)
     if args.command == "list":
-        cmd_list(grid, args.monitor)
+        cmd_list(grid, args)
         return EXIT_OK
     if args.command == "keys":
         cmd_keys(grid)
@@ -1238,9 +1488,12 @@ def main(argv=None):
         return EXIT_OK
     if not args.zone:
         fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)
-    if args.zone not in grid.zones:
+    # Зона может быть описана только в наборе конкретного монитора, поэтому
+    # проверяем по объединению наборов, а не по общему [zones].
+    known = grid.all_zone_names()
+    if args.zone not in known:
         fail(
-            f"zone-tiler: нет зоны '{args.zone}'. Есть: " + ", ".join(sorted(grid.zones)),
+            f"zone-tiler: нет зоны '{args.zone}'. Есть: " + ", ".join(sorted(known)),
             EXIT_USAGE,
         )
     if args.command == "stack":
