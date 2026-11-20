@@ -23,8 +23,9 @@ jobs:
         run: |
           python3 -m compileall -q \
             zone-tiler.py zone-editor.py zone_reflow.py zone_config.py \
-            zone-picker.py zone_picker_nav.py \
-            zone-daemon.py setup-hotkeys.py make-icon.py tests
+            zone_geom.py zone-picker.py zone_picker_nav.py \
+            zone-daemon.py zone_ipc.py gridsnap-ctl setup-hotkeys.py \
+            make-icon.py tests
       - name: Юнит-тесты
         run: python3 -m unittest discover -s tests -v
 
@@ -44,8 +45,11 @@ jobs:
           dpkg-deb -I "$deb"
           dpkg-deb -c "$deb" | grep -q usr/lib/gridsnap/zone-tiler.py
           dpkg-deb -c "$deb" | grep -q usr/lib/gridsnap/zone_geom.py
+          dpkg-deb -c "$deb" | grep -q usr/lib/gridsnap/zone_ipc.py
           dpkg-deb -c "$deb" | grep -q usr/bin/gridsnap-tiler
-          dpkg-deb -c "$deb" | grep -q usr/share/applications/gridsnap.desktop
+          dpkg-deb -c "$deb" | grep -q usr/bin/gridsnap-ctl
+          dpkg-deb -c "$deb" | grep -q \
+            usr/share/applications/gridsnap.desktop
           tmp="$(mktemp -d)"
           dpkg-deb -x "$deb" "$tmp"
           python3 "$tmp/usr/lib/gridsnap/zone-tiler.py" --version
@@ -58,6 +62,8 @@ jobs:
           root="$(ls -d "$tmp"/gridsnap-*/)"
           "$root/install.sh" --prefix "$tmp/prefix" --no-launcher
           "$tmp/prefix/bin/gridsnap-tiler" --version
+          test -x "$tmp/prefix/bin/gridsnap-ctl"
+          "$tmp/prefix/bin/gridsnap-ctl" --version
 
   debian:
     name: Штатный пакет Debian (debian/)

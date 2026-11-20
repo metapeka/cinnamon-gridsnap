@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""gridsnap-ctl — клиент IPC демона GridSnap (`zone-daemon.py`).
+
+Говорит с локальным UNIX-сокетом демона: одна JSON-команда на соединение,
+ответ — JSON-строка. Зависимостей нет — только стандартная библиотека и
+чистый `zone_ipc.py` (кадрирование протокола).
+
+    gridsnap-ctl status                     # состояние демона (зоны, окна, reflow)
+    gridsnap-ctl apply main                 # вложить активное окно в зону main
+    gridsnap-ctl apply main --window 0x1a00007
+    gridsnap-ctl apply main --monitor 1
+    gridsnap-ctl reload                     # демон перечитает zones.conf
+    gridsnap-ctl quit                       # попросить демон завершиться
+
+Путь сокета — по умолчанию `$XDG_RUNTIME_DIR/gridsnap/daemon.sock`, как у
+демона; переопределяется `--socket PATH` (тот же флаг у демона).
+
+Коды возврата: 0 — успех, 1 — ошибка (нет демона, отказ команды),
+2 — ошибка аргументов.
+"""
+
+import argparse
+import json
+import os
+import socket
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+import zone_ipc  # noqa: E402  (ищем рядом с собой, как устанавливается)
+
+EXIT_OK = 0
+EXIT_FAIL = 1
+EXIT_USAGE = 2
+
+VERSION = "0.1.0"
+
+# Сколько ждать ответа демона, секунд.
+TIMEOUT = 5.0
+
+
+def send_command(request, path, timeout=TIMEOUT):
+    """Отправить одну команду и вернуть ответ-dict.
+
+    Райзит `OSError` (нет демона/сокета, обрыв) и `zone_ipc.ProtocolError`
+    (битый ответ) — вызывающий печатает понятное сообщение.
+    """
+    conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    conn.settimeout(timeout)
+    try:
+        conn.connect(path)
+        conn.sendall(zone_ipc.encode_message(request))
+        return zone_ipc.read_response(conn)
+    finally:
+        conn.close()
+
+
+def build_request(args):
+    """Собрать запрос из аргументов CLI. Неверные сочетания -> `SystemExit(2)`."""
+    request = {"cmd": args.command}
+    if args.command == "apply":
+        if not args.zone:
+            print("gridsnap-ctl: для apply укажите зону, например: apply main", file=sys.stderr)
+            raise SystemExit(EXIT_USAGE)
+        request["zone"] = args.zone
+        if args.window is not None:
+            request["window"] = args.window
+        if args.monitor is not None:
+            request["monitor"] = args.monitor
+    elif args.zone or args.window is not None or args.monitor is not None:
+        print(
+            f"gridsnap-ctl: у команды {args.command} нет зоны/окна/монитора",
+            file=sys.stderr,
+        )
+        raise SystemExit(EXIT_USAGE)
+    return request
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        description="Управление демоном GridSnap через локальный IPC-сокет",
+        epilog=(
+            "Примеры: gridsnap-ctl status; gridsnap-ctl apply main; "
+            "gridsnap-ctl quit"
+        ),
+    )
+    ap.add_argument(
+        "command",
+        choices=["status", "apply", "reload", "quit"],
+        help="status — состояние; apply — вложить окно в зону; reload — перечитать конфиг; quit — выйти",
+    )
+    ap.add_argument("zone", nargs="?", help="имя зоны для apply")
+    ap.add_argument(
+        "--window",
+        type=lambda s: int(s, 0),
+        help="id окна для apply (по умолчанию активное окно)",
+    )
+    ap.add_argument("--monitor", type=int, help="номер монитора для apply")
+    ap.add_argument(
+        "--socket",
+        default=None,
+        help="путь UNIX-сокета (по умолчанию $XDG_RUNTIME_DIR/gridsnap/daemon.sock)",
+    )
+    ap.add_argument("--raw", action="store_true", help="печатать ответ одной строкой")
+    ap.add_argument("--quiet", action="store_true", help="ничего не печатать при успехе")
+    ap.add_argument("--version", action="version", version=f"gridsnap-ctl {VERSION}")
+    args = ap.parse_args(argv)
+
+    request = build_request(args)
+    path = args.socket or zone_ipc.default_socket_path()
+    try:
+        response = send_command(request, path)
+    except zone_ipc.ProtocolError as exc:
+        print(f"gridsnap-ctl: демон ответил непонятно: {exc}", file=sys.stderr)
+        return EXIT_FAIL
+    except OSError as exc:
+        print(
+            f"gridsnap-ctl: нет связи с демоном по сокету {path} ({exc}). "
+            "Запущен ли zone-daemon.py?",
+            file=sys.stderr,
+        )
+        return EXIT_FAIL
+
+    if not response.get("ok"):
+        print(
+            f"gridsnap-ctl: {response.get('error', 'команда отклонена')}",
+            file=sys.stderr,
+        )
+        return EXIT_FAIL
+
+    if not args.quiet:
+        if args.raw:
+            print(json.dumps(response, ensure_ascii=False))
+        else:
+            print(json.dumps(response, ensure_ascii=False, indent=2))
+    return EXIT_OK
+
+
+if __name__ == "__main__":
+    sys.exit(main())

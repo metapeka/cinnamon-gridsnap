@@ -27,16 +27,24 @@ zone-daemon — долгоживущий демон GridSnap: сам вклад�
   reflow = off                        # off | neighbors (по умолчанию off)
 
 Запуск:
-  zone-daemon.py                 # слушать события до Ctrl-C
+  zone-daemon.py                 # слушать события до Ctrl-C (и поднять IPC-сокет)
   zone-daemon.py --verbose       # писать в stdout, что делает демон
   zone-daemon.py --once          # обработать одно изменение _NET_CLIENT_LIST и выйти
   zone-daemon.py --conf PATH
+  zone-daemon.py --socket PATH   # свой путь UNIX-сокета IPC
+  zone-daemon.py --no-socket     # без IPC (только автоукладка)
+
+IPC — локальный UNIX-сокет (по умолчанию `$XDG_RUNTIME_DIR/gridsnap/daemon.sock`,
+права 0600): по одной JSON-команде на соединение, ответ — тоже JSON-строка.
+Команды: `status`, `apply`, `reload`, `quit`; говорит с сокетом клиент
+`gridsnap-ctl`. Кадрирование и диспетчер живут в чистом `zone_ipc.py`.
 """
 
 import argparse
 import collections
 import ctypes
 import importlib.util
+import json
 import os
 import select
 import sys
@@ -81,6 +89,7 @@ def _load_sibling(name, filename):
 
 tiler = _load_sibling("gridsnap_zone_tiler", "zone-tiler.py")
 zone_reflow = _load_sibling("gridsnap_zone_reflow", "zone_reflow.py")
+zone_ipc = _load_sibling("gridsnap_zone_ipc", "zone_ipc.py")
 
 
 # ------------------------------------------------------------------ метаданные
@@ -218,6 +227,8 @@ class Daemon:
         self.seen = set()
         self._wa_cache = None
         self._mons_cache = None
+        # Команда `quit` по сокету: цикл `serve` проверяет флаг и выходит.
+        self.stop_requested = False
 
     # -- вспомогательное
 
@@ -323,12 +334,145 @@ class Daemon:
         if holder is None:
             return
         holder_zone = self.windows.get(holder)
-        if holder_zone is None:
+        if holder_zone is None or holder_zone not in self.grid.zones:
+            # Держателя нет или его зона исчезла после reload — покрытие снимаем.
             del self.filled[key]
             return
         if self._apply(holder, self.grid.rect(holder_zone, wa), holder_zone):
             del self.filled[key]
             self.log(f"возвращаю зону '{holder_zone}' к исходной рамке")
+
+    # -- IPC: обработчики команд сокета
+
+    def build_dispatcher(self):
+        """Диспетчер команд сокета с инъекцией обработчиков демона.
+
+        Конкретные обработчики можно подменить в тестах; сам диспетчер
+        (`zone_ipc.Dispatcher`) не знает ни о X, ни о конфиге.
+        """
+        return zone_ipc.Dispatcher(
+            {
+                "status": self.ipc_status,
+                "apply": self.ipc_apply,
+                "reload": self.ipc_reload,
+                "quit": self.ipc_quit,
+            }
+        )
+
+    def _monitor_list(self):
+        """Рабочие области для команд IPC: принудительная или все мониторы."""
+        if self.workarea is not None:
+            wa = self._forced_workarea()
+            return [wa] if wa else []
+        return self._monitors() or []
+
+    def ipc_status(self, request=None):
+        """Состояние демона: зоны, окно→зона, монитор, профиль, reflow.
+
+        Пиксельные рамки зон даются на каждый монитор (`zones_px`), потому что
+        зона — доля рабочей области, а у монитора своя область.
+        """
+        zones = {name: list(self.grid.fractions(name)) for name in sorted(self.grid.zones)}
+        monitors = self._monitor_list()
+        zones_px = {
+            name: [list(self.grid.rect(name, wa)) for wa in monitors] for name in zones
+        }
+        windows = []
+        for win, zone in sorted(self.windows.items()):
+            wa = self.win_monitor.get(win)
+            windows.append(
+                {"window": hex(win), "zone": zone, "monitor": list(wa) if wa else None}
+            )
+        filled = [
+            {"monitor": list(wa), "zone": zone, "holder": hex(holder)}
+            for (wa, zone), holder in sorted(
+                self.filled.items(), key=lambda item: (item[0][1], item[1])
+            )
+        ]
+        return {
+            "version": VERSION,
+            "conf": self.conf_path,
+            "reflow": self.reflow,
+            # Профили раскладок — волна 3; поле есть заранее для совместимости.
+            "profile": None,
+            "monitors": [list(wa) for wa in monitors],
+            "zones": zones,
+            "zones_px": zones_px,
+            "windows": windows,
+            "filled": filled,
+        }
+
+    def _monitor_for_command(self, request, window):
+        """Рабочая область для `apply`: явный номер монитора или монитор окна.
+
+        Без явного `monitor` (и без читаемого положения окна) берётся первый
+        монитор — команду дал пользователь, и отказ хуже приблизительного
+        выбора.
+        """
+        monitors = self._monitor_list()
+        index = request.get("monitor")
+        if index is not None:
+            index = int(index)
+            if not 0 <= index < len(monitors):
+                raise ValueError(f"монитора {index} нет (всего {len(monitors)})")
+            return monitors[index]
+        wa = self._monitor_of(window)
+        if wa is not None:
+            return wa
+        return monitors[0] if monitors else None
+
+    def ipc_apply(self, request):
+        """Вложить окно в зону по команде сокета (по умолчанию — активное).
+
+        Успешная укладка запоминается в трекере демона: закрытие окна затем
+        штатно запускает reflow, а не оставляет призрак.
+        """
+        zone = request.get("zone")
+        if not isinstance(zone, str) or zone not in self.grid.zones:
+            raise ValueError(
+                f"нет зоны '{zone}'. Есть: " + ", ".join(sorted(self.grid.zones))
+            )
+        window = request.get("window")
+        if window is None:
+            window = tiler.active_window()  # нет активного окна -> SystemExit
+        elif isinstance(window, str):
+            window = int(window, 0)
+        else:
+            window = int(window)
+        wa = self._monitor_for_command(request, window)
+        if wa is None:
+            raise ValueError(f"не удалось определить монитор окна 0x{window:x}")
+        rect = self.grid.rect(zone, wa)
+        if not self._apply(window, rect, zone):
+            raise ValueError(f"не удалось вложить окно 0x{window:x} в зону '{zone}'")
+        self.windows[window] = zone
+        self.win_monitor[window] = wa
+        self._restore_holder(wa, zone)
+        return {
+            "window": hex(window),
+            "zone": zone,
+            "monitor": list(wa),
+            "rect": list(rect),
+        }
+
+    def ipc_reload(self, request=None):
+        """Перечитать zones.conf: сетка, правила и reflow; кэши сбросить."""
+        self.grid = tiler.Grid(self.conf_path)
+        self.reflow = read_reflow(self.grid.conf)
+        self._wa_cache = None
+        self._mons_cache = None
+        self.log(f"конфиг перечитан: {self.conf_path}")
+        return {
+            "conf": self.conf_path,
+            "zones": sorted(self.grid.zones),
+            "reflow": self.reflow,
+        }
+
+    def ipc_quit(self, request=None):
+        """Попросить цикл демона завершиться после текущего события."""
+        self.stop_requested = True
+        self.log("получена команда quit — завершаюсь")
+        return {"bye": True}
 
     # -- события
 
@@ -484,7 +628,25 @@ def _bind_event_functions(x):
     x.XCloseDisplay.restype = ctypes.c_int
 
 
-def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOUT):
+def _serve_ipc(dae, ipc):
+    """Принять и обслужить команды сокета; ошибки не роняют демон.
+
+    Ответы и ошибки пишутся в журнал (`--verbose`). Исключение приёма/разбора
+    логируется и глушится: сокет — вспомогательный канал, X-цикл дороже.
+    """
+    try:
+        responses = ipc.accept_all()
+    except (Exception, SystemExit) as exc:
+        dae.log(f"ошибка IPC-сокета: {exc}")
+        return
+    for response in responses:
+        if response.get("ok"):
+            dae.log("IPC: " + json.dumps(response, ensure_ascii=False))
+        else:
+            dae.log("IPC-ошибка: " + str(response.get("error", "?")))
+
+
+def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOUT, ipc=None):
     """Цикл событий X11: PropertyNotify о `_NET_CLIENT_LIST` -> реконсиляция.
 
     Подписка — `PropertyChangeMask` на root. На старте один раз читается текущий
@@ -498,6 +660,9 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     реконсиляцию, не трогая трекер.
     `once=True` — обработать один PropertyNotify и выйти; если событий нет —
     подождать `once_timeout` секунд и выйти (для smoke-проверок).
+    `ipc` — слушающий сокет `zone_ipc.Server`: его дескриптор добавляется в тот же
+    `select`, а команды обслуживаются между X-событиями; команда `quit` ставит
+    `dae.stop_requested`, и цикл завершается.
     """
     if x11 is None:
         x11 = tiler.X11()
@@ -509,14 +674,19 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     x11.x.XSync(x11.dpy, 0)
     client_list_atom = x11.atom(CLIENT_LIST_ATOM)
     fd = x11.x.XConnectionNumber(x11.dpy)
+    watch = [fd]
+    if ipc is not None:
+        watch.append(ipc.fileno())
     dae.log(f"демон слушает X11 (root 0x{x11.root:x}, reflow={dae.reflow})")
+    if ipc is not None:
+        dae.log(f"IPC-сокет: {getattr(ipc, 'path', '?')}")
     try:
         # Раскладываем окна, уже открытые к запуску (вход в готовую сессию).
         _reconcile_if_known(dae, read_clients)
         while True:
             if not x11.x.XPending(x11.dpy):
                 ready, _, _ = select.select(
-                    [fd], [], [], once_timeout if once else None
+                    watch, [], [], once_timeout if once else None
                 )
                 if not ready:
                     break  # once: событий так и не пришло
@@ -532,6 +702,10 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
                         )
                         or handled
                     )
+            if ipc is not None:
+                _serve_ipc(dae, ipc)
+            if getattr(dae, "stop_requested", False):
+                break
             if once and handled:
                 break
     except KeyboardInterrupt:
@@ -558,11 +732,29 @@ def main(argv=None):
         action="store_true",
         help="обработать одно изменение _NET_CLIENT_LIST и выйти",
     )
+    ap.add_argument(
+        "--socket",
+        default=None,
+        help="путь UNIX-сокета IPC (по умолчанию $XDG_RUNTIME_DIR/gridsnap/daemon.sock)",
+    )
+    ap.add_argument("--no-socket", action="store_true", help="не поднимать IPC-сокет")
     ap.add_argument("--version", action="version", version=f"zone-daemon {VERSION}")
     args = ap.parse_args(argv)
 
     dae = Daemon(args.conf, verbose=args.verbose)
-    serve(dae, once=args.once)
+    server = None
+    if not args.no_socket:
+        path = args.socket or zone_ipc.default_socket_path()
+        try:
+            server = zone_ipc.Server(path, dae.build_dispatcher())
+        except OSError as exc:
+            print(f"zone-daemon: IPC-сокет: {exc}", file=sys.stderr)
+            return tiler.EXIT_FAIL
+    try:
+        serve(dae, once=args.once, ipc=server)
+    finally:
+        if server is not None:
+            server.close()
     return 0
 
 
