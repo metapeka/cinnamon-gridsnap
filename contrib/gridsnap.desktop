@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Gridsnap
+GenericName=Window grid layouts
+GenericName[ru]=Раскладка окон по зонам
+Comment=Draw a zone grid and snap windows into it
+Comment[ru]=Нарисуйте сетку зон и вкладывайте в них окна
+Exec=gridsnap-editor
+Icon=gridsnap
+Terminal=false
+Categories=Settings;
+Keywords=grid;snap;tiling;zones;windows;сетка;зоны;окна;мозаика;
+StartupNotify=true
+StartupWMClass=zone-editor.py
