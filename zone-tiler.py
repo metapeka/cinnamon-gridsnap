@@ -28,6 +28,16 @@ zone-tiler — раскладывает активное окно по зона�
   zone-tiler.py undo                      # вернуть окна из последней операции
   zone-tiler.py undo --all                # откатить всю историю раскладок
 
+Профили раскладок (свои шаблоны: зоны + правила + клавиши) хранятся в
+`~/.config/gridsnap/templates/*.conf`, активация — `profile use <имя>`:
+
+  zone-tiler.py profile list              # сохранённые профили
+  zone-tiler.py profile save work         # текущий zones.conf — в профиль «work»
+  zone-tiler.py profile use work          # активировать профиль (и обновить сочетания)
+  zone-tiler.py profile use work --no-hotkeys
+  zone-tiler.py profile show work
+  zone-tiler.py profile rm work
+
 История раскладок — JSON в XDG-состоянии (`~/.local/state/gridsnap/history.json`),
 её читает и пишет каждая команда отдельным процессом (подробности — в --help и в
 `docs/specs/zone-tiler.md`).
@@ -1096,23 +1106,92 @@ def cmd_keys(grid):
             print(f"{zone}\t{binding}")
 
 
+# ---------------------------------------------------------------- профили
+
+PROFILE_ACTIONS = ("list", "show", "save", "use", "rm")
+
+
+def _run_hotkeys(conf, quiet=False):
+    """Перечитать [keys] из conf и обновить сочетания Cinnamon (best-effort)."""
+    script = os.path.join(HERE, "setup-hotkeys.py")
+    try:
+        r = subprocess.run(
+            [sys.executable, script, "--conf", conf], text=True, capture_output=True, timeout=60
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"zone-tiler: сочетания не обновлены: {exc}", file=sys.stderr)
+        return
+    if r.returncode:
+        tail = (r.stderr or r.stdout).strip()
+        print(f"zone-tiler: сочетания не обновлены ({tail})", file=sys.stderr)
+        return
+    if not quiet:
+        first = (r.stdout or r.stderr).strip().splitlines()
+        print(f"zone-tiler: {first[0] if first else 'сочетания обновлены'}")
+
+
+def cmd_profile(args):
+    """Профили раскладок: list/show/save/use/rm (импорт zone_config ленивый)."""
+    import zone_config as zc
+
+    action = (args.zone or "").strip()
+    if action not in PROFILE_ACTIONS:
+        fail(
+            "zone-tiler: profile — укажите действие: "
+            "list | show <имя> | save <имя> | use <имя> | rm <имя>",
+            EXIT_USAGE,
+        )
+    conf = args.conf
+    if action == "list":
+        for name in zc.list_profiles(conf):
+            print(name)
+        return
+
+    name = (args.name or "").strip()
+    if not name:
+        fail(f"zone-tiler: profile {action} — укажите имя профиля", EXIT_USAGE)
+
+    try:
+        if action == "show":
+            sys.stdout.write(zc.profile_text(name, conf))
+        elif action == "save":
+            zones = zc.load_zones(conf)
+            rules = zc.load_extra_sections(conf, sections=["rules"]).get("rules", [])
+            path = zc.save_profile(name, zones, rules, conf)
+            print(f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» сохранён: {path}")
+        elif action == "rm":
+            zc.remove_profile(name, conf)
+            print(f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» удалён")
+        else:  # use
+            zones = zc.apply_profile(name, conf)
+            print(f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» применён: {len(zones)} зон")
+            if not args.no_hotkeys:
+                _run_hotkeys(conf, quiet=args.quiet)
+    except ValueError as exc:
+        fail(f"zone-tiler: {exc}", EXIT_USAGE)
+    except FileNotFoundError as exc:
+        fail(f"zone-tiler: {exc}", EXIT_CONFIG)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Раскладка окон по зонам сетки (Cinnamon/X11)",
         epilog=(
             "Примеры: zone-tiler.py arrange --by order; zone-tiler.py stack main; "
-            "zone-tiler.py undo --all"
+            "zone-tiler.py undo --all; zone-tiler.py profile use work"
         ),
     )
     ap.add_argument(
         "command",
-        choices=["list", "apply", "keys", "arrange", "stack", "undo"],
+        choices=["list", "apply", "keys", "arrange", "stack", "undo", "profile"],
         help=(
             "list/apply/keys — как раньше; arrange — разложить окна по зонам; "
-            "stack — собрать окна в зону стопкой; undo — вернуть рамки из истории"
+            "stack — собрать окна в зону стопкой; undo — вернуть рамки из истории; "
+            "profile — свои профили раскладок (зоны + правила + клавиши)"
         ),
     )
-    ap.add_argument("zone", nargs="?", help="имя зоны для apply/stack")
+    ap.add_argument("zone", nargs="?", help="имя зоны для apply/stack или действие profile")
+    ap.add_argument("name", nargs="?", help="имя профиля для profile show/save/use/rm")
     ap.add_argument("--monitor", type=int, default=0, help="номер монитора (по умолчанию 0)")
     ap.add_argument("--window", type=lambda s: int(s, 0), help="id окна (по умолчанию активное)")
     ap.add_argument(
@@ -1128,12 +1207,21 @@ def main(argv=None):
         help="сдвиг окна в стопке/каскаде, px (по умолчанию 20; 0 — без сдвига)",
     )
     ap.add_argument("--all", action="store_true", help="undo: откатить всю историю, а не последнюю операцию")
+    ap.add_argument(
+        "--no-hotkeys",
+        action="store_true",
+        help="profile use: не регистрировать сочетания клавиш после активации",
+    )
     ap.add_argument("--dry-run", action="store_true", help="только посчитать рамку")
     ap.add_argument("--verify", action="store_true", help="перечитать реальную геометрию")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--conf", default=CONF)
     ap.add_argument("--version", action="version", version=f"zone-tiler {VERSION}")
     args = ap.parse_args(argv)
+
+    if args.command == "profile":
+        cmd_profile(args)
+        return EXIT_OK
 
     grid = Grid(args.conf)
     if args.command == "list":

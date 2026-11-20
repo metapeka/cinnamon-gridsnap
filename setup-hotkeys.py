@@ -10,6 +10,9 @@ setup-hotkeys.py — регистрирует в Cinnamon горячие кла�
   python3 setup-hotkeys.py            # установить/обновить
   python3 setup-hotkeys.py --list     # показать, что будет установлено
   python3 setup-hotkeys.py --remove   # удалить все сочетания zone-tiler
+
+Путь к zones.conf можно задать флагом ``--conf``: он передаётся и в
+``zone-tiler.py keys``, и в устанавливаемую команду сочетания.
 """
 
 import argparse
@@ -53,10 +56,11 @@ def cb_name(cid):
         return ""
 
 
-def zone_pairs():
-    out = subprocess.run(
-        [sys.executable, ZONEBIN, "keys"], text=True, capture_output=True
-    )
+def zone_pairs(conf=None):
+    cmd = [sys.executable, ZONEBIN, "keys"]
+    if conf:
+        cmd += ["--conf", conf]
+    out = subprocess.run(cmd, text=True, capture_output=True)
     if out.returncode:
         sys.exit(f"setup-hotkeys: {out.stderr.strip()}")
     pairs = []
@@ -96,9 +100,10 @@ def main():
     ap = argparse.ArgumentParser(description="Горячие клавиши зон для Cinnamon")
     ap.add_argument("--list", action="store_true", help="только показать план")
     ap.add_argument("--remove", action="store_true", help="удалить сочетания zone-tiler")
+    ap.add_argument("--conf", help="путь к zones.conf (по умолчанию — как у zone-tiler.py)")
     args = ap.parse_args()
 
-    pairs = [] if args.remove else zone_pairs()
+    pairs = [] if args.remove else zone_pairs(args.conf)
     kept = drop_owned(custom_ids())
 
     if args.list:
@@ -109,9 +114,12 @@ def main():
     ids = next_ids(kept, len(pairs))
     for cid, (zone, binding) in zip(ids, pairs):
         path = f"{CB_SCHEMA}:{BASE}{cid}/"
+        command = f"{sys.executable} {ZONEBIN} apply {zone} --quiet"
+        if args.conf:
+            command += f" --conf {args.conf}"
         gs(path, "name", gvariant_str(NAME_PREFIX + zone))
         gs(path, "binding", "[" + gvariant_str(binding) + "]")
-        gs(path, "command", gvariant_str(f"{sys.executable} {ZONEBIN} apply {zone} --quiet"))
+        gs(path, "command", gvariant_str(command))
 
     new_list = kept + ids
     gs(LIST_SCHEMA, "custom-list", "[" + ", ".join(gvariant_str(i) for i in new_list) + "]")

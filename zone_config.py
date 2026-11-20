@@ -29,6 +29,8 @@ AFTER_KEYS = ("daemon",)
 def load_zonetiler(path=ZONEBIN):
     """Загрузить ``zone-tiler.py`` как модуль (в нём парсер конфига)."""
     spec = importlib.util.spec_from_file_location("zone_tiler", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"zone_config: не удалось загрузить {path}")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -245,3 +247,150 @@ def unique_name(zones, base="zone"):
     while f"{base}{i}" in names:
         i += 1
     return f"{base}{i}"
+
+
+# --------------------------------------------------------------- профили
+
+PROFILE_EXT = ".conf"
+
+
+def profiles_dir(conf_path=None):
+    """Каталог профилей.
+
+    Рядом с активным ``zones.conf`` (``<каталог>/templates``) — тогда ``--conf``
+    уводит профили за собой; без аргумента — XDG-каталог
+    ``$XDG_CONFIG_HOME/gridsnap/templates`` (по умолчанию
+    ``~/.config/gridsnap/templates``).
+    """
+    if conf_path:
+        return os.path.join(os.path.dirname(os.path.abspath(conf_path)), "templates")
+    return os.path.join(zt.config_home(), "gridsnap", "templates")
+
+
+def sanitize_profile_name(text):
+    """Имя профиля тем же правилом, что имя зоны; пустое и «.», «..» отбрасываются."""
+    name = sanitize_name(text)
+    if not name or name in (".", ".."):
+        return ""
+    return name
+
+
+def profile_path(name, conf_path=None):
+    """Путь к ``<имя>.conf`` в каталоге профилей; плохое имя — ``ValueError``.
+
+    Имя санируется, поэтому ``.conf`` не может выйти за каталог шаблонов: у
+    результата тот же каталог, что у самого каталога профилей.
+    """
+    safe = sanitize_profile_name(name)
+    if not safe:
+        raise ValueError(f"плохое имя профиля: {name!r}")
+    directory = profiles_dir(conf_path)
+    path = os.path.join(directory, safe + PROFILE_EXT)
+    if os.path.dirname(os.path.realpath(path)) != os.path.realpath(directory):
+        raise ValueError(f"плохое имя профиля: {name!r}")
+    return path
+
+
+def list_profiles(conf_path=None):
+    """Имена сохранённых профилей (без ``.conf``) по алфавиту; нет каталога — пусто."""
+    directory = profiles_dir(conf_path)
+    try:
+        entries = os.listdir(directory)
+    except FileNotFoundError:
+        return []
+    names = []
+    for entry in entries:
+        if entry.endswith(PROFILE_EXT) and os.path.isfile(os.path.join(directory, entry)):
+            names.append(entry[: -len(PROFILE_EXT)])
+    return sorted(names)
+
+
+def _profile_missing(name):
+    return FileNotFoundError(f"нет профиля «{name}»")
+
+
+def profile_text(name, conf_path=None):
+    """Содержимое файла профиля дословно (для ``profile show``)."""
+    path = profile_path(name, conf_path)
+    if not os.path.exists(path):
+        raise _profile_missing(sanitize_profile_name(name))
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except OSError as exc:
+        raise _profile_missing(sanitize_profile_name(name)) from exc
+
+
+def read_profile(name, conf_path=None):
+    """``(зоны, строки [rules])`` профиля; зоны несут привязки из ``[keys]``."""
+    path = profile_path(name, conf_path)
+    if not os.path.exists(path):
+        raise _profile_missing(sanitize_profile_name(name))
+    zones = load_zones(path)
+    rules = load_extra_sections(path, sections=["rules"]).get("rules") or []
+    return zones, rules
+
+
+def save_profile(name, zones, rules=None, conf_path=None):
+    """Записать профиль: ``[zones]`` + ``[rules]`` + ``[keys]``, без ``[grid]``/``[daemon]``.
+
+    Чужие секции в профиль не тащим — он и есть только раскладка. Возвращает путь.
+    """
+    if not zones:
+        raise ValueError("профиль без зон сохранять нечего")
+    path = profile_path(name, conf_path)
+    safe = sanitize_profile_name(name)
+    lines = [
+        f"# Профиль раскладки GridSnap: {safe}.",
+        "# Секции [zones], [rules], [keys]; активация — zone-tiler.py profile use <имя>.",
+        "",
+        "[zones]",
+    ]
+    for z in zones:
+        lines.append(f"{z.name} = {z.fmt()}")
+    if rules:
+        lines += ["", "[rules]"]
+        lines.extend(_section_lines(rules))
+    bindings = [z for z in zones if z.binding.strip()]
+    if bindings:
+        lines += ["", "[keys]"]
+        for z in bindings:
+            lines.append(f"{z.name} = {z.binding.strip()}")
+    directory = os.path.dirname(path)
+    try:
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+    except OSError as exc:
+        raise OSError(f"не удалось записать профиль «{safe}»: {exc}") from exc
+    return path
+
+
+def remove_profile(name, conf_path=None):
+    """Удалить файл профиля; нет файла — ``FileNotFoundError``. Возвращает путь."""
+    path = profile_path(name, conf_path)
+    if not os.path.exists(path):
+        raise _profile_missing(sanitize_profile_name(name))
+    try:
+        os.remove(path)
+    except OSError as exc:
+        raise _profile_missing(sanitize_profile_name(name)) from exc
+    return path
+
+
+def apply_profile(name, conf_path=None):
+    """Активировать профиль в ``zones.conf``.
+
+    Секции ``[zones]``/``[rules]``/``[keys]`` берутся из профиля (``[keys]`` — из
+    привязок зон), ``[grid]``, ``[daemon]`` и прочие секции активного конфига
+    сохраняются как есть. Возвращает зоны профиля.
+    """
+    zones, rules = read_profile(name, conf_path)
+    extra = load_extra_sections(conf_path)
+    if rules:
+        extra["rules"] = rules
+    else:
+        extra.pop("rules", None)
+    save_zones(conf_path, zones, extra)
+    return zones
