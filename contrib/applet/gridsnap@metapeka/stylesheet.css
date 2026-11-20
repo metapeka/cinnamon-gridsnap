@@ -1,0 +1,8 @@
+/* Стили апплета GridSnap. Cinnamon подхватывает файл автоматически. */
+
+/* Строки-подсказки в меню: «Зон нет», «Монитор 0: …» и прочие неактивные
+   пункты помечены классом gridsnap-hint (см. applet.js). */
+.popup-menu-item.gridsnap-hint {
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.55);
+}

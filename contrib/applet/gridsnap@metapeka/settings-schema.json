@@ -1,0 +1,47 @@
+{
+    "layout": {
+        "type": "layout",
+        "pages": ["page-main"],
+        "page-main": {
+            "type": "page",
+            "title": "GridSnap",
+            "sections": ["section-paths", "section-panel"]
+        },
+        "section-paths": {
+            "type": "section",
+            "title": "Каталог GridSnap",
+            "keys": ["gridsnap-dir", "python-bin"]
+        },
+        "section-panel": {
+            "type": "section",
+            "title": "Панель",
+            "keys": ["use-label", "label-text"]
+        }
+    },
+    "gridsnap-dir": {
+        "type": "filechooser",
+        "select-dir": true,
+        "default": "~/thinkrail/gridsnape",
+        "description": "Каталог GridSnap со скриптами zone-tiler.py, zone-editor.py и setup-hotkeys.py",
+        "tooltip": "По умолчанию ~/thinkrail/gridsnape — каталог, которым пользуется автор. Апплет запускает скрипты строго из этого каталога, поэтому его надо менять при другой установке GridSnap."
+    },
+    "python-bin": {
+        "type": "entry",
+        "default": "python3",
+        "description": "Интерпретатор Python",
+        "tooltip": "Команда, которой запускаются скрипты GridSnap (по умолчанию python3)."
+    },
+    "use-label": {
+        "type": "switch",
+        "default": false,
+        "description": "Показывать надпись в панели",
+        "tooltip": "Если выключено, в панели только иконка GridSnap."
+    },
+    "label-text": {
+        "type": "entry",
+        "default": "GridSnap",
+        "description": "Надпись в панели",
+        "dependency": "use-label",
+        "tooltip": "Текст рядом с иконкой, когда надпись включена."
+    }
+}
