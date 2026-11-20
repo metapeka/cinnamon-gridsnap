@@ -1,10 +1,14 @@
 # Gridsnap — сетка окон в Cinnamon: редактор зон и горячие клавиши
 
+English: [README.en.md](README.en.md)
+
 Проверено на Debian 13, Cinnamon 6.4.10 (Muffin, X11), монитор 1920×1040 рабочей области.
 
 ![Иконка Gridsnap](icons/gridsnap-256.png)
 
 ![Редактор сетки](docs/editor.png)
+
+![Редактор сетки в работе](docs/demo.gif)
 
 ## Установка
 
