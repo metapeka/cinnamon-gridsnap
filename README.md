@@ -278,7 +278,8 @@ python3 setup-hotkeys.py --remove   # удалить все сочетания z
 
 ## 8. Проверки, которые прогонялись
 
-* юнит-тесты без X (парсер, правила, reflow, демон, конфиг-слой, arrange/undo):
+* юнит-тесты без X (парсер, правила, reflow, демон, конфиг-слой, arrange/undo, геометрия
+  редактора `zone_geom`):
   `python3 -m unittest discover -s tests -v`;
 * дымовой тест на своём Xvfb: `sh tests/smoke.sh` (окно встаёт в зону пиксель в пиксель);
 * дымовой тест arrange+undo: `sh tests/smoke-arrange.sh` (три окна раскладываются и возвращаются);
