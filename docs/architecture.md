@@ -22,7 +22,9 @@ GridSnap — несколько самостоятельных исполняе�
 ## Модули и связи
 
 - **Раскладчик `zone-tiler.py`** — модель сетки (`Grid`), чтение `zones.conf`, расчёт пиксельных рамок,
-  отправка EWMH-сообщений, CLI. От него зависят остальные.
+  отправка EWMH-сообщений, CLI (`list`/`apply`/`keys`/`arrange`/`stack`/`undo`). Здесь же — общие с
+  демоном фильтры окон (`is_ignored_type`, `window_types`, `read_client_list`) и чистая история раскладок
+  (`History`, `choose_assignments`, `cascade_rect`, `undo_targets`). От него зависят остальные.
 - **Редактор `zone-editor.py`** — GTK-окно. Конфиг читает/пишет через чистый слой `zone_config.py`, а для
   проверки и регистрации сочетаний запускает `zone-tiler.py` и `setup-hotkeys.py` отдельными процессами.
   Зависит от `zone_config.py`.
@@ -33,7 +35,8 @@ GridSnap — несколько самостоятельных исполняе�
 - **Горячие клавиши `setup-hotkeys.py`** — читает `zone-tiler.py keys` и пишет сочетания Cinnamon через
   `gsettings`. Зависит от раскладчика (через его CLI).
 - **Демон `zone-daemon.py`** — долгоживущий процесс: автоукладка новых окон по `[rules]` и (опционально)
-  reflow. Импортирует `zone-tiler.py` (`Grid`, `match_rules`, `apply_zone`, `X11`) и `zone_reflow.py`.
+  reflow. Импортирует `zone-tiler.py` (`Grid`, `match_rules`, `apply_zone`, `X11`, а также общие фильтры
+  `is_ignored_type`/`window_types`/`read_client_list`) и `zone_reflow.py`.
   Зависит от раскладчика и геометрии reflow.
 - **Геометрия reflow `zone_reflow.py`** — чистая функция `reflow(zones, freed, occupied)` без X11 и GTK;
   знает только прямоугольники в долях. От неё зависит демон.
@@ -80,5 +83,5 @@ GridSnap — несколько самостоятельных исполняе�
 ## За рамками
 
 - Свой композитор/оконный менеджер, подмена отпечатка и Windows-порт — см. `gridsnap`.
-- IPC/сокет, «разложить все окна по зонам», вкладки/стопки и Wayland-бэкенд — не в текущем коде (идеи
-  развития отслеживаются в `docs/ROADMAP.md`, спеку не задают).
+- IPC/сокет, вкладки/стопки внутри зоны и Wayland-бэкенд — не в текущем коде (идеи развития
+  отслеживаются в `docs/ROADMAP.md`, спеку не задают).
