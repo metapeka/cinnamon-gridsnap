@@ -4,11 +4,19 @@
 // CLI-скрипты GridSnap из каталога, заданного в настройках:
 //   * zone-tiler.py list           — зоны и рабочие области;
 //   * zone-tiler.py apply <зона>   — вложить активное окно в зону;
+//   * zone-tiler.py profile ...    — профили раскладок (list/use);
 //   * zone-tiler.py arrange|undo   — разложить окна / вернуть как было;
 //   * zone-editor.py               — визуальный редактор сетки;
-//   * setup-hotkeys.py             — сочетания клавиш Cinnamon.
+//   * setup-hotkeys.py             — сочетания клавиш Cinnamon;
+//   * gridsnap-ctl status          — состояние демона (зона активного окна).
+//
 // Сетка, правила и история раскладок остаются в одном месте — в самом GridSnap,
 // поэтому апплет ничего не знает про формат zones.conf и не дублирует его.
+//
+// Индикатор текущей зоны опрашивает демон по таймеру: активное окно берётся из
+// `xprop -root _NET_ACTIVE_WINDOW`, его зона — из ответа `gridsnap-ctl status`.
+// Всё это необязательное украшение: любая ошибка (нет демона, нет xprop, битый
+// ответ) просто убирает индикатор, ничего не показывая в панели.
 
 const Applet = imports.ui.applet;
 const PopupMenu = imports.ui.popupMenu;
@@ -21,12 +29,21 @@ const Gio = imports.gi.Gio;
 const TILER = "zone-tiler.py";
 const EDITOR = "zone-editor.py";
 const HOTKEYS = "setup-hotkeys.py";
+const CTL = "gridsnap-ctl";
 const DEFAULT_DIR = "~/thinkrail/gridsnape";
+
+// Раз в сколько секунд обновлять индикатор текущей зоны (только при надписи).
+const INDICATOR_INTERVAL = 2;
+// Сколько символов причины показывать в подменю, чтобы не рвать панель.
+const REASON_MAX = 80;
 
 // Строка зоны из `zone-tiler.py list`: "  main  x=0  y=40  1605x1040".
 const ZONE_RE = /^\s*(\S+)\s+x=(-?\d+)\s+y=(-?\d+)\s+(\d+)x(\d+)\s*$/;
 // Строка рабочей области: "рабочая область монитора 0: 0,40 1920x1040".
 const WORKAREA_RE = /^рабочая область монитора\s+(\d+):\s+(-?\d+),(-?\d+)\s+(\d+)x(\d+)/;
+// Вывод `xprop -root _NET_ACTIVE_WINDOW`:
+// "_NET_ACTIVE_WINDOW(WINDOW): window id # 0x1a00007".
+const ACTIVE_WINDOW_RE = /window id #\s*(0x[0-9a-fA-F]+)/;
 
 // Развернуть "~" и "~/" в абсолютный путь: настройки хранят путь строкой.
 function expandHome(path) {
@@ -45,6 +62,13 @@ class GridSnapApplet extends Applet.TextIconApplet {
 
         this.metadata = metadata;
         this.appletDir = metadata.path;
+
+        // Индикатор текущей зоны: последняя известная зона активного окна,
+        // таймер опроса и признак «опрос уже идёт» (чтобы не наслаивать запуски).
+        this._currentZone = null;
+        this._indicatorTimer = 0;
+        this._indicatorBusy = false;
+        this._removed = false;
 
         this.settings = new Settings.AppletSettings(this, metadata.uuid, instance_id);
         this.settings.bind("gridsnap-dir", "gridsnap_dir", this._on_settings_changed);
@@ -86,18 +110,27 @@ class GridSnapApplet extends Applet.TextIconApplet {
     }
 
     _on_settings_changed() {
-        if (this.use_label)
-            this.set_applet_label(this.label_text || "GridSnap");
-        else
-            this.set_applet_label("");
-
         let icon = GLib.build_filenamev([this.appletDir, "icon.png"]);
         if (GLib.file_test(icon, GLib.FileTest.EXISTS))
             this.set_applet_icon_path(icon);
         else
             this.set_applet_icon_symbolic_name("view-grid-symbolic");
 
-        this.set_applet_tooltip(_("GridSnap — зоны окон"));
+        this._render();
+        this._syncIndicator();
+    }
+
+    // Надпись и тултип: индикатор — часть надписи, отдельного переключателя нет.
+    _render() {
+        let base = (this.label_text || "").trim() || "GridSnap";
+        let zone = this.use_label ? this._currentZone : null;
+
+        this.set_applet_label(this.use_label ? (zone ? base + " — " + zone : base) : "");
+
+        let tooltip = _("GridSnap — зоны окон");
+        if (zone)
+            tooltip += "\n" + _("Текущая зона:") + " " + zone;
+        this.set_applet_tooltip(tooltip);
     }
 
     // ----------------------------------------------------------------- меню
@@ -116,6 +149,9 @@ class GridSnapApplet extends Applet.TextIconApplet {
 
         section.zones = new PopupMenu.PopupSubMenuMenuItem(_("Зоны"));
         menu.addMenuItem(section.zones);
+
+        section.profiles = new PopupMenu.PopupSubMenuMenuItem(_("Профили"));
+        menu.addMenuItem(section.profiles);
 
         section.workareas = new PopupMenu.PopupSubMenuMenuItem(_("Рабочие области"));
         menu.addMenuItem(section.workareas);
@@ -146,7 +182,62 @@ class GridSnapApplet extends Applet.TextIconApplet {
 
     _refresh() {
         this._refreshZones();
+        this._refreshProfiles();
         this._refreshWorkareas();
+    }
+
+    // Подменю «Профили»: `zone-tiler.py profile list`, клик — `profile use <имя>`.
+    _refreshProfiles() {
+        for (let section of this._sections)
+            section.profiles.menu.removeAll();
+
+        this._run([TILER, "profile", "list"], (stdout, stderr, ok) => {
+            let names = [];
+            if (ok) {
+                for (let line of stdout.split("\n")) {
+                    let name = line.trim();
+                    if (name)
+                        names.push(name);
+                }
+            }
+
+            let reason = "";
+            if (!ok) {
+                reason = this._reason(stderr) || _("команда завершилась с ошибкой");
+            }
+
+            for (let section of this._sections) {
+                if (!ok) {
+                    this._placeholder(section.profiles.menu,
+                        _("Не удалось прочитать список профилей") + ": " + reason);
+                    continue;
+                }
+                if (names.length === 0) {
+                    this._placeholder(section.profiles.menu, _("Профилей нет"));
+                    continue;
+                }
+                for (let name of names)
+                    section.profiles.menu.addMenuItem(
+                        this._action(name, () => this._applyProfile(name)));
+            }
+        });
+    }
+
+    // Причина из вывода упавшей команды: первая непустая строка обычной
+    // ошибки или последняя строка трейсбека (там лежит сам текст исключения).
+    _reason(text) {
+        let lines = [];
+        for (let line of (text || "").split("\n")) {
+            let trimmed = line.trim();
+            if (trimmed)
+                lines.push(trimmed);
+        }
+        if (lines.length === 0)
+            return "";
+        let pick = text.indexOf("Traceback (most recent call last)") >= 0
+            ? lines[lines.length - 1]
+            : lines[0];
+        return pick.length > REASON_MAX ? pick.slice(0, REASON_MAX - 1) + "…" : pick;
     }
 
     _refreshZones() {
@@ -242,7 +333,11 @@ class GridSnapApplet extends Applet.TextIconApplet {
                     GLib.build_filenamev([this._gridsnapDir(), relArgs[0]])];
         for (let i = 1; i < relArgs.length; i++)
             argv.push(relArgs[i]);
+        this._exec(argv, callback);
+    }
 
+    // Запустить произвольную команду (нужна для `xprop`) тем же способом.
+    _exec(argv, callback) {
         let proc;
         try {
             proc = Gio.Subprocess.new(
@@ -284,6 +379,112 @@ class GridSnapApplet extends Applet.TextIconApplet {
         });
     }
 
+    // `profile use` сам перерегистрирует сочетания (как пункт «Применить сочетания»).
+    _applyProfile(name) {
+        this._run([TILER, "profile", "use", name], (_stdout, stderr, ok) => {
+            if (!ok) {
+                let message = (stderr || "").trim() || _("не удалось применить профиль");
+                Main.notify("GridSnap", message);
+            }
+        });
+    }
+
+    // -------------------------------------------------------------- индикатор
+
+    // Таймер живёт только когда панель показывает надпись и апплет в панели:
+    // без надписи индикатор некуда выводить, а лишние опросы демона не нужны.
+    _syncIndicator() {
+        let want = !!this.use_label && !this._removed;
+
+        if (!want) {
+            this._indicatorStop();
+            this._setZone(null);
+            return;
+        }
+
+        this._pollZone();
+        if (!this._indicatorTimer) {
+            this._indicatorTimer = GLib.timeout_add_seconds(
+                GLib.PRIORITY_DEFAULT, INDICATOR_INTERVAL, () => {
+                    this._pollZone();
+                    return GLib.SOURCE_CONTINUE;
+                });
+        }
+    }
+
+    _indicatorStop() {
+        if (this._indicatorTimer) {
+            GLib.source_remove(this._indicatorTimer);
+            this._indicatorTimer = 0;
+        }
+        this._indicatorBusy = false;
+    }
+
+    // Один цикл опроса: активное окно -> его зона у демона. Любая неудача — null.
+    _pollZone() {
+        if (this._indicatorBusy || !this.use_label || this._removed)
+            return;
+        // На время открытого меню не опрашиваем: оно и так вызывает CLI само.
+        if (this.menu.isOpen || (this._applet_context_menu && this._applet_context_menu.isOpen))
+            return;
+
+        this._indicatorBusy = true;
+        this._exec(["xprop", "-root", "_NET_ACTIVE_WINDOW"], (out, _err, ok) => {
+            let m = ok ? out.match(ACTIVE_WINDOW_RE) : null;
+            if (!m) {
+                this._indicatorBusy = false;
+                this._setZone(null);
+                return;
+            }
+            this._zoneOfWindow(m[1], (zone) => {
+                this._indicatorBusy = false;
+                this._setZone(zone);
+            });
+        });
+    }
+
+    // Зона окна по `gridsnap-ctl status`; нет демона/битый ответ/нет окна — null.
+    _zoneOfWindow(windowId, callback) {
+        this._run([CTL, "status"], (stdout, _stderr, ok) => {
+            if (!ok) {
+                callback(null);
+                return;
+            }
+            let data;
+            try {
+                data = JSON.parse(stdout);
+            } catch (e) {
+                callback(null);
+                return;
+            }
+            if (!data || !Array.isArray(data.windows)) {
+                callback(null);
+                return;
+            }
+
+            let wanted = parseInt(windowId, 16);
+            let zone = null;
+            for (let entry of data.windows) {
+                if (!entry || typeof entry.window !== "string")
+                    continue;
+                if (parseInt(entry.window, 16) !== wanted)
+                    continue;
+                if (typeof entry.zone === "string" && entry.zone)
+                    zone = entry.zone;
+                break;
+            }
+            callback(zone);
+        });
+    }
+
+    // Запомнить зону и перерисовать надпись; без изменений — ничего не трогаем.
+    _setZone(zone) {
+        if (this._removed || zone === this._currentZone)
+            return;
+        this._currentZone = zone;
+        this._render();
+    }
+
     // --------------------------------------------------------------- события
 
     on_applet_clicked(_event) {
@@ -291,6 +492,8 @@ class GridSnapApplet extends Applet.TextIconApplet {
     }
 
     on_applet_removed_from_panel() {
+        this._removed = true;
+        this._indicatorStop();
         this.settings.finalize();
     }
 }
