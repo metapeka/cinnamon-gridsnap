@@ -1666,6 +1666,12 @@ def cmd_focus(grid, args):
                 f"zone-tiler: {response.get('error', 'демон отклонил focus')}",
                 EXIT_FAIL,
             )
+        # Демон — хозяин режима, но запись CLI могла остаться от ветки без демона
+        # (демон подняли уже в режиме): добираем её разворот, иначе окна так и
+        # остались бы свёрнутыми, а файл — врать о режиме.
+        if response.get("off") and state:
+            _focus_restore(state)
+            clear_focus_state()
         _print_focus_response(response, quiet=args.quiet)
         return
 
