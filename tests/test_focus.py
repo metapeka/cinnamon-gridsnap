@@ -13,9 +13,12 @@
     python3 tests/test_focus.py
 """
 
+import contextlib
 import importlib.util
+import io
 import os
 import tempfile
+import types
 import unittest
 from unittest import mock
 
@@ -187,6 +190,133 @@ class TestFocusStateFile(unittest.TestCase):
             self.assertEqual(
                 zt.focus_path(), os.path.join(self.dir, "gridsnap", "focus.json")
             )
+
+
+class TestFocusRestore(unittest.TestCase):
+    """Разворот по записи: только свои окна, цель — последней."""
+
+    def state(self):
+        return {
+            "zone": "main",
+            "target": {"window": "0x10", "wm_class": "Code"},
+            "windows": [
+                {"window": "0x11", "wm_class": "firefox"},
+                {"window": "0x12", "wm_class": "chromium"},
+                {"window": "0x13", "wm_class": "Telegram"},
+            ],
+        }
+
+    def restore(self, state, alive, classes):
+        x11 = FakeX11()
+        with mock.patch.object(zt, "read_client_list", return_value=alive), \
+                mock.patch.object(zt, "window_class_title", side_effect=lambda w: (classes.get(w, ""), "")):
+            restored = zt._focus_restore(state, x11=x11)
+        return x11, restored
+
+    def test_restores_own_windows_and_target_last(self):
+        alive = [0x10, 0x11, 0x12, 0x13]
+        classes = {0x10: "Code", 0x11: "firefox", 0x12: "chromium", 0x13: "Telegram"}
+        x11, restored = self.restore(self.state(), alive, classes)
+        self.assertEqual(restored, [0x11, 0x12, 0x13])
+        # цель активируется последней — внимание остаётся на ней
+        self.assertEqual(x11.activated, [0x11, 0x12, 0x13, 0x10])
+        self.assertEqual(x11.closed, 0)
+
+    def test_skips_window_gone_from_client_list(self):
+        alive = [0x10, 0x11, 0x13]
+        classes = {0x10: "Code", 0x11: "firefox", 0x12: "chromium", 0x13: "Telegram"}
+        x11, restored = self.restore(self.state(), alive, classes)
+        self.assertEqual(restored, [0x11, 0x13])
+        self.assertNotIn(0x12, x11.activated)
+
+    def test_skips_window_with_reused_xid(self):
+        # XID переиспользован другой программой — разворачивать чужое нельзя.
+        alive = [0x10, 0x11, 0x12, 0x13]
+        classes = {0x10: "Code", 0x11: "firefox", 0x12: "Другое", 0x13: "Telegram"}
+        x11, restored = self.restore(self.state(), alive, classes)
+        self.assertEqual(restored, [0x11, 0x13])
+
+    def test_empty_state_restores_nothing(self):
+        x11, restored = self.restore({}, [0x10], {0x10: "Code"})
+        self.assertEqual(restored, [])
+        self.assertEqual(x11.activated, [])
+
+    def test_window_id_parsing(self):
+        self.assertEqual(zt._focus_window_id({"window": "0x1a"}), 0x1A)
+        self.assertEqual(zt._focus_window_id({"window": 26}), 26)
+        self.assertIsNone(zt._focus_window_id({"window": None}))
+        self.assertIsNone(zt._focus_window_id({"window": "мусор"}))
+        self.assertIsNone(zt._focus_window_id({"нет": 1}))
+
+    def test_alive_without_recorded_class_is_trusted(self):
+        self.assertTrue(zt._focus_alive(0x1, {}, {0x1}))
+        self.assertFalse(zt._focus_alive(0x2, {}, {0x1}))
+
+
+class TestFocusResponse(unittest.TestCase):
+    """Печать ответа демона `--quiet` и без."""
+
+    def printed(self, response, quiet=False):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            zt._print_focus_response(response, quiet=quiet)
+        return buf.getvalue().strip()
+
+    def test_enter_summary(self):
+        text = self.printed(
+            {"ok": True, "zone": "main", "window": "0x1a", "minimized": ["0x2", "0x3"]}
+        )
+        self.assertIn("0x1a -> зона 'main'", text)
+        self.assertIn("свёрнуто окон — 2", text)
+
+    def test_exit_summary(self):
+        text = self.printed({"ok": True, "off": True, "restored": ["0x2"]})
+        self.assertIn("выключен", text)
+        self.assertIn("развёрнуто окон — 1", text)
+
+    def test_quiet_prints_nothing(self):
+        self.assertEqual(self.printed({"ok": True, "off": True}, quiet=True), "")
+
+
+class TestFocusCommand(unittest.TestCase):
+    """CLI без демона: `--off` при неактивном режиме не падает и не шумит."""
+
+    def args(self, **kw):
+        base = {"zone": None, "off": False, "window": None, "quiet": False, "dry_run": False}
+        base.update(kw)
+        return types.SimpleNamespace(**base)
+
+    def test_focus_without_zone_requests_mode_without_zone(self):
+        # Форма клавиши `[focus]` без `zone`: «свернуть всё, кроме этого окна».
+        seen = {}
+
+        def fake(request, timeout=None):
+            seen.update(request)
+            return {"ok": True, "off": False, "zone": None, "window": "0x1", "minimized": []}
+
+        with mock.patch.object(zt, "daemon_request", side_effect=fake), \
+                mock.patch.object(zt, "load_focus_state", return_value={}), \
+                contextlib.redirect_stdout(io.StringIO()):
+            zt.cmd_focus(None, self.args())
+        self.assertNotIn("zone", seen)
+        self.assertEqual(seen["cmd"], "focus")
+        self.assertNotIn("off", seen)
+
+    def test_off_without_state_and_without_daemon_reports_nothing_restored(self):
+        buf = io.StringIO()
+        with mock.patch.object(zt, "daemon_request", return_value=None), \
+                mock.patch.object(zt, "load_focus_state", return_value={}), \
+                mock.patch.object(zt, "clear_focus_state"), \
+                contextlib.redirect_stdout(buf):
+            zt.cmd_focus(None, self.args(off=True))
+        self.assertIn("развёрнуто окон — 0", buf.getvalue())
+
+    def test_daemon_response_errors_are_fatal(self):
+        with mock.patch.object(zt, "daemon_request", return_value={"ok": False, "error": "нет зоны"}), \
+                mock.patch.object(zt, "load_focus_state", return_value={}), \
+                mock.patch.object(zt, "fail", side_effect=SystemExit(1)):
+            with self.assertRaises(SystemExit):
+                zt.cmd_focus(None, self.args(zone="main"))
 
 
 if __name__ == "__main__":

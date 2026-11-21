@@ -93,6 +93,7 @@ import fnmatch
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -1176,6 +1177,20 @@ def focus_candidates(entries, target, workspace, wa):
     return out
 
 
+def focus_entries(client_ids, monitors_):
+    """`(окно, стол, рабочая область)` для каждого клиента — вход `focus_candidates`.
+
+    Читает `_NET_WM_DESKTOP` и центр окна (`xwininfo`). Монитор не прочитался —
+    окно попадает с `None` и кандидатом не станет: сворачивать окно, которого
+    не видно, вслепую хуже, чем не сворачивать. Читает X, но решений не
+    принимает — отбор делает чистая `focus_candidates`.
+    """
+    return [
+        (win, window_workspace_for_zones(win), window_monitor(win, monitors_))
+        for win in client_ids
+    ]
+
+
 # --------------------------------------------- раскладка и история (без X)
 
 # Сколько последних операций хранить в истории раскладок.
@@ -1572,21 +1587,268 @@ def cmd_apply(grid, args):
         remember("apply", [before], quiet=args.quiet)
 
 
+# -------------------------------------------------- режим «только эта зона» (CLI)
+
+# Сколько ждать ответа демона, секунд (тот же порядок, что у `gridsnap-ctl`).
+DAEMON_TIMEOUT = 5.0
+
+
+def daemon_request(request, timeout=DAEMON_TIMEOUT):
+    """Отправить одну команду живому демону; `None` — демона нет.
+
+    `zone_ipc` подключается лениво (как `picker_nav`): без демона раскладчику
+    этот модуль не нужен. Мёртвый сокет/отсутствие демона (`OSError`) — это
+    `None`: вызывающий сделает то же самое разово. Демон жив, но не ответил за
+    `timeout`, или ответил непонятно — это уже не «демона нет», и второй хозяин
+    режима не заводится: отказ с внятным сообщением.
+    """
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import zone_ipc  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+
+    conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    conn.settimeout(timeout)
+    try:
+        conn.connect(zone_ipc.default_socket_path())
+    except OSError:
+        conn.close()
+        return None
+    try:
+        conn.sendall(zone_ipc.encode_message(request))
+        return zone_ipc.read_response(conn)
+    except TimeoutError:
+        fail(
+            f"zone-tiler: демон не ответил за {timeout:g} с — режим не переключаю "
+            "(работающего демона нельзя обойти снаружи)",
+            EXIT_FAIL,
+        )
+    except zone_ipc.ProtocolError as exc:
+        fail(f"zone-tiler: демон ответил непонятно: {exc}", EXIT_FAIL)
+    finally:
+        conn.close()
+
+
 def cmd_focus(grid, args):
     """Режим «только эта зона»: окно в зону, остальные окна монитора — свёрнуты.
 
     Вход и выход — **одна** команда (toggle): повторный `focus` при активном
     режиме разворачивает окна, свёрнутые режимом, и больше ничего; свёрнутое
     вручную остаётся свёрнутым. `--off` — явный выход для скриптов и второй
-    клавиши. Область — рабочий стол и монитор целевого окна: другие экраны и
-    столы не трогаются, а исключения (`window_excluded`) и диалоги — тем более.
+    клавиши. Зона необязательна: без неё окно остаётся где стоит, и режим
+    значит «только это окно» (это форма клавиши `[focus]` без `zone`). Область —
+    рабочий стол и монитор целевого окна: другие экраны и столы не трогаются, а
+    исключения (`window_excluded`) и диалоги — тем более.
 
     С живым демоном команда **делегирует ему**: у режима должен быть один
     хозяин, и только демон умеет сворачивать окна, появляющиеся после входа.
     Без демона работает разово, а список свёрнутых держит в `focus.json`
     (см. `focus_path`) — новые окна в таком режиме не отслеживаются.
     """
-    raise NotImplementedError("zone-tiler: focus ещё не реализован")
+    request = {"cmd": "focus"}
+    if args.off:
+        request["off"] = True
+    elif args.zone:
+        request["zone"] = args.zone
+    if args.window is not None:
+        request["window"] = args.window
+
+    state = load_focus_state()
+    if args.dry_run:
+        _focus_dry_run(grid, args, state)
+        return
+
+    # Живой демон — единственный хозяин режима: он видит `_NET_CLIENT_LIST`
+    # и умеет довернуть окна, появившиеся после входа. Без демона — разово.
+    response = daemon_request(request)
+    if response is not None:
+        if not response.get("ok"):
+            fail(
+                f"zone-tiler: {response.get('error', 'демон отклонил focus')}",
+                EXIT_FAIL,
+            )
+        _print_focus_response(response, quiet=args.quiet)
+        return
+
+    if request.get("off") or state:
+        restored = _focus_restore(state)
+        clear_focus_state()
+        if not args.quiet:
+            print(f"режим «только эта зона» выключен: развёрнуто окон — {len(restored)}")
+        return
+    _focus_enter(grid, args)
+
+
+def _focus_dry_run(grid, args, state):
+    """Показать, что сделал бы `focus`, ничего не двигая и не сворачивая."""
+    if args.off or state:
+        windows = state.get("windows") or []
+        print(f"режим «только эта зона»: выключился бы, развернулось бы окон — {len(windows)}")
+        return
+    window = args.window or active_window()
+    if args.zone:
+        require_zone(grid, args.zone)
+    wa = window_monitor(window, monitors())
+    if wa is None:
+        fail(f"zone-tiler: не удалось определить монитор окна 0x{window:x}", EXIT_FAIL)
+    candidates = focus_candidates(
+        focus_entries(read_client_list() or [], monitors()), window,
+        current_workspace(), wa,
+    )
+    todo = [
+        win
+        for win in candidates
+        if not window_is_excluded(win, grid.ignore) and not window_iconic(win)
+    ]
+    where = "остаётся на месте" if not args.zone else "зона '{}'".format(args.zone)
+    if args.zone:
+        x, y, w, h = grid.rect(args.zone, wa)
+        where += f" x={x} y={y} {w}x{h}"
+    print(
+        f"режим «только эта зона»: окно 0x{window:x} -> {where}, "
+        f"свернулось бы окон — {len(todo)}"
+    )
+
+
+def _focus_enter(grid, args):
+    """Разовый вход в режим без демона: цель в зону (если задана), остальные — свёрнуты."""
+    window = args.window or active_window()
+    if args.zone:
+        require_zone(grid, args.zone)
+    if window_is_excluded(window, grid.ignore):
+        if not args.quiet:
+            print(
+                f"zone-tiler: окно 0x{window:x} под исключением "
+                "([ignore]/служебный тип) — режим не включаю",
+                file=sys.stderr,
+            )
+        return
+    workspace = current_workspace()
+    if workspace is None:
+        fail("zone-tiler: не удалось определить активный рабочий стол", EXIT_FAIL)
+    monitors_ = monitors()
+    wa = window_monitor(window, monitors_)
+    if wa is None:
+        fail(f"zone-tiler: не удалось определить монитор окна 0x{window:x}", EXIT_FAIL)
+    # Зона проверяется на этой рабочей области — до того, как что-то двинулось.
+    rect = grid.rect(args.zone, wa) if args.zone else None
+    entries = focus_entries(read_client_list() or [], monitors_)
+    todo = [
+        win
+        for win in focus_candidates(entries, window, workspace, wa)
+        if not window_is_excluded(win, grid.ignore) and not window_iconic(win)
+    ]
+
+    before = None
+    if rect is not None:
+        try:
+            before = snapshot_window(window, zone=args.zone)
+        except Exception:
+            before = None  # геометрию не прочитать — без записи в историю
+
+    # Одно X-соединение на всю операцию: `iconify` чужое соединение не закрывает.
+    x11 = X11()
+    minimized = []
+    try:
+        if rect is not None:
+            apply_zone(window, rect, label=args.zone, x11=x11, quiet=True)
+        for win in todo:
+            iconify(win, x11=x11, quiet=True)
+            minimized.append(
+                {"window": hex(win), "wm_class": window_class_title(win)[0]}
+            )
+    finally:
+        x11.close()
+    if before is not None:
+        remember("apply", [before], quiet=args.quiet)
+
+    save_focus_state(
+        {
+            "zone": args.zone,
+            "workspace": workspace,
+            "monitor": list(wa),
+            "target": {"window": hex(window), "wm_class": window_class_title(window)[0]},
+            "windows": minimized,
+        }
+    )
+    if not args.quiet:
+        where = f" -> зона '{args.zone}'" if args.zone else ""
+        print(
+            f"режим «только эта зона»: окно 0x{window:x}{where}, "
+            f"свёрнуто окон — {len(minimized)}"
+        )
+
+
+def _focus_restore(state, x11=None):
+    """Развернуть окна из записи `focus.json`; чужое не трогаем.
+
+    Окно, которого больше нет в `_NET_CLIENT_LIST`, и окно с другим `WM_CLASS`
+    (XID переиспользован другой программой) пропускаются: развернуть чужое окно
+    хуже, чем не развернуть своё. Последней активируется цель — она и должна
+    остаться в фокусе. Записей нет — и X не нужен.
+    """
+    records = [
+        record
+        for record in (state.get("windows") or [])
+        if _focus_window_id(record) is not None
+    ]
+    target = state.get("target") if isinstance(state.get("target"), dict) else None
+    target_id = _focus_window_id(target) if target else None
+    if not records and target_id is None:
+        return []
+
+    alive = read_client_list()
+    alive = set(alive) if alive is not None else None
+    own = x11 is None
+    if own:
+        x11 = X11()
+    restored = []
+    try:
+        for record in records:
+            win = _focus_window_id(record)
+            if win is None or not _focus_alive(win, record, alive):
+                continue
+            deiconify(win, x11=x11)
+            restored.append(win)
+        if target_id is not None and _focus_alive(target_id, target, alive):
+            deiconify(target_id, x11=x11)
+    finally:
+        if own:
+            x11.close()
+    return restored
+
+
+def _focus_window_id(record):
+    """Идентификатор окна из записи `focus.json` (число или `0x…`); иначе None."""
+    value = record.get("window") if isinstance(record, dict) else record
+    try:
+        return int(value, 0) if isinstance(value, str) else int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _focus_alive(win, record, alive):
+    """Наше ли это ещё окно: в списке клиентов и с тем же `WM_CLASS`."""
+    if alive is not None and win not in alive:
+        return False
+    expected = record.get("wm_class") if isinstance(record, dict) else ""
+    if not expected:
+        return True
+    return window_class_title(win)[0] == expected
+
+
+def _print_focus_response(response, quiet=False):
+    """Напечатать ответ демона на `focus` по-человечески (`--quiet` — молча)."""
+    if quiet:
+        return
+    if response.get("off"):
+        count = len(response.get("restored") or [])
+        print(f"режим «только эта зона» выключен: развёрнуто окон — {count}")
+        return
+    count = len(response.get("minimized") or [])
+    print(
+        f"режим «только эта зона»: окно {response.get('window')} -> зона "
+        f"'{response.get('zone')}', свёрнуто окон — {count}"
+    )
 
 
 def monitor_arg(args):
@@ -2043,12 +2305,23 @@ def main(argv=None):
     )
     ap.add_argument(
         "command",
-        choices=["list", "apply", "move", "keys", "arrange", "stack", "undo", "profile"],
+        choices=[
+            "list",
+            "apply",
+            "move",
+            "focus",
+            "keys",
+            "arrange",
+            "stack",
+            "undo",
+            "profile",
+        ],
         help=(
             "list/apply/keys — как раньше; move — перебросить окно в соседнюю зону; "
-            "arrange — разложить окна по зонам; stack — собрать окна в зону стопкой; "
-            "undo — вернуть рамки из истории; profile — свои профили раскладок "
-            "(зоны + правила + клавиши)"
+            "focus — режим «только эта зона» (окно в зону, остальные свёрнуты; "
+            "повторно — выход); arrange — разложить окна по зонам; stack — собрать "
+            "окна в зону стопкой; undo — вернуть рамки из истории; profile — свои "
+            "профили раскладок (зоны + правила + клавиши)"
         ),
     )
     ap.add_argument(
@@ -2113,6 +2386,11 @@ def main(argv=None):
     )
     ap.add_argument("--dry-run", action="store_true", help="только посчитать рамку")
     ap.add_argument(
+        "--off",
+        action="store_true",
+        help="focus: явно выйти из режима «только эта зона» (развернуть свёрнутое режимом)",
+    )
+    ap.add_argument(
         "--move",
         action="store_true",
         help="keys: сочетания перемещения в соседнюю зону из секции [move]",
@@ -2149,6 +2427,9 @@ def main(argv=None):
         return EXIT_OK
     if args.command == "move":
         cmd_move(grid, args)
+        return EXIT_OK
+    if args.command == "focus":
+        cmd_focus(grid, args)
         return EXIT_OK
     if not args.zone:
         fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)
