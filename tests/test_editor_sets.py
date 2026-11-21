@@ -7,8 +7,9 @@
 (`save_plan`): отличается от общего или монитор правили — пишем, совпал и не
 правили — секция удаляется только у монитора на экране, отключённый выход не
 трогаем. Сквозные проверки (`apply_save_plan`) идут через настоящий
-`zone_config.save_zones`: чужие секции (`[rules]`, `[daemon]`), наборы соседних
-и отключённых мониторов и `[keys]` без дублей.
+`zone_config.save_zone_sets`: чужие секции (`[rules]`, `[daemon]`), наборы соседних
+и отключённых мониторов и `[keys]` без дублей (повтор имени в двух наборах не
+даёт повтора в секции — это забота писателя, а не текстовой чистки).
 
 Запуск:
     python3 -m unittest discover -s tests -v
@@ -153,19 +154,78 @@ class TestZoneSetSignature(unittest.TestCase):
 # ----------------------------------------------- [keys] без повторов
 
 
-class TestDedupeKeyLines(unittest.TestCase):
-    def test_second_entry_for_same_zone_is_dropped(self):
-        text = BASE + "[zones]\nmain = 0, 0, 1, 1\n[keys]\nmain = a\nmain = b\nright = c\n"
-        fixed = geom.dedupe_key_lines(text)
-        keys = fixed.split("[keys]", 1)[1]
-        self.assertEqual(keys.count("main ="), 1)
-        self.assertIn("main = a\n", keys)      # первая строка главнее
-        self.assertIn("right = c\n", keys)
+def keys_body(text):
+    """Тело секции `[keys]` по строкам — без заголовков комментариев-подсказок."""
+    body, inside = [], False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            inside = stripped == "[keys]"
+            continue
+        if inside:
+            body.append(line)
+    return [line for line in body if line.strip()]
 
-    def test_other_sections_and_comments_survive(self):
-        text = (BASE + "# комментарий\n[zones]\nmain = 0, 0, 1, 1\n"
-                "[keys]\nmain = a\n[daemon]\nmain = same name, other section\n")
-        self.assertEqual(geom.dedupe_key_lines(text), text)
+
+class TestKeysWithoutDuplicates(ConfCase):
+    """Повтор имени в двух наборах не даёт повтора в `[keys]`.
+
+    Чистка живёт в самом писателе (`zone_config`), а не в тексте файла после
+    записи: `[keys]` собирается без повторов, поэтому `ConfigParser` файл читает.
+    """
+
+    def test_same_name_in_two_sets_yields_one_key_line(self):
+        default = [zone("main", (0, 0, 0.5, 1), "<Super><Alt>1")]
+        monitors = {"HDMI-1": [zone("main", (0, 0, 1, 1), "<Super><Alt>1"),
+                               zone("wide", (0, 0, 1, 0.5), "<Super><Alt>2")]}
+        zc.save_zone_sets(self.conf, default, monitors)
+        keys = keys_body(self.read())
+        self.assertEqual(sum(1 for line in keys if line.startswith("main =")), 1, keys)
+        self.assertIn("wide = <Super><Alt>2", keys)
+        # ключ берётся из набора по умолчанию — он пишется первым
+        self.assertIn("main = <Super><Alt>1", keys)
+
+    def test_broken_keys_file_reads_after_rewrite(self):
+        self.write(
+            BASE
+            + "[zones]\nmain = 0, 0, 1, 1\n"
+            + "[keys]\nmain = <Super><Alt>1\nmain = <Super><Alt>9\n"
+        )
+        with self.assertRaises(configparser.Error):
+            zc.load_zones(self.conf)          # руками испорченный файл не читается
+        zc.save_zone_sets(
+            self.conf,
+            [zone("main", (0, 0, 1, 1), "<Super><Alt>1")],
+            {"HDMI-1": [zone("main", (0, 0, 1, 1), "<Super><Alt>1")]},
+        )
+        self.assertEqual([z.binding for z in zc.load_zones(self.conf)], ["<Super><Alt>1"])
+        self.assertEqual(keys_body(self.read()), ["main = <Super><Alt>1"])
+
+    def test_one_call_writes_all_sets_and_keeps_third(self):
+        self.write(CONF)
+        extra = zc.load_extra_sections(self.conf)
+        zc.save_zone_sets(
+            self.conf,
+            [zone("main", (0, 0, 0.5, 1), "<Super><Alt>1"),
+             zone("right", (0.5, 0, 0.5, 1), "<Super><Alt>2")],
+            {
+                "HDMI-1": [zone("main", (0, 0, 1, 0.5)), zone("bottom", (0, 0.5, 1, 0.5))],
+                "VGA-1": [zone("old", (0, 0, 1, 1), "<Super><Alt>9")],
+            },
+            extra,
+        )
+        self.assertEqual(
+            zc.list_zone_sets(self.conf),
+            {
+                None: ["main", "right"],
+                "HDMI-1": ["main", "bottom"],
+                "VGA-1": ["old"],
+            },
+        )
+        self.assertEqual(self.read().count("[zones:VGA-1]"), 1)
+        self.assertEqual(keys_body(self.read()),
+                         ["main = <Super><Alt>1", "right = <Super><Alt>2",
+                          "old = <Super><Alt>9"])
 
 
 
