@@ -1371,6 +1371,22 @@ class TestFocusMode(DaemonTestCase):
         self.assertEqual(self.deiconified, [0x2, 0x1])
         self.assertEqual(d.windows, {})
 
+    def test_target_disappearing_without_zone_leaves_mode(self):
+        # Форма `focus` без зоны: цель в `windows` не лежит, поэтому её исчезновение
+        # ловит только отдельная проверка цели в реконсиляции.
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("gimp")  # правила нет — цель нигде не учтена
+        self.metas[0x2] = self.meta("gimp")
+        d = self.focus_daemon()
+        d.ipc_focus({"window": 0x1})
+        self.assertIsNone(d.focus["zone"])
+        self.assertEqual(self.iconified, [0x2])
+        d.seen = {0x1, 0x2}
+        d.reconcile([0x2])  # цель 0x1 исчезла из _NET_CLIENT_LIST
+        self.assertIsNone(d.focus)
+        self.assertEqual(self.deiconified, [0x2, 0x1])
+
     def test_minimized_window_disappearing_keeps_mode(self):
         self.current = 0
         self.setup_clients([0x1, 0x2])

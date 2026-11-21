@@ -1282,6 +1282,10 @@ class Daemon:
         for win in list(self.focus["minimized"]) if self.focus is not None else []:
             if win not in current and win not in self.windows:
                 self.on_destroy(win)
+        # Цель могла быть и не уложена в зону (форма `focus` без зоны): тогда
+        # первый проход её не увидит, а режим без цели держать незачем.
+        if self.focus is not None and self.focus["target"] not in current:
+            self.on_destroy(self.focus["target"])
         self._prune_state(current)
         self.seen = current
 
