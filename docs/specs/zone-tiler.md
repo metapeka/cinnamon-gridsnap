@@ -4,6 +4,7 @@ type: module-design
 status: active
 title: "Модуль: раскладчик zone-tiler"
 parent: gridsnap-architecture
+depends-on: [zone-tabs]
 ---
 
 _Черновик по `importing-a-codebase`: восстановлено из кода, владельцем не сверено._
@@ -47,8 +48,9 @@ zone-tiler.py apply <зона> [--monitor N|ИМЯ] [--workspace N|current|conf]
 zone-tiler.py move <left|right|up|down> [--monitor N|ИМЯ] [--workspace N|current|conf] [--dry-run|--verify|--quiet] [--conf PATH]
 zone-tiler.py focus [<зона>] [--window ID] [--off] [--dry-run|--quiet] [--conf PATH]
 zone-tiler.py keys  [--move] [--conf PATH]
-zone-tiler.py arrange [--by auto|rules|order] [--workspace N|current|conf] [--offset N] [--dry-run|--verify|--quiet] [--conf PATH]
-zone-tiler.py stack <зона> [--monitor N|ИМЯ] [--workspace N|current|conf] [--offset N] [--dry-run|--verify|--quiet] [--conf PATH]
+zone-tiler.py arrange [--by auto|rules|order] [--workspace N|current|conf] [--dry-run|--verify|--quiet] [--conf PATH]
+zone-tiler.py stack <зона> [--monitor N|ИМЯ] [--workspace N|current|conf] [--dry-run|--verify|--quiet] [--conf PATH]
+zone-tiler.py tabs-next [--quiet] [--conf PATH]
 zone-tiler.py undo [--all] [--verify|--quiet] [--conf PATH]
 zone-tiler.py profile list | show <имя> | save <имя> | use <имя> | rm <имя> [--no-hotkeys] [--conf PATH]
 zone-tiler.py --version
@@ -63,7 +65,10 @@ zone-tiler.py --version
 - `focus [<зона>]` — режим «только эта зона»: окно в зону (без зоны — остаётся где стоит),
   остальные окна её стола и монитора свёрнуты; повторный вызов — выход. См. «Режим «только эта зона»».
 - `arrange` — раскладывает клиентские окна `_NET_CLIENT_LIST` по зонам (см. «Раскладка одной командой»).
-- `stack <зона>` — собирает подвижные клиентские окна в одну зону стопкой-каскадом.
+- `stack <зона>` — собирает подвижные клиентские окна в одну зону вкладками.
+- `tabs-next` — поднимает следующую вкладку стопки зоны активного окна: работу отдаёт демону
+  (`zone_tabs.tabs_next_command`), без демона — код 1 и понятное сообщение. Её запускает клавиша
+  `[tabs] key`.
 - `undo` — возвращает окна на прежние рамки из истории (последняя операция; `--all` — вся история).
 - `profile` — свои профили раскладок (см. «Профили раскладок»); `use` после записи регистрирует сочетания
   клавиш, `--no-hotkeys` это отключает.
@@ -99,16 +104,17 @@ zone-tiler.py --version
 Выбор окон — чистая `choose_assignments(client_ids, metas, zones, rules, by)`; `movable_windows` —
 чистый фильтр. Оба без X и GTK, покрыты юнит-тестами.
 
-Несколько окон, попавших в одну зону **одного монитора**, ложатся туда каскадом: первое — ровно по
-зоне, каждое следующее сдвинуто на `--offset` px (по умолчанию 20) вниз-вправо (`cascade_rect`).
-Окно не уменьшается: заголовок каждого остаётся виден (обычно вверху-слева), даже если окно частично
-уходит за край зоны. Левый верхний угол не выпускается за рабочую область. Оконный менеджер может
-сам поправить сдвиг, если окно иначе не поместилось бы на экране (например, полноразмерное окно
-WM прижимает к верху) — тогда `--verify` честно покажет «не совпало», а каскад останется
-горизонтальным.
+Несколько окон, попавших в одну зону **одного монитора**, больше не ложатся каскадом: они встают
+**вкладками** — на одну общую рамку, которую считает чистая `in_zone_rect(zone_rect, count, height)`:
+одно окно занимает зону целиком, два и больше — зону минус полоса вкладок высотой из `[tabs] height`
+(умолчание `zone_tabs.STRIP_HEIGHT` = 22 px). Правило «одна вкладка — вся зона» живёт в ядре
+(`zone_tabs.stack_rect`), поэтому раскладчик и демон не расходятся на одном и том же числе окон.
+Полоса с заголовками и переключение вкладок — дело демона (см. `zone-tabs` и `gridsnap-daemon`);
+разовый `arrange`/`stack` только расставляет окна по общей рамке. Флага `--offset` и функции
+`cascade_rect` нет: вызов с `--offset` — ошибка аргументов (код 2), а не молчаливое игнорирование.
 
 `stack <зона>` — частный случай: все подвижные клиентские окна собираются в одну зону выбранного
-монитора (`--monitor`, по умолчанию 0) и раскладываются тем же каскадом.
+монитора (`--monitor`, по умолчанию 0) и встают на общую рамку вкладок.
 
 `arrange --dry-run` и `stack --dry-run` печатают `окно -> зона: x=… y=… WxH` и ничего не двигают.
 `--verify`/`--quiet` работают как у `apply`.
