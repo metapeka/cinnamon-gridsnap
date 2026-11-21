@@ -11,7 +11,10 @@
     python3 tests/test_zone_config.py
 """
 
+import contextlib
+import io
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -26,6 +29,8 @@ import zone_config as zc  # noqa: E402
 
 BASE_GRID = "[grid]\ncols = 1.0\nrows = 1.0\n"
 RECT_ZONES = "[zones]\nmain = 0, 0, 0.5, 1\ntop-right = 0.5, 0, 0.5, 0.5\n"
+MONITOR_ZONES = "[zones:HDMI-1]\ntop = 0, 0, 1, 0.5\nbottom = 0, 0.5, 1, 0.5\n"
+SECOND_MONITOR_ZONES = "[zones:DP-2]\nwide = 0, 0, 1, 1\n"
 GRID_ZONES = (
     "[grid]\ncols = 0.25, 0.5, 1.0\nrows = 0.5, 1.0\n"
     "[zones]\nleft = 0:1, 0:1\nright = 2:3, 0:1\n"
@@ -35,14 +40,18 @@ DAEMON = "[daemon]\nreflow = off   # off | neighbors\n"
 
 
 class ConfMixin:
-    """Пишет временный zones.conf и убирает его после теста."""
+    """Временный каталог с zones.conf; каталог убирается после теста."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="gridsnap-conf-")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def conf(self, text):
-        fd, path = tempfile.mkstemp(suffix=".conf", text=True)
-        os.close(fd)
+        path = os.path.join(self.tmpdir, f"zones{len(os.listdir(self.tmpdir))}.conf")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(text)
-        self.addCleanup(os.unlink, path)
         return path
 
     def read(self, path):
@@ -114,6 +123,291 @@ class TestLoadZones(ConfMixin, unittest.TestCase):
         zones, extra = zc.load_config(path)
         self.assertEqual([z.name for z in zones], ["main", "top-right"])
         self.assertEqual(set(extra), {"rules", "daemon"})
+
+
+class TestMonitorZoneSets(ConfMixin, unittest.TestCase):
+    """Наборы зон на монитор: ``[zones]`` плюс ``[zones:<имя выхода>]``."""
+
+    def two_sets(self):
+        return self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES)
+
+    def test_without_monitor_reads_default_set(self):
+        zones = zc.load_zones(self.two_sets())
+        self.assertEqual([z.name for z in zones], ["main", "top-right"])
+
+    def test_monitor_set_is_read_by_output_name(self):
+        zones = zc.load_zones(self.two_sets(), "HDMI-1")
+        self.assertEqual([z.name for z in zones], ["top", "bottom"])
+        self.assertEqual(zones[1].as_tuple(), (0.0, 0.5, 1.0, 0.5))
+
+    def test_unknown_monitor_falls_back_to_default_set(self):
+        zones = zc.load_zones(self.two_sets(), "HDMI-9")
+        self.assertEqual([z.name for z in zones], ["main", "top-right"])
+        self.assertEqual([z.name for z in zc.load_zones(self.two_sets(), "")], ["main", "top-right"])
+
+    def test_monitor_name_is_case_sensitive(self):
+        # имя выхода X11 — не имя зоны: санитайза нет, регистр значим
+        zones = zc.load_zones(self.two_sets(), "hdmi-1")
+        self.assertEqual([z.name for z in zones], ["main", "top-right"])
+
+    def test_monitor_set_takes_bindings_from_keys(self):
+        path = self.conf(
+            BASE_GRID + RECT_ZONES + MONITOR_ZONES + "[keys]\nmain = <Super><Alt>1\ntop = <Super><Alt>2\n"
+        )
+        self.assertEqual([z.binding for z in zc.load_zones(path, "HDMI-1")], ["<Super><Alt>2", ""])
+        self.assertEqual([z.binding for z in zc.load_zones(path)], ["<Super><Alt>1", ""])
+
+    def test_monitor_set_accepts_grid_cell_form(self):
+        path = self.conf(
+            "[grid]\ncols = 0.5, 1.0\nrows = 1.0\n"
+            + RECT_ZONES
+            + "[zones:HDMI-1]\nleft = 0:1, 0:1\nright = 1:2, 0:1\n"
+        )
+        self.assertEqual(
+            [z.as_tuple() for z in zc.load_zones(path, "HDMI-1")],
+            [(0.0, 0.0, 0.5, 1.0), (0.5, 0.0, 0.5, 1.0)],
+        )
+
+    def test_monitor_set_without_keys_section(self):
+        self.assertEqual([z.binding for z in zc.load_zones(self.two_sets(), "DP-2")], [""])
+
+    def test_empty_monitor_section_body_is_config_error(self):
+        path = self.conf(BASE_GRID + RECT_ZONES + "[zones:HDMI-1]\n")
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            zc.load_zones(path, "HDMI-1")
+
+    def test_empty_monitor_name_is_config_error(self):
+        path = self.conf(BASE_GRID + RECT_ZONES + "[zones:]\ntop = 0, 0, 1, 1\n")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
+            zc.list_zone_sets(path)
+        self.assertEqual(caught.exception.code, 3)
+        self.assertIn("[zones:]", err.getvalue())
+        self.assertIn("[zones:HDMI-1]", err.getvalue())
+
+    def test_extra_sections_skip_monitor_sets(self):
+        # иначе `[zones:HDMI-1]` уедет в «чужие» секции нижним регистром и задвоится
+        path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + RULES)
+        self.assertEqual(set(zc.load_extra_sections(path)), {"rules"})
+
+
+class TestZoneSetList(ConfMixin, unittest.TestCase):
+    """``list_zone_sets`` — какие наборы есть в файле (для редактора и CLI)."""
+
+    def test_lists_default_and_monitor_sets(self):
+        path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES)
+        self.assertEqual(
+            zc.list_zone_sets(path),
+            {
+                None: ["main", "top-right"],
+                "HDMI-1": ["top", "bottom"],
+                "DP-2": ["wide"],
+            },
+        )
+
+    def test_default_key_is_first_then_file_order(self):
+        path = self.conf(BASE_GRID + RECT_ZONES + SECOND_MONITOR_ZONES + MONITOR_ZONES)
+        self.assertEqual(list(zc.list_zone_sets(path)), [None, "DP-2", "HDMI-1"])
+
+    def test_default_key_absent_without_zones_section(self):
+        path = self.conf(BASE_GRID + MONITOR_ZONES)
+        self.assertEqual(zc.list_zone_sets(path), {"HDMI-1": ["top", "bottom"]})
+
+    def test_missing_file_lists_nothing(self):
+        self.assertEqual(zc.list_zone_sets(os.path.join(tempfile.mkdtemp(), "none.conf")), {})
+
+    def test_load_zone_sets_returns_objects_with_bindings(self):
+        path = self.conf(
+            BASE_GRID + RECT_ZONES + MONITOR_ZONES + "[keys]\nmain = <Super><Alt>1\ntop = <Super><Alt>2\n"
+        )
+        sets = zc.load_zone_sets(path)
+        self.assertEqual(list(sets), [None, "HDMI-1"])
+        self.assertEqual([z.binding for z in sets["HDMI-1"]], ["<Super><Alt>2", ""])
+
+
+class TestSaveMonitorZoneSets(ConfMixin, unittest.TestCase):
+    def test_save_monitor_set_writes_its_section(self):
+        path = os.path.join(tempfile.mkdtemp(), "zones.conf")
+        zc.save_zones(path, [zc.Zone("top", 0, 0, 1, 0.5)], monitor="HDMI-1")
+        text = self.read(path)
+        self.assertIn("[zones:HDMI-1]", text)
+        self.assertEqual([z.name for z in zc.load_zones(path, "HDMI-1")], ["top"])
+
+    def test_saving_one_monitor_keeps_other_sets_and_extras(self):
+        path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES + RULES + DAEMON)
+        zones = [zc.Zone("top", 0, 0, 1, 0.6), zc.Zone("bottom", 0, 0.6, 1, 0.4)]
+        zc.save_zones(path, zones, zc.load_extra_sections(path), monitor="HDMI-1")
+        text = self.read(path)
+        self.assertIn("[zones:HDMI-1]", text)
+        self.assertIn("[zones:DP-2]", text)  # соседний набор на месте
+        self.assertIn("wide = 0, 0, 1, 1", text)
+        self.assertIn("[rules]\nChrome = main", text)
+        self.assertIn("reflow = off   # off | neighbors", text)
+        self.assertEqual([z.as_tuple() for z in zc.load_zones(path, "HDMI-1")],
+                         [(0.0, 0.0, 1.0, 0.6), (0.0, 0.6, 1.0, 0.4)])
+        self.assertEqual([z.name for z in zc.load_zones(path)], ["main", "top-right"])
+
+    def test_saving_default_keeps_monitor_sets(self):
+        path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES)
+        zc.save_zones(path, [zc.Zone("only", 0, 0, 1, 1)], zc.load_extra_sections(path))
+        self.assertEqual([z.name for z in zc.load_zones(path)], ["only"])
+        self.assertEqual([z.name for z in zc.load_zones(path, "HDMI-1")], ["top", "bottom"])
+
+    def test_monitor_section_written_once(self):
+        path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES)
+        zc.save_zones(path, zc.load_zones(path, "HDMI-1"), zc.load_extra_sections(path), monitor="HDMI-1")
+        text = self.read(path)
+        self.assertEqual(text.count("[zones:HDMI-1]"), 1)
+        self.assertEqual(sections_in(text), ["grid", "zones", "zones:HDMI-1"])
+
+    def test_saving_monitor_keeps_other_monitor_bindings(self):
+        path = self.conf(
+            BASE_GRID
+            + RECT_ZONES
+            + MONITOR_ZONES
+            + "[keys]\nmain = <Super><Alt>1\ntop = <Super><Alt>2\nwide = <Super><Alt>3\n"
+            + SECOND_MONITOR_ZONES
+        )
+        zc.save_zones(path, [zc.Zone("top", 0, 0, 1, 0.5)], zc.load_extra_sections(path), monitor="HDMI-1")
+        self.assertEqual([z.binding for z in zc.load_zones(path, "DP-2")], ["<Super><Alt>3"])
+        self.assertEqual([z.binding for z in zc.load_zones(path)], ["<Super><Alt>1", ""])
+
+    def test_empty_monitor_set_removes_its_section(self):
+        path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES)
+        zc.save_zones(path, [], zc.load_extra_sections(path), monitor="HDMI-1")
+        self.assertEqual(zc.list_zone_sets(path), {None: ["main", "top-right"]})
+
+    def test_editor_roundtrip_keeps_all_sets(self):
+        path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES + RULES)
+        zones, extra = zc.load_config(path)
+        zones.append(zc.Zone("extra", 0.5, 0.5, 0.5, 0.5))
+        zc.save_zones(path, zones, extra)
+        self.assertEqual(
+            zc.list_zone_sets(path),
+            {
+                None: ["main", "top-right", "extra"],
+                "HDMI-1": ["top", "bottom"],
+                "DP-2": ["wide"],
+            },
+        )
+        self.assertIn("[rules]", self.read(path))
+
+
+class TestSaveZoneSets(ConfMixin, unittest.TestCase):
+    """Все наборы за один проход (`save_zone_sets`) и `[keys]` без повторов."""
+
+    def keys_of(self, path):
+        """Тело `[keys]` по строкам — не путать с подсказкой в шапке файла."""
+        body, inside = [], False
+        for line in self.read(path).splitlines():
+            stripped = line.strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                inside = stripped == "[keys]"
+                continue
+            if inside and "=" in line:
+                body.append(line)
+        return body
+
+    def test_writes_default_and_monitor_sets_in_one_call(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(
+            path,
+            [zc.Zone("main", 0, 0, 0.5, 1, "<Super><Alt>1")],
+            {"HDMI-1": [zc.Zone("wide", 0, 0, 1, 1, "<Super><Alt>2")],
+             "DP-2": [zc.Zone("top", 0, 0, 1, 0.5)]},
+        )
+        self.assertEqual(
+            zc.list_zone_sets(path),
+            {None: ["main"], "HDMI-1": ["wide"], "DP-2": ["top"]},
+        )
+        self.assertEqual(sections_in(self.read(path)), ["grid", "zones", "zones:HDMI-1",
+                                                       "zones:DP-2", "keys"])
+        self.assertEqual([z.binding for z in zc.load_zones(path, "HDMI-1")], ["<Super><Alt>2"])
+
+    def test_duplicate_zone_name_in_two_sets_gives_one_key_line(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(
+            path,
+            [zc.Zone("main", 0, 0, 0.5, 1, "<Super><Alt>1")],
+            {"HDMI-1": [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1"),
+                        zc.Zone("wide", 0, 0, 1, 0.5, "<Super><Alt>2")]},
+        )
+        self.assertEqual(self.keys_of(path), ["main = <Super><Alt>1",
+                                             "wide = <Super><Alt>2"])
+        # главный ключ — из общего набора, он пишется первым
+        sets = zc.load_zone_sets(path)
+        self.assertEqual([z.binding for z in sets[None]], ["<Super><Alt>1"])
+        self.assertEqual([z.binding for z in sets["HDMI-1"]], ["<Super><Alt>1", "<Super><Alt>2"])
+
+    def test_default_set_key_wins_over_monitor_key(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(
+            path,
+            [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1")],
+            {"HDMI-1": [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>5")]},
+        )
+        self.assertEqual(self.keys_of(path), ["main = <Super><Alt>1"])
+
+    def test_broken_keys_in_file_do_not_stop_the_rewrite(self):
+        # Файл, испорченный руками: повтор в [keys]. Читать его писателю не нужно —
+        # файл переписывается целиком, поэтому повтора в нём уже не будет.
+        path = self.conf(BASE_GRID + "[zones]\nmain = 0, 0, 1, 1\n"
+                         + "[keys]\nmain = <Super><Alt>1\nmain = <Super><Alt>9\n")
+        zc.save_zone_sets(path, [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1")])
+        self.assertEqual(self.keys_of(path), ["main = <Super><Alt>1"])
+        self.assertEqual([z.binding for z in zc.load_zones(path)], ["<Super><Alt>1"])
+
+    def test_sets_not_passed_are_not_kept(self):
+        # Новая API — полная запись: что не передали, того в файле не будет.
+        path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES)
+        zc.save_zone_sets(path, [zc.Zone("only", 0, 0, 1, 1)], {"HDMI-1": [zc.Zone("top", 0, 0, 1, 1)]})
+        self.assertEqual(zc.list_zone_sets(path),
+                         {None: ["only"], "HDMI-1": ["top"]})
+
+    def test_no_default_section_with_none(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(path, None, {"HDMI-1": [zc.Zone("top", 0, 0, 1, 1)]})
+        self.assertEqual(sections_in(self.read(path)), ["grid", "zones:HDMI-1"])
+        self.assertEqual(zc.list_zone_sets(path), {"HDMI-1": ["top"]})
+
+    def test_empty_set_and_empty_monitor_name_are_skipped(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(path, [zc.Zone("main", 0, 0, 1, 1)],
+                          {"HDMI-1": [], "  ": [zc.Zone("x", 0, 0, 1, 1)], None: []})
+        self.assertEqual(sections_in(self.read(path)), ["grid", "zones"])
+
+    def test_extras_are_written_and_keys_sit_between_them(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(
+            path,
+            [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1")],
+            {"HDMI-1": [zc.Zone("wide", 0, 0, 1, 0.5)]},
+            {"rules": ["Chrome = main"], "daemon": ["reflow = off"]},
+        )
+        text = self.read(path)
+        self.assertEqual(sections_in(text), ["grid", "zones", "zones:HDMI-1", "rules",
+                                             "keys", "daemon"])
+        self.assertIn("[rules]\nChrome = main", text)
+
+    def test_returns_path_and_creates_directory(self):
+        path = os.path.join(self.tmpdir, "nested", "zones.conf")
+        self.assertEqual(zc.save_zone_sets(path, [zc.Zone("main", 0, 0, 1, 1)]), path)
+        self.assertTrue(os.path.exists(path))
+
+
+class TestProfileKeys(ConfMixin, unittest.TestCase):
+    def test_profile_has_one_key_line_per_zone_name(self):
+        zones = [zc.Zone("main", 0, 0, 0.5, 1, "<Super><Alt>1")]
+        monitors = {"HDMI-1": [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1"),
+                                zc.Zone("wide", 0, 0, 1, 0.5, "<Super><Alt>2")]}
+        path = zc.save_profile("dupes", zones, None, os.path.join(self.tmpdir, "zones.conf"),
+                               monitor_sets=monitors)
+        text = self.read(path)
+        self.assertEqual(sum(1 for line in text.splitlines() if line.startswith("main = <")), 1,
+                         text)
+        conf = os.path.join(self.tmpdir, "zones.conf")
+        self.assertEqual([z.binding for z in zc.read_profile("dupes", conf)[0]],
+                         ["<Super><Alt>1"])
 
 
 class TestSaveZones(ConfMixin, unittest.TestCase):

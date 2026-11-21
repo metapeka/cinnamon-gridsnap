@@ -8,6 +8,7 @@ zone-editor.py — визуальный редактор сетки зон дл�
   * двойной клик по пустому месту — новая зона, Delete — удалить;
   * прилипание к краям экрана, к другим зонам и к линиям 1/4, 1/3, 1/2, 2/3, 3/4;
   * шаблоны раскладок (2 колонки, 1+2, 2×2, 3 колонки, главное + стек);
+  * набор зон на каждый монитор: свой (`[zones:<выход>]`) или общий `[zones]`;
   * сохранение в zones.conf и регистрация горячих клавиш Cinnamon;
   * кнопка «Проверить на активном окне» — сразу вкладывает активное окно в зону.
 
@@ -34,14 +35,13 @@ from zone_config import (  # noqa: E402
     Zone,
     list_profiles,
     load_extra_sections,
-    load_zones,
+    load_zone_sets,
     missing_rule_targets,
     read_profile,
     remove_profile,
     sanitize_name,
     sanitize_profile_name,
     save_profile,
-    save_zones,
     unique_name,
     zt,
 )
@@ -371,18 +371,45 @@ class Editor(Gtk.Window):
         super().__init__(title="Gridsnap — сетка окон")
         self.conf_path = conf_path
         self.set_icon_name("gridsnap")
-        self.monitors = zt.monitors()
+        # Мониторы — по именам выходов: имя адресует набор зон `[zones:<выход>]`.
+        self.outputs = zt.monitor_outputs()
+        self.monitors = [rect for _name, rect in self.outputs]
+        self.fallback_area = self.monitors[0] if self.monitors else (0, 0, 1920, 1080)
+        sets = load_zone_sets(conf_path)
+        self.default_zones = [z.copy() for z in sets.get(None) or []]
+        self.file_own = {name for name in sets if name is not None}
+        self.sets = {name: zones for name, zones in sets.items() if name is not None}
+        self.edited = set()
+        if not self.default_zones:
+            # Конфиг из одних секций мониторов: общий набор заводим с первого
+            # монитора, иначе сохранение записало бы пустой (и нечитаемый) [zones].
+            for name in [name for name, _rect in self.outputs] + list(self.sets):
+                if self.sets.get(name):
+                    self.default_zones = [z.copy() for z in self.sets[name]]
+                    break
+        # Монитор, чей холст и есть общий набор `[zones]`: первый на экране без
+        # своей секции. Правки на нём меняют общий набор, а не создают копию.
+        self.default_monitor = next(
+            (name for name, _rect in self.outputs if name not in self.sets), None
+        )
+        self.combo_entries = [(name, rect) for name, rect in self.outputs]
+        self.combo_entries += [(name, None) for name in self.sets if name not in dict(self.outputs)]
         self.monitor_index = 0
-        self.zones = load_zones(conf_path)
+        self.current_monitor = None
+        self.zones = []
         self.extra_sections = load_extra_sections(conf_path)
-        self.selected = 0 if self.zones else None
+        self.selected = None
         self.dirty = False
+        self.message = ""
         self._loading = False
         self.set_default_size(1120, 700)
         self.set_border_width(10)
         self.connect("key-press-event", self.on_key)
         self.build_ui()
-        self.refresh_panel()
+        if self.combo_entries:
+            self.show_monitor(self.combo_entries[0][0])
+        else:
+            self.refresh_panel()
         self.canvas.queue_draw()
 
     # ---- разметка
@@ -426,6 +453,18 @@ class Editor(Gtk.Window):
         item = Gtk.ToolItem()
         item.add(self.tpl_btn)
         bar.insert(item, -1)
+        self.target_btn = Gtk.MenuButton()
+        self.target_btn.set_tooltip_text("Уложить активное окно в зону на другом мониторе")
+        self.target_btn.set_label("На монитор…")
+        self.target_pop = Gtk.Popover()
+        self.target_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.target_box.set_border_width(8)
+        self.target_pop.add(self.target_box)
+        self.target_btn.set_popover(self.target_pop)
+        self.target_btn.connect("clicked", lambda _b: self.rebuild_target_menu())
+        titem = Gtk.ToolItem()
+        titem.add(self.target_btn)
+        bar.insert(titem, -1)
         self.prof_btn = Gtk.MenuButton()
         self.prof_btn.set_tooltip_text("Профили раскладок (зоны + правила + клавиши)")
         self.prof_btn.set_label("Профили")
@@ -485,9 +524,14 @@ class Editor(Gtk.Window):
 
         pbox.attach(Gtk.Label(label="Монитор", xalign=0), 0, 2, 1, 1)
         self.mon_combo = Gtk.ComboBoxText()
-        for i, (mx, my, mw, mh) in enumerate(self.monitors):
-            self.mon_combo.append_text(f"{i}: {mw}×{mh} в {mx},{my}")
-        self.mon_combo.set_active(0)
+        for name, rect in self.combo_entries:
+            if rect is None:
+                # Секция [zones:<выход>] осталась от прежнего подключения — её
+                # можно посмотреть и поправить, но не удалить.
+                self.mon_combo.append_text(f"{name} — нет на экране")
+            else:
+                self.mon_combo.append_text(f"{name} — {rect[2]}×{rect[3]}")
+        self.mon_combo.set_active(0 if self.combo_entries else -1)
         self.mon_combo.connect("changed", self.on_monitor_changed)
         pbox.attach(self.mon_combo, 1, 2, 1, 1)
 
@@ -502,14 +546,101 @@ class Editor(Gtk.Window):
     # ---- состояние
 
     def workarea(self):
-        return self.monitors[self.monitor_index]
+        """Рабочая область текущего монитора; у отключённого — первая на экране."""
+        if not self.combo_entries:
+            return self.fallback_area
+        _name, rect = self.combo_entries[self.monitor_index]
+        return rect or self.fallback_area
 
     def set_status(self, text):
-        self.status.set_text(text)
+        """Сообщение одной строкой; в статусе всегда видно, чей набор на холсте."""
+        self.message = text
+        self.update_status()
+
+    def update_status(self):
+        hint = self.set_hint()
+        self.status.set_text(f"{hint} · {self.message}" if self.message else hint)
+
+    def set_hint(self):
+        """Свой набор, наследование или общий `[zones]` — по текущему монитору."""
+        name = self.current_monitor
+        if name is None:
+            return "набор не выбран"
+        rect = dict(self.combo_entries).get(name)
+        return geom.set_origin_text(
+            name,
+            self._is_own(name),
+            shared=(name == self.default_monitor),
+            offline=rect is None,
+        )
+
+    def _is_own(self, monitor):
+        """Есть ли у монитора свой набор: секция в файле или правки в редакторе."""
+        return monitor in self.file_own or monitor in self.edited
 
     def set_dirty(self, val):
         self.dirty = val
+        if val:
+            # Любая правка отменяет прошлое «сохранено…» в статусе.
+            self.message = ""
+        if val and self.current_monitor is not None and self.current_monitor != self.default_monitor:
+            # Правка унаследованного набора делает его своим: при сохранении у
+            # монитора появится своя секция [zones:<выход>].
+            self.edited.add(self.current_monitor)
         self.set_title(("● " if val else "") + "Gridsnap — сетка окон")
+        self.update_status()
+
+    def show_monitor(self, name):
+        """Показать набор монитора: секцию из файла или копию общего `[zones]`."""
+        index = next(
+            (i for i, (item, _rect) in enumerate(self.combo_entries) if item == name), 0
+        )
+        if name == self.default_monitor:
+            self.zones = self.default_zones
+        elif name in self.sets:
+            self.zones = self.sets[name]
+        else:
+            zones, _own = geom.set_for_monitor(name, self.sets, self.default_zones)
+            self.zones = self.sets[name] = zones
+        self.current_monitor = name
+        self.monitor_index = index
+        self.selected = 0 if self.zones else None
+        self.message = ""
+        self._loading = True
+        self.mon_combo.set_active(index)
+        self._loading = False
+        self.refresh_panel()
+        self.update_status()
+        self.canvas.queue_draw()
+
+    def set_zones(self, zones):
+        """Заменить содержимое текущего набора на месте (связь с черновиком жива)."""
+        self.zones[:] = list(zones)
+
+    def select_monitor_index(self, index):
+        """Показать монитор по номеру в комбо — аргумент ``--monitor``."""
+        if index is None or not 0 <= index < len(self.combo_entries):
+            return
+        self.show_monitor(self.combo_entries[index][0])
+
+    def _draft(self, monitor):
+        """Черновик набора монитора: показанный, из файла или копия общего набора."""
+        if monitor == self.default_monitor:
+            return self.default_zones
+        if monitor in self.sets:
+            return self.sets[monitor]
+        return [z.copy() for z in self.default_zones]
+
+    def _all_drafts(self):
+        """Наборы всех мониторов — и на экране, и отключённых (их секции живут)."""
+        return {name: self._draft(name) for name, _rect in self.combo_entries}
+
+    def _all_zone_names(self):
+        """Имена зон всех наборов — по ним проверяются цели правил `[rules]`."""
+        names = set()
+        for zones in self._all_drafts().values():
+            names.update(z.name for z in zones)
+        return names
 
     def select(self, index):
         self.selected = index
@@ -604,16 +735,24 @@ class Editor(Gtk.Window):
     def on_key_changed(self, entry):
         if self._loading or self.selected is None:
             return
-        self.zones[self.selected].binding = entry.get_text().strip()
+        z = self.zones[self.selected]
+        value = entry.get_text().strip()
+        z.binding = value
+        # `[keys]` одна на файл: клавиша зоны одна во всех наборах, где есть это имя.
+        for zones in self._all_drafts().values():
+            for other in zones:
+                if other is not z and other.name == z.name:
+                    other.binding = value
         self.set_dirty(True)
         self.canvas.queue_draw()
 
     def on_monitor_changed(self, combo):
         if self._loading:
             return
-        self.monitor_index = combo.get_active()
-        self.canvas.queue_draw()
-        self.refresh_panel()
+        index = combo.get_active()
+        if not 0 <= index < len(self.combo_entries):
+            return
+        self.show_monitor(self.combo_entries[index][0])
 
     def on_key(self, _w, ev):
         if ev.state & Gdk.ModifierType.CONTROL_MASK and ev.keyval == Gdk.KEY_s:
@@ -669,14 +808,14 @@ class Editor(Gtk.Window):
         self.canvas.queue_draw()
 
     def on_clear(self):
-        self.zones = []
+        self.set_zones([])
         self.selected = None
         self.select(None)
         self.set_dirty(True)
         self.canvas.queue_draw()
 
     def apply_template(self, zones, name):
-        self.zones = [z.copy() for z in zones]
+        self.set_zones([z.copy() for z in zones])
         self.selected = 0 if self.zones else None
         self.select(self.selected)
         self.set_dirty(True)
@@ -752,7 +891,7 @@ class Editor(Gtk.Window):
         except (ValueError, OSError, SystemExit) as exc:
             self.set_status(f"профиль не прочитан: {exc}")
             return
-        self.zones = [z.copy() for z in zones]
+        self.set_zones([z.copy() for z in zones])
         self.selected = 0 if self.zones else None
         if rules:
             self.extra_sections["rules"] = rules
@@ -797,22 +936,38 @@ class Editor(Gtk.Window):
         self.set_status(f"профиль «{name}» удалён")
 
     def on_save(self):
-        """Сохранить раскладку. ``False`` — конфиг не записан (нет зон или висячие правила)."""
-        if not self.zones:
-            self.set_status("нет зон — сохранять нечего")
+        """Сохранить общий набор и секции мониторов.
+
+        ``False`` — конфиг не записан (правила ссылаются на отсутствующие зоны).
+        """
+        if not self.default_zones:
+            self.set_status("в общем наборе [zones] нет зон — добавьте зону на мониторе, "
+                            "который его наследует (или в его секции)")
             return False
-        dangling = missing_rule_targets(self.extra_sections, {z.name for z in self.zones})
+        dangling = missing_rule_targets(self.extra_sections, self._all_zone_names())
         if dangling:
             self.set_status(_dangling_rules_status(dangling))
             return False
+        plan = geom.save_plan(
+            self.default_zones,
+            self._all_drafts(),
+            self.edited,
+            onscreen={name for name, rect in self.combo_entries if rect is not None},
+            existing=self.file_own,
+        )
         try:
-            save_zones(self.conf_path, self.zones, self.extra_sections)
+            geom.apply_save_plan(self.conf_path, self.default_zones, plan, self.extra_sections)
         except OSError as exc:
             self.set_status(f"ошибка записи: {exc}")
             return False
+        write, drop = plan
+        self.file_own = (self.file_own | set(write)) - set(drop)
+        self.edited.clear()
         self.set_dirty(False)
-        self.set_status(f"сохранено: {self.conf_path} ({len(self.zones)} зон). "
-                        "Клавиши применяются кнопкой «сочетания клавиш».")
+        self.set_status(
+            f"сохранено: {self.conf_path} — [zones]: {len(self.default_zones)} зон, "
+            f"своих наборов: {len(write)}. Клавиши применяются кнопкой «сочетания клавиш»."
+        )
         return True
 
     def on_hotkeys(self):
@@ -826,20 +981,57 @@ class Editor(Gtk.Window):
         msg = (r.stdout or r.stderr).strip().splitlines()
         self.set_status(f"сочетания: {msg[0] if msg else 'без вывода'}")
 
+    def rebuild_target_menu(self):
+        """Меню «На монитор…»: монитор → зоны его набора."""
+        for child in self.target_box.get_children():
+            self.target_box.remove(child)
+        shown = 0
+        for name, rect in self.combo_entries:
+            if rect is None:
+                continue  # на отключённый выход окно не уложить
+            zones = self._draft(name)
+            head = Gtk.Label(xalign=0)
+            head.set_markup(f"<b>{name}</b> — {rect[2]}×{rect[3]}")
+            self.target_box.pack_start(head, False, False, 0)
+            if not zones:
+                empty = Gtk.Label(label="   нет зон", xalign=0)
+                empty.get_style_context().add_class("dim-label")
+                self.target_box.pack_start(empty, False, False, 0)
+            for z in zones:
+                btn = Gtk.ModelButton()
+                btn.set_label(f"{z.name}   {z.w:.0%}×{z.h:.0%}")
+                btn.connect(
+                    "clicked", lambda _w, zn=z.name, mn=name: self.apply_on_monitor(zn, mn)
+                )
+                self.target_box.pack_start(btn, False, False, 0)
+            shown += 1
+        if not shown:
+            self.target_box.pack_start(Gtk.Label(label="нет мониторов"), False, False, 0)
+        self.target_box.show_all()
+
+    def apply_on_monitor(self, zone, monitor):
+        """Уложить активное окно в зону набора монитора через ``apply --monitor``."""
+        if self.dirty and not self.on_save():
+            return
+        self._apply(zone, monitor)
+
+    def _apply(self, zone, monitor=None):
+        """Запустить ``zone-tiler.py apply`` (с монитором, если задан) и сказать итог."""
+        cmd = [sys.executable, ZONEBIN, "apply", zone, "--verify"]
+        if monitor:
+            cmd += ["--monitor", monitor]
+        r = subprocess.run(cmd, text=True, capture_output=True)
+        out = (r.stdout or r.stderr).strip().replace("\n", " | ")
+        where = f" на {monitor}" if monitor else ""
+        self.set_status(f"проверка «{zone}»{where}: {out}")
+
     def on_test(self):
         if self.selected is None:
             self.set_status("выберите зону")
             return
         if not self.on_save():
             return
-        z = self.zones[self.selected]
-        r = subprocess.run(
-            [sys.executable, ZONEBIN, "apply", z.name, "--verify"],
-            text=True,
-            capture_output=True,
-        )
-        out = (r.stdout or r.stderr).strip().replace("\n", " | ")
-        self.set_status(f"проверка «{z.name}»: {out}")
+        self._apply(self.zones[self.selected].name)
 
 
 # ---------------------------------------------------------------------- main
@@ -857,6 +1049,7 @@ def main():
         win = Gtk.OffscreenWindow()
         win.set_size_request(1140, 720)
         ed = Editor(args.conf)
+        ed.select_monitor_index(args.monitor)
         # редактор — отдельное окно; для снимка переносим его содержимое в offscreen
         child = ed.get_child()
         ed.remove(child)
@@ -871,6 +1064,7 @@ def main():
         return
 
     ed = Editor(args.conf)
+    ed.select_monitor_index(args.monitor)
     ed.show_all()
     ed.connect("destroy", Gtk.main_quit)
     Gtk.main()
