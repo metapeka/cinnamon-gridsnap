@@ -31,7 +31,8 @@ BINDIR  := /usr/bin
 
 MODULES := zone-tiler.py zone-daemon.py zone-editor.py zone_config.py \
            zone_geom.py zone_reflow.py zone-picker.py zone_picker_nav.py \
-           zone_ipc.py zone-hotcorners.py setup-hotkeys.py make-icon.py
+           zone_ipc.py zone_tabs.py zone-tabstrip.py zone_tabstrip_nav.py \
+           zone-hotcorners.py setup-hotkeys.py make-icon.py
 CLIENTS := gridsnap-ctl
 INSTALL_SH := install.sh install-launcher.sh install-daemon.sh
 RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.md Makefile PKGBUILD

@@ -26,6 +26,7 @@ package() {
         zone-tiler.py zone-daemon.py zone-editor.py zone-picker.py \
         zone-hotcorners.py \
         zone_config.py zone_geom.py zone_picker_nav.py zone_reflow.py zone_ipc.py \
+        zone_tabs.py zone-tabstrip.py zone_tabstrip_nav.py \
         setup-hotkeys.py make-icon.py \
         zones.conf \
         "$pkgdir/usr/lib/gridsnap/"
