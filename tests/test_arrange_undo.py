@@ -273,9 +273,11 @@ class TestCli(unittest.TestCase):
         for word in ("arrange", "stack", "undo", "--by", "--offset", "--all"):
             self.assertIn(word, r.stdout)
 
-    def test_stack_unknown_zone_is_usage_error(self):
+    def test_stack_unknown_zone_is_config_error(self):
+        # Нет зоны ни в сетке стола, ни в общем [zones] — ошибка конфига (код 3),
+        # см. `require_zone` в zone-tiler.py.
         r = self.run_cli("stack", "no-such-zone")
-        self.assertEqual(r.returncode, 2)
+        self.assertEqual(r.returncode, 3)
         self.assertIn("нет зоны", r.stderr)
 
     def test_arrange_bad_mode_is_usage_error(self):
