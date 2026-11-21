@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: "Модуль: демон автоукладки zone-daemon"
 parent: gridsnap-architecture
-depends-on: [zone-tiler, zone-ipc]
+depends-on: [zone-tiler, zone-ipc, zone-tabs]
 references: [zone-reflow]
 ---
 
