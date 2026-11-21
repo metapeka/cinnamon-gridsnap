@@ -49,6 +49,15 @@ IPC — локальный UNIX-сокет (по умолчанию `$XDG_RUNTIM
 его стола и монитора сворачиваются. Живёт режим здесь, в демоне, потому что
 только он видит `_NET_CLIENT_LIST` и потому умеет свернуть окна, появившиеся
 после входа; повторная команда — toggle, `{"off": true}` — явный выход.
+
+Вкладки в зоне: несколько окон одной зоны стоят на общей рамке (зона минус
+полоса), верхнее видно целиком. Хозяин — тоже демон. Окно, попавшее в зону,
+само становится вкладкой; вторая вкладка отнимает у окон высоту полосы и
+переставляет уже стоявшее окно. Состав стопки выводится из трекера и рамок
+(файла состояния нет), а полосу рисует отдельный процесс `zone-tabstrip.py`
+(GTK в демон не добавляется): ему на каждое изменение пишется снимок
+`zone_tabs.strips_payload`. Команды `tabs-next` (клавиша) и `tabs-switch`
+(клик по полосе) приходят в тот же сокет, что и команды `gridsnap-ctl`.
 """
 
 import argparse
@@ -107,6 +116,12 @@ def _load_sibling(name, filename):
 tiler = _load_sibling("gridsnap_zone_tiler", "zone-tiler.py")
 zone_reflow = _load_sibling("gridsnap_zone_reflow", "zone_reflow.py")
 zone_ipc = _load_sibling("gridsnap_zone_ipc", "zone_ipc.py")
+zone_tabs = _load_sibling("gridsnap_zone_tabs", "zone_tabs.py")
+
+# Полоса вкладок — отдельный GTK-процесс рядом с демоном (как `--hud` у
+# горячих краёв): GTK в демон не добавляется, а полосе для снимка вкладок
+# довольно stdin.
+TABSTRIP = os.path.join(HERE, "zone-tabstrip.py")
 
 
 # ------------------------------------------------------------------ метаданные
@@ -143,6 +158,99 @@ def read_window_meta(win):
     return Meta(wm_class, wm_title, window_types(win))
 
 
+class TabStripProcess:
+    """Дочерний ``zone-tabstrip.py`` — полоса вкладок поверх зон.
+
+    Снимок вкладок пишется в stdin одной строкой JSON на изменение (протокол
+    ``zone_tabs.strips_payload``); EOF в stdin завершает главный цикл полосы,
+    поэтому останов — сначала мягкий EOF, потом ``terminate``/``kill``.
+
+    Сбой запуска демон не роняет: без полосы вкладки работают, просто на экране
+    нет подсказки, что окон в зоне несколько. Повторять запуск, которого быть не
+    может (нет ``zone-tabstrip.py`` или нет GTK), смысла нет — ``failed``.
+    """
+
+    def __init__(self, conf, script=None, python=None, verbose=False):
+        self.conf = conf
+        self.script = script or TABSTRIP
+        self.python = python or sys.executable
+        self.verbose = verbose
+        self.proc = None
+        self.failed = False
+
+    def log(self, message):
+        if self.verbose:
+            print(f"zone-daemon: {message}", file=sys.stderr, flush=True)
+
+    def command(self):
+        return [self.python, self.script, "--conf", self.conf]
+
+    def start(self):
+        """Запустить полосу; уже запущенную не трогаем, безнадёжную не повторяем."""
+        if self.failed or self.running():
+            return False
+        if not os.path.exists(self.script):
+            self.failed = True
+            self.log(f"полосы вкладок нет: {self.script} не найден")
+            return False
+        try:
+            self.proc = subprocess.Popen(
+                self.command(),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=None if self.verbose else subprocess.DEVNULL,
+                text=True,
+                bufsize=1,
+            )
+        except OSError as exc:
+            self.failed = True
+            self.log(f"полоса вкладок не запустилась: {exc}")
+            return False
+        self.log(f"полоса вкладок запущена: {self.script}")
+        return True
+
+    def feed(self, line):
+        """Отдать полосе снимок; ``False`` — она его не приняла (умерла/не поднялась)."""
+        if self.failed:
+            return False
+        if not self.running() and not self.start():
+            return False
+        try:
+            self.proc.stdin.write(line)
+            self.proc.stdin.flush()
+        except (BrokenPipeError, OSError, ValueError):
+            self.stop()
+            return False
+        return True
+
+    def running(self):
+        return self.proc is not None and self.proc.poll() is None
+
+    def stop(self):
+        """Погасить полосу: EOF в stdin, затем terminate/kill. Идемпотентно."""
+        proc, self.proc = self.proc, None
+        if proc is None:
+            return False
+        try:
+            if proc.stdin is not None:
+                proc.stdin.close()
+        except (OSError, ValueError):
+            pass
+        try:
+            proc.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            proc.terminate()
+            try:
+                proc.wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                try:
+                    proc.wait(timeout=1.0)
+                except subprocess.TimeoutExpired:
+                    pass
+        return True
+
+
 def window_rect(win):
     """Рамка окна с компенсацией `_NET_FRAME_EXTENTS` (для памяти об укладке).
 
@@ -162,6 +270,29 @@ def read_reflow(conf):
     except Exception:
         return REFLOW_OFF
     return value if value in (REFLOW_OFF, REFLOW_NEIGHBORS) else REFLOW_OFF
+
+
+def read_tabs_height(conf):
+    """Высота полосы вкладок из `[tabs]`; нет секции/значения или мусор -> умолчание.
+
+    Высота — величина с умолчанием (``zone_tabs.STRIP_HEIGHT``), а не догма:
+    читается тем же конфигом, что и зоны, но разбирает её сам демон — разбор
+    секции ``[tabs]`` целиком живёт в ``zone_config`` у полосы и раскладчика.
+    """
+    try:
+        raw = conf.get("tabs", "height", fallback=None)
+    except Exception:
+        return zone_tabs.STRIP_HEIGHT
+    if raw is None:
+        return zone_tabs.STRIP_HEIGHT
+    try:
+        height = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return zone_tabs.STRIP_HEIGHT
+    # 0/отрицательная/абсурдно большая высота — не полоса, а мусор в конфиге.
+    if not 0 < height < 200:
+        return zone_tabs.STRIP_HEIGHT
+    return height
 
 
 # --------------------------------------------------------------- память укладок
@@ -356,6 +487,13 @@ class Daemon:
       window_workspace — callable(window) -> номер стола окна либо None
                    (по умолчанию `tiler.window_workspace_for_zones`; None же
                    у «липкого» окна — оно живёт в общем наборе зон);
+      read_clients — callable() -> список id из `_NET_CLIENT_LIST` или None
+                   (`read_client_list`); вкладкам нужен порядок окон снизу вверх;
+      active_window — callable() -> id активного окна (`tiler.active_window`):
+                   `tabs-next` переключает стопку его зоны, а полоса метит
+                   активную вкладку;
+      strip      — процесс полосы вкладок (`TabStripProcess` или подмена в
+                   тестах) либо `None` — полосы нет; её сбой демон не роняет;
       verbose    — печатать ли, что делает демон.
 
     `windows` — трекер `window id -> имя зоны`: им же отсекаются повторные
@@ -384,7 +522,15 @@ class Daemon:
     в зону, а окна того же стола и монитора сворачиваются; их id попадают в
     `minimized`, и на выходе разворачиваются только они (свёрнутое вручную
     остаётся свёрнутым). Режим снимается сам, когда цель исчезла, сменился
-    активный стол или демон завершается — и тогда окна возвращаются.
+    активный стол или демон завершается — и тогда окна возвращаются. Вкладки
+    зоны-цели режим не сворачивает: они часть той зоны, которую владелец
+    попросил оставить.
+
+    Вкладки в зоне (`_zone_stack`, `_settle_in_zone`, `tabs_picture`): окна
+    одной зоны на одном столе и мониторе стоят на общей рамке. Одно окно
+    занимает зону целиком, два и больше — зону минус полосу
+    (`zone_tabs.tab_rect`); вторая вкладка переставляет первую. Снимок стопок
+    уходит в `self.strip` одной строкой `zone_tabs.strips_payload`.
     """
 
     def __init__(
@@ -404,6 +550,8 @@ class Daemon:
         iconify=None,
         deiconify=None,
         read_clients=None,
+        active_window=None,
+        strip=None,
         verbose=False,
     ):
         self.conf_path = conf_path or tiler.default_conf()
@@ -424,6 +572,16 @@ class Daemon:
         self.iconify = iconify or tiler.iconify
         self.deiconify = deiconify or tiler.deiconify
         self.read_clients = read_clients or read_client_list
+        # Активное окно читается вкладками: по нему выбирается стопка для
+        # `tabs-next` и метится видимая вкладка в снимке для полосы.
+        self.active_window = active_window or tiler.active_window
+        # Полоса вкладок — отдельный GTK-процесс (`TabStripProcess`) или None:
+        # без неё вкладки работают, просто нет подсказки на экране.
+        self.strip = strip
+        # Высота полосы из `[tabs]`; нет секции или мусор — умолчание ядра.
+        self.tabs_height = read_tabs_height(self.grid.conf)
+        # Последний отданный полосе снимок: одинаковые не пишем повторно.
+        self._strips_last = None
         # Путь файла состояния; `None` — только в памяти (тесты, утилитный запуск).
         self.state_path = state_path
         # Путь `focus.json` — куда отдаётся неразвёрнутый остаток режима при
@@ -769,7 +927,7 @@ class Daemon:
         actual = self._read_rect(win)
         if actual is not None and frame_matches(actual, record["frame"]):
             zone_rect = self._zone_rect_for(win, record)
-            if zone_rect is not None and not frame_matches(actual, zone_rect):
+            if zone_rect is not None and not self._in_zone_frame(actual, zone_rect):
                 # Рамка не своя зона: это сосед, расширенный reflow, а книга
                 # покрытий (`filled`) в файле состояния не живёт. Даём окну
                 # пройти обычный путь `on_map` — правило вернёт его в зону из
@@ -794,6 +952,17 @@ class Daemon:
             f"окно 0x{win:x} вышло из зоны '{record['zone']}' — само не вернётся"
         )
         return True
+
+    def _in_zone_frame(self, actual, zone_rect):
+        """Стоит ли окно в своей зоне: на рамке зоны или на общей рамке вкладок.
+
+        Рамка вкладки — та же зона минус полоса. Без этой проверки память
+        укладок решила бы, что окно-вкладку вынесли из зоны, и вернула его
+        обратно на рамку зоны (а с ним и всю стопку).
+        """
+        if frame_matches(actual, zone_rect):
+            return True
+        return frame_matches(actual, self._tab_frame(zone_rect))
 
     def _apply_pending(self, current):
         """Разобрать память прошлого запуска по текущему списку клиентов."""
@@ -858,10 +1027,265 @@ class Daemon:
             # Держателя нет или его зоны больше нет в наборе — покрытие снимаем.
             del self.filled[key]
             return
-        if self._apply(holder, grid.rect(holder_zone, wa), holder_zone):
+        # Рамка возврата — по числу вкладок стопки: окно-вкладка возвращается
+        # на общую рамку зоны, а не на всю её площадь.
+        holder_workspace = self.win_workspace.get(holder)
+        count = len(self._zone_stack(holder_zone, wa, holder_workspace))
+        rect = self._stack_rect(holder_zone, wa, holder_workspace, count, grid=grid)
+        if self._apply(holder, rect, holder_zone):
             del self.filled[key]
             self._save_state()
             self.log(f"возвращаю зону '{holder_zone}' к исходной рамке")
+
+    # -- вкладки в зоне
+
+    def _client_order(self, client_ids=None):
+        """id клиентов в порядке `_NET_CLIENT_LIST` — снизу вверх.
+
+        Список читает демон (только он его видит); недоступен — берётся
+        порядок трекера, чтобы одна неудача xprop не рвала стопки на части.
+        `client_ids` — уже прочитанный список (его же читает `reconcile`):
+        тогда лишнего запроса к X нет.
+        """
+        clients = []
+        try:
+            source = self.read_clients() if client_ids is None else client_ids
+            clients = [int(win) for win in (source or [])]
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось прочитать список клиентов: {exc}")
+        order = list(dict.fromkeys(clients))
+        order.extend(win for win in self.windows if win not in order)
+        return order
+
+    def _tracked_order(self, client_ids=None):
+        """Уложенные окна видимого стола в порядке `_NET_CLIENT_LIST` (снизу вверх)."""
+        return [
+            win
+            for win in self._client_order(client_ids)
+            if win in self.windows and self._visible(self.win_workspace.get(win))
+        ]
+
+    def _frames(self, windows):
+        """`{окно: рамка}` в заданном порядке; нечитаемая рамка — `None`.
+
+        Словарь в Python хранит порядок вставки, поэтому `zone_tabs.tabs_of_zone`
+        видит окна именно в порядке `_NET_CLIENT_LIST`.
+        """
+        return {win: self._read_rect(win) for win in windows}
+
+    def _zone_pixel_rect(self, zone, wa, workspace=None, grid=None):
+        """Пиксельная рамка зоны на мониторе `wa` (сетка — по столу или заданная)."""
+        grid = grid or self._grid_for(workspace)
+        return tuple(int(round(v)) for v in grid.rect(zone, wa))
+
+    def _tab_frame(self, zone_rect):
+        """Рамка окна-вкладки: зона минус полоса (узкая зона — сама зона)."""
+        return tuple(
+            int(round(v)) for v in zone_tabs.tab_rect(zone_rect, self.tabs_height)
+        )
+
+    def _stack_rect(self, zone, wa, workspace=None, count=1, grid=None):
+        """Рамка окна зоны: вся зона до двух вкладок, дальше — зона минус полоса.
+
+        Полоса отнимает высоту у окон только когда вкладок больше одной: одно
+        окно занимает зону целиком, как до вкладок.
+        """
+        rect = self._zone_pixel_rect(zone, wa, workspace, grid)
+        return rect if count < 2 else self._tab_frame(rect)
+
+    def _zone_stack(self, zone, wa, workspace=None, exclude=()):
+        """Окна стопки зоны `zone` — в порядке `_NET_CLIENT_LIST` (снизу вверх).
+
+        Стопка — окна одной зоны, одного монитора и одного стола: без этого в
+        неё попало бы окно соседнего экрана или другого стола, и переключение
+        подняло бы чужое. «Липкое»/неопознанное окно (`workspace is None`) не
+        спорит с столом зоны — она живёт в наборе по умолчанию и видна везде.
+        `wa is None` — монитор не задан (тесты, окно без рабочей области).
+        """
+        skip = set(exclude)
+        out = []
+        for win in self._client_order():
+            if self.windows.get(win) != zone or win in skip:
+                continue
+            if wa is not None and self.win_monitor.get(win) != wa:
+                continue
+            other = self.win_workspace.get(win)
+            if workspace is not None and other is not None and other != workspace:
+                continue
+            out.append(win)
+        return out
+
+    def _align_stack(self, stack, rect):
+        """Переставить уже стоящие вкладки на общую рамку: полоса появилась/ушла."""
+        for win in stack:
+            if self._apply(win, rect, self.windows.get(win)):
+                self.log(
+                    f"вкладки: окно 0x{win:x} встало на общую рамку зоны "
+                    f"'{self.windows.get(win)}'"
+                )
+
+    def _settle_in_zone(self, win, zone, wa, workspace, wm_class="", grid=None):
+        """Поставить окно вкладкой в зону и выровнять стопку.
+
+        Рамка считается по числу вкладок, которое станет после укладки: первое
+        окно — вся зона, второе — общая рамка вкладок, и тогда же переставляется
+        уже стоявшее окно (полоса появилась, окно стало ниже на её высоту).
+        Окно, переехавшее из другой зоны, оставляет за собой одну оставшуюся
+        вкладку — ей возвращается вся зона (`_collapse_stack`).
+
+        Возвращает рамку, в которую легло окно, или `None` — уложить не вышло
+        (тогда трекер не трогается: зону занятой не считаем).
+        """
+        previous = (
+            self.windows.get(win),
+            self.win_monitor.get(win),
+            self.win_workspace.get(win),
+        )
+        stack = self._zone_stack(zone, wa, workspace, exclude=(win,))
+        rect = self._stack_rect(zone, wa, workspace, len(stack) + 1, grid=grid)
+        if not self._apply(win, rect, zone):
+            return None
+        self.windows[win] = zone
+        self.win_monitor[win] = wa
+        self.win_workspace[win] = workspace
+        self.win_class[win] = wm_class
+        self._align_stack(stack, rect)
+        if previous[0] is not None and previous[0] != zone:
+            self._collapse_stack(previous[0], previous[1], previous[2])
+        self._save_state()
+        self._restore_holder(workspace, wa, zone)
+        return rect
+
+    def _collapse_stack(self, zone, wa, workspace):
+        """Вернуть единственной оставшейся вкладке зону целиком.
+
+        Полоса — признак стопки: ушла предпоследняя вкладка — полосы нет, и
+        окно снова занимает всю зону. `False` — в стопке не одна вкладка (или
+        двигать нельзя: невидимый стол, нет монитора).
+        """
+        if wa is None or not self._visible(workspace):
+            return False
+        remaining = self._zone_stack(zone, wa, workspace)
+        if len(remaining) != 1:
+            return False
+        win = remaining[0]
+        rect = self._zone_pixel_rect(zone, wa, workspace)
+        if not self._apply(win, rect, zone):
+            return False
+        self._save_state()
+        self.log(
+            f"в зоне '{zone}' осталась одна вкладка — окно 0x{win:x} занимает зону целиком"
+        )
+        return True
+
+    def tabs_in_zone(self, zone, wa, workspace=None, frames=None, grid=None):
+        """Окна-вкладки зоны по рамкам (снизу вверх) — `zone_tabs.tabs_of_zone`.
+
+        `frames` — `{окно: рамка}` в порядке `_NET_CLIENT_LIST`; по умолчанию
+        читаются рамки уложенных окон видимого стола. Вкладка — окно, чья рамка
+        совпала с общей (зона минус полоса, допуск `zone_tabs.FRAME_TOLERANCE`):
+        одно окно стоит на рамке зоны целиком и стопкой не считается.
+        """
+        if frames is None:
+            frames = self._frames(self._tracked_order())
+        tab_frame = self._stack_rect(zone, wa, workspace, 2, grid)
+        return zone_tabs.tabs_of_zone(frames, tab_frame)
+
+    def _window_title(self, win):
+        """Заголовок окна для полосы; не прочитан — пустая строка."""
+        try:
+            return getattr(self.read_meta(win), "wm_title", "") or ""
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось прочитать заголовок 0x{win:x}: {exc}")
+            return ""
+
+    def _active_window(self):
+        """Активное окно (`_NET_ACTIVE_WINDOW`); `None` — не прочитать."""
+        try:
+            active = self.active_window()
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось определить активное окно: {exc}")
+            return None
+        return None if active is None else int(active)
+
+    def tabs_picture(self, client_ids=None):
+        """Записи снимка для полосы — только зоны текущего рабочего стола.
+
+        На других столах окон не видно, и подсказка «здесь стопка» там не нужна.
+        Активная вкладка — та, в которой активное окно; активное окно вне
+        стопки — верхняя (полоса всё равно должна что-то подсветить). Записи
+        строит `zone_tabs.strip_record`: одна вкладка и узкая зона дают `None`
+        (полосы нет), и такие записи в снимок не попадают.
+        """
+        workspace = self.workspace
+        monitors = self._monitor_list()
+        if not monitors:
+            return []
+        grid = self._grid_for(workspace)
+        frames = self._frames(self._tracked_order(client_ids))
+        active = self._active_window()
+        records = []
+        for wa in monitors:
+            for zone in sorted(grid.zones):
+                zone_rect = self._zone_pixel_rect(zone, wa, workspace, grid)
+                tabs = [
+                    win
+                    for win in self.tabs_in_zone(zone, wa, workspace, frames, grid)
+                    if self.win_monitor.get(win) == wa
+                ]
+                if not tabs:
+                    continue
+                titles = [(win, self._window_title(win)) for win in tabs]
+                shown = active if active in tabs else tabs[-1]
+                record = zone_tabs.strip_record(
+                    zone, zone_rect, titles, active=shown, height=self.tabs_height
+                )
+                if record is not None:
+                    records.append(record)
+        return records
+
+    def sync_strips(self, client_ids=None):
+        """Отдать полосе полный снимок вкладок; сбой полосы демон не роняет.
+
+        Снимок — одна строка `zone_tabs.strips_payload` на каждое изменение
+        (не дельта): полосе не надо помнить прошлое. Одинаковые снимки не
+        пишутся дважды — событий много, а меняется картина реже. Без полосы
+        (`strip is None`) метод ничего не стоит и не читает ни X, ни конфиг.
+        """
+        if self.strip is None:
+            return False
+        try:
+            records = self.tabs_picture(client_ids)
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось собрать снимок вкладок: {exc}")
+            return False
+        payload = zone_tabs.strips_payload(records)
+        if payload == self._strips_last:
+            return False
+        self._strips_last = payload
+        if not records and not self.strip.running():
+            return False  # рисовать нечего и рисовать некому
+        try:
+            accepted = self.strip.feed(payload)
+        except (Exception, SystemExit) as exc:
+            self.log(f"полоса вкладок: {exc}")
+            accepted = False
+        if not accepted:
+            # Полоса не приняла снимок (упала/не запустилась): в следующий раз
+            # отдадим тот же снимок заново — уже новому процессу.
+            self._strips_last = None
+            self.log("полоса вкладок снимок не приняла")
+        return accepted
+
+    def _raise_window(self, win):
+        """Показать окно: `_NET_ACTIVE_WINDOW` через общее соединение демона."""
+        try:
+            self.deiconify(win, x11=self.x11)
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось поднять окно 0x{win:x}: {exc}")
+            return False
+        self.log(f"окно 0x{win:x} поднято")
+        return True
 
     # -- IPC: обработчики команд сокета
 
@@ -878,6 +1302,8 @@ class Daemon:
                 "focus": self.ipc_focus,
                 "reload": self.ipc_reload,
                 "quit": self.ipc_quit,
+                zone_tabs.TABS_NEXT: self.ipc_tabs_next,
+                zone_tabs.TABS_SWITCH: self.ipc_tabs_switch,
             }
         )
 
@@ -1004,23 +1430,98 @@ class Daemon:
         wa = self._monitor_for_command(request, window)
         if wa is None:
             raise ValueError(f"не удалось определить монитор окна 0x{window:x}")
-        rect = self.grid.rect(zone, wa)
-        if not self._apply(window, rect, zone):
-            raise ValueError(f"не удалось вложить окно 0x{window:x} в зону '{zone}'")
-        self.windows[window] = zone
-        self.win_monitor[window] = wa
         # Окно вкладывается там, где сейчас пользователь: занятость считаем по
         # активному столу (сетка зоны — по-прежнему из основного конфига).
-        self.win_workspace[window] = self.workspace
-        self.win_class[window] = wm_class
-        self._save_state()
-        self._restore_holder(self.workspace, wa, zone)
+        rect = self._settle_in_zone(
+            window, zone, wa, self.workspace, wm_class, grid=self.grid
+        )
+        if rect is None:
+            raise ValueError(f"не удалось вложить окно 0x{window:x} в зону '{zone}'")
+        self.sync_strips()
         return {
             "window": hex(window),
             "zone": zone,
             "monitor": list(wa),
             "rect": list(rect),
         }
+
+    def ipc_tabs_next(self, request=None):
+        """Поднять следующую вкладку стопки зоны активного окна (`tabs-next`).
+
+        Зону демон выбирает сам — по активному окну. Окно вне зон, стопка из
+        одной вкладки и нечитаемое активное окно — не ошибка, а честный ответ
+        `{"switched": false, ...}`: клавиша не должна ругаться на то, что
+        переключать нечего.
+
+        Возврат: `{"switched": true, "zone", "window" (hex), "previous" (hex)}`
+        или `{"switched": false, "zone", "window": None, "reason"}`.
+        """
+        active = self._active_window()
+        if active is None:
+            return {
+                "switched": False,
+                "zone": None,
+                "window": None,
+                "reason": "активное окно не прочитано — переключать нечего",
+            }
+        zone = self.windows.get(active)
+        if zone is None:
+            return {
+                "switched": False,
+                "zone": None,
+                "window": None,
+                "reason": f"окно 0x{active:x} вне зон — переключать нечего",
+            }
+        stack = self._zone_stack(
+            zone,
+            self.win_monitor.get(active),
+            self.win_workspace.get(active),
+        )
+        target = zone_tabs.next_tab(stack, active)
+        if target is None:
+            return {
+                "switched": False,
+                "zone": zone,
+                "window": None,
+                "reason": f"в зоне '{zone}' одна вкладка — переключать нечего",
+            }
+        if not self._raise_window(target):
+            raise ValueError(f"не удалось поднять окно 0x{target:x} зоны '{zone}'")
+        self.sync_strips()
+        return {
+            "switched": True,
+            "zone": zone,
+            "window": hex(target),
+            "previous": hex(active),
+        }
+
+    def ipc_tabs_switch(self, request):
+        """Показать окно зоны по клику в полосе (`tabs-switch`).
+
+        Клик приходит из полосы в тот же сокет, что и команды `gridsnap-ctl`.
+        Окно, которого в вкладках этой зоны нет (уже закрылось, ушло в другую
+        зону или его вынесли), не поднимаем: `ValueError` вместо чужого окна
+        поверх зоны.
+        """
+        request = request or {}
+        zone = request.get("zone")
+        if not isinstance(zone, str) or not zone:
+            raise ValueError("в команде tabs-switch нет зоны")
+        window = request.get("window")
+        if window is None:
+            raise ValueError("в команде tabs-switch нет окна")
+        window = int(window, 0) if isinstance(window, str) else int(window)
+        stack = self._zone_stack(
+            zone, self.win_monitor.get(window), self.win_workspace.get(window)
+        )
+        if window not in stack:
+            raise ValueError(
+                f"окно 0x{window:x} не вкладка зоны '{zone}' — не поднимаю"
+            )
+        if not self._raise_window(window):
+            raise ValueError(f"не удалось поднять окно 0x{window:x} зоны '{zone}'")
+        self.sync_strips()
+        return {"zone": zone, "window": hex(window)}
 
     def _focus_covers(self, win, workspace, wa=None):
         """Сворачивает ли активный режим это окно: тот же стол и монитор режима.
@@ -1044,6 +1545,24 @@ class Daemon:
             )
         )
 
+    def _focus_zone_tabs(self, target):
+        """Вкладки зоны цели — их режим не сворачивает: они часть зоны.
+
+        Стопка ищется в трекере (цель уже уложена в зону до отбора, или была
+        уложена раньше). Цель в множестве всегда: сворачивать её самой себе
+        нечего.
+        """
+        keep = {target}
+        zone = self.windows.get(target)
+        if zone is None:
+            return keep
+        keep.update(
+            self._zone_stack(
+                zone, self.win_monitor.get(target), self.win_workspace.get(target)
+            )
+        )
+        return keep
+
     def _focus_candidates(self, target, wa):
         """Окна, которые режим сворачивает сейчас, в порядке `_NET_CLIENT_LIST`.
 
@@ -1052,7 +1571,9 @@ class Daemon:
         `tiler.focus_candidates`; здесь же отсеиваются исключения
         (`window_excluded`: диалоги, `[ignore]`, служебные типы остаются
         видимыми — это требование продукта) и свёрнутое вручную: такое окно
-        режим не сворачивал и на выходе не развернёт.
+        режим не сворачивал и на выходе не развернёт. Вкладки зоны-цели из
+        отбора исключаются (`_focus_zone_tabs`): они часть той самой зоны,
+        которую владелец попросил оставить.
         """
         try:
             client_ids = self.read_clients() or []
@@ -1063,10 +1584,14 @@ class Daemon:
             (win, self._window_workspace(win), self._monitor_of(win))
             for win in client_ids
         ]
+        keep = self._focus_zone_tabs(target)
         out = []
         for win in tiler.focus_candidates(entries, target, self.workspace, wa):
             if win in out:
                 continue  # дубль в списке клиентов
+            if win in keep:
+                self.log(f"окно 0x{win:x} — вкладка зоны режима — остаётся видимой")
+                continue
             try:
                 meta = self.read_meta(win)
             except (Exception, SystemExit) as exc:
@@ -1313,19 +1838,15 @@ class Daemon:
                 "зона» не включаю: его область зависит от монитора цели"
             )
         if zone is not None:
-            rect = self.grid.rect(zone, wa)
-            if not self._apply(window, rect, zone):
+            # Цель сама становится вкладкой зоны: если там уже было окно, оба
+            # встают на общую рамку, а полоса получает новый снимок.
+            rect = self._settle_in_zone(
+                window, zone, wa, self.workspace, wm_class, grid=self.grid
+            )
+            if rect is None:
                 raise ValueError(
                     f"не удалось вложить окно 0x{window:x} в зону '{zone}'"
                 )
-            self.windows[window] = zone
-            self.win_monitor[window] = wa
-            # Окно вкладывается там, где сейчас пользователь: занятость считаем
-            # по активному столу (сетка зоны — по-прежнему из основного конфига).
-            self.win_workspace[window] = self.workspace
-            self.win_class[window] = wm_class
-            self._save_state()
-            self._restore_holder(self.workspace, wa, zone)
         self.focus = {
             "zone": zone,
             "target": window,
@@ -1335,6 +1856,7 @@ class Daemon:
         }
         for win in self._focus_candidates(window, wa):
             self._focus_minimize(win)
+        self.sync_strips()
         return {
             "zone": zone,
             "window": hex(window),
@@ -1346,10 +1868,12 @@ class Daemon:
         """Перечитать zones.conf: сетка, правила, профили столов и reflow; кэши сбросить."""
         self.grid = tiler.Grid(self.conf_path)
         self.reflow = read_reflow(self.grid.conf)
+        self.tabs_height = read_tabs_height(self.grid.conf)
         self._grids = {}
         self._wa_cache = None
         self._mons_cache = None
         self.log(f"конфиг перечитан: {self.conf_path}")
+        self.sync_strips()
         return {
             "conf": self.conf_path,
             "zones": sorted(self.grid.zones),
@@ -1395,6 +1919,9 @@ class Daemon:
             self.on_destroy(self.focus["target"])
         self._prune_state(current)
         self.seen = current
+        # Картина вкладок поменялась (окна пришли/ушли): полосе — новый снимок.
+        # Список клиентов уже прочитан — передаём его, чтобы не спрашивать X дважды.
+        self.sync_strips(client_ids)
 
     def on_workspace_change(self):
         """Активный стол сменился (`_NET_CURRENT_DESKTOP`): запомнить новый.
@@ -1429,6 +1956,8 @@ class Daemon:
                 f"{workspace_label(self.focus['workspace'])} — оставляю "
                 "его на месте"
             )
+        # Полосы — только у зон текущего стола: снимок пересобирается на смену.
+        self.sync_strips()
         return workspace
 
     def on_map(self, win, override_redirect=False):
@@ -1483,19 +2012,13 @@ class Daemon:
         wa = self._monitor_of(win)
         if wa is None:
             return  # монитор окна недоступен: не падаем и окно не трогаем
-        rect = grid.rect(zone, wa)
-        if not self._apply(win, rect, zone):
+        # Правило дизайна волны: одно окно занимает зону целиком, два и больше
+        # встают на общую рамку вкладок — и тогда переставляется и уже стоявшее.
+        if self._settle_in_zone(win, zone, wa, workspace, wm_class, grid=grid) is None:
             return  # не запоминаем: окно не уложено, зону занятой не считаем
-        self.windows[win] = zone
-        self.win_monitor[win] = wa
-        self.win_workspace[win] = workspace
-        self.win_class[win] = wm_class
         self.log(
             f"окно 0x{win:x} -> зона '{zone}' (стол {workspace_label(workspace)})"
         )
-        self._save_state()
-        # Зона снова занята — расширившийся на неё сосед больше не нужен.
-        self._restore_holder(workspace, wa, zone)
         # Режим «только эта зона»: окно уже в своей зоне — теперь прячем его,
         # чтобы после выхода оно оказалось именно там, а не где пришлось.
         if self._focus_covers(win, workspace, wa):
@@ -1528,6 +2051,10 @@ class Daemon:
         wa = self.win_monitor.pop(win, None)
         workspace = self.win_workspace.pop(win, None)
         self.log(f"окно 0x{win:x} ушло из зоны '{zone}'")
+        # Зона занята, пока в ней есть хоть одна вкладка: ушла последняя — ниже
+        # reflow увидит зону свободной, а пока в стопке осталась одна — ей
+        # возвращается вся зона (полосы у одиночного окна нет).
+        self._collapse_stack(zone, wa, workspace)
         # Держатель исчез: снять записи о зонах, которые он покрывал.
         for key, holder in list(self.filled.items()):
             if holder == win:
@@ -1554,6 +2081,12 @@ class Daemon:
         if not changes:
             return
         for name, frac in changes.items():
+            if len(self._zone_stack(name, wa, self.workspace)) > 1:
+                # В зоне стопка вкладок: они живут на общей рамке, и вынуть из
+                # неё одно окно — значит разложить стопку. Такую зону не
+                # расширяем, а зону не считаем покрытой.
+                self.log(f"reflow: в зоне '{name}' вкладки — не расширяю")
+                continue
             target = self._window_for_zone(name, wa)
             if target is None:
                 continue
@@ -1755,8 +2288,12 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
         pass
     finally:
         # Режим «только эта зона» не должен пережить демон: иначе свёрнутые окна
-        # останутся свёрнутыми без хозяина.
+        # останутся свёрнутыми без хозяина. Полоса вкладок тоже живёт ровно
+        # столько, сколько демон: EOF в stdin завершает её главный цикл.
         _restore_focus_on_exit(dae)
+        strip = getattr(dae, "strip", None)
+        if strip is not None:
+            strip.stop()
         x11.x.XCloseDisplay(x11.dpy)
 
 
@@ -1787,11 +2324,13 @@ def main(argv=None):
     ap.add_argument("--version", action="version", version=f"zone-daemon {VERSION}")
     args = ap.parse_args(argv)
 
+    conf_path = args.conf or tiler.default_conf()
     dae = Daemon(
-        args.conf,
+        conf_path,
         state_path=placed_path(),
         session_id=read_session_id(),
         focus_path=tiler.focus_path(),
+        strip=TabStripProcess(conf_path, verbose=args.verbose),
         verbose=args.verbose,
     )
     server = None

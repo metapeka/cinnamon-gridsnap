@@ -106,6 +106,13 @@ class TestTabsOfZone(unittest.TestCase):
     def test_empty(self):
         self.assertEqual(tabs.tabs_of_zone({}, tabs.tab_rect(ZONE)), [])
 
+    def test_single_window_on_the_whole_zone_is_not_a_stack(self):
+        # Правило дизайна: одно окно занимает зону целиком (рамка — сама зона),
+        # поэтому стопкой оно не считается — полоса появляется со второго окна.
+        # Демон держит одиночное окно именно на `zone_rect`, а не на `tab_rect`.
+        self.assertEqual(tabs.tabs_of_zone({11: ZONE}, tabs.tab_rect(ZONE)), [])
+        self.assertEqual(tabs.tabs_of_zone({11: ZONE, 22: tabs.tab_rect(ZONE)}, tabs.tab_rect(ZONE)), [22])
+
 
 class TestNextTab(unittest.TestCase):
     def test_wraps_around_the_ring(self):
@@ -118,6 +125,11 @@ class TestNextTab(unittest.TestCase):
 
     def test_single_window_has_nothing_to_switch(self):
         self.assertIsNone(tabs.next_tab([1], 1))
+
+    def test_two_tab_ring_goes_both_ways(self):
+        # В стопке из двух окон «следующее» — это единственное другое.
+        self.assertEqual(tabs.next_tab([1, 2], 1), 2)
+        self.assertEqual(tabs.next_tab([1, 2], 2), 1)
 
     def test_empty_has_nothing_to_switch(self):
         self.assertIsNone(tabs.next_tab([], None))
@@ -135,6 +147,13 @@ class TestStripRecord(unittest.TestCase):
 
     def test_single_tab_has_no_strip(self):
         self.assertIsNone(tabs.strip_record("main", ZONE, [(11, "Firefox")], active=11))
+
+    def test_tab_order_bottom_to_top_is_kept(self):
+        record = tabs.strip_record(
+            "main", ZONE, [(11, "A"), (22, "B"), (33, "C")], active=22
+        )
+        self.assertEqual([tab["window"] for tab in record["tabs"]], [11, 22, 33])
+        self.assertEqual([tab["active"] for tab in record["tabs"]], [False, True, False])
 
     def test_narrow_zone_has_no_strip(self):
         self.assertIsNone(tabs.strip_record("main", NARROW, [(11, "A"), (22, "B")], active=11))
