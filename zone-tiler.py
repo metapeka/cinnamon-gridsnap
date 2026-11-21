@@ -54,6 +54,13 @@ zone-tiler — раскладывает активное окно по зона�
   zone-tiler.py profile use work --no-hotkeys
   zone-tiler.py profile show work
   zone-tiler.py profile rm work
+  zone-tiler.py profile export work              # JSON в stdout (для пайпов)
+  zone-tiler.py profile export work work.json    # JSON в файл — поделиться раскладкой
+  zone-tiler.py profile import work.json         # JSON → templates/<имя>.conf
+  zone-tiler.py profile import work.json --name home  # то же, но под другим именем
+
+JSON-профиль — переносимый обмен между машинами (``gridsnap_profile``: 1);
+основным остаётся ``.conf``, JSON только для выгрузки и загрузки.
 
 История раскладок — JSON в XDG-состоянии (`~/.local/state/gridsnap/history.json`),
 её читает и пишет каждая команда отдельным процессом (подробности — в --help и в
@@ -1519,7 +1526,7 @@ def cmd_keys(grid):
 
 # ---------------------------------------------------------------- профили
 
-PROFILE_ACTIONS = ("list", "show", "save", "use", "rm")
+PROFILE_ACTIONS = ("list", "show", "save", "use", "rm", "export", "import")
 
 
 def _run_hotkeys(conf, quiet=False):
@@ -1541,15 +1548,43 @@ def _run_hotkeys(conf, quiet=False):
         print(f"zone-tiler: {first[0] if first else 'сочетания обновлены'}")
 
 
+def _profile_export(zc, args, name, conf):
+    """``profile export``: JSON-профиля в stdout или в файл."""
+    target = (args.target or "").strip()
+    if target and args.json:
+        fail("zone-tiler: profile export — или --json, или файл, не оба сразу", EXIT_USAGE)
+    data = zc.profile_to_dict(name, conf)
+    if not target:
+        sys.stdout.write(zc.dumps_profile(data))
+        return
+    path = zc.write_profile_json(data, target)
+    print(
+        f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» выгружен: "
+        f"{path} ({zc.profile_zone_total(data)} зон)"
+    )
+
+
+def _profile_import(zc, args, path, conf):
+    """``profile import``: JSON-файл → профиль ``templates/<имя>.conf``."""
+    data = zc.read_profile_json(path)
+    written = zc.profile_from_dict(data, (args.as_name or "").strip() or None, conf)
+    name = os.path.basename(written)[: -len(zc.PROFILE_EXT)]
+    print(
+        f"zone-tiler: профиль «{name}» импортирован: {written} "
+        f"({zc.profile_zone_total(data)} зон)"
+    )
+
+
 def cmd_profile(args):
-    """Профили раскладок: list/show/save/use/rm (импорт zone_config ленивый)."""
+    """Профили раскладок: list/show/save/use/rm/export/import (zone_config лениво)."""
     import zone_config as zc
 
     action = (args.zone or "").strip()
     if action not in PROFILE_ACTIONS:
         fail(
-            "zone-tiler: profile — укажите действие: "
-            "list | show <имя> | save <имя> | use <имя> | rm <имя>",
+            "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | "
+            "use <имя> | rm <имя> | export <имя> [файл | --json] | "
+            "import <файл> [--name <имя>]",
             EXIT_USAGE,
         )
     conf = args.conf
@@ -1560,7 +1595,8 @@ def cmd_profile(args):
 
     name = (args.name or "").strip()
     if not name:
-        fail(f"zone-tiler: profile {action} — укажите имя профиля", EXIT_USAGE)
+        what = "файл JSON-профиля" if action == "import" else "имя профиля"
+        fail(f"zone-tiler: profile {action} — укажите {what}", EXIT_USAGE)
 
     try:
         if action == "show":
@@ -1573,11 +1609,17 @@ def cmd_profile(args):
         elif action == "rm":
             zc.remove_profile(name, conf)
             print(f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» удалён")
+        elif action == "export":
+            _profile_export(zc, args, name, conf)
+        elif action == "import":
+            _profile_import(zc, args, name, conf)
         else:  # use
             zones = zc.apply_profile(name, conf)
             print(f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» применён: {len(zones)} зон")
             if not args.no_hotkeys:
                 _run_hotkeys(conf, quiet=args.quiet)
+    except zc.ProfileJsonError as exc:
+        fail(f"zone-tiler: {exc}", EXIT_CONFIG)
     except ValueError as exc:
         fail(f"zone-tiler: {exc}", EXIT_USAGE)
     except FileNotFoundError as exc:
@@ -1602,7 +1644,12 @@ def main(argv=None):
         ),
     )
     ap.add_argument("zone", nargs="?", help="имя зоны для apply/stack или действие profile")
-    ap.add_argument("name", nargs="?", help="имя профиля для profile show/save/use/rm")
+    ap.add_argument("name", nargs="?", help="имя профиля или файл JSON для profile import")
+    ap.add_argument(
+        "target",
+        nargs="?",
+        help="profile export: файл для JSON (без него и без --json — stdout)",
+    )
     ap.add_argument(
         "--monitor",
         default="0",
@@ -1637,6 +1684,17 @@ def main(argv=None):
         "--no-hotkeys",
         action="store_true",
         help="profile use: не регистрировать сочетания клавиш после активации",
+    )
+    ap.add_argument(
+        "--json",
+        action="store_true",
+        help="profile export: печатать JSON в stdout, а не писать файл",
+    )
+    ap.add_argument(
+        "--name",
+        dest="as_name",
+        metavar="ИМЯ",
+        help="profile import: имя профиля (по умолчанию — из JSON)",
     )
     ap.add_argument("--dry-run", action="store_true", help="только посчитать рамку")
     ap.add_argument("--verify", action="store_true", help="перечитать реальную геометрию")

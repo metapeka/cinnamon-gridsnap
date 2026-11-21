@@ -318,6 +318,34 @@ class TestHeadless(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertEqual(cli("profile", "list", "--conf", conf).stdout.strip(), "")
 
+    def test_cli_profile_export_import_keeps_zones_rules_keys(self):
+        # JSON — обмен, а не второй формат: круг export → rm → import
+        # возвращает тот же профиль (зоны, правила, клавиши) под новым именем.
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = os.path.join(tmp, "zones.conf")
+            with open(conf, "w", encoding="utf-8") as fh:
+                fh.write(ACTIVE)
+            tiler = os.path.join(ROOT, "zone-tiler.py")
+            exported = os.path.join(tmp, "demo.json")
+            self.assertEqual(self.run_python(None, tiler, "profile", "save", "demo",
+                                             "--conf", conf).returncode, 0)
+            before = zc.read_profile_sets("demo", conf)
+            r = self.run_python(None, tiler, "profile", "export", "demo", exported,
+                               "--conf", conf)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(self.run_python(None, tiler, "profile", "rm", "demo",
+                                             "--conf", conf).returncode, 0)
+            r = self.run_python(None, tiler, "profile", "import", exported,
+                                "--name", "copy", "--conf", conf)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            listed = self.run_python(None, tiler, "profile", "list", "--conf", conf)
+            self.assertEqual(listed.stdout.split(), ["copy"])
+            zones, rules, monitor_sets = zc.read_profile_sets("copy", conf)
+            self.assertEqual([z.name for z in zones], [z.name for z in before[0]])
+            self.assertEqual(rules, before[1])
+            self.assertEqual(monitor_sets, before[2])
+            self.assertEqual([z.binding for z in zones], [z.binding for z in before[0]])
+
     def test_cli_bad_name_and_missing_profile_codes(self):
         with tempfile.TemporaryDirectory() as tmp:
             conf = os.path.join(tmp, "zones.conf")
