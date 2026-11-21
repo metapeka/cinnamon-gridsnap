@@ -389,6 +389,9 @@ class Daemon:
         state_path=None,
         read_rect=None,
         session_id=None,
+        iconify=None,
+        deiconify=None,
+        read_clients=None,
         verbose=False,
     ):
         self.conf_path = conf_path or tiler.default_conf()
@@ -403,6 +406,12 @@ class Daemon:
         self.read_window_workspace = window_workspace or tiler.window_workspace_for_zones
         # Рамку окна читает память об укладках (сравнение «окно на месте/ушло»).
         self.read_rect = read_rect or window_rect
+        # Сворачивание/разворот и список клиентов — инъекция как у apply/read_meta:
+        # тесты не должны трогать X, а демон в работе зовёт общие примитивы
+        # раскладчика (`tiler.iconify`/`tiler.deiconify`).
+        self.iconify = iconify or tiler.iconify
+        self.deiconify = deiconify or tiler.deiconify
+        self.read_clients = read_clients or read_client_list
         # Путь файла состояния; `None` — только в памяти (тесты, утилитный запуск).
         self.state_path = state_path
         # Идентификатор X-сессии: запись из другой сессии (те же XID, но чужая)
@@ -441,6 +450,10 @@ class Daemon:
         # Все id из последнего `_NET_CLIENT_LIST` (и уложенные, и без правила) —
         # чтобы не читать метаданные повторно на каждой реконсиляции.
         self.seen = set()
+        # Режим «только эта зона» (None — выключен): словарь с полями
+        # `zone`, `target`, `workspace`, `monitor` и множеством `minimized` —
+        # окна, которые свернул именно режим (их и только их он разворачивает).
+        self.focus = None
         self._wa_cache = None
         self._mons_cache = None
         # Команда `quit` по сокету: цикл `serve` проверяет флаг и выходит.
@@ -847,6 +860,7 @@ class Daemon:
             {
                 "status": self.ipc_status,
                 "apply": self.ipc_apply,
+                "focus": self.ipc_focus,
                 "reload": self.ipc_reload,
                 "quit": self.ipc_quit,
             }
@@ -983,6 +997,34 @@ class Daemon:
             "monitor": list(wa),
             "rect": list(rect),
         }
+
+    def ipc_focus(self, request):
+        """Режим «только эта зона»: вход/toggle/выход.
+
+        `focus <зона>` кладёт активное окно (или `window` из запроса) в зону и
+        сворачивает остальные окна **того же стола и того же монитора**; команда
+        при уже активном режиме — **toggle**: сворачивает режим и разворачивает
+        окна, которые свернул он сам. `{"off": true}` — явный выход без входа.
+
+        Разворачиваются только окна из `self.focus["minimized"]` (свёрнутое
+        вручную остаётся свёрнутым), последней — цель: `deiconify` поднимает и
+        фокусирует окно. Исключения (`window_excluded`: `[ignore]`, служебные
+        типы, диалоги) и уже свёрнутые окна не трогаются и в `minimized` не
+        попадают.
+
+        Активный стол не прочитан — отказ: сворачивать окна чужих столов
+        вслепую хуже, чем не включать режим.
+
+        Возврат:
+
+        - вход — `{"zone", "window" (hex), "monitor" ([x,y,w,h]), "minimized"
+          ([hex] — что свернули)}`;
+        - выход — `{"off": True, "restored": [hex]}`.
+
+        Режим входит в `status` полем `focus`: `null` или
+        `{"zone", "window", "minimized" (число)}`.
+        """
+        raise NotImplementedError("zone-daemon: focus ещё не реализован")
 
     def ipc_reload(self, request=None):
         """Перечитать zones.conf: сетка, правила, профили столов и reflow; кэши сбросить."""
