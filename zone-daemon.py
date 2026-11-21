@@ -52,7 +52,9 @@ import ctypes
 import importlib.util
 import json
 import os
+import re
 import select
+import subprocess
 import sys
 import time
 from typing import cast
@@ -111,7 +113,7 @@ IGNORED_WINDOW_TYPES = tiler.IGNORED_WINDOW_TYPES
 IGNORED_TYPE_TAILS = tiler.IGNORED_TYPE_TAILS
 CLIENT_LIST_ATOM = tiler.CLIENT_LIST_ATOM
 window_types = tiler.window_types
-is_ignored_type = tiler.is_ignored_type
+window_excluded = tiler.window_excluded
 read_client_list = tiler.read_client_list
 read_window_center = tiler.read_window_center
 monitor_for_point = tiler.monitor_for_point
@@ -136,6 +138,15 @@ def read_window_meta(win):
     return Meta(wm_class, wm_title, window_types(win))
 
 
+def window_rect(win):
+    """Рамка окна с компенсацией `_NET_FRAME_EXTENTS` (для памяти об укладке).
+
+    Та же геометрия, что `apply_zone` читает при `--verify`, поэтому сравнение
+    «окно на месте / вышло из зоны» не зависит от рамки оконного менеджера.
+    """
+    return tiler.read_frame(win, tiler.frame_extents(win))
+
+
 # ---------------------------------------------------------------------- конфиг
 
 
@@ -146,6 +157,151 @@ def read_reflow(conf):
     except Exception:
         return REFLOW_OFF
     return value if value in (REFLOW_OFF, REFLOW_NEIGHBORS) else REFLOW_OFF
+
+
+# --------------------------------------------------------------- память укладок
+
+# Память о том, куда демон положил окно, живёт между запусками: иначе стартовая
+# реконсиляция после перезапуска снова утащила бы в зону окно, которое
+# пользователь оттуда вынес. Это состояние, а не конфиг (его не переносят) и не
+# кэш (его вправе вычистить чистильщик) — отсюда `XDG_STATE_HOME`.
+PLACED_STATE_VERSION = 1
+
+# Насколько рамка окна вправе разойтись с запомненной, чтобы окно всё ещё
+# считалось стоящим в своей зоне. Пара пикселей — дрожание окна/приложения после
+# укладки; настоящий переезд пользователя заметно больше.
+PLACED_TOLERANCE = 8
+
+# `_NET_MOVERESIZE_WINDOW` — клиентское сообщение, WM применяет его не мгновенно.
+# Если первое чтение застало старую рамку, ждём столько и перечитываем ещё раз,
+# иначе окно тут же сочли бы «вышедшим из зоны».
+PLACED_RETRY_DELAY = 0.15
+
+
+def placed_path():
+    """Путь памяти об укладках: `$XDG_STATE_HOME/gridsnap/placed.json`."""
+    return os.path.join(tiler.state_home(), "gridsnap", "placed.json")
+
+
+def read_session_id():
+    """Идентификатор X-сессии: окно `_NET_SUPPORTING_WM_CHECK`.
+
+    Память об укладках не должна переезжать в новую X-сессию: там XID раздаются
+    заново, и старая запись может «попасть» на чужое окно того же класса.
+    Не читается — `None`, тогда проверка выключена.
+    """
+    try:
+        out = subprocess.check_output(
+            ["xprop", "-root", "_NET_SUPPORTING_WM_CHECK"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return None
+    found = re.search(r"window id # (0x[0-9a-fA-F]+)", out)
+    return found.group(1) if found else None
+
+
+def frame_matches(actual, placed, tolerance=PLACED_TOLERANCE):
+    """Совпадают ли рамки в пределах допуска. Чистая функция — под тесты."""
+    if actual is None or placed is None or len(actual) != 4 or len(placed) != 4:
+        return False
+    return all(abs(int(a) - int(b)) <= tolerance for a, b in zip(actual, placed))
+
+
+def _state_window_id(raw):
+    """XID из ключа файла состояния; не число — `None`."""
+    try:
+        win = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return win if win > 0 else None
+
+
+def _state_frame(value):
+    """Рамка `[x, y, w, h]` из JSON; кривая — `None`."""
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return None
+    try:
+        return [int(v) for v in value]
+    except (TypeError, ValueError):
+        return None
+
+
+def _state_record(record):
+    """Запись об укладке из JSON; кривая — `None`.
+
+    Обязательны `frame` и непустая `zone`: без зоны запись бесполезна — некуда
+    возвращать окно. `monitor`/`workspace` необязательны (липкое окно,
+    неопознанный стол), `wm_class` нужен, чтобы отличить переиспользованный XID.
+    """
+    if not isinstance(record, dict):
+        return None
+    frame = _state_frame(record.get("frame"))
+    zone = record.get("zone")
+    if frame is None or not isinstance(zone, str) or not zone:
+        return None
+    monitor = _state_frame(record.get("monitor"))
+    workspace = record.get("workspace")
+    if workspace is not None:
+        try:
+            workspace = int(workspace)
+        except (TypeError, ValueError):
+            workspace = None
+    return {
+        "frame": frame,
+        "wm_class": str(record.get("wm_class") or ""),
+        "zone": zone,
+        "monitor": monitor,
+        "workspace": workspace,
+    }
+
+
+def load_placed_state(path, session=None):
+    """Память об укладках из файла: `{XID: запись}`; нет файла/битый — `{}`.
+
+    Файл состояния вспомогательный: демон обязан подняться и без него, поэтому
+    ошибки чтения не поднимаются наверх, а кривые записи отбрасываются поодиночке.
+    Записи другой X-сессии (если и файл, и аргумент знают её id) отбрасываются
+    целиком: XID в новой сессии раздаются заново.
+    """
+    if not path:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict) or data.get("version") != PLACED_STATE_VERSION:
+        return {}
+    file_session = data.get("session")
+    if session is not None and file_session is not None and file_session != session:
+        return {}
+    windows = data.get("windows")
+    if not isinstance(windows, dict):
+        return {}
+    result = {}
+    for raw_win, record in windows.items():
+        win = _state_window_id(raw_win)
+        parsed = _state_record(record)
+        if win is not None and parsed is not None:
+            result[win] = parsed
+    return result
+
+
+def save_placed_state(path, state, session=None):
+    """Записать память об укладках атомарно (`.tmp` + `os.replace`)."""
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    data = {"version": PLACED_STATE_VERSION, "windows": state}
+    if session is not None:
+        data["session"] = session
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, sort_keys=True, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    os.replace(tmp, path)
 
 
 # -------------------------------------------------------------------- геометрия
@@ -230,6 +386,9 @@ class Daemon:
         window_center=None,
         current_workspace=None,
         window_workspace=None,
+        state_path=None,
+        read_rect=None,
+        session_id=None,
         verbose=False,
     ):
         self.conf_path = conf_path or tiler.default_conf()
@@ -242,6 +401,13 @@ class Daemon:
         self.window_center = window_center or read_window_center
         self.read_current_workspace = current_workspace or tiler.current_workspace
         self.read_window_workspace = window_workspace or tiler.window_workspace_for_zones
+        # Рамку окна читает память об укладках (сравнение «окно на месте/ушло»).
+        self.read_rect = read_rect or window_rect
+        # Путь файла состояния; `None` — только в памяти (тесты, утилитный запуск).
+        self.state_path = state_path
+        # Идентификатор X-сессии: запись из другой сессии (те же XID, но чужая)
+        # не подхватывается. `None` — проверка выключена.
+        self.session_id = session_id
         self.verbose = verbose
         self.reflow = read_reflow(self.grid.conf)
         self.windows = {}
@@ -251,6 +417,17 @@ class Daemon:
         # Стол, на котором уложено окно: window id -> номер стола или None
         # (липкое окно). Окно другого стола не делает зону занятой на этом.
         self.win_workspace = {}
+        # Рамка, которую демон применил: window id -> (x, y, w, h). По ней видно,
+        # что пользователь вынес окно из зоны (окно уже не там, где его положили).
+        self.placed = {}
+        # `WM_CLASS` уложенного окна — записи состояния нужно отличить
+        # переиспользованный XID при усыновлении после перезапуска.
+        self.win_class = {}
+        # Окна, которые пользователь вынес из своих зон: window id -> запись.
+        # Их демон больше не двигает до переоткрытия окна (новый XID).
+        self.detached = {}
+        # Память прошлого запуска: разбирается на первой же реконсиляции.
+        self._pending = load_placed_state(state_path, session_id) if state_path else {}
         # Зоны, покрытые расширенным соседом (reflow=neighbors): тройка
         # (стол, рабочая область, освобождённая зона) -> окно-держатель.
         # Покрытие ключуется столом и монитором: одна и та же зона на разных
@@ -401,14 +578,220 @@ class Daemon:
 
         Ловим и `SystemExit`: `fail()` в layout-коде бросает его при отказе
         X-сервера (например, исчерпаны соединения), а он не подкласс
-        `Exception`. `KeyboardInterrupt` не перехватываем.
+        `Exception`. `KeyboardInterrupt` не перехватываем. Удачная укладка
+        запоминается: позже по её рамке видно, что окно вышло из зоны.
         """
         try:
             self.apply(win, rect, label=zone, quiet=True)
-            return True
         except (Exception, SystemExit) as exc:  # окно могло исчезнуть/отказ X
             self.log(f"не удалось вложить окно 0x{win:x} в зону '{zone}': {exc}")
             return False
+        self._remember_placement(win, rect)
+        return True
+
+    # -- память об укладках
+
+    def _read_rect(self, win):
+        """Текущая рамка окна; `None`, если её не прочитать (нет X, окно ушло)."""
+        try:
+            rect = self.read_rect(win)
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось прочитать рамку окна 0x{win:x}: {exc}")
+            return None
+        if rect is None:
+            return None
+        try:
+            return tuple(int(v) for v in rect)
+        except (TypeError, ValueError):
+            return None
+
+    def _remember_placement(self, win, rect):
+        """Запомнить рамку укладки: по ней видно, что окно вышло из зоны.
+
+        Берётся фактическая рамка (рамку мог поправить WM), а если её не
+        прочитать — запрошенная. WM применяет `_NET_MOVERESIZE_WINDOW` не
+        мгновенно, поэтому несовпавшую рамку перечитываем ещё раз: иначе окно,
+        которое демон только что уложил, тут же сочли бы «вышедшим из зоны».
+        Файл состояния пишут вызывающие, когда трекер уже обновлён.
+        """
+        frame = self._read_rect(win)
+        if frame is not None and not frame_matches(frame, rect):
+            time.sleep(PLACED_RETRY_DELAY)
+            again = self._read_rect(win)
+            if again is not None:
+                frame = again
+        self.placed[win] = frame or tuple(int(v) for v in rect)
+        self.detached.pop(win, None)
+
+    def _placement_record(self, win, frame):
+        """Запись об укладке для файла состояния."""
+        wa = self.win_monitor.get(win)
+        return {
+            "frame": [int(v) for v in frame],
+            "wm_class": self.win_class.get(win, ""),
+            "zone": self.windows.get(win),
+            "monitor": [int(v) for v in wa] if wa else None,
+            "workspace": self.win_workspace.get(win),
+        }
+
+    def _save_state(self):
+        """Сохранить память об укладках (сбой записи демон не роняет)."""
+        if not self.state_path:
+            return
+        state = {
+            str(win): self._placement_record(win, frame)
+            for win, frame in self.placed.items()
+        }
+        for win, record in self.detached.items():
+            state[str(win)] = dict(record)
+        try:
+            save_placed_state(self.state_path, state, self.session_id)
+        except OSError as exc:
+            self.log(f"не удалось сохранить память об укладках: {exc}")
+
+    def _detach(self, win):
+        """Снять окно с трекера: оно больше не в своей зоне (пользователь вынес).
+
+        Зона освобождается (записи `filled` на окно-держателя снимаются), окно
+        уходит в `detached` — само оно уже не вернётся ни на новом появлении,
+        ни после перезапуска демона (пока XID не сменится).
+        """
+        zone = self.windows.pop(win, None)
+        if zone is None:
+            return
+        wa = self.win_monitor.pop(win, None)
+        workspace = self.win_workspace.pop(win, None)
+        frame = self.placed.pop(win, None)
+        wm_class = self.win_class.pop(win, None)
+        for key, holder in list(self.filled.items()):
+            if holder == win:
+                del self.filled[key]
+        if frame is not None:
+            self.detached[win] = {
+                "frame": [int(v) for v in frame],
+                "wm_class": wm_class or "",
+                "zone": zone,
+                "monitor": [int(v) for v in wa] if wa else None,
+                "workspace": workspace,
+            }
+        self._save_state()
+        self.log(f"окно 0x{win:x} вышло из зоны '{zone}' — больше его не двигаю")
+
+    def _refresh_detached(self):
+        """Заметить окна, которые пользователь вынес из своих зон.
+
+        Сравнивается текущая рамка окна с той, что демон применил: разошлась
+        больше допуска — окно ушло. Его записи снимаются, зона освобождается для
+        reflow, и заново демон его не укладывает. Рамка не читается — считаем,
+        что окно на месте (не двигать хуже, чем пропустить переезд).
+        """
+        for win in list(self.windows):
+            if not self._visible(self.win_workspace.get(win)):
+                continue  # окно невидимого стола не двигаем — и ушедшим не считаем
+            placed = self.placed.get(win)
+            if placed is None:
+                continue
+            actual = self._read_rect(win)
+            if actual is None:
+                continue
+            if not frame_matches(actual, placed):
+                self._detach(win)
+
+    def _zone_rect_for(self, win, record):
+        """Рамка зоны записи на её мониторе; `None` — не посчитать.
+
+        Нужна, чтобы отличить «окно стоит в своей зоне» от «окно расширено
+        reflow на соседнюю»: во втором случае записанная рамка — объединение, а
+        не зона.
+        """
+        wa = tuple(record["monitor"]) if record.get("monitor") else None
+        if wa is None:
+            wa = self._monitor_of(win)
+        if wa is None:
+            return None
+        try:
+            grid = self._grid_for(record.get("workspace"))
+            return grid.rect(record["zone"], wa)
+        except (Exception, SystemExit) as exc:
+            self.log(
+                f"не удалось посчитать зону '{record['zone']}' записи 0x{win:x}: {exc}"
+            )
+            return None
+
+    def _adopt_placement(self, win, record):
+        """Учесть запись прошлого запуска: усыновить окно или пометить ушедшим.
+
+        Рамка совпала с запомненной — окно всё ещё там, куда его положили: берём
+        под присмотр без `apply`. Разошлась — пользователь его вынес, и демон
+        больше окно не двигает. Если записанная рамка — не зона, а объединение с
+        соседней (расширенный reflow сосед), окно тоже возвращается в свою зону
+        через `on_map`. `False` — запись не про это окно (XID переиспользован
+        другим приложением или класс не сошёлся): окно идёт обычным путём
+        `on_map`.
+        """
+        try:
+            meta = self.read_meta(win)
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось прочитать метаданные 0x{win:x}: {exc}")
+            return False
+        wm_class = getattr(meta, "wm_class", "") or ""
+        recorded_class = record.get("wm_class") or ""
+        if recorded_class and wm_class and recorded_class != wm_class:
+            return False
+        actual = self._read_rect(win)
+        if actual is not None and frame_matches(actual, record["frame"]):
+            zone_rect = self._zone_rect_for(win, record)
+            if zone_rect is not None and not frame_matches(actual, zone_rect):
+                # Рамка не своя зона: это сосед, расширенный reflow, а книга
+                # покрытий (`filled`) в файле состояния не живёт. Даём окну
+                # пройти обычный путь `on_map` — правило вернёт его в зону из
+                # конфига, и новое окно не ляжет поверх.
+                self.log(
+                    f"окно 0x{win:x} стоит не в своей зоне '{record['zone']}' — "
+                    "укладываю по правилу"
+                )
+                return False
+            self.windows[win] = record["zone"]
+            if record.get("monitor"):
+                self.win_monitor[win] = tuple(record["monitor"])
+            self.win_workspace[win] = record.get("workspace")
+            self.placed[win] = tuple(record["frame"])
+            self.win_class[win] = wm_class or recorded_class
+            self.log(
+                f"окно 0x{win:x} осталось в зоне '{record['zone']}' — беру под присмотр"
+            )
+            return True
+        self.detached[win] = dict(record)
+        self.log(
+            f"окно 0x{win:x} вышло из зоны '{record['zone']}' — само не вернётся"
+        )
+        return True
+
+    def _apply_pending(self, current):
+        """Разобрать память прошлого запуска по текущему списку клиентов."""
+        pending, self._pending = self._pending, {}
+        if not pending:
+            return
+        for win, record in pending.items():
+            if win not in current:
+                continue  # окно закрылось, пока демон не работал
+            if not self._adopt_placement(win, record):
+                self.log(f"запись о 0x{win:x} не подошла — укладываю по правилу")
+
+    def _prune_state(self, current):
+        """Забыть окна, которых больше нет в `_NET_CLIENT_LIST`."""
+        dropped = False
+        for win in list(self.placed):
+            if win not in current:
+                self.placed.pop(win, None)
+                self.win_class.pop(win, None)
+                dropped = True
+        for win in list(self.detached):
+            if win not in current:
+                del self.detached[win]
+                dropped = True
+        if dropped:
+            self._save_state()
 
     def _window_for_zone(self, zone, wa=None):
         """Окно в зоне `zone` на видимом столе; при `wa` — именно на этой области.
@@ -449,6 +832,7 @@ class Daemon:
             return
         if self._apply(holder, grid.rect(holder_zone, wa), holder_zone):
             del self.filled[key]
+            self._save_state()
             self.log(f"возвращаю зону '{holder_zone}' к исходной рамке")
 
     # -- IPC: обработчики команд сокета
@@ -568,6 +952,17 @@ class Daemon:
             window = int(window, 0)
         else:
             window = int(window)
+        meta = self.read_meta(window)
+        wm_class = getattr(meta, "wm_class", "") or ""
+        if window_excluded(
+            wm_class,
+            getattr(meta, "wm_title", "") or "",
+            getattr(meta, "window_type", ()),
+            self.grid.ignore,
+        ):
+            raise ValueError(
+                f"окно 0x{window:x} под исключением ([ignore]/служебный тип) — не двигаю"
+            )
         wa = self._monitor_for_command(request, window)
         if wa is None:
             raise ValueError(f"не удалось определить монитор окна 0x{window:x}")
@@ -579,6 +974,8 @@ class Daemon:
         # Окно вкладывается там, где сейчас пользователь: занятость считаем по
         # активному столу (сетка зоны — по-прежнему из основного конфига).
         self.win_workspace[window] = self.workspace
+        self.win_class[window] = wm_class
+        self._save_state()
         self._restore_holder(self.workspace, wa, zone)
         return {
             "window": hex(window),
@@ -618,6 +1015,10 @@ class Daemon:
         увидит её занятой и соседей не сдвинет.
         """
         current = set(client_ids)
+        # Память прошлого запуска и переезды пользователя — до укладки: окно,
+        # которое вынесли из зоны, не должно быть уложено снова.
+        self._apply_pending(current)
+        self._refresh_detached()
         new = [win for win in dict.fromkeys(client_ids) if win not in self.seen]
         for win in new:
             self.log(f"новое окно 0x{win:x} в _NET_CLIENT_LIST")
@@ -625,6 +1026,7 @@ class Daemon:
         for win in list(self.windows):
             if win not in current:
                 self.on_destroy(win)
+        self._prune_state(current)
         self.seen = current
 
     def on_workspace_change(self):
@@ -662,17 +1064,21 @@ class Daemon:
         """
         if win in self.windows:
             return  # окно уже уложено (повторное появление в списке)
+        if win in self.detached:
+            return  # пользователь вынес окно из зоны — само оно не вернётся
         if override_redirect:
             return  # меню/подсказки WM — не самостоятельные окна
         meta = self.read_meta(win)
         wm_class = getattr(meta, "wm_class", "") or ""
+        wm_title = getattr(meta, "wm_title", "") or ""
         if not wm_class:
             return  # без WM_CLASS правило не проверить
-        if is_ignored_type(getattr(meta, "window_type", ())):
+        if window_excluded(
+            wm_class, wm_title, getattr(meta, "window_type", ()), self.grid.ignore
+        ):
+            self.log(f"окно 0x{win:x} под исключением ([ignore]/служебный тип) — не трогаю")
             return
-        zone = tiler.match_rules(
-            self.grid.rules, wm_class, getattr(meta, "wm_title", "") or ""
-        )
+        zone = tiler.match_rules(self.grid.rules, wm_class, wm_title)
         if zone is None:
             return
         workspace = self._window_workspace(win)
@@ -692,9 +1098,11 @@ class Daemon:
         self.windows[win] = zone
         self.win_monitor[win] = wa
         self.win_workspace[win] = workspace
+        self.win_class[win] = wm_class
         self.log(
             f"окно 0x{win:x} -> зона '{zone}' (стол {workspace_label(workspace)})"
         )
+        self._save_state()
         # Зона снова занята — расширившийся на неё сосед больше не нужен.
         self._restore_holder(workspace, wa, zone)
 
@@ -745,6 +1153,7 @@ class Daemon:
                 continue  # окно не переехало: зону покрытой не считаем
             self.filled[(self.workspace, wa, zone)] = target
             self.log(f"reflow: окно 0x{target:x} -> зона '{name}'")
+        self._save_state()
 
     def on_unmap(self, win):
         """Окно скрыто (свёрнуто/сменился воркспейс) — no-op.
@@ -942,7 +1351,12 @@ def main(argv=None):
     ap.add_argument("--version", action="version", version=f"zone-daemon {VERSION}")
     args = ap.parse_args(argv)
 
-    dae = Daemon(args.conf, verbose=args.verbose)
+    dae = Daemon(
+        args.conf,
+        state_path=placed_path(),
+        session_id=read_session_id(),
+        verbose=args.verbose,
+    )
     server = None
     if not args.no_socket:
         path = args.socket or zone_ipc.default_socket_path()

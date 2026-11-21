@@ -55,11 +55,11 @@ WORKSPACE_SHARED = "общий набор"
 # Сколько столов показать в диалоге, если ``_NET_NUMBER_OF_DESKTOPS`` не прочитать.
 WORKSPACE_DESKTOPS_DEFAULT = 4
 
-# Порядок «чужих» секций при сохранении: [rules] до [keys], [daemon] после.
+# Порядок «чужих» секций при сохранении: [rules] и [ignore] до [keys], [daemon] после.
 # ``[move]`` пишется сама: она «своя» (см. :data:`RESERVED_SECTIONS`), но
 # редактор её не правит и обязан сохранить — тело берётся из прежнего файла
 # (или из ``extra``, если его передали явно).
-BEFORE_KEYS = ("rules",)
+BEFORE_KEYS = ("rules", "ignore")
 AFTER_KEYS = ("daemon",)
 
 
@@ -730,7 +730,7 @@ def save_zone_sets(path, default_zones, monitor_sets=None, extra=None):
     из ``extra``), чтобы сохранение зон не сбросило настройку клавиш.
     ``[keys]`` собирается со всех записанных наборов без повторов — по клавише
     на имя зоны, главная из набора по умолчанию (он пишется первым). Порядок:
-    ``[grid]``, ``[zones]``, ``[zones:*]``, ``[rules]``, ``[keys]``, ``[move]``,
+    ``[grid]``, ``[zones]``, ``[zones:*]``, ``[rules]``, ``[ignore]``, ``[keys]``, ``[move]``,
     ``[daemon]``, остальные — после. Возвращает путь.
     """
     sets = {}
@@ -909,36 +909,39 @@ def profile_text(name, conf_path=None):
 
 
 def read_profile_sets(name, conf_path=None):
-    """``(зоны [zones], строки [rules], {монитор: [Zone]})`` профиля.
+    """``(зоны [zones], строки [rules], {монитор: [Zone]}, строки [ignore])``.
 
     Зоны несут привязки из ``[keys]``; набор по умолчанию — всегда список
     (пустой, если секции ``[zones]`` в профиле нет), наборы мониторов — в
-    порядке секций файла.
+    порядке секций файла. ``[ignore]`` идёт вместе с ``[rules]``: это одно
+    семейство правил окон, и расхождение «правило уехало, а исключение осталось»
+    удивляло бы.
     """
     path = profile_path(name, conf_path)
     if not os.path.exists(path):
         raise _profile_missing(sanitize_profile_name(name))
     default, monitors = _zone_sets(path)
-    rules = load_extra_sections(path, sections=["rules"]).get("rules") or []
-    return (default or []), rules, monitors
+    extra = load_extra_sections(path, sections=["rules", "ignore"])
+    return (default or []), extra.get("rules") or [], monitors, extra.get("ignore") or []
 
 
 def read_profile(name, conf_path=None):
-    """``(зоны, строки [rules])`` профиля; зоны несут привязки из ``[keys]``.
+    """``(зоны, строки [rules], строки [ignore])`` профиля; зоны с привязками.
 
     Это только набор по умолчанию (``[zones]``) — ради совместимости с
     редактором; все наборы отдаёт :func:`read_profile_sets`.
     """
-    zones, rules, _monitors = read_profile_sets(name, conf_path)
-    return zones, rules
+    zones, rules, _monitors, ignore = read_profile_sets(name, conf_path)
+    return zones, rules, ignore
 
 
-def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None):
-    """Записать профиль: ``[zones]``, ``[zones:*]``, ``[rules]``, ``[keys]``.
+def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None, ignore=None):
+    """Записать профиль: ``[zones]``, ``[zones:*]``, ``[rules]``, ``[ignore]``, ``[keys]``.
 
     ``[grid]``/``[daemon]`` и прочие чужие секции в профиль не тащим — он и
     есть только раскладка. ``monitor_sets`` — ``{имя выхода: [Zone]}``;
     ключи ``None``/пустые игнорируются (набор по умолчанию — ``zones``).
+    ``ignore`` — строки секции ``[ignore]`` (селекторы исключённых окон).
     Возвращает путь.
     """
     sets = {}
@@ -952,7 +955,7 @@ def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None):
     safe = sanitize_profile_name(name)
     lines = [
         f"# Профиль раскладки GridSnap: {safe}.",
-        "# Секции [zones], [zones:<монитор>], [rules], [keys]; "
+        "# Секции [zones], [zones:<монитор>], [rules], [ignore], [keys]; "
         "активация — zone-tiler.py profile use <имя>.",
     ]
     written = []
@@ -967,6 +970,9 @@ def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None):
     if rules:
         lines += ["", "[rules]"]
         lines.extend(_section_lines(rules))
+    if ignore:
+        lines += ["", "[ignore]"]
+        lines.extend(_section_lines(ignore))
     key_lines = _key_lines(written)
     if key_lines:
         lines += ["", "[keys]"]
@@ -1032,11 +1038,12 @@ def profile_to_dict(name, conf_path=None):
 
     ``zones`` — набор по умолчанию (пустой словарь, если секции ``[zones]``
     нет), ``monitors`` — наборы ``[zones:<выход>]`` (ключа нет, если их нет),
-    ``rules`` — строки ``[rules]`` как в файле, ``keys`` — ``{зона:
-    сочетание}`` из ``[keys]``. Доли округлены до :data:`PROFILE_JSON_DIGITS`.
+    ``rules`` — строки ``[rules]`` как в файле, ``ignore`` — строки ``[ignore]``,
+    ``keys`` — ``{зона: сочетание}`` из ``[keys]``. Доли округлены до
+    :data:`PROFILE_JSON_DIGITS`.
     Профиля нет — ``FileNotFoundError``; битый ``.conf`` — ``SystemExit``.
     """
-    zones, rules, monitor_sets = read_profile_sets(name, conf_path)
+    zones, rules, monitor_sets, ignore = read_profile_sets(name, conf_path)
     data = {
         PROFILE_JSON_KEY: PROFILE_JSON_VERSION,
         "name": sanitize_profile_name(name),
@@ -1045,6 +1052,7 @@ def profile_to_dict(name, conf_path=None):
     if monitor_sets:
         data["monitors"] = {m: _json_zone(zs) for m, zs in monitor_sets.items()}
     data["rules"] = list(rules or [])
+    data["ignore"] = list(ignore or [])
     data["keys"] = _zone_keys(zones, monitor_sets)
     return data
 
@@ -1213,6 +1221,19 @@ def profile_from_dict(data, name=None, conf_path=None):
                 f"правило «{selector} = {target}» ссылается на неизвестную зону '{target}'"
             )
 
+    ignore = data.get("ignore")
+    if ignore is None:
+        ignore = []
+    if isinstance(ignore, str) or not isinstance(ignore, (list, tuple)):
+        raise ProfileJsonError("в JSON-профиле ignore должен быть списком строк")
+    ignore = [str(line) for line in ignore]
+    for line in ignore:
+        text = line.strip()
+        if not text or text[0] in "#;":
+            continue
+        if "=" not in _INLINE_COMMENT_RE.sub("", text):
+            raise ProfileJsonError(f"исключение без «селектор = заметка»: {line!r}")
+
     keys = data.get("keys")
     if keys is None:
         keys = {}
@@ -1223,23 +1244,30 @@ def profile_from_dict(data, name=None, conf_path=None):
         for zone in chunk:
             zone.binding = bindings.get(zone.name, "")
 
-    return save_profile(safe, zones, rules, conf_path, monitor_sets=monitor_sets)
+    return save_profile(
+        safe, zones, rules, conf_path, monitor_sets=monitor_sets, ignore=ignore
+    )
 
 
 def apply_profile(name, conf_path=None):
     """Активировать профиль в ``zones.conf``.
 
-    Наборы зон ``[zones]``/``[zones:*]``, ``[rules]`` и ``[keys]`` берутся из
-    профиля (``[keys]`` — из привязок зон) и заменяют наборы активного конфига
-    целиком: наборов мониторов, которых в профиле нет, в конфиге не останется.
-    ``[grid]``, ``[daemon]`` и прочие секции активного конфига сохраняются.
-    Возвращает зоны набора по умолчанию (пустой список, если его в профиле нет).
+    Наборы зон ``[zones]``/``[zones:*]``, ``[rules]``, ``[ignore]`` и ``[keys]``
+    берутся из профиля (``[keys]`` — из привязок зон) и заменяют наборы активного
+    конфига целиком: наборов мониторов, которых в профиле нет, в конфиге не
+    останется. ``[grid]``, ``[daemon]`` и прочие секции активного конфига
+    сохраняются. Возвращает зоны набора по умолчанию (пустой список, если его в
+    профиле нет).
     """
-    zones, rules, monitor_sets = read_profile_sets(name, conf_path)
+    zones, rules, monitor_sets, ignore = read_profile_sets(name, conf_path)
     extra = load_extra_sections(conf_path)
     if rules:
         extra["rules"] = rules
     else:
         extra.pop("rules", None)
+    if ignore:
+        extra["ignore"] = ignore
+    else:
+        extra.pop("ignore", None)
     _write_config(conf_path, zones or None, monitor_sets, extra)
     return zones

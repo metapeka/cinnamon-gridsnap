@@ -1105,6 +1105,284 @@ class TestWorkspaces(DaemonTestCase):
         )
 
 
+class TestDaemonIgnore(DaemonTestCase):
+    """`[ignore]` в демоне: автоукладка по правилам и явный apply по сокету."""
+
+    IGNORE_LEFT = (
+        "[grid]\ncols = 1.0\nrows = 1.0\n"
+        "[zones]\nleft = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\n"
+        "[rules]\nfirefox* = left\nchromium* = right\n"
+        "[ignore]\nfirefox-esr = диалоги firefox\n"
+    )
+
+    def test_on_map_skips_ignored_selector(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = self.daemon(self.IGNORE_LEFT)
+        d.on_map(0x1)
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {})
+
+    def test_on_map_places_window_outside_ignore(self):
+        self.metas[0x2] = self.meta("chromium")
+        d = self.daemon(self.IGNORE_LEFT)
+        d.on_map(0x2)
+        self.assertEqual(self.applied, [(0x2, (500, 0, 500, 1000), "right", True)])
+        self.assertEqual(d.windows, {0x2: "right"})
+
+    def test_ipc_apply_refuses_ignored_window(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = self.multi_daemon(self.IGNORE_LEFT)
+        with self.assertRaises(ValueError) as caught:
+            d.ipc_apply({"zone": "left", "window": 0x1})
+        self.assertIn("исключением", str(caught.exception))
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {})
+
+    def test_ipc_apply_places_window_outside_ignore(self):
+        self.metas[0x1] = self.meta("chromium")
+        self.centers[0x1] = (10, 10)
+        d = self.multi_daemon(self.IGNORE_LEFT)
+        result = d.ipc_apply({"zone": "right", "window": 0x1})
+        self.assertEqual(result["zone"], "right")
+        self.assertEqual(d.windows, {0x1: "right"})
+
+
+class TestPlacedState(unittest.TestCase):
+    """Файл памяти об укладках: чтение терпимо к мусору, запись — атомарная."""
+
+    def setUp(self):
+        directory = tempfile.mkdtemp(prefix="gridsnap-placed-")
+        self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
+        self.path = os.path.join(directory, "placed.json")
+
+    def test_missing_file_is_empty(self):
+        self.assertEqual(zd.load_placed_state(self.path), {})
+        self.assertEqual(zd.load_placed_state(None), {})
+
+    def test_broken_file_is_empty(self):
+        with open(self.path, "w", encoding="utf-8") as fh:
+            fh.write("{ не json")
+        self.assertEqual(zd.load_placed_state(self.path), {})
+
+    def test_wrong_version_is_empty(self):
+        with open(self.path, "w", encoding="utf-8") as fh:
+            fh.write('{"version": 99, "windows": {"1": {"frame": [0,0,1,1], "zone": "main"}}}')
+        self.assertEqual(zd.load_placed_state(self.path), {})
+
+    def test_round_trip(self):
+        record = {
+            "frame": [0, 0, 500, 1000],
+            "wm_class": "firefox-esr",
+            "zone": "left",
+            "monitor": [0, 0, 1000, 1000],
+            "workspace": 1,
+        }
+        zd.save_placed_state(self.path, {"8388656": record})
+        self.assertEqual(zd.load_placed_state(self.path), {8388656: record})
+
+    def test_records_without_zone_are_dropped(self):
+        with open(self.path, "w", encoding="utf-8") as fh:
+            fh.write(
+                '{"version": 1, "windows": {'
+                '"1": {"frame": [0,0,1,1]}, "x": {"zone": "a"}}}'
+            )
+        self.assertEqual(zd.load_placed_state(self.path), {})
+
+    def test_frame_matches_tolerance(self):
+        self.assertTrue(zd.frame_matches((0, 0, 100, 100), (3, -3, 103, 97)))
+        self.assertFalse(zd.frame_matches((0, 0, 100, 100), (50, 0, 100, 100)))
+        self.assertFalse(zd.frame_matches(None, (0, 0, 1, 1)))
+        self.assertFalse(zd.frame_matches((0, 0, 1), (0, 0, 1)))
+
+    def test_state_from_another_session_is_dropped(self):
+        record = {
+            "frame": [0, 0, 500, 1000],
+            "wm_class": "firefox-esr",
+            "zone": "left",
+            "monitor": [0, 0, 1000, 1000],
+            "workspace": None,
+        }
+        zd.save_placed_state(self.path, {"1": record}, session="0x1400003")
+        self.assertEqual(zd.load_placed_state(self.path, "0x1400003"), {1: record})
+        self.assertEqual(zd.load_placed_state(self.path, "0x9999999"), {})
+        # без известной сессии файл читается как раньше
+        self.assertEqual(zd.load_placed_state(self.path), {1: record})
+
+
+class TestDaemonPlacedMemory(DaemonTestCase):
+    """Память демона: окно, вынесенное из зоны, само туда не возвращается."""
+
+    TEXT = (
+        "[grid]\ncols = 1.0\nrows = 1.0\n"
+        "[zones]\nleft = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\n"
+        "[rules]\nfirefox* = left\nchromium* = right\n"
+    )
+
+    def setUp(self):
+        super().setUp()
+        self.frames = {}
+        directory = tempfile.mkdtemp(prefix="gridsnap-placed-")
+        self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
+        self.state_path = os.path.join(directory, "placed.json")
+
+    def read_rect(self, win):
+        return self.frames.get(win)
+
+    def placed_daemon(self, text=None):
+        """Демон с подменённой геометрией и своим файлом состояния."""
+        return zd.Daemon(
+            self.conf(text or self.TEXT),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            workarea=lambda: WA,
+            current_workspace=lambda: self.current,
+            window_workspace=lambda win: self.workspaces.get(win),
+            state_path=self.state_path,
+            read_rect=self.read_rect,
+        )
+
+    def test_on_map_records_placement(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 500, 1000)
+        d = self.placed_daemon()
+        d.on_map(0x1)
+        self.assertEqual(d.placed[0x1], (0, 0, 500, 1000))
+        self.assertEqual(d.win_class[0x1], "firefox-esr")
+        saved = zd.load_placed_state(self.state_path)
+        self.assertEqual(saved[0x1]["zone"], "left")
+        self.assertEqual(saved[0x1]["frame"], [0, 0, 500, 1000])
+
+    def test_window_moved_by_user_is_detached(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 500, 1000)
+        d = self.placed_daemon()
+        d.reconcile([0x1])
+        self.assertEqual(d.windows, {0x1: "left"})
+        d.filled[(None, WA, "left")] = 0x1
+        self.frames[0x1] = (600, 600, 300, 300)  # пользователь вынес окно
+        d.reconcile([0x1])
+        self.assertEqual(d.windows, {})
+        self.assertEqual(d.filled, {})  # зона свободна для reflow
+        self.assertIn(0x1, d.detached)
+        self.assertEqual(len(self.applied), 1)  # заново не укладывал
+        d.on_map(0x1)
+        self.assertEqual(len(self.applied), 1)
+
+    def test_restart_adopts_window_still_in_zone(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 500, 1000)
+        self.placed_daemon().on_map(0x1)
+        self.applied.clear()
+        second = self.placed_daemon()
+        second.reconcile([0x1])
+        self.assertEqual(self.applied, [])  # усыновил без apply
+        self.assertEqual(second.windows, {0x1: "left"})
+        self.assertEqual(second.win_monitor, {0x1: WA})
+
+    def test_restart_skips_window_moved_out(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 500, 1000)
+        self.placed_daemon().on_map(0x1)
+        self.frames[0x1] = (600, 600, 300, 300)
+        self.applied.clear()
+        second = self.placed_daemon()
+        second.reconcile([0x1])
+        self.assertEqual(self.applied, [])
+        self.assertEqual(second.windows, {})
+        self.assertIn(0x1, second.detached)
+
+    def test_restart_ignores_record_of_reused_xid(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 500, 1000)
+        self.placed_daemon().on_map(0x1)
+        self.metas[0x1] = self.meta("chromium")  # XID переиспользован
+        self.applied.clear()
+        second = self.placed_daemon()
+        second.reconcile([0x1])
+        self.assertEqual(self.applied, [(0x1, (500, 0, 500, 1000), "right", True)])
+        self.assertEqual(second.windows, {0x1: "right"})
+
+    def test_broken_state_file_does_not_break_start(self):
+        with open(self.state_path, "w", encoding="utf-8") as fh:
+            fh.write("{ мусор")
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 500, 1000)
+        d = self.placed_daemon()
+        d.reconcile([0x1])
+        self.assertEqual(d.windows, {0x1: "left"})
+
+    def test_restart_returns_reflow_expanded_window_to_its_zone(self):
+        # Файл состояния: демон расширил окно 0x1 (зона left) на right и записал
+        # объединённую рамку. Перезапуск должен вернуть окно в left: книга
+        # покрытий `filled` в файле не живёт, и иначе новое окно в right ляжет
+        # поверх расширенного.
+        zd.save_placed_state(
+            self.state_path,
+            {
+                "1": {
+                    "frame": [0, 0, 1000, 1000],
+                    "wm_class": "firefox-esr",
+                    "zone": "left",
+                    "monitor": list(WA),
+                    "workspace": None,
+                }
+            },
+        )
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 1000, 1000)
+        d = self.placed_daemon()
+        d.reconcile([0x1])
+        self.assertEqual(self.applied, [(0x1, (0, 0, 500, 1000), "left", True)])
+        self.assertEqual(d.windows, {0x1: "left"})
+
+    def test_placement_retries_late_wm_move(self):
+        # WM применил `_NET_MOVERESIZE_WINDOW` не сразу: первое чтение — старая
+        # рамка, второе — уже целевая. В `placed` должна попасть целевая, иначе
+        # окно тут же сочли бы «вышедшим из зоны».
+        self.metas[0x1] = self.meta("firefox-esr")
+        reads = iter([(300, 300, 200, 200), (0, 0, 500, 1000)])
+        d = zd.Daemon(
+            self.conf(self.TEXT),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            workarea=lambda: WA,
+            read_rect=lambda win: next(reads, (0, 0, 500, 1000)),
+        )
+        d.on_map(0x1)
+        self.assertEqual(d.placed[0x1], (0, 0, 500, 1000))
+
+    def test_moved_window_on_invisible_desktop_stays_tracked(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 500, 1000)
+        self.workspaces = {0x1: 2}
+        self.current = 1
+        d = self.placed_daemon()
+        d.reconcile([0x1])
+        self.assertEqual(d.windows, {0x1: "left"})
+        self.frames[0x1] = (600, 600, 300, 300)
+        d.reconcile([0x1])
+        self.assertEqual(d.windows, {0x1: "left"})  # невидимый стол не трогаем
+        self.current = 2
+        d.on_workspace_change()
+        d.reconcile([0x1])
+        self.assertEqual(d.windows, {})  # на своём столе переезд виден
+        self.assertIn(0x1, d.detached)
+
+    def test_no_state_path_writes_nothing(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 500, 1000)
+        d = zd.Daemon(
+            self.conf(self.TEXT),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            workarea=lambda: WA,
+            read_rect=self.read_rect,
+        )
+        d.on_map(0x1)
+        self.assertEqual(d.placed[0x1], (0, 0, 500, 1000))
+        self.assertFalse(os.path.exists(self.state_path))
+
+
 class TestFractionsToPixels(unittest.TestCase):
     def test_divides_workarea(self):
         self.assertEqual(

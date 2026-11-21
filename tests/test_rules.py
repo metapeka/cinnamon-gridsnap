@@ -181,5 +181,105 @@ class TestGridRules(ConfMixin, unittest.TestCase):
         self.assertEqual(zt.match_rules(grid.rules, "firefox-esr", ""), "top-right")
 
 
+class TestSelectorMatches(unittest.TestCase):
+    def test_glob_class_case_insensitive(self):
+        self.assertTrue(zt.selector_matches("firefox*", "FireFox-ESR", ""))
+        self.assertFalse(zt.selector_matches("firefox*", "chromium", "firefox docs"))
+
+    def test_regex_matches_class_or_title(self):
+        self.assertTrue(
+            zt.selector_matches("re:docs\\.google", "chromium", "Docs - docs.google.com")
+        )
+        self.assertTrue(zt.selector_matches("re:^navigator", "Navigator", ""))
+
+    def test_invalid_regex_matches_nothing(self):
+        self.assertFalse(zt.selector_matches("re:[unclosed", "firefox", ""))
+
+
+class TestWindowExcluded(unittest.TestCase):
+    def test_service_type_is_excluded_without_selectors(self):
+        self.assertTrue(
+            zt.window_excluded("Chrome", "", {"_NET_WM_WINDOW_TYPE_DIALOG"}, [])
+        )
+
+    def test_plain_window_is_not_excluded(self):
+        self.assertFalse(zt.window_excluded("Chrome", "title", set(), []))
+
+    def test_selector_excludes_even_without_service_type(self):
+        self.assertTrue(zt.window_excluded("TelegramDesktop", "", set(), ["telegram*"]))
+        self.assertTrue(zt.window_excluded("x", "Загрузка…", set(), ["re:загрузка"]))
+
+    def test_no_selectors_means_no_extra_exclusion(self):
+        self.assertFalse(zt.window_excluded("Chrome", "title", set(), None))
+
+
+class TestMovableWindowsIgnores(unittest.TestCase):
+    def _meta(self, win_class, wtype=()):
+        return zt.WindowMeta(win_class, "", wtype)
+
+    def test_movable_windows_skips_ignored(self):
+        metas = {
+            0x1: self._meta("Chrome"),
+            0x2: self._meta("TelegramDesktop"),
+            0x3: self._meta("Firefox"),
+        }
+        self.assertEqual(
+            zt.movable_windows([0x1, 0x2, 0x3], metas, ["telegram*"]), [0x1, 0x3]
+        )
+
+    def test_choose_assignments_skips_ignored(self):
+        metas = {0x1: self._meta("Chrome"), 0x2: self._meta("TelegramDesktop")}
+        got = zt.choose_assignments(
+            [0x1, 0x2], metas, ["main", "top"], [], by="order", ignore=["telegram*"]
+        )
+        self.assertEqual(got, [(0x1, "main")])
+
+
+class TestGridIgnore(ConfMixin, unittest.TestCase):
+    def test_ignore_parsed_with_notes_and_case(self):
+        # Значение — заметка для человека; регистр `re:`-регекспа сохраняется.
+        selector = r"re:\S+Deploy\S*"
+        path = self.conf(
+            BASE_GRID + ZONES + f"[ignore]\nChrome = заметка\n{selector} = ещё\n"
+        )
+        grid = zt.Grid(path)
+        self.assertEqual(grid.ignore, ["Chrome", selector])
+
+    def test_no_ignore_section_gives_empty_list(self):
+        path = self.conf(BASE_GRID + ZONES)
+        self.assertEqual(zt.Grid(path).ignore, [])
+
+    def test_ignore_entries_are_matchable(self):
+        path = self.conf(BASE_GRID + ZONES + "[ignore]\nFireFox* =\n")
+        grid = zt.Grid(path)
+        self.assertTrue(zt.window_excluded("firefox-esr", "", set(), grid.ignore))
+
+
+class TestWindowIsExcluded(unittest.TestCase):
+    """`window_is_excluded` — та же чистая проверка, но с чтением X."""
+
+    def _out(self, text):
+        return mock.patch.object(zt.subprocess, "check_output", return_value=text)
+
+    def test_selector_matches_read_window(self):
+        out = (
+            'WM_CLASS(STRING) = "telegram", "TelegramDesktop"\n'
+            '_NET_WM_NAME(UTF8_STRING) = "Telegram"\n'
+            "_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_NORMAL\n"
+        )
+        with self._out(out):
+            self.assertTrue(zt.window_is_excluded(0x1, ["telegram*"]))
+            self.assertFalse(zt.window_is_excluded(0x1, ["chrome*"]))
+
+    def test_service_type_is_excluded(self):
+        out = (
+            'WM_CLASS(STRING) = "x", "Chrome"\n'
+            '_NET_WM_NAME(UTF8_STRING) = "T"\n'
+            "_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_DIALOG\n"
+        )
+        with self._out(out):
+            self.assertTrue(zt.window_is_excluded(0x1, []))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

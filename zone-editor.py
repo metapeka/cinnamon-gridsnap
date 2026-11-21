@@ -962,7 +962,7 @@ class Editor(Gtk.Window):
     def load_profile(self, name):
         """Загрузить зоны, правила и клавиши профиля в холст как черновик."""
         try:
-            zones, rules = read_profile(name, self.conf_path)
+            zones, rules, ignore = read_profile(name, self.conf_path)
         except (ValueError, OSError, SystemExit) as exc:
             self.set_status(f"профиль не прочитан: {exc}")
             return
@@ -972,6 +972,10 @@ class Editor(Gtk.Window):
             self.extra_sections["rules"] = rules
         else:
             self.extra_sections.pop("rules", None)
+        if ignore:
+            self.extra_sections["ignore"] = ignore
+        else:
+            self.extra_sections.pop("ignore", None)
         self.select(self.selected)
         self.set_dirty(True)
         self.canvas.queue_draw()
@@ -989,8 +993,9 @@ class Editor(Gtk.Window):
             self.set_status("пустое имя профиля")
             return
         rules = self.extra_sections.get("rules", [])
+        ignore = self.extra_sections.get("ignore", [])
         try:
-            path = save_profile(safe, self.zones, rules, self.conf_path)
+            path = save_profile(safe, self.zones, rules, self.conf_path, ignore=ignore)
         except (ValueError, OSError) as exc:
             self.set_status(f"профиль не сохранён: {exc}")
             return

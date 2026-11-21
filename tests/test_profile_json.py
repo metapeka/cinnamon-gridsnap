@@ -28,6 +28,7 @@ import zone_config as zc  # noqa: E402  # isort: skip
 
 ZONES = [zc.Zone("main", 0, 0, 0.5, 1), zc.Zone("side", 0.5, 0, 0.5, 1, "<Super><Alt>2")]
 RULES = ["Chrome = main", "re:^VLC = side"]
+IGNORE = ["TelegramDesktop = диалоги Telegram"]
 HDMI_ZONES = [zc.Zone("top", 0, 0, 1, 0.5), zc.Zone("bottom", 0, 0.5, 1, 0.5)]
 KEYS = {"main": "<Super><Alt>1", "side": "<Super><Alt>2", "top": "<Super><F1>"}
 
@@ -103,8 +104,12 @@ class TestProfileToDict(ConfMixin, unittest.TestCase):
     def test_no_monitors_key_for_common_set_only(self):
         zc.save_profile("plain", ZONES, conf_path=self.conf)
         data = zc.profile_to_dict("plain", self.conf)
-        self.assertEqual(sorted(data), ["gridsnap_profile", "keys", "name", "rules", "zones"])
+        self.assertEqual(
+            sorted(data),
+            ["gridsnap_profile", "ignore", "keys", "name", "rules", "zones"],
+        )
         self.assertEqual(data["rules"], [])
+        self.assertEqual(data["ignore"], [])
         self.assertEqual(data["keys"], {"side": "<Super><Alt>2"})
         self.assertNotIn("monitors", data)
 
@@ -128,11 +133,12 @@ class TestRoundTrip(ConfMixin, unittest.TestCase):
         data = zc.profile_to_dict("cinema", self.conf)
         path = zc.profile_from_dict(data, conf_path=self.conf)
         self.assertEqual(path, self.profile_path("cinema"))
-        zones, rules, monitor_sets = zc.read_profile_sets("cinema", self.conf)
+        zones, rules, monitor_sets, ignore = zc.read_profile_sets("cinema", self.conf)
         self.assertEqual([(z.name, z.as_tuple(), z.binding) for z in zones],
                          [("main", (0.0, 0.0, 0.5, 1.0), ""),
                           ("side", (0.5, 0.0, 0.5, 1.0), "<Super><Alt>2")])
         self.assertEqual(rules, RULES)
+        self.assertEqual(ignore, [])
         # Порядок зон в наборе после JSON — по алфавиту (sort_keys), имена те же.
         self.assertEqual(sorted(z.name for z in monitor_sets["HDMI-1"]), ["bottom", "top"])
         self.assertEqual(zc.profile_to_dict("cinema", self.conf), data)
@@ -160,7 +166,14 @@ class TestRoundTrip(ConfMixin, unittest.TestCase):
         zc.profile_from_dict(data, conf_path=self.conf)
         self.assertEqual(zc.list_zone_sets(self.profile_path("monitors")),
                          {"HDMI-1": ["top", "bottom"]})
-        self.assertEqual(zc.read_profile("monitors", self.conf), ([], []))
+        self.assertEqual(zc.read_profile("monitors", self.conf), ([], [], []))
+
+    def test_ignore_survives_json_round_trip(self):
+        zc.save_profile("cinema", ZONES, RULES, self.conf, ignore=IGNORE)
+        data = zc.profile_to_dict("cinema", self.conf)
+        self.assertEqual(data["ignore"], IGNORE)
+        zc.profile_from_dict(data, conf_path=self.conf)
+        self.assertEqual(zc.read_profile("cinema", self.conf)[2], IGNORE)
 
     def test_import_under_new_name(self):
         path = zc.profile_from_dict(GOOD, "  My Cinema ", self.conf)

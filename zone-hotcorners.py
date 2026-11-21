@@ -443,6 +443,7 @@ class Hotcorners:
         outputs=None,
         grid_for=None,
         apply=None,
+        is_excluded=None,
         hud=None,
         edge=None,
         clock=time.monotonic,
@@ -460,6 +461,7 @@ class Hotcorners:
         self.outputs = outputs or tiler.monitor_outputs
         self.grid_for = grid_for or self.default_grid
         self.apply = apply or (lambda win, rect, label: tiler.apply_zone(win, rect, label=label))
+        self.is_excluded = is_excluded or tiler.window_is_excluded
         self.hud = None if no_hud else (hud if hud is not None else HudProcess(conf, verbose=verbose))
         self.edge = edge or EdgeTiling()
         self.clock = clock
@@ -556,6 +558,13 @@ class Hotcorners:
             self.grid = self.grid_for(self.drag_win)
         except SystemExit:  # tiler.fail: битый конфиг или нет конфига
             self.err("zone-hotcorners: сетка зон не прочитана, перетаскивание брошено")
+            self.finish_drag()
+            return False
+        if self.is_excluded(self.drag_win, self.grid.ignore):
+            self.log(
+                f"окно 0x{self.drag_win:x} под исключением ([ignore]/служебный тип) — "
+                "перетаскивание не отслеживаю"
+            )
             self.finish_drag()
             return False
         self.monitors = self.read_monitors()

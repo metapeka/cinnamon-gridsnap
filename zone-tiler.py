@@ -200,23 +200,34 @@ def window_class_title(win):
         return ("", "")
 
 
-def match_rules(rules, wm_class, wm_title):
-    """Первая подходящая зона для окна или None. Чистая функция — под тесты.
+def selector_matches(selector, wm_class, wm_title):
+    """Подходит ли окно под один селектор. Чистая функция — под тесты.
 
     Селектор `re:<regex>` ищется в строке `class|title` без учёта регистра;
     обычный селектор — это glob по WM_CLASS (тоже без учёта регистра).
+    Некорректная регулярка не совпадает ни с чем. Один разбор на `[rules]` и
+    `[ignore]`, чтобы правила и исключения сопоставлялись одинаково.
     """
-    haystack = f"{wm_class}|{wm_title}"
+    if selector.lower().startswith("re:"):
+        try:
+            found = re.search(selector[3:], f"{wm_class}|{wm_title}", re.IGNORECASE)
+        except re.error:
+            return False
+        return found is not None
+    return fnmatch.fnmatch(wm_class.lower(), selector.lower())
+
+
+def match_rules(rules, wm_class, wm_title):
+    """Первая подходящая зона для окна или None. Чистая функция — под тесты."""
     for selector, zone in rules:
-        if selector.lower().startswith("re:"):
-            try:
-                if re.search(selector[3:], haystack, re.IGNORECASE):
-                    return zone
-            except re.error:
-                continue
-        elif fnmatch.fnmatch(wm_class.lower(), selector.lower()):
+        if selector_matches(selector, wm_class, wm_title):
             return zone
     return None
+
+
+def matches_selectors(selectors, wm_class, wm_title):
+    """Есть ли среди селекторов хотя бы один подходящий. Чистая функция."""
+    return any(selector_matches(s, wm_class, wm_title) for s in (selectors or ()))
 
 
 # --------------------------------------------------- фильтры «какие окна двигать»
@@ -279,6 +290,20 @@ def window_types(win):
     return frozenset(re.findall(r"_NET_WM_WINDOW_TYPE_[A-Z_]+", out))
 
 
+def window_excluded(wm_class, wm_title, window_type, ignore_selectors=()):
+    """Оставить ли окно в покое. Чистая функция — один источник истины фильтра.
+
+    True, если тип окна служебный (`is_ignored_type`) или окно подошло хотя бы
+    под один селектор `[ignore]` (glob по `WM_CLASS` без учёта регистра или
+    `re:<regex>` по строке `class|title`). Один предикат для автоукладки демона,
+    `arrange`/`stack`, явных `apply`/`move` и пикера — поэтому фильтр не
+    расходится между точками вызова.
+    """
+    if is_ignored_type(window_type):
+        return True
+    return matches_selectors(ignore_selectors, wm_class, wm_title)
+
+
 # Задержка перед единственным повтором чтения метаданных: `_NET_WM_NAME` иногда
 # появляется уже после того, как окно попало в `_NET_CLIENT_LIST`.
 META_RETRY_DELAY = 0.2
@@ -297,6 +322,17 @@ def read_window_meta(win):
         wm_class = wm_class or wm_class2
         wm_title = wm_title or wm_title2
     return WindowMeta(wm_class, wm_title, window_types(win))
+
+
+def window_is_excluded(win, ignore_selectors=()):
+    """Под исключением ли окно `win` (`[ignore]`/служебный тип). Читает X.
+
+    Одна проверка для явных команд (`apply`, `move`, `undo`) и пикера: факт для
+    вызывающего, сообщение печатает он сам. Это та же `window_excluded`, что и у
+    автоукладки, поэтому фильтр не может разойтись между точками вызова.
+    """
+    meta = read_window_meta(win)
+    return window_excluded(meta.wm_class, meta.wm_title, meta.window_type, ignore_selectors)
 
 
 def read_client_list():
@@ -395,6 +431,16 @@ class Grid:
                         EXIT_CONFIG,
                     )
                 self.rules.append((selector, zone))
+        # `[ignore]` — те же селекторы, что в `[rules]`, но без цели: значение —
+        # произвольная заметка для человека/журнала и на сопоставление не влияет.
+        # Секция читается тем же парсером с `optionxform = str`, поэтому регистр
+        # `re:`-регулярки сохраняется; порядок строк сохраняется для журнала.
+        self.ignore = []
+        if rules_cp.has_section("ignore"):
+            for selector, _note in rules_cp.items("ignore"):
+                selector = selector.strip()
+                if selector:
+                    self.ignore.append(selector)
 
     def all_zone_names(self):
         """Имена зон в объединении всех наборов (общий и по мониторам).
@@ -1038,11 +1084,12 @@ class X11:
 HISTORY_LIMIT = 20
 
 
-def movable_windows(client_ids, metas):
+def movable_windows(client_ids, metas, ignore=None):
     """id окон, которые можно двигать, в порядке `_NET_CLIENT_LIST`.
 
-    Те же фильтры, что у демона: нужен непустой `WM_CLASS` и не служебный тип
-    окна. `override_redirect` окон в списке клиентов EWMH нет, поэтому там такой
+    Те же фильтры, что у демона: нужен непустой `WM_CLASS` и окно не под
+    исключением — `window_excluded` (служебный тип или селектор `[ignore]`).
+    `override_redirect` окон в списке клиентов EWMH нет, поэтому там такой
     проверки не требуется. Чистая функция — под тесты.
     """
     out = []
@@ -1050,19 +1097,22 @@ def movable_windows(client_ids, metas):
         meta = metas.get(win)
         if meta is None:
             continue
-        if not meta.wm_class or is_ignored_type(meta.window_type):
+        if not meta.wm_class:
+            continue
+        if window_excluded(meta.wm_class, meta.wm_title, meta.window_type, ignore):
             continue
         out.append(win)
     return out
 
 
-def choose_assignments(client_ids, metas, zones, rules, by="auto"):
+def choose_assignments(client_ids, metas, zones, rules, by="auto", ignore=None):
     """Сопоставить окна зонам. Чистая функция — под тесты.
 
     client_ids — id в порядке `_NET_CLIENT_LIST` (снизу вверх);
     metas — {id: WindowMeta};
     zones — имена зон в порядке файла (важен для order/auto);
     rules — [(селектор, зона)] из `[rules]`;
+    ignore — селекторы `[ignore]` (окна под ними не двигаются);
     by — режим:
       `rules` — только окна со сработавшим правилом, каждое в свою зону;
       `order` — все подвижные окна по порядку в зоны по порядку; лишним окнам
@@ -1073,7 +1123,7 @@ def choose_assignments(client_ids, metas, zones, rules, by="auto"):
     Возвращает список (id, зона) в порядке укладки; неназначенные окна в него
     не попадают.
     """
-    windows = movable_windows(client_ids, metas)
+    windows = movable_windows(client_ids, metas, ignore)
     if by == "rules":
         result = []
         for win in windows:
@@ -1343,6 +1393,14 @@ def cmd_apply(grid, args):
         print(f"{args.zone}: x={x} y={y} {w}x{h} (монитор {index}: {output})")
         return
     window = args.window or active_window()
+    if window_is_excluded(window, grid.ignore):
+        if not args.quiet:
+            print(
+                f"zone-tiler: окно 0x{window:x} под исключением "
+                "([ignore]/служебный тип) — не двигаю",
+                file=sys.stderr,
+            )
+        return
     before = None
     try:
         before = snapshot_window(window, zone=args.zone)
@@ -1426,6 +1484,14 @@ def cmd_move(grid, args):
         )
     outputs = monitor_outputs()
     window = args.window or active_window()
+    if window_is_excluded(window, grid.ignore):
+        if not args.quiet:
+            print(
+                f"zone-tiler: окно 0x{window:x} под исключением "
+                "([ignore]/служебный тип) — не двигаю",
+                file=sys.stderr,
+            )
+        return EXIT_OK
     extents = frame_extents(window)
     try:
         frame = read_frame(window, extents)
@@ -1512,7 +1578,9 @@ def cmd_arrange(grid, args):
     assignments = []
     for output, wa, wins in groups:
         zones = list(grid.zones_for(output))
-        for win, zone in choose_assignments(wins, metas, zones, grid.rules, args.by):
+        for win, zone in choose_assignments(
+            wins, metas, zones, grid.rules, args.by, ignore=grid.ignore
+        ):
             assignments.append((win, zone, output, wa))
     if not groups:
         if not args.quiet:
@@ -1561,7 +1629,7 @@ def cmd_stack(grid, args):
     if client_ids is None:
         fail("zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)", EXIT_FAIL)
     metas = {win: read_window_meta(win) for win in client_ids}
-    windows = movable_windows(client_ids, metas)
+    windows = movable_windows(client_ids, metas, grid.ignore)
     if not windows:
         if not args.quiet:
             print("zone-tiler: нет окон для стопки")
@@ -1619,13 +1687,16 @@ def cmd_undo(grid, args):
 
     try:
         for win, frame, wm_class in targets:
-            current_class, _ = window_class_title(win)
+            current_class, current_title = window_class_title(win)
             if wm_class and current_class and current_class != wm_class:
                 # id мог переиспользоваться другим приложением после выхода старого
                 warn(f"окно 0x{win:x}: класс не совпал ({current_class} ≠ {wm_class}) — пропускаю")
                 continue
             if wm_class and not current_class:
                 warn(f"окно 0x{win:x}: уже не существует — пропускаю")
+                continue
+            if window_excluded(current_class, current_title, window_types(win), grid.ignore):
+                warn(f"окно 0x{win:x}: под исключением ([ignore]/служебный тип) — пропускаю")
                 continue
             try:
                 apply_zone(win, tuple(frame), x11=x11, quiet=args.quiet, verify=args.verify)
@@ -1759,8 +1830,10 @@ def cmd_profile(args):
             sys.stdout.write(zc.profile_text(name, conf))
         elif action == "save":
             zones = zc.load_zones(conf)
-            rules = zc.load_extra_sections(conf, sections=["rules"]).get("rules", [])
-            path = zc.save_profile(name, zones, rules, conf)
+            extra = zc.load_extra_sections(conf, sections=["rules", "ignore"])
+            path = zc.save_profile(
+                name, zones, extra.get("rules", []), conf, ignore=extra.get("ignore")
+            )
             print(f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» сохранён: {path}")
         elif action == "rm":
             zc.remove_profile(name, conf)
