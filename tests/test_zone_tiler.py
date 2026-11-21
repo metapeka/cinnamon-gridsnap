@@ -321,10 +321,13 @@ class TestCli(ConfMixin, unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIn("apply", r.stdout)
 
-    def test_unknown_zone_is_usage_error(self):
+    def test_unknown_zone_is_config_error(self):
+        # Зона, которой нет ни в сетке стола, ни в общем [zones], — это расхождение
+        # конфига и профиля, а не опечатка в аргументе: код 3 и перечень зон.
         r = self.run_cli("apply", "no-such-zone")
-        self.assertEqual(r.returncode, 2)
+        self.assertEqual(r.returncode, 3)
         self.assertIn("нет зоны", r.stderr)
+        self.assertIn("Есть:", r.stderr)
 
     def test_missing_conf_is_config_error(self):
         r = self.run_cli("list", "--conf", "/nonexistent/definitely.conf")

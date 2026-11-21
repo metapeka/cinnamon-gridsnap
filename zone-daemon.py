@@ -16,6 +16,12 @@ zone-daemon — долгоживущий демон GridSnap: сам вклад�
 Сворачивание окна из `_NET_CLIENT_LIST` не убирает — поэтому reflow не
 срабатывает, и это желаемое поведение.
 
+Рабочие столы: демон помнит активный стол (`_NET_CURRENT_DESKTOP`) и стол
+каждого уложенного окна (`_NET_WM_DESKTOP`). Сетка зон берётся для стола окна
+через `zone-tiler.grid_for_workspace()` (профиль из `[workspaces]`, иначе общий
+`[zones]`); «липкое» окно (`0xFFFFFFFF`) живёт в общем наборе. Окна невидимых
+столов не двигаются никогда: reflow работает только на текущем столе.
+
 Конфиг — тот же `zones.conf` (по умолчанию путь как у раскладчика,
 `zone-tiler.default_conf()`):
 
@@ -64,6 +70,10 @@ META_RETRY_DELAY = 0.2
 
 # Коды событий X11.
 PROPERTY_NOTIFY = 28
+
+# Активный рабочий стол (EWMH, на root). Читается тем же PropertyNotify-циклом,
+# что и список клиентов: маска PropertyChangeMask на root уже стоит.
+CURRENT_DESKTOP_ATOM = "_NET_CURRENT_DESKTOP"
 
 # PropertyChangeMask: PropertyNotify о свойствах root (в т.ч. _NET_CLIENT_LIST).
 PROPERTY_CHANGE_MASK = 1 << 22
@@ -153,6 +163,11 @@ def fractions_to_pixels(fx, fy, fw, fh, wa):
     return (x1, y1, max(1, x2 - x1), max(1, y2 - y1))
 
 
+def workspace_label(workspace):
+    """Стол для журнала: номер EWMH (с нуля) или пометка «неизвестен»."""
+    return "неизвестен" if workspace is None else f"#{workspace}"
+
+
 # ----------------------------------------------------------------------- демон
 
 
@@ -174,12 +189,20 @@ class Daemon:
                    (по умолчанию `tiler.monitors`, вызывается лениво);
       window_center — callable(window) -> (px, py) либо None (по умолчанию
                    `read_window_center`, вызывается лениво);
+      current_workspace — callable() -> номер активного стола (по умолчанию
+                   `tiler.current_workspace`); читается один раз в `__init__`,
+                   потом на каждый PropertyNotify о `_NET_CURRENT_DESKTOP`;
+      window_workspace — callable(window) -> номер стола окна либо None
+                   (по умолчанию `tiler.window_workspace_for_zones`; None же
+                   у «липкого» окна — оно живёт в общем наборе зон);
       verbose    — печатать ли, что делает демон.
 
     `windows` — трекер `window id -> имя зоны`: им же отсекаются повторные
     появления окна (свернуть/развернуть не переставляют окно). `win_monitor`
-    хранит рабочую область, на которой окно уложено; `filled` — покрытые зоны
-    по мониторам.
+    хранит рабочую область, на которой окно уложено; `win_workspace` — стол,
+    на котором оно уложено (`None` — липкое/неизвестный стол); `filled` —
+    покрытые зоны по столу и монитору. Стол учитывается везде, где считается
+    занятость: окно стола 2 не делает зону занятой для reflow на столе 1.
 
     Точка входа из X11-контура — `reconcile(client_ids)`: список id текущих
     клиентов из `_NET_CLIENT_LIST`. Новые id (которых нет в `seen`) проходят
@@ -188,10 +211,13 @@ class Daemon:
     метаданные не перечитываются на каждой реконсиляции.
 
     Закрытие окна (`on_destroy`) снимает его с трекера и, если включён
-    `reflow=neighbors`, перестраивает раскладку. Скрытие окна (`on_unmap`:
-    сворачивание, смена воркспейса) в `_NET_CLIENT_LIST` ничего не меняет,
-    поэтому реконсиляция его не видит: окно остаётся в трекере, соседей не
-    двигаем.
+    `reflow=neighbors`, перестраивает раскладку — но только когда стол
+    закрытого окна виден (`self.workspace`); иначе состояние чистится, а окна
+    на других столах не двигаются. Скрытие окна (`on_unmap`: сворачивание,
+    смена воркспейса) в `_NET_CLIENT_LIST` ничего не меняет, поэтому
+    реконсиляция его не видит: окно остаётся в трекере, соседей не двигаем.
+    Смена активного стола (`on_workspace_change`) обновляет только
+    `self.workspace` — окна не переставляются.
     """
 
     def __init__(
@@ -202,6 +228,8 @@ class Daemon:
         workarea=None,
         monitors=None,
         window_center=None,
+        current_workspace=None,
+        window_workspace=None,
         verbose=False,
     ):
         self.conf_path = conf_path or tiler.default_conf()
@@ -212,16 +240,27 @@ class Daemon:
         self.workarea = workarea
         self.monitors = monitors if monitors is not None else tiler.monitors
         self.window_center = window_center or read_window_center
+        self.read_current_workspace = current_workspace or tiler.current_workspace
+        self.read_window_workspace = window_workspace or tiler.window_workspace_for_zones
         self.verbose = verbose
         self.reflow = read_reflow(self.grid.conf)
         self.windows = {}
         # Рабочая область, на которой уложено окно: window id -> (x, y, w, h).
         # Нужна reflow, чтобы не расширять соседа с другого монитора.
         self.win_monitor = {}
-        # Зоны, покрытые расширенным соседом (reflow=neighbors): пара
-        # (рабочая область, освобождённая зона) -> окно-держатель. Покрытие
-        # ключуется монитором: одна и та же зона на двух экранах независима.
+        # Стол, на котором уложено окно: window id -> номер стола или None
+        # (липкое окно). Окно другого стола не делает зону занятой на этом.
+        self.win_workspace = {}
+        # Зоны, покрытые расширенным соседом (reflow=neighbors): тройка
+        # (стол, рабочая область, освобождённая зона) -> окно-держатель.
+        # Покрытие ключуется столом и монитором: одна и та же зона на разных
+        # столах и экранах независима, и reflow одного стола не трогает другой.
         self.filled = {}
+        # Сетки столов, посчитанные по `[workspaces]`: стол -> Grid. Кэш
+        # сбрасывается `reload`, чтобы новый профиль подхватился без рестарта.
+        self._grids = {}
+        # Активный стол (нумерация EWMH с нуля); None — не определить.
+        self.workspace = self._read_current_workspace()
         # Все id из последнего `_NET_CLIENT_LIST` (и уложенные, и без правила) —
         # чтобы не читать метаданные повторно на каждой реконсиляции.
         self.seen = set()
@@ -235,6 +274,65 @@ class Daemon:
     def log(self, message):
         if self.verbose:
             print(message, flush=True)
+
+    # -- рабочие столы
+
+    def _read_current_workspace(self):
+        """Активный стол из `_NET_CURRENT_DESKTOP`; `None` — не определить.
+
+        `tiler.current_workspace()` при отказе `xprop` возвращает `None` сам,
+        но подменённый читатель может и бросить: стол — не повод падать, при
+        неизвестном столе reflow просто не двигает окна.
+        """
+        try:
+            return self.read_current_workspace()
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось определить активный стол: {exc}")
+            return None
+
+    def _window_workspace(self, win):
+        """Стол окна для выбора сетки; `None` — «липкое» или не опознано."""
+        try:
+            return self.read_window_workspace(win)
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось определить стол окна 0x{win:x}: {exc}")
+            return None
+
+    def _visible(self, workspace):
+        """Виден ли стол окна сейчас — то есть можно ли двигать это окно.
+
+        `None` (липкое окно или неопознанный стол) — видно всегда. Неизвестный
+        же активный стол (`self.workspace is None`) видимым не делает никого:
+        двигать окна вслепую хуже, чем не двигать.
+        """
+        if workspace is None:
+            return True
+        return workspace == self.workspace
+
+    def _grid_for(self, workspace=None):
+        """Сетка рабочего стола: профиль из `[workspaces]` или общий набор зон.
+
+        `workspace=None` (липкое/неопознанное окно) — обычный `Grid(conf_path)`:
+        общий набор зон, как зафиксировано контрактом `grid_for_workspace`.
+        Сетки кэшируются по столу, чтобы не перечитывать конфиг и профиль на
+        каждое окно; `reload` сбрасывает кэш. Битый `[workspaces]` или профиль
+        (в т.ч. `SystemExit` из `fail()`) не роняют демон: берётся общий набор.
+        """
+        if workspace is None:
+            return self.grid
+        cached = self._grids.get(workspace)
+        if cached is not None:
+            return cached
+        try:
+            grid = tiler.grid_for_workspace(self.conf_path, workspace)
+        except (Exception, SystemExit) as exc:
+            self.log(
+                f"не удалось взять сетку стола {workspace_label(workspace)}: {exc} — "
+                "беру общий набор"
+            )
+            grid = self.grid
+        self._grids[workspace] = grid
+        return grid
 
     def _forced_workarea(self):
         """Принудительная одна рабочая область; `None`, если её не получить."""
@@ -313,32 +411,43 @@ class Daemon:
             return False
 
     def _window_for_zone(self, zone, wa=None):
-        """Окно в зоне `zone`; при `wa` — именно на этой рабочей области."""
+        """Окно в зоне `zone` на видимом столе; при `wa` — именно на этой области.
+
+        Окна других столов не кандидаты: reflow двигает только видимый стол.
+        """
         for win, occupied in self.windows.items():
             if occupied != zone:
                 continue
-            if wa is None or self.win_monitor.get(win) == wa:
-                return win
+            if wa is not None and self.win_monitor.get(win) != wa:
+                continue
+            if not self._visible(self.win_workspace.get(win)):
+                continue
+            return win
         return None
 
-    def _restore_holder(self, wa, zone):
+    def _restore_holder(self, workspace, wa, zone):
         """Вернуть соседа, расширившегося на `zone`, к его рамке из конфига.
 
-        `zone` на рабочей области `wa` занята новым окном, поэтому покрытие
-        больше не нужно. Если окна-держателя уже нет в трекере, запись снимается
-        без перемещений. При неудачном `apply` запись остаётся: попробуем при
+        `zone` на рабочей области `wa` занята новым окном стола `workspace`,
+        поэтому покрытие больше не нужно. Покрытие живёт на видимом столе
+        (reflow туда и только туда), поэтому окно другого стола его не трогает.
+        Если окна-держателя уже нет в трекере, запись снимается без
+        перемещений. При неудачном `apply` запись остаётся: попробуем при
         следующем окне.
         """
-        key = (wa, zone)
+        if not self._visible(workspace):
+            return  # окно невидимого стола: покрытие видимого стола не наше
+        key = (self.workspace, wa, zone)
         holder = self.filled.get(key)
         if holder is None:
             return
         holder_zone = self.windows.get(holder)
-        if holder_zone is None or holder_zone not in self.grid.zones:
-            # Держателя нет или его зона исчезла после reload — покрытие снимаем.
+        grid = self._grid_for(self.win_workspace.get(holder))
+        if holder_zone is None or holder_zone not in grid.all_zone_names():
+            # Держателя нет или его зоны больше нет в наборе — покрытие снимаем.
             del self.filled[key]
             return
-        if self._apply(holder, self.grid.rect(holder_zone, wa), holder_zone):
+        if self._apply(holder, grid.rect(holder_zone, wa), holder_zone):
             del self.filled[key]
             self.log(f"возвращаю зону '{holder_zone}' к исходной рамке")
 
@@ -367,10 +476,13 @@ class Daemon:
         return self._monitors() or []
 
     def ipc_status(self, request=None):
-        """Состояние демона: зоны, окно→зона, монитор, профиль, reflow.
+        """Состояние демона: зоны, окно→зона, стол, монитор, профиль, reflow.
 
         Пиксельные рамки зон даются на каждый монитор (`zones_px`), потому что
-        зона — доля рабочей области, а у монитора своя область.
+        зона — доля рабочей области, а у монитора своя область. Поля
+        `windows[].zone/window/monitor` — прежние: апплет и тесты читают их как
+        раньше; `workspace` (номер активного стола и стол каждого окна и
+        покрытия) добавлен рядом, а не вместо.
         """
         zones = {name: list(self.grid.fractions(name)) for name in sorted(self.grid.zones)}
         monitors = self._monitor_list()
@@ -381,18 +493,35 @@ class Daemon:
         for win, zone in sorted(self.windows.items()):
             wa = self.win_monitor.get(win)
             windows.append(
-                {"window": hex(win), "zone": zone, "monitor": list(wa) if wa else None}
+                {
+                    "window": hex(win),
+                    "zone": zone,
+                    "monitor": list(wa) if wa else None,
+                    "workspace": self.win_workspace.get(win),
+                }
             )
         filled = [
-            {"monitor": list(wa), "zone": zone, "holder": hex(holder)}
-            for (wa, zone), holder in sorted(
-                self.filled.items(), key=lambda item: (item[0][1], item[1])
+            {
+                "workspace": workspace,
+                "monitor": list(wa),
+                "zone": zone,
+                "holder": hex(holder),
+            }
+            for (workspace, wa, zone), holder in sorted(
+                self.filled.items(),
+                key=lambda item: (
+                    item[0][2],
+                    -1 if item[0][0] is None else item[0][0],
+                    item[1],
+                ),
             )
         ]
         return {
             "version": VERSION,
             "conf": self.conf_path,
             "reflow": self.reflow,
+            # Активный рабочий стол (нумерация EWMH с нуля); None — неизвестен.
+            "workspace": self.workspace,
             # Профили раскладок — волна 3; поле есть заранее для совместимости.
             "profile": None,
             "monitors": [list(wa) for wa in monitors],
@@ -447,7 +576,10 @@ class Daemon:
             raise ValueError(f"не удалось вложить окно 0x{window:x} в зону '{zone}'")
         self.windows[window] = zone
         self.win_monitor[window] = wa
-        self._restore_holder(wa, zone)
+        # Окно вкладывается там, где сейчас пользователь: занятость считаем по
+        # активному столу (сетка зоны — по-прежнему из основного конфига).
+        self.win_workspace[window] = self.workspace
+        self._restore_holder(self.workspace, wa, zone)
         return {
             "window": hex(window),
             "zone": zone,
@@ -456,9 +588,10 @@ class Daemon:
         }
 
     def ipc_reload(self, request=None):
-        """Перечитать zones.conf: сетка, правила и reflow; кэши сбросить."""
+        """Перечитать zones.conf: сетка, правила, профили столов и reflow; кэши сбросить."""
         self.grid = tiler.Grid(self.conf_path)
         self.reflow = read_reflow(self.grid.conf)
+        self._grids = {}
         self._wa_cache = None
         self._mons_cache = None
         self.log(f"конфиг перечитан: {self.conf_path}")
@@ -494,8 +627,39 @@ class Daemon:
                 self.on_destroy(win)
         self.seen = current
 
+    def on_workspace_change(self):
+        """Активный стол сменился (`_NET_CURRENT_DESKTOP`): запомнить новый.
+
+        Окна не двигаем: укладка и reflow идут только по событиям окон, а
+        невидимые столы остаются как есть. Возвращает новый стол (прежний,
+        если прочитать не удалось).
+        """
+        previous = self.workspace
+        workspace = self._read_current_workspace()
+        if workspace is None:
+            self.log(
+                f"активный стол не прочитался — остаётся {workspace_label(previous)}"
+            )
+            return previous
+        self.workspace = workspace
+        if workspace == previous:
+            self.log(f"активный стол не изменился: {workspace_label(workspace)}")
+        else:
+            self.log(
+                f"активный стол: {workspace_label(workspace)} "
+                f"(был {workspace_label(previous)}) — окна не двигаю"
+            )
+        return workspace
+
     def on_map(self, win, override_redirect=False):
-        """Новое клиентское окно: вложить в зону по правилу, если оно подходит."""
+        """Новое клиентское окно: вложить в зону по правилу, если оно подходит.
+
+        Сетка берётся для стола окна (`tiler.grid_for_workspace`): на столе с
+        профилем окно встаёт в зоны профиля, а «липкое» окно — в общий набор
+        `zones.conf`. Правила — из основного конфига: имя зоны глобально, но
+        если в наборе стола такой зоны нет, окно не укладывается (лучше никак,
+        чем в чужую геометрию).
+        """
         if win in self.windows:
             return  # окно уже уложено (повторное появление в списке)
         if override_redirect:
@@ -511,24 +675,41 @@ class Daemon:
         )
         if zone is None:
             return
+        workspace = self._window_workspace(win)
+        grid = self._grid_for(workspace)
+        if zone not in grid.all_zone_names():
+            self.log(
+                f"зоны '{zone}' нет в наборе стола {workspace_label(workspace)} — "
+                f"окно 0x{win:x} не укладываю"
+            )
+            return
         wa = self._monitor_of(win)
         if wa is None:
             return  # монитор окна недоступен: не падаем и окно не трогаем
-        rect = self.grid.rect(zone, wa)
+        rect = grid.rect(zone, wa)
         if not self._apply(win, rect, zone):
             return  # не запоминаем: окно не уложено, зону занятой не считаем
         self.windows[win] = zone
         self.win_monitor[win] = wa
-        self.log(f"окно 0x{win:x} -> зона '{zone}'")
+        self.win_workspace[win] = workspace
+        self.log(
+            f"окно 0x{win:x} -> зона '{zone}' (стол {workspace_label(workspace)})"
+        )
         # Зона снова занята — расширившийся на неё сосед больше не нужен.
-        self._restore_holder(wa, zone)
+        self._restore_holder(workspace, wa, zone)
 
     def on_destroy(self, win):
-        """Окно исчезло из `_NET_CLIENT_LIST` — снять с трекера и, если нужно, reflow."""
+        """Окно исчезло из `_NET_CLIENT_LIST` — снять с трекера и, если нужно, reflow.
+
+        Перестройка — только когда стол закрытого окна виден (`self.workspace`):
+        окна невидимых столов не двигаются никогда, состояние такого стола
+        просто чистится.
+        """
         zone = self.windows.pop(win, None)
         if zone is None:
             return
         wa = self.win_monitor.pop(win, None)
+        workspace = self.win_workspace.pop(win, None)
         self.log(f"окно 0x{win:x} ушло из зоны '{zone}'")
         # Держатель исчез: снять записи о зонах, которые он покрывал.
         for key, holder in list(self.filled.items()):
@@ -536,14 +717,22 @@ class Daemon:
                 del self.filled[key]
         if self.reflow != REFLOW_NEIGHBORS or wa is None:
             return
-        # reflow — в пределах монитора ушедшего окна: окна на других экранах в
-        # занятых зонах не учитываются, соседа с другого монитора не двигаем.
+        if not self._visible(workspace):
+            self.log(
+                f"стол {workspace_label(workspace)} не виден "
+                f"(сейчас {workspace_label(self.workspace)}) — reflow не делаю"
+            )
+            return
+        # reflow — в пределах монитора ушедшего окна и видимого стола: окна на
+        # других экранах и столах в занятых зонах не учитываются и не двигаются.
         occupied = {
             other_zone
             for other, other_zone in self.windows.items()
             if self.win_monitor.get(other) == wa
+            and self._visible(self.win_workspace.get(other))
         }
-        zones = {name: self.grid.fractions(name) for name in self.grid.zones}
+        grid = self._grid_for(self.workspace)
+        zones = {name: grid.fractions(name) for name in grid.zones}
         changes = zone_reflow.reflow(zones, zone, occupied)
         if not changes:
             return
@@ -554,7 +743,7 @@ class Daemon:
             fx, fy, fw, fh = frac
             if not self._apply(target, fractions_to_pixels(fx, fy, fw, fh, wa), name):
                 continue  # окно не переехало: зону покрытой не считаем
-            self.filled[(wa, zone)] = target
+            self.filled[(self.workspace, wa, zone)] = target
             self.log(f"reflow: окно 0x{target:x} -> зона '{name}'")
 
     def on_unmap(self, win):
@@ -563,7 +752,8 @@ class Daemon:
         В `_NET_CLIENT_LIST` такое окно остаётся, поэтому реконсиляция его не
         снимает с трекера: при разворачивании окно не переставляется заново, а
         соседи не расширяются на занятую зону. Снятие с трекера и reflow —
-        только когда окно исчезает из `_NET_CLIENT_LIST` (`on_destroy`).
+        только когда окно исчезает из `_NET_CLIENT_LIST` (`on_destroy`), и там
+        же стоит проверка «стол окна виден»: перестраивать здесь нечего.
         """
         self.log(f"окно 0x{win:x} скрыто — оставляем в трекере")
 
@@ -585,14 +775,22 @@ class XPropertyEvent(ctypes.Structure):
     ]
 
 
-def handle_property_event(dae, buf, client_list_atom, read_clients):
-    """PropertyNotify: если изменился `_NET_CLIENT_LIST` — реконсиляция.
+def handle_property_event(dae, buf, client_list_atom, read_clients, desktop_atom=None):
+    """PropertyNotify: `_NET_CLIENT_LIST` — реконсиляция, `_NET_CURRENT_DESKTOP` — стол.
 
-    Возвращает True, если событие относилось к списку клиентов. Если список
-    прочитать не удалось (`read_clients()` дал `None`), реконсиляция
+    Возвращает True, если событие относилось к одному из этих свойств. Если
+    список прочитать не удалось (`read_clients()` дал `None`), реконсиляция
     пропускается: трекер и `seen` не трогаем.
+
+    `desktop_atom` — атом `_NET_CURRENT_DESKTOP`: на него демон обновляет
+    активный стол (`dae.on_workspace_change()`), но окна не двигает: укладка и
+    reflow — только по событиям окон. `None` — атом не передан, событие о столе
+    пропускается (старый вызов из четырёх аргументов).
     """
     ev = ctypes.cast(buf, ctypes.POINTER(XPropertyEvent)).contents
+    if desktop_atom is not None and ev.atom == desktop_atom:
+        dae.on_workspace_change()
+        return True
     if ev.atom != client_list_atom:
         return False
     client_ids = read_clients()
@@ -651,7 +849,8 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
 
     Подписка — `PropertyChangeMask` на root. На старте один раз читается текущий
     список клиентов и укладываются уже открытые окна; дальше то же происходит на
-    каждый PropertyNotify про `_NET_CLIENT_LIST`.
+    каждый PropertyNotify про `_NET_CLIENT_LIST`. PropertyNotify про
+    `_NET_CURRENT_DESKTOP` обновляет только активный стол демона.
 
     `x11` и `read_clients` можно подменить (тогда реальный дисплей не нужен).
     Своё соединение `serve` кладёт в `dae.x11`, чтобы `apply_zone` переиспользовал
@@ -673,6 +872,8 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     x11.x.XSelectInput(x11.dpy, x11.root, PROPERTY_CHANGE_MASK)
     x11.x.XSync(x11.dpy, 0)
     client_list_atom = x11.atom(CLIENT_LIST_ATOM)
+    # Тот же PropertyChangeMask на root даёт и смену активного стола.
+    desktop_atom = x11.atom(CURRENT_DESKTOP_ATOM)
     fd = x11.x.XConnectionNumber(x11.dpy)
     watch = [fd]
     if ipc is not None:
@@ -698,7 +899,7 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
                 if etype == PROPERTY_NOTIFY:
                     handled = (
                         handle_property_event(
-                            dae, buf, client_list_atom, read_clients
+                            dae, buf, client_list_atom, read_clients, desktop_atom
                         )
                         or handled
                     )

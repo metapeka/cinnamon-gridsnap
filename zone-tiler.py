@@ -32,11 +32,18 @@ zone-tiler — раскладывает активное окно по зона�
   zone-tiler.py apply left --monitor 1    # зона на другом мониторе
   zone-tiler.py apply left --monitor HDMI-1   # или по имени выхода (приоритетнее номера)
   zone-tiler.py apply left --window 0x3400007
+  zone-tiler.py apply left --workspace 1  # зона сетки рабочего стола 1
   zone-tiler.py arrange                   # разложить окна по зонам (по правилам и остатку)
   zone-tiler.py arrange --by order        # разложить окна по зонам по порядку списка
   zone-tiler.py stack main                # собрать окна в зону main стопкой (каскадом)
   zone-tiler.py undo                      # вернуть окна из последней операции
   zone-tiler.py undo --all                # откатить всю историю раскладок
+
+Своя сетка на рабочем столе — это профиль: секция `[workspaces]` сопоставляет
+номер стола (с 1) имени профиля из `templates/`. `list`/`apply`/`arrange`/`stack`
+по умолчанию берут сетку активного стола (`--workspace current`), `--workspace N`
+адресует стол номером EWMH (с нуля). Имя зоны остаётся глобальным, `[keys]`
+общая на файл.
 
 Профили раскладок (свои шаблоны: зоны + правила + клавиши) хранятся в
 `~/.config/gridsnap/templates/*.conf`, активация — `profile use <имя>`:
@@ -614,6 +621,8 @@ def grid_for_workspace(conf_path, workspace=None):
     """
     import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как в редакторе
 
+    if workspace == WORKSPACE_CONF:
+        return Grid(conf_path)
     if workspace is None:
         workspace = current_workspace()
     if workspace is None:
@@ -628,6 +637,92 @@ def grid_for_workspace(conf_path, workspace=None):
     if not os.path.exists(path):
         return Grid(conf_path)
     return Grid(path)
+
+
+WORKSPACE_CURRENT = "current"
+# Значение `--workspace conf`: брать сетку прямо из zones.conf, не глядя на
+# `[workspaces]`. Нужно редактору: он рисует и правит сам `zones.conf`, поэтому
+# «проверить зону» обязано считать ту же сетку, что на холсте, а не профиль стола.
+WORKSPACE_CONF = "conf"
+
+
+def workspace_spec(text):
+    """Разобрать `--workspace`: ``current`` (и пусто) или номер стола EWMH.
+
+    Возвращает ``WORKSPACE_CURRENT`` или ``int``; номер отрицательным быть не
+    может, поэтому `-1` — ошибка аргументов. Разбор идёт в `argparse` (тип
+    аргумента), чтобы неверное значение давало код 2 и внятное сообщение.
+    """
+    value = "" if text is None else str(text).strip()
+    if not value or value.lower() == WORKSPACE_CURRENT:
+        return WORKSPACE_CURRENT
+    if value.lower() == WORKSPACE_CONF:
+        return WORKSPACE_CONF
+    if re.fullmatch(r"\d+", value):
+        return int(value)
+    raise argparse.ArgumentTypeError(
+        f"неверный рабочий стол '{text}': нужен номер стола (0, 1, …), "
+        f"{WORKSPACE_CURRENT} или {WORKSPACE_CONF}"
+    )
+
+
+def resolve_workspace(spec):
+    """Номер стола для запроса сетки: ``current``/``None`` — активный стол.
+
+    ``None`` у `current_workspace()` (нет xprop, нет `_NET_CURRENT_DESKTOP`)
+    означает «стол неизвестен» — вызывающий получает общий `zones.conf`.
+    """
+    if spec is None or spec == WORKSPACE_CURRENT:
+        return current_workspace()
+    if spec == WORKSPACE_CONF:
+        return WORKSPACE_CONF
+    return int(spec)
+
+
+def workspace_profile(conf_path, workspace):
+    """Имя профиля стола из ``[workspaces]`` или ``None``, если его нет.
+
+    Отвечает только на вопрос «какая сетка на этом столе»: сопоставления нет,
+    имя профиля не санируется или файла профиля нет на диске — ``None``, то есть
+    стол живёт в общем наборе зон. Та же логика деградации, что у
+    :func:`grid_for_workspace`, — чтобы подпись в `list` не расходилась с тем,
+    что команда реально показала.
+    """
+    if workspace is None or workspace == WORKSPACE_CONF:
+        return None
+    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как в редакторе
+
+    profile = zc.load_workspace_map(conf_path).get(workspace + 1)
+    if profile is None:
+        return None
+    try:
+        path = zc.profile_path(profile, conf_path)
+    except ValueError:
+        return None
+    return profile if os.path.exists(path) else None
+
+
+def require_zone(grid, zone, workspace=None, profile=None):
+    """Проверить, что зона есть в наборе сетки; иначе ошибка конфига (код 3).
+
+    Зона ищется в объединении наборов показанной сетки (общий `[zones]` и
+    `[zones:<выход>]`) — то есть ровно там, где её найдёт раскладка. Перечень
+    доступных зон печатается целиком: по нему видно, что стол получил не тот
+    профиль, а не только что имя набрано с ошибкой.
+    """
+    known = grid.all_zone_names()
+    if zone in known:
+        return
+    if profile and workspace is not None:
+        where = f" в сетке стола {workspace + 1} (профиль «{profile}»)"
+    elif profile:
+        where = f" в сетке профиля «{profile}»"
+    else:
+        where = " в [zones]"
+    fail(
+        f"zone-tiler: нет зоны '{zone}'{where}. Есть: " + ", ".join(sorted(known)),
+        EXIT_CONFIG,
+    )
 
 
 def monitors():
@@ -1124,13 +1219,20 @@ def snapshot_window(win, zone=None):
 # -------------------------------------------------------------------- команды
 
 
-def cmd_list(grid, args):
+def cmd_list(grid, args, profile=None):
+    """Показать зоны сетки: `[zones:<выход>]` монитора или общий `[zones]`.
+
+    `profile` — имя профиля стола, которым показана сетка (`None` — общий
+    `zones.conf`); оно дописывается в первую строку, чтобы было видно, почему
+    набор зон именно такой. Начало первой строки неизменно: его разбирает
+    апплет Cinnamon (регулярка `рабочая область монитора N: ...`).
+    """
     outputs = monitor_outputs()
     index, output = resolve_monitor(args.monitor, outputs)
     wa = outputs[index][1]
-    # Строка рабочей области начинается так же, как раньше: её разбирает апплет
-    # Cinnamon (регулярка `рабочая область монитора N: ...`).
     note = "" if output == f"monitor-{index}" else f"  (выход {output})"
+    if profile:
+        note += f"  (профиль «{profile}»)"
     print(f"рабочая область монитора {index}: {wa[0]},{wa[1]} {wa[2]}x{wa[3]}{note}")
     zones = grid.zones_for(output)
     width = max(len(z) for z in zones)
@@ -1506,6 +1608,17 @@ def main(argv=None):
         default="0",
         help="монитор для list/apply/stack: имя выхода (HDMI-1) или номер (по умолчанию 0)",
     )
+    ap.add_argument(
+        "--workspace",
+        metavar="N|current",
+        default=None,
+        type=workspace_spec,
+        help=(
+            "рабочий стол для list/apply/arrange/stack: номер (EWMH, с нуля), "
+            "current (сетка активного стола — по умолчанию) или conf "
+            "(всегда сетка zones.conf, без профилей столов)"
+        ),
+    )
     ap.add_argument("--window", type=lambda s: int(s, 0), help="id окна (по умолчанию активное)")
     ap.add_argument(
         "--by",
@@ -1535,30 +1648,32 @@ def main(argv=None):
     if args.command == "profile":
         cmd_profile(args)
         return EXIT_OK
-
-    grid = Grid(args.conf)
-    if args.command == "list":
-        cmd_list(grid, args)
-        return EXIT_OK
+    # `[keys]` общая на файл, а undo возвращает прежние рамки: профиль стола им
+    # не указ, поэтому читают сам zones.conf, а не сетку рабочего стола.
     if args.command == "keys":
-        cmd_keys(grid)
+        cmd_keys(Grid(args.conf))
+        return EXIT_OK
+    if args.command == "undo":
+        cmd_undo(Grid(args.conf), args)
+        return EXIT_OK
+
+    # list/apply/arrange/stack работают сеткой своего стола: `--workspace N` или
+    # активный стол по умолчанию; сетка берётся через grid_for_workspace, поэтому
+    # стол без профиля молча живёт в общем [zones].
+    workspace = resolve_workspace(args.workspace)
+    profile = workspace_profile(args.conf, workspace)
+    grid = grid_for_workspace(args.conf, workspace)
+    if args.command == "list":
+        cmd_list(grid, args, profile=profile)
         return EXIT_OK
     if args.command == "arrange":
         cmd_arrange(grid, args)
         return EXIT_OK
-    if args.command == "undo":
-        cmd_undo(grid, args)
-        return EXIT_OK
     if not args.zone:
         fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)
-    # Зона может быть описана только в наборе конкретного монитора, поэтому
-    # проверяем по объединению наборов, а не по общему [zones].
-    known = grid.all_zone_names()
-    if args.zone not in known:
-        fail(
-            f"zone-tiler: нет зоны '{args.zone}'. Есть: " + ", ".join(sorted(known)),
-            EXIT_USAGE,
-        )
+    # Зона ищется в наборе показанной сетки (монитор + общий [zones]); нет её
+    # там — это ошибка конфига: конфиг и профиль стола разошлись.
+    require_zone(grid, args.zone, workspace=workspace, profile=profile)
     if args.command == "stack":
         cmd_stack(grid, args)
         return EXIT_OK
