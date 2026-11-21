@@ -123,6 +123,13 @@ zone_tabs = _load_sibling("gridsnap_zone_tabs", "zone_tabs.py")
 # довольно stdin.
 TABSTRIP = os.path.join(HERE, "zone-tabstrip.py")
 
+# Сколько проверять только запущенный процесс полосы, чтобы отличить отказ
+# запуска («нет GTK»: python стартует, `zone-tabstrip.py` падает на импорте с
+# кодом 1) от работающей полосы. Проверка короткая и только на старте: демон
+# полосу не ждёт, а без неё вкладки работают.
+START_VERIFY_DELAY = 0.3
+START_POLL_INTERVAL = 0.02
+
 
 # ------------------------------------------------------------------ метаданные
 
@@ -168,6 +175,12 @@ class TabStripProcess:
     Сбой запуска демон не роняет: без полосы вкладки работают, просто на экране
     нет подсказки, что окон в зоне несколько. Повторять запуск, которого быть не
     может (нет ``zone-tabstrip.py`` или нет GTK), смысла нет — ``failed``.
+
+    «Нет GTK» выглядит не как `OSError` от `Popen`: python стартует нормально, а
+    ``zone-tabstrip.py`` падает на импорте с кодом 1 — и такой ребёнок больше не
+    перезапускается на каждом изменении картины. Отличить отказ запуска от
+    смерти уже работавшей полосы помогает короткая проверка сразу после
+    `Popen` (`_launch_failure`): умершая позже полоса остаётся перезапускаемой.
     """
 
     def __init__(self, conf, script=None, python=None, verbose=False):
@@ -206,8 +219,39 @@ class TabStripProcess:
             self.failed = True
             self.log(f"полоса вкладок не запустилась: {exc}")
             return False
+        code = self._launch_failure()
+        if code is not None:
+            self.failed = True
+            self.stop()  # закрыть stdin мёртвого ребёнка
+            self.log(
+                f"полоса вкладок не запустилась: {self.script} вышел с кодом {code}"
+            )
+            return False
         self.log(f"полоса вкладок запущена: {self.script}")
         return True
+
+    def _launch_failure(self):
+        """Код возврата, если ребёнок умер сразу после старта, иначе ``None``.
+
+        `poll()` сразу после `Popen` обычно ещё `None`: python только-только
+        запустился. Поэтому коротко ждём и опрашиваем: упавший на импорте
+        `zone-tabstrip.py` (нет GTK) выходит почти сразу, а живая полоса
+        доживает до конца проверки. Смерть уже работавшей полосы — не отказ
+        запуска: её `feed` перезапускает как раньше.
+        """
+        proc = self.proc
+        if proc is None:
+            return None
+        if START_VERIFY_DELAY <= 0:
+            return proc.poll()
+        deadline = time.monotonic() + START_VERIFY_DELAY
+        while True:
+            code = proc.poll()
+            if code is not None:
+                return code
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(START_POLL_INTERVAL)
 
     def feed(self, line):
         """Отдать полосе снимок; ``False`` — она его не приняла (умерла/не поднялась)."""
@@ -849,9 +893,7 @@ class Daemon:
         workspace = self.win_workspace.pop(win, None)
         frame = self.placed.pop(win, None)
         wm_class = self.win_class.pop(win, None)
-        for key, holder in list(self.filled.items()):
-            if holder == win:
-                del self.filled[key]
+        self._drop_coverage(win)
         if frame is not None:
             self.detached[win] = {
                 "frame": [int(v) for v in frame],
@@ -862,6 +904,22 @@ class Daemon:
             }
         self._save_state()
         self.log(f"окно 0x{win:x} вышло из зоны '{zone}' — больше его не двигаю")
+
+    def _drop_coverage(self, win):
+        """Снять покрытия, где держателем было `win`: окно сдвинули из зоны.
+
+        `filled` — книга «кто расширился на чужую зону». Держателя сдвинули
+        (стопка переставила его на общую рамку, он остался единственной
+        вкладкой, он вышел из зоны или его закрыли) — запись о покрытой зоне
+        больше не правда, и `status.filled` не должен её показывать. Геометрия
+        от этого не едет: запись снялась бы и позже, когда зону займут заново.
+        """
+        dropped = False
+        for key, holder in list(self.filled.items()):
+            if holder == win:
+                del self.filled[key]
+                dropped = True
+        return dropped
 
     def _refresh_detached(self):
         """Заметить окна, которые пользователь вынес из своих зон.
@@ -1121,9 +1179,14 @@ class Daemon:
         return out
 
     def _align_stack(self, stack, rect):
-        """Переставить уже стоящие вкладки на общую рамку: полоса появилась/ушла."""
+        """Переставить уже стоящие вкладки на общую рамку: полоса появилась/ушла.
+
+        Сдвинутое окно перестаёт быть держателем покрытия: его зона-покрытие
+        больше не за ним, и запись снимается здесь же (`_drop_coverage`).
+        """
         for win in stack:
             if self._apply(win, rect, self.windows.get(win)):
+                self._drop_coverage(win)
                 self.log(
                     f"вкладки: окно 0x{win:x} встало на общую рамку зоны "
                     f"'{self.windows.get(win)}'"
@@ -1150,6 +1213,8 @@ class Daemon:
         rect = self._stack_rect(zone, wa, workspace, len(stack) + 1, grid=grid)
         if not self._apply(win, rect, zone):
             return None
+        # Окно переехало — покрытия, которые оно держало, больше не его.
+        self._drop_coverage(win)
         self.windows[win] = zone
         self.win_monitor[win] = wa
         self.win_workspace[win] = workspace
@@ -1177,6 +1242,9 @@ class Daemon:
         rect = self._zone_pixel_rect(zone, wa, workspace)
         if not self._apply(win, rect, zone):
             return False
+        # Единственная вкладка сдвинулась на всю зону — держателем покрытия она
+        # быть перестала (`_drop_coverage`), иначе `status.filled` врёт.
+        self._drop_coverage(win)
         self._save_state()
         self.log(
             f"в зоне '{zone}' осталась одна вкладка — окно 0x{win:x} занимает зону целиком"
@@ -1248,6 +1316,62 @@ class Daemon:
                 if record is not None:
                     records.append(record)
         return records
+
+    def _normalize_stacks(self, client_ids=None):
+        """Привести рамки стопок к числу вкладок — по зонам видимого стола.
+
+        Правило «осталась одна вкладка — ей вся зона» живёт в ядре
+        (`zone_tabs.stack_rect`), но применяется не только при укладке и
+        закрытии: окно уходит из стопки руками (`_refresh_detached`) или вторая
+        вкладка не возвращается после перезапуска демона (`_adopt_placement` и
+        `_in_zone_frame`, который считает рамку вкладки «окно в зоне»). Тогда
+        оставшееся окно стоит на рамке вкладки — на высоту полосы ниже, с пустой
+        полосой сверху. Один проход по зонам вместо россыпи вызовов
+        `_collapse_stack` возвращает таким окнам рамку по числу вкладок.
+
+        Двигаются только окна, стоящие на рамке вкладки при единственной
+        вкладке в зоне: окно на своей зоне и расширенный reflow-держатель (его
+        рамка — объединение зон) не трогаются. `True` — что-то переставили.
+        """
+        if self.workspace is None:
+            return False
+        grid = self._grid_for(self.workspace)
+        stacks = {}
+        for win in self._client_order(client_ids):
+            zone = self.windows.get(win)
+            if zone is None or zone not in grid.zones:
+                continue
+            if not self._visible(self.win_workspace.get(win)):
+                continue
+            stacks.setdefault((zone, self.win_monitor.get(win)), []).append(win)
+        moved = False
+        for (zone, wa), stack in stacks.items():
+            if len(stack) != 1 or wa is None:
+                continue
+            win = stack[0]
+            zone_rect = self._zone_pixel_rect(zone, wa, self.workspace, grid)
+            tab_frame = self._tab_frame(zone_rect)
+            if tab_frame == zone_rect:
+                continue  # узкая зона: полосы нет, рамки вкладки и зоны совпали
+            # Сравниваем с памятью укладок, а не с чтением X: до этого прохода
+            # `_refresh_detached` уже сравнил факт с памятью, и раз окно в
+            # трекере — оно там, куда демон его положил (или его не прочитать).
+            actual = self.placed.get(win)
+            if actual is None:
+                actual = self._read_rect(win)
+            if actual is None or not frame_matches(actual, tab_frame):
+                continue  # окно не на рамке вкладки — не наше дело
+            if not self._apply(win, zone_rect, zone):
+                continue
+            self._drop_coverage(win)
+            moved = True
+            self.log(
+                f"в зоне '{zone}' осталась одна вкладка — окно 0x{win:x} "
+                "занимает зону целиком"
+            )
+        if moved:
+            self._save_state()
+        return moved
 
     def sync_strips(self, client_ids=None):
         """Отдать полосе полный снимок вкладок; сбой полосы демон не роняет.
@@ -1535,6 +1659,12 @@ class Daemon:
         один источник истины), одна запись: само окно, его стол и его рабочая
         область. `wa` передаётся, если монитор уже прочитан. Монитор окна не
         прочитать — не сворачиваем: хуже угадать и спрятать чужое.
+
+        Вкладки зоны-цели не сворачиваются — ни те, что были в стопке на входе
+        в режим (`_focus_candidates`), ни те, что правило положило туда уже во
+        время режима: режим называется «только эта зона», и прятать окно самой
+        зоны значит противоречить его смыслу (плюс полоса показывала бы
+        свёрнутую вкладку, а `ipc_apply` в ту же зону окно не сворачивает).
         """
         state = self.focus
         if state is None:
@@ -1544,11 +1674,14 @@ class Daemon:
         if wa is None:
             return False
         entries = [(win, workspace, wa)]
-        return bool(
-            tiler.focus_candidates(
-                entries, state["target"], state["workspace"], state["monitor"]
-            )
-        )
+        if not tiler.focus_candidates(
+            entries, state["target"], state["workspace"], state["monitor"]
+        ):
+            return False
+        if win in self._focus_zone_tabs(state["target"]):
+            self.log(f"окно 0x{win:x} — вкладка зоны режима — не сворачиваю")
+            return False
+        return True
 
     def _focus_zone_tabs(self, target):
         """Вкладки зоны цели — их режим не сворачивает: они часть зоны.
@@ -1800,6 +1933,10 @@ class Daemon:
             # режим не на активном): так окна на другом столе тоже вернутся.
             restored, remaining, state = self.leave_focus(switch=True)
             self._focus_handoff(remaining, state)
+            # `leave_focus` разворачивает окна и активирует цель последней:
+            # активное окно (а с ним подсвеченная вкладка) могло смениться,
+            # поэтому снимок полосы пересобирается и здесь, а не только на входе.
+            self.sync_strips()
             return {"off": True, "restored": [hex(w) for w in restored]}
         zone = request.get("zone")
         if zone is not None and (
@@ -1924,6 +2061,9 @@ class Daemon:
             self.on_destroy(self.focus["target"])
         self._prune_state(current)
         self.seen = current
+        # Состав стопок мог измениться без укладки (окно вынесли руками, вторая
+        # вкладка не вернулась после перезапуска): рамки приводим одним проходом.
+        self._normalize_stacks(client_ids)
         # Картина вкладок поменялась (окна пришли/ушли): полосе — новый снимок.
         # Список клиентов уже прочитан — передаём его, чтобы не спрашивать X дважды.
         self.sync_strips(client_ids)
@@ -2061,9 +2201,7 @@ class Daemon:
         # возвращается вся зона (полосы у одиночного окна нет).
         self._collapse_stack(zone, wa, workspace)
         # Держатель исчез: снять записи о зонах, которые он покрывал.
-        for key, holder in list(self.filled.items()):
-            if holder == win:
-                del self.filled[key]
+        self._drop_coverage(win)
         if self.reflow != REFLOW_NEIGHBORS or wa is None:
             return
         if not self._visible(workspace):
