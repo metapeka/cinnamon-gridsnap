@@ -2,9 +2,11 @@
 # worker-watch.sh — следить за воркерами Orca, не давая себе молча ждать.
 #
 #   tools/worker-watch.sh [--stall SEC] [--deadline SEC] DISPATCH_ID...
+#   tools/worker-watch.sh --all          # все, кто ещё не закончил
 #
 # Dispatch id печатает `worker-start` в поле dispatchId (ctx_...): Orca не умеет
-# перечислить воркеров прогона, поэтому id идут в командной строке.
+# перечислить воркеров прогона, поэтому id идут в командной строке. `--all`
+# берёт их из `worker-list` — удобно, когда после спавна сразу включаешь надзор.
 #
 # Смысл: Orca будит координатора, когда воркер отчитался, упал или потерял
 # терминал. Но если воркер просто повис (модель «думает», терминал ждёт ответа,
@@ -27,9 +29,10 @@ STALL=${ORCA_WATCH_STALL:-600}
 DEADLINE=${ORCA_WATCH_DEADLINE:-1800}
 INTERVAL=${ORCA_WATCH_INTERVAL:-20}
 DISPATCHES=""
+ALL=0
 
 usage() {
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 need_value() {
@@ -41,14 +44,31 @@ while [ $# -gt 0 ]; do
         --stall) need_value "$@"; STALL=$2; shift 2 ;;
         --deadline) need_value "$@"; DEADLINE=$2; shift 2 ;;
         --interval) need_value "$@"; INTERVAL=$2; shift 2 ;;
+        --all) ALL=1; shift ;;
         -h|--help) usage; exit 0 ;;
         --*) echo "worker-watch: неизвестный ключ $1" >&2; usage >&2; exit 2 ;;
         *) DISPATCHES="$DISPATCHES $1"; shift ;;
     esac
 done
 
+if [ "$ALL" -eq 1 ]; then
+    DISPATCHES=$("$ORCA" orchestration worker-list --json 2>/dev/null | python3 -c '
+import json, sys
+terminal = {"succeeded", "failed", "cancelled", "closed"}
+try:
+    d = json.load(sys.stdin)
+except ValueError:
+    sys.exit(0)
+for w in d.get("result", {}).get("workers", []):
+    if w.get("state") not in terminal:
+        print(w["dispatchId"])
+')
+    [ -n "$DISPATCHES" ] || { echo "worker-watch: активных воркеров нет — все уже закончили"; exit 0; }
+    echo "worker-watch: активные воркеры: $(echo $DISPATCHES)"
+fi
+
 if [ -z "$DISPATCHES" ]; then
-    echo "worker-watch: укажите dispatch id (ctx_..., его печатает worker-start)" >&2
+    echo "worker-watch: укажите dispatch id (ctx_..., его печатает worker-start) или --all" >&2
     exit 2
 fi
 
