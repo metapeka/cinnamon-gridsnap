@@ -18,6 +18,11 @@ tolerant-чтение `[daemon]`, `read_client_list` (парсинг xprop), р�
 reflow не переходят через стол, окна невидимых столов не двигаются, а
 `_NET_CURRENT_DESKTOP` меняет только `self.workspace`.
 
+Режим «только эта зона»: вход/`off`/toggle, сворачивание только окон того же
+стола и монитора (исключения и свёрнутое вручную — мимо), разворот на выходе с
+активацией цели последней, снятие режима по исчезновению цели и смене стола,
+сворачивание новых окон того же стола/монитора и поле `focus` в `status`.
+
 Запуск:
     python3 tests/test_daemon.py
 """
@@ -117,6 +122,9 @@ class DaemonTestCase(unittest.TestCase):
     того, какой стол открыт на машине сборки.
     """
 
+    # Тип окна диалога: служебный, демон его не двигает и не сворачивает.
+    DIALOG = {"_NET_WM_WINDOW_TYPE_DIALOG"}
+
     def setUp(self):
         self.applied = []
         self.metas = {}
@@ -124,6 +132,14 @@ class DaemonTestCase(unittest.TestCase):
         self.centers = {}
         self.current = None
         self.workspaces = {}
+        # Инъекции режима «только эта зона»: что свернули/развернули и какой
+        # список клиентов видит демон. `iconic` — подмена `window_iconic`.
+        self.iconified = []
+        self.iconify_calls = []
+        self.deiconified = []
+        self.deiconify_calls = []
+        self.iconic = set()
+        self.clients = []
 
     # -- обвязка
 
@@ -162,6 +178,9 @@ class DaemonTestCase(unittest.TestCase):
             workarea=lambda: WA,
             current_workspace=lambda: self.current,
             window_workspace=lambda win: self.workspaces.get(win),
+            iconify=self.iconify,
+            deiconify=self.deiconify,
+            read_clients=lambda: self.clients,
         )
 
     def multi_daemon(self, text=TWO_ZONES, reflow=None, monitors=(WA, WA1)):
@@ -176,10 +195,25 @@ class DaemonTestCase(unittest.TestCase):
             window_center=lambda win: self.centers[win],
             current_workspace=lambda: self.current,
             window_workspace=lambda win: self.workspaces.get(win),
+            iconify=self.iconify,
+            deiconify=self.deiconify,
+            read_clients=lambda: self.clients,
         )
 
     def apply(self, win, rect, label="", quiet=False):
         self.applied.append((win, rect, label, quiet))
+
+    def iconify(self, win, x11=None, quiet=True):
+        """Вместо `tiler.iconify`: запомнить и считать окно свёрнутым (как WM)."""
+        self.iconified.append(win)
+        self.iconify_calls.append((win, x11, quiet))
+        self.iconic.add(win)
+
+    def deiconify(self, win, x11=None):
+        """Вместо `tiler.deiconify`: запомнить и считать окно видимым (как WM)."""
+        self.deiconified.append(win)
+        self.deiconify_calls.append((win, x11))
+        self.iconic.discard(win)
 
     def read_meta(self, win):
         self.reads.append(win)
@@ -220,7 +254,7 @@ class TestDaemonEvents(DaemonTestCase):
 
     def test_dialog_window_type_ignored(self):
         self.metas[0x1] = self.meta(
-            "firefox-esr", window_type={"_NET_WM_WINDOW_TYPE_DIALOG"}
+            "firefox-esr", window_type=self.DIALOG
         )
         d = self.daemon()
         d.on_map(0x1)
@@ -335,7 +369,7 @@ class TestDaemonEvents(DaemonTestCase):
 
     def test_reconcile_ignored_type_is_seen_but_untracked(self):
         self.metas[0x1] = self.meta(
-            "firefox-esr", window_type={"_NET_WM_WINDOW_TYPE_DIALOG"}
+            "firefox-esr", window_type=self.DIALOG
         )
         d = self.daemon()
         d.reconcile([0x1])
@@ -1147,6 +1181,325 @@ class TestDaemonIgnore(DaemonTestCase):
         self.assertEqual(d.windows, {0x1: "right"})
 
 
+class TestFocusMode(DaemonTestCase):
+    """Режим «только эта зона»: вход, toggle, выход и новички.
+
+    `window_iconic` подменён состоянием `self.iconic`: без X настоящая проверка
+    всегда говорит «видимо». `self.iconify`/`self.deiconify` это состояние
+    меняют, как настоящий WM, поэтому вручную свёрнутое окно остаётся таковым.
+    """
+
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(
+            zd.tiler, "window_iconic", lambda win: win in self.iconic
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def setup_clients(self, windows, workspace=0):
+        """Клиенты демона: окна на столе `workspace` и первом мониторе."""
+        for win in windows:
+            self.workspaces[win] = workspace
+            self.centers[win] = (100, 100)
+        self.clients = list(windows)
+
+    def focus_daemon(self, text=TWO_ZONES):
+        """Демон с двумя мониторами: он же проверяет область сворачивания."""
+        return self.multi_daemon(text=text)
+
+    # -- вход
+
+    def test_entry_minimizes_only_same_workspace_and_monitor(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2, 0x3, 0x4, 0x5])
+        self.workspaces[0x5] = 1  # окно другого стола
+        self.centers[0x4] = (1500, 300)  # окно другого монитора
+        self.metas[0x1] = self.meta("firefox-esr")  # правило: left
+        self.metas[0x2] = self.meta("chromium")
+        self.metas[0x3] = self.meta("dialog-x", window_type=self.DIALOG)
+        self.metas[0x4] = self.meta("chromium")
+        self.metas[0x5] = self.meta("chromium")
+        d = self.focus_daemon()
+        reply = d.ipc_focus({"zone": "left", "window": 0x1})
+        self.assertEqual(
+            reply,
+            {
+                "zone": "left",
+                "window": "0x1",
+                "monitor": list(WA),
+                "minimized": ["0x2"],
+            },
+        )
+        self.assertEqual(self.applied, [(0x1, (0, 0, 500, 1000), "left", True)])
+        # диалог и окна чужого стола/монитора остаются видимыми
+        self.assertEqual(self.iconified, [0x2])
+        self.assertEqual(self.iconify_calls, [(0x2, None, True)])
+        self.assertEqual(d.windows, {0x1: "left"})
+        self.assertEqual(d.win_monitor, {0x1: WA})
+        self.assertEqual(d.win_workspace, {0x1: 0})
+        self.assertEqual(
+            d.focus,
+            {
+                "zone": "left",
+                "target": 0x1,
+                "workspace": 0,
+                "monitor": WA,
+                "minimized": {0x2},
+            },
+        )
+
+    def test_entry_without_zone_keeps_target_in_place(self):
+        # Форма `[focus]` без зоны: цель не двигается и в трекеры не попадает.
+        self.current = 0
+        self.setup_clients([0x1, 0x2, 0x3])
+        self.workspaces[0x3] = 1  # чужой стол — не сворачиваем
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("gimp")
+        self.metas[0x3] = self.meta("gimp")
+        d = self.focus_daemon()
+        reply = d.ipc_focus({"window": 0x1})
+        self.assertEqual(
+            reply,
+            {
+                "zone": None,
+                "window": "0x1",
+                "monitor": list(WA),
+                "minimized": ["0x2"],
+            },
+        )
+        self.assertEqual(self.applied, [])
+        self.assertEqual(self.iconified, [0x2])
+        self.assertEqual(d.windows, {})
+        self.assertIsNone(d.focus["zone"])
+        self.assertEqual(d.ipc_status()["focus"]["zone"], None)
+
+    def test_entry_uses_active_window_when_not_given(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        with mock.patch.object(zd.tiler, "active_window", lambda: 0x1):
+            reply = d.ipc_focus({"zone": "left"})
+        self.assertEqual(reply["window"], "0x1")
+
+    def test_entry_accepts_hex_string_window(self):
+        self.current = 0
+        self.setup_clients([0x1])
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = self.focus_daemon()
+        reply = d.ipc_focus({"zone": "left", "window": "0x1"})
+        self.assertEqual(reply["window"], "0x1")
+
+    def test_entry_rejects_unknown_zone(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = self.focus_daemon()
+        with self.assertRaises(ValueError) as caught:
+            d.ipc_focus({"zone": "nope", "window": 0x1})
+        self.assertIn("нет зоны 'nope'", str(caught.exception))
+        self.assertEqual(self.applied, [])
+        self.assertIsNone(d.focus)
+
+    def test_entry_rejects_excluded_target(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("dialog-x", window_type=self.DIALOG)
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        with self.assertRaises(ValueError) as caught:
+            d.ipc_focus({"zone": "left", "window": 0x1})
+        self.assertIn("исключением", str(caught.exception))
+        self.assertEqual(self.applied, [])
+        self.assertEqual(self.iconified, [])
+        self.assertIsNone(d.focus)
+
+    def test_entry_without_active_workspace_refuses(self):
+        self.current = None
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        with self.assertRaises(ValueError) as caught:
+            d.ipc_focus({"zone": "left", "window": 0x1})
+        self.assertIn("активный стол", str(caught.exception))
+        self.assertEqual(self.applied, [])
+        self.assertEqual(self.iconified, [])
+        self.assertIsNone(d.focus)
+
+    # -- toggle и выход
+
+    def test_toggle_restores_only_mode_windows_and_activates_target_last(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2, 0x3])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.metas[0x3] = self.meta("gimp")
+        self.iconic = {0x3}  # свёрнуто вручную до входа в режим
+        d = self.focus_daemon()
+        reply = d.ipc_focus({"zone": "left", "window": 0x1})
+        self.assertEqual(reply["minimized"], ["0x2"])
+        out = d.ipc_focus({"zone": "left", "window": 0x1})
+        self.assertEqual(out, {"off": True, "restored": ["0x2"]})
+        # свёрнутое вручную не разворачиваем, цель активируется последней
+        self.assertEqual(self.deiconified, [0x2, 0x1])
+        self.assertEqual(self.deiconify_calls, [(0x2, None), (0x1, None)])
+        self.assertIsNone(d.focus)
+        self.assertIsNone(d.ipc_status()["focus"])
+
+    def test_off_on_inactive_mode_is_success(self):
+        d = self.focus_daemon()
+        self.assertEqual(d.ipc_focus({"off": True}), {"off": True, "restored": []})
+        self.assertEqual(
+            d.ipc_focus({"off": True, "zone": "left"}),
+            {"off": True, "restored": []},
+        )
+        self.assertEqual(self.deiconified, [])
+        self.assertEqual(self.iconified, [])
+        self.assertEqual(self.applied, [])
+
+    def test_target_disappearing_leaves_mode_and_restores_windows(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        d.seen = {0x1, 0x2}
+        d.reconcile([0x2])  # цель 0x1 исчезла из _NET_CLIENT_LIST
+        self.assertIsNone(d.focus)
+        self.assertEqual(self.deiconified, [0x2, 0x1])
+        self.assertEqual(d.windows, {})
+
+    def test_minimized_window_disappearing_keeps_mode(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("gimp")  # правила нет: в windows его нет
+        d = self.focus_daemon()
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        d.seen = {0x1, 0x2}
+        d.reconcile([0x1])  # свёрнутое 0x2 исчезло, цель жива
+        self.assertIsNotNone(d.focus)
+        self.assertEqual(d.focus["minimized"], set())
+        self.assertEqual(self.deiconified, [])
+        self.assertEqual(d.ipc_status()["focus"]["minimized"], 0)
+
+    def test_workspace_change_leaves_mode(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        self.current = 1
+        self.assertEqual(d.on_workspace_change(), 1)
+        self.assertIsNone(d.focus)
+        self.assertEqual(self.deiconified, [0x2, 0x1])
+
+    def test_workspace_change_to_same_workspace_keeps_mode(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        d.on_workspace_change()
+        self.assertIsNotNone(d.focus)
+        self.assertEqual(self.deiconified, [])
+
+    # -- новое окно при активном режиме
+
+    def test_new_window_is_placed_then_minimized(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        self.applied.clear()
+        self.iconified.clear()
+        self.metas[0x9] = self.meta("chromium")
+        self.workspaces[0x9] = 0
+        self.centers[0x9] = (200, 200)
+        d.on_map(0x9)
+        # сначала укладка по правилу — после выхода окно окажется в своей зоне
+        self.assertEqual(self.applied, [(0x9, (500, 0, 500, 1000), "right", True)])
+        self.assertEqual(self.iconified, [0x9])
+        self.assertEqual(d.windows[0x9], "right")
+        self.assertEqual(d.focus["minimized"], {0x2, 0x9})
+
+    def test_new_window_without_rule_is_just_minimized(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        self.iconified.clear()
+        self.metas[0x9] = self.meta("terminal")  # правила нет
+        self.workspaces[0x9] = 0
+        self.centers[0x9] = (200, 200)
+        d.on_map(0x9)
+        self.assertEqual(self.iconified, [0x9])
+        self.assertEqual([w for w, *_ in self.applied], [0x1])
+        self.assertNotIn(0x9, d.windows)
+        self.assertIn(0x9, d.focus["minimized"])
+
+    def test_new_excluded_window_stays_visible(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        self.metas[0x9] = self.meta("dialog-x", window_type=self.DIALOG)
+        self.workspaces[0x9] = 0
+        self.centers[0x9] = (200, 200)
+        d.on_map(0x9)
+        self.assertEqual(self.iconified, [0x2])
+        self.assertNotIn(0x9, d.windows)
+        self.assertNotIn(0x9, d.focus["minimized"])
+
+    def test_new_window_on_other_workspace_is_not_minimized(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        self.metas[0x9] = self.meta("chromium")
+        self.workspaces[0x9] = 1
+        self.centers[0x9] = (200, 200)
+        d.on_map(0x9)
+        # обычное поведение: уложено по правилу и осталось видимым
+        self.assertEqual(self.iconified, [0x2])
+        self.assertEqual(d.windows[0x9], "right")
+
+    # -- status
+
+    def test_status_reports_focus_mode(self):
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        self.assertIsNone(d.ipc_status()["focus"])
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        status = d.ipc_status()
+        self.assertEqual(
+            status["focus"], {"zone": "left", "window": "0x1", "minimized": 1}
+        )
+        # прежние поля не изменились
+        self.assertEqual(status["workspace"], 0)
+        self.assertEqual(
+            status["windows"],
+            [{"window": "0x1", "zone": "left", "monitor": list(WA), "workspace": 0}],
+        )
+        d.ipc_focus({"off": True})
+        self.assertIsNone(d.ipc_status()["focus"])
+
+
 class TestPlacedState(unittest.TestCase):
     """Файл памяти об укладках: чтение терпимо к мусору, запись — атомарная."""
 
@@ -1795,6 +2148,45 @@ class TestServeLoop(unittest.TestCase):
         zd.serve(dae, x11=fake, once=True, read_clients=lambda: [], once_timeout=0.05)
         self.assertEqual(dae.reconciled, [[]])
         self.assertTrue(fake.closed)
+
+    def test_serve_restores_focus_windows_on_exit(self):
+        # Режим «только эта зона» не должен пережить демон: в `finally` serve
+        # разворачивает его окна, цель — последней.
+        restored = []
+        dae = zd.Daemon(
+            self.conf(ONE_RULE),
+            workarea=lambda: WA,
+            deiconify=lambda win, x11=None: restored.append(win),
+        )
+        dae.seen = {0x1, 0x2}
+        dae.focus = {
+            "zone": "left",
+            "target": 0x1,
+            "workspace": 0,
+            "monitor": WA,
+            "minimized": {0x2},
+        }
+        fake = FakeX11(fd=self.pipe_fd())
+        zd.serve(
+            dae, x11=fake, once=True, read_clients=lambda: [0x1, 0x2], once_timeout=0.05
+        )
+        self.assertEqual(restored, [0x2, 0x1])
+        self.assertIsNone(dae.focus)
+        self.assertTrue(fake.closed)
+
+    def test_focus_state_is_dropped_without_x(self):
+        # Ранний выход без X-соединения: окна не развернуть, состояние снимаем.
+        dae = zd.Daemon(self.conf(ONE_RULE), workarea=lambda: WA)
+        dae.focus = {
+            "zone": "left",
+            "target": 0x1,
+            "workspace": 0,
+            "monitor": WA,
+            "minimized": {0x2},
+        }
+        dae.x11 = None
+        zd._restore_focus_on_exit(dae)
+        self.assertIsNone(dae.focus)
 
 
 class TestCli(unittest.TestCase):
