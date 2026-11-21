@@ -1401,13 +1401,13 @@ def in_zone_rect(zone_rect, count, height=None):
     окна одним и тем же правилом.
     """
     tabs = zone_tabs_module()
-    if int(count) < 2:
-        return tuple(int(round(v)) for v in zone_rect)
-    rect = tabs.tab_rect(
-        zone_rect, tabs.STRIP_HEIGHT if height is None else int(height)
-    )
-    # Рамки окон — пиксели: `tab_rect` считает float, а EWMH и вывод
-    # `--dry-run` ждут целых, как у `Grid.rect`.
+    strip = tabs.STRIP_HEIGHT if height is None else int(height)
+    # Правило «одна вкладка — вся зона, две и больше — рамка вкладки» живёт
+    # в ядре (`zone_tabs.stack_rect`): одно на демон и раскладчик, иначе
+    # `apply` и `arrange` разойдутся на одном и том же числе окон.
+    rect = tabs.stack_rect(zone_rect, int(count), strip)
+    # Рамки окон — пиксели: ядро считает float, а EWMH и вывод `--dry-run`
+    # ждут целых, как у `Grid.rect`.
     return tuple(int(round(v)) for v in rect)
 
 

@@ -1091,7 +1091,12 @@ class Daemon:
         окно занимает зону целиком, как до вкладок.
         """
         rect = self._zone_pixel_rect(zone, wa, workspace, grid)
-        return rect if count < 2 else self._tab_frame(rect)
+        # Правило «одна вкладка — вся зона» берётся из ядра — то же, что у
+        # раскладчика (`zone-tiler.in_zone_rect`), иначе `apply` и `arrange`
+        # разойдутся на одном и том же числе окон.
+        return tuple(
+            int(round(v)) for v in zone_tabs.stack_rect(rect, count, self.tabs_height)
+        )
 
     def _zone_stack(self, zone, wa, workspace=None, exclude=()):
         """Окна стопки зоны `zone` — в порядке `_NET_CLIENT_LIST` (снизу вверх).
