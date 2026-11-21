@@ -17,10 +17,15 @@ chmod 700 "$ROOT/runtime"
 cp -r "$HERE/gridsnap@metapeka" "$DATA/cinnamon/applets/"
 
 # Предустановим надпись в панели, чтобы её было видно на снимке.
-mkdir -p "$CONF/cinnamon/spices/gridsnap@metapeka"
-cat > "$CONF/cinnamon/spices/gridsnap@metapeka/0.json" <<'JSON'
+# Имя файла зависит от версии Cinnamon: одни берут <instance>.json (0.json),
+# другие — <uuid>.json, поэтому пишем оба варианта.
+SPICE="$CONF/cinnamon/spices/gridsnap@metapeka"
+mkdir -p "$SPICE"
+for name in 0.json "gridsnap@metapeka.json"; do
+    cat > "$SPICE/$name" <<'JSON'
 {"use-label": {"value": true}, "label-text": {"value": "GridSnap"}}
 JSON
+done
 
 export XDG_DATA_HOME="$DATA"
 export XDG_CONFIG_HOME="$CONF"
@@ -49,7 +54,9 @@ if ! kill -0 "$CPID" 2>/dev/null; then
 fi
 
 echo "== файл настроек апплета =="
-SETTINGS="$CONF/cinnamon/spices/gridsnap@metapeka/0.json"
+# Файл, который читает Cinnamon этой версии (<uuid>.json), либо старый <instance>.json.
+SETTINGS="$CONF/cinnamon/spices/gridsnap@metapeka/gridsnap@metapeka.json"
+[ -f "$SETTINGS" ] || SETTINGS="$CONF/cinnamon/spices/gridsnap@metapeka/0.json"
 if [ -f "$SETTINGS" ]; then
     echo "есть: $SETTINGS"
     python3 -c "import json;d=json.load(open('$SETTINGS'));print('label =',d['label-text']['value'],'| use-label =',d['use-label']['value'])"
