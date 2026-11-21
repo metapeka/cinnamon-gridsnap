@@ -32,6 +32,13 @@ MONITOR_SECTION_PREFIX = "zones:"
 # (с 1), значение — имя профиля из ``templates/<имя>.conf``.
 WORKSPACES_SECTION = "workspaces"
 
+# Подпись «стол без профиля» в диалоге «Профили столов». С настоящим именем
+# профиля не совпадёт: имена санируются, пробел в них превращается в дефис.
+WORKSPACE_SHARED = "общий набор"
+
+# Сколько столов показать в диалоге, если ``_NET_NUMBER_OF_DESKTOPS`` не прочитать.
+WORKSPACE_DESKTOPS_DEFAULT = 4
+
 # Порядок «чужих» секций при сохранении: [rules] до [keys], [daemon] после.
 BEFORE_KEYS = ("rules",)
 AFTER_KEYS = ("daemon",)
@@ -142,6 +149,167 @@ def load_workspace_map(path):
             )
         mapping[int(number)] = profile
     return mapping
+
+
+def _workspace_number(value):
+    """Номер стола из ключа карты: целое с 1, иначе ``ValueError``."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"номер стола должен быть целым: {value!r}") from None
+    if number < 1:
+        raise ValueError(f"номер стола должен быть с 1, а не {number}")
+    return number
+
+
+def _workspace_body(mapping):
+    """Тело секции ``[workspaces]``: ``номер = имя`` по возрастанию номера.
+
+    Имя профиля санируется тем же правилом, что при чтении
+    (:func:`sanitize_profile_name`), поэтому запись и чтение понимают друг
+    друга. Номер не целый или меньше 1, а пустое после санирования имя —
+    ``ValueError``: писать заведомо нечитаемый конфиг незачем.
+    """
+    items = {}
+    for number, name in (mapping or {}).items():
+        items[_workspace_number(number)] = name
+    lines = []
+    for number in sorted(items):
+        profile = sanitize_profile_name(items[number])
+        if not profile:
+            raise ValueError(
+                f"пустое имя профиля у стола {number}: {items[number]!r}"
+            )
+        lines.append(f"{number} = {profile}")
+    return lines
+
+
+def _workspace_spans(lines):
+    """``(начало, конец)`` всех секций ``[workspaces]``: заголовок и тело."""
+    spans, start = [], None
+    for index, line in enumerate(lines):
+        match = _SECTION_RE.match(line)
+        if not match:
+            continue
+        if start is not None:
+            spans.append((start, index))
+            start = None
+        if match.group(1).strip().lower() == WORKSPACES_SECTION:
+            start = index
+    if start is not None:
+        spans.append((start, len(lines)))
+    return spans
+
+
+def _tidy_blank(lines):
+    """Пустые строки: без ведущих, без хвостовых и без пар подряд."""
+    out = []
+    for line in lines:
+        if not line.strip() and (not out or not out[-1].strip()):
+            continue
+        out.append(line)
+    while out and not out[-1].strip():
+        out.pop()
+    return out
+
+
+def save_workspace_map(path, mapping):
+    """Записать секцию ``[workspaces]``: номер стола (с 1) → имя профиля.
+
+    Правится только эта секция, и текстом: ``[grid]``, наборы зон ``[zones]``/
+    ``[zones:<выход>]``, ``[keys]``, ``[rules]``, ``[daemon]`` и прочие строки
+    файла остаются дословно, как после ручной правки. Пустой ``mapping``
+    убирает секцию совсем, номера пишутся по возрастанию. Имена профилей
+    санируются, поэтому ``{"2": "my cinema"}`` станет ``2 = my-cinema``.
+    Файла нет — он будет создан с одной этой секцией. Кривой номер (не целый
+    или меньше 1) и пустое имя профиля — ``ValueError``. Возвращает путь.
+    """
+    body = _workspace_body(mapping)
+    block = [f"[{WORKSPACES_SECTION}]"] + body if body else []
+    lines = []
+    if path and os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    spans = _workspace_spans(lines)
+    if spans:
+        # Блок встаёт на место первой секции, дубли (если их наплодили руками)
+        # уходят: ConfigParser на повторе секции падает.
+        insert_at = spans[0][0]
+        drop = set()
+        for start, end in spans:
+            drop.update(range(start, end))
+        result = []
+        for index, line in enumerate(lines):
+            if index == insert_at:
+                result.extend(block)
+            if index not in drop:
+                result.append(line)
+    else:
+        result = list(lines)
+        if block:
+            while result and not result[-1].strip():
+                result.pop()
+            if result:
+                result.append("")
+            result.extend(block)
+    lines = _tidy_blank(result)
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n" if lines else "")
+    return path
+
+
+def workspace_dialog_rows(mapping, profiles=None, desktops=None):
+    """Строки диалога «Профили столов»: по одной на стол.
+
+    ``mapping`` — карта из :func:`load_workspace_map`, ``profiles`` — имена
+    профилей на диске (:func:`list_profiles`), ``desktops`` — число столов из
+    ``_NET_NUMBER_OF_DESKTOPS`` (``None``/0 — не прочитали, берём
+    :data:`WORKSPACE_DESKTOPS_DEFAULT`).
+
+    Строка — ``(номер, профиль, варианты, предупреждение)``:
+
+    * ``номер`` — стол с 1, как в интерфейсе Cinnamon;
+    * ``профиль`` — имя профиля стола, ``None`` — общий набор зон;
+    * ``варианты`` — выпадающий список: :data:`WORKSPACE_SHARED`, затем имена
+      профилей с диска, и обязательно имя из сопоставления — профиль мог
+      исчезнуть, но запись показываем и не выбрасываем;
+    * ``предупреждение`` — пусто или текст про профиль, которого нет на диске:
+      до появления файла такой стол раскладывается общим набором.
+
+    Столы идут по порядку; сопоставления за пределами ``desktops`` тоже
+    попадают в список — иначе сохранение потеряло бы их.
+    """
+    try:
+        total = int(desktops)
+    except (TypeError, ValueError):
+        total = WORKSPACE_DESKTOPS_DEFAULT
+    if total < 1:
+        total = WORKSPACE_DESKTOPS_DEFAULT
+    names = sorted({sanitize_profile_name(n) for n in (profiles or [])} - {""})
+    mapped = {}
+    for number, name in (mapping or {}).items():
+        try:
+            key = int(number)
+        except (TypeError, ValueError):
+            continue
+        if key >= 1:
+            mapped[key] = name
+    rows = []
+    for number in sorted(set(range(1, total + 1)) | set(mapped)):
+        profile = sanitize_profile_name(mapped.get(number)) or None
+        options = [WORKSPACE_SHARED] + names
+        missing = profile is not None and profile not in names
+        if missing:
+            options.append(profile)
+        warning = ""
+        if missing:
+            warning = (f"профиля «{profile}» нет на диске: стол {number} пока "
+                       "раскладывается общим набором")
+        rows.append((number, profile, options, warning))
+    return rows
 
 
 def _clean_monitor(monitor):
