@@ -43,16 +43,22 @@ WA1 = (1000, 0, 800, 600)
 class FakeX11:
     """Поддельное X-соединение: запоминает, что и кому послали."""
 
-    def __init__(self):
+    def __init__(self, desktop=0):
         self.iconified = []
         self.activated = []
+        self.desktops = []
         self.closed = 0
+        self.desktop = desktop
 
     def iconify(self, win):
         self.iconified.append(win)
 
     def activate(self, win):
         self.activated.append(win)
+
+    def set_current_desktop(self, desktop):
+        self.desktops.append(desktop)
+        self.desktop = desktop
 
     def close(self):
         self.closed += 1
@@ -193,11 +199,18 @@ class TestFocusStateFile(unittest.TestCase):
 
 
 class TestFocusRestore(unittest.TestCase):
-    """Разворот по записи: только свои окна, цель — последней."""
+    """Разворот по записи: только свои окна, цель последней, остаток не теряется.
+
+    `window_iconic` подменён на «всё развернулось», иначе проверка состояния
+    трогала бы настоящий `xprop` без дисплея; отдельный тест оставляет окно
+    свёрнутым и проверяет «остаток». Паузы проверки сведены к нулю.
+    """
 
     def state(self):
         return {
             "zone": "main",
+            "workspace": 0,
+            "monitor": [0, 0, 1000, 1000],
             "target": {"window": "0x10", "wm_class": "Code"},
             "windows": [
                 {"window": "0x11", "wm_class": "firefox"},
@@ -206,39 +219,68 @@ class TestFocusRestore(unittest.TestCase):
             ],
         }
 
-    def restore(self, state, alive, classes):
-        x11 = FakeX11()
+    def restore(self, state, alive, classes, iconic=(), desktop=0):
+        x11 = FakeX11(desktop=desktop)
         with mock.patch.object(zt, "read_client_list", return_value=alive), \
-                mock.patch.object(zt, "window_class_title", side_effect=lambda w: (classes.get(w, ""), "")):
-            restored = zt._focus_restore(state, x11=x11)
-        return x11, restored
+                mock.patch.object(zt, "current_workspace", side_effect=lambda: x11.desktop), \
+                mock.patch.object(zt, "window_iconic", side_effect=lambda w: w in iconic), \
+                mock.patch.object(zt, "FOCUS_VERIFY_DELAY", 0), \
+                mock.patch.object(
+                    zt, "window_class_title",
+                    side_effect=lambda w: (classes.get(w, ""), ""),
+                ):
+            restored, remaining = zt._focus_restore(state, x11=x11)
+        return x11, restored, remaining
 
     def test_restores_own_windows_and_target_last(self):
         alive = [0x10, 0x11, 0x12, 0x13]
         classes = {0x10: "Code", 0x11: "firefox", 0x12: "chromium", 0x13: "Telegram"}
-        x11, restored = self.restore(self.state(), alive, classes)
-        self.assertEqual(restored, [0x11, 0x12, 0x13])
+        x11, restored, remaining = self.restore(self.state(), alive, classes)
+        self.assertEqual(restored, [0x11, 0x12, 0x13, 0x10])
+        self.assertEqual(remaining, [])
         # цель активируется последней — внимание остаётся на ней
         self.assertEqual(x11.activated, [0x11, 0x12, 0x13, 0x10])
         self.assertEqual(x11.closed, 0)
+        self.assertEqual(x11.desktops, [])  # стол записи уже активен
+
+    def test_switches_to_record_workspace_before_restoring(self):
+        # Активация окна не на активном столе muffin-ом игнорируется: сначала стол.
+        alive = [0x10, 0x11, 0x12, 0x13]
+        classes = {0x10: "Code", 0x11: "firefox", 0x12: "chromium", 0x13: "Telegram"}
+        x11, restored, _ = self.restore(self.state(), alive, classes, desktop=2)
+        self.assertEqual(x11.desktops, [0])
+        self.assertEqual(len(restored), 4)
 
     def test_skips_window_gone_from_client_list(self):
         alive = [0x10, 0x11, 0x13]
         classes = {0x10: "Code", 0x11: "firefox", 0x12: "chromium", 0x13: "Telegram"}
-        x11, restored = self.restore(self.state(), alive, classes)
-        self.assertEqual(restored, [0x11, 0x13])
+        x11, restored, remaining = self.restore(self.state(), alive, classes)
+        self.assertEqual(restored, [0x11, 0x13, 0x10])
+        self.assertEqual(remaining, [])
         self.assertNotIn(0x12, x11.activated)
 
     def test_skips_window_with_reused_xid(self):
         # XID переиспользован другой программой — разворачивать чужое нельзя.
         alive = [0x10, 0x11, 0x12, 0x13]
         classes = {0x10: "Code", 0x11: "firefox", 0x12: "Другое", 0x13: "Telegram"}
-        x11, restored = self.restore(self.state(), alive, classes)
-        self.assertEqual(restored, [0x11, 0x13])
+        x11, restored, remaining = self.restore(self.state(), alive, classes)
+        self.assertEqual(restored, [0x11, 0x13, 0x10])
+        self.assertEqual(remaining, [])
+
+    def test_leftover_windows_are_reported_not_dropped(self):
+        # Развернуть не вышло (не тот стол, отказ WM) — это не «развёрнуто».
+        alive = [0x10, 0x11, 0x12, 0x13]
+        classes = {0x10: "Code", 0x11: "firefox", 0x12: "chromium", 0x13: "Telegram"}
+        x11, restored, remaining = self.restore(
+            self.state(), alive, classes, iconic={0x12}
+        )
+        self.assertEqual(restored, [0x11, 0x13, 0x10])
+        self.assertEqual(remaining, [0x12])
 
     def test_empty_state_restores_nothing(self):
-        x11, restored = self.restore({}, [0x10], {0x10: "Code"})
+        x11, restored, remaining = self.restore({}, [0x10], {0x10: "Code"})
         self.assertEqual(restored, [])
+        self.assertEqual(remaining, [])
         self.assertEqual(x11.activated, [])
 
     def test_window_id_parsing(self):

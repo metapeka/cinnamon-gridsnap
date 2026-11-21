@@ -1196,6 +1196,10 @@ class TestFocusMode(DaemonTestCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
+        # Паузы проверки состояния в развороте — нулевые: тесты не должны ждать.
+        delay = mock.patch.object(zd.tiler, "FOCUS_VERIFY_DELAY", 0)
+        delay.start()
+        self.addCleanup(delay.stop)
 
     def setup_clients(self, windows, workspace=0):
         """Клиенты демона: окна на столе `workspace` и первом мониторе."""
@@ -1387,6 +1391,29 @@ class TestFocusMode(DaemonTestCase):
         self.assertIsNone(d.focus)
         self.assertEqual(self.deiconified, [0x2, 0x1])
 
+    def test_unrestorable_windows_go_to_focus_json(self):
+        # Активацию окна на неактивном столе muffin игнорирует. Демон не теряет
+        # такое окно, а отдаёт в `focus.json`:
+        # без записи оно осталось бы свёрнутым навсегда, а так его доведёт `focus --off`.
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        fd, path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        self.addCleanup(os.unlink, path)
+        d.focus_path = path
+        d.deiconify = lambda win, x11=None: None  # «разворот не действует»
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        out = d.ipc_focus({"off": True})
+        self.assertEqual(out, {"off": True, "restored": []})
+        self.assertIsNone(d.focus)
+        state = zd.tiler.load_focus_state(path)
+        self.assertEqual([r["window"] for r in state["windows"]], ["0x2"])
+        self.assertEqual(state["workspace"], 0)
+        self.assertEqual(state["target"]["window"], "0x1")
+
     def test_minimized_window_disappearing_keeps_mode(self):
         self.current = 0
         self.setup_clients([0x1, 0x2])
@@ -1401,7 +1428,10 @@ class TestFocusMode(DaemonTestCase):
         self.assertEqual(self.deiconified, [])
         self.assertEqual(d.ipc_status()["focus"]["minimized"], 0)
 
-    def test_workspace_change_leaves_mode(self):
+    def test_workspace_change_keeps_mode(self):
+        # Уход со стола режим НЕ снимает: окна того стола и так не видны, а снять
+        # его нельзя — `_NET_ACTIVE_WINDOW` muffin игнорирует для окна не на
+        # активном столе, и окна остались бы свёрнутыми без хозяина.
         self.current = 0
         self.setup_clients([0x1, 0x2])
         self.metas[0x1] = self.meta("firefox-esr")
@@ -1410,8 +1440,10 @@ class TestFocusMode(DaemonTestCase):
         d.ipc_focus({"zone": "left", "window": 0x1})
         self.current = 1
         self.assertEqual(d.on_workspace_change(), 1)
-        self.assertIsNone(d.focus)
-        self.assertEqual(self.deiconified, [0x2, 0x1])
+        self.assertIsNotNone(d.focus)
+        self.assertEqual(d.focus["minimized"], {0x2})
+        self.assertEqual(self.deiconified, [])
+        self.assertEqual(d.ipc_status()["focus"]["minimized"], 1)
 
     def test_workspace_change_to_same_workspace_keeps_mode(self):
         self.current = 0
