@@ -8,7 +8,8 @@
 #   1. явный `zone-tiler.py apply` — исключённое окно стоит, обычное едет в зону;
 #   2. `zone-tiler.py arrange` — исключённое не раскладывается, обычное — да;
 #   3. `zone-daemon.py` при старте — исключённое не укладывается (on_map), обычное — да;
-#   4. `zone-picker.py` + Enter — исключённое окно не сдвигается, код возврата 1.
+#   4. `zone-picker.py` + Enter — исключённое окно не сдвигается, код возврата 1;
+#   5. перезапуск демона — окно, которое пользователь вынес из зоны, не возвращается.
 #
 # Конфиг — свой, во временном каталоге; рабочий стол, окна и настройки владельца
 # не затрагиваются.
@@ -245,6 +246,19 @@ else
     bad "оверлей выбора зоны не появился ($(summary "$LOGDIR/picker.log"))"
     kill "$PICKPID" 2>/dev/null
     PICKPID=""
+fi
+
+# --- 5. перезапуск демона и память о вынесенном окне ---------------------
+say ""
+say "5. Перезапуск демона не возвращает вынесенное окно"
+# Окно стоит в main, а в файле состояния демона записано, что он клал его в right.
+BEFORE=$(frame_of "$NRM")
+python3 "$DAEMON" --once --no-socket --conf "$CONF" --verbose >"$LOGDIR/daemon-restart.log" 2>&1
+AFTER=$(frame_of "$NRM")
+if [ "$BEFORE" = "$AFTER" ] && zone_frame_ok "$NRM" main >"$LOGDIR/daemon-restart.log.frame" 2>&1; then
+    ok "демон не вернул окно в зону, оно осталось в main: $(cat "$LOGDIR/daemon-restart.log.frame")"
+else
+    bad "демон вернул окно: $BEFORE -> $AFTER ($(summary "$LOGDIR/daemon-restart.log"))"
 fi
 
 say ""
