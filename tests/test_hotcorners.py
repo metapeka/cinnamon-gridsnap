@@ -171,7 +171,7 @@ class Clock:
 
 
 def make_watcher(conf_text=GRID_CONF, *, hud=None, edge=None, clock=None, dry_run=False,
-                 no_hud=False, outputs=None, applied=None):
+                 no_hud=False, outputs=None, applied=None, is_excluded=None):
     """Hotcorners с заглушками X/HUD/gsettings; возвращает (watcher, контекст).
 
     Контекст — TempConf; вызывающий держит его открытым, пока watcher жив
@@ -193,6 +193,7 @@ def make_watcher(conf_text=GRID_CONF, *, hud=None, edge=None, clock=None, dry_ru
         read_frame=lambda win, ext: FRAME,
         outputs=outputs or (lambda: ONE_MONITOR),
         apply=lambda win, rect, label: applied.append((win, rect, label)),
+        is_excluded=is_excluded or (lambda win, ignore: False),
         hud=FakeHud() if hud is None else hud,
         edge=edge,
         clock=clock or Clock(),
@@ -373,6 +374,37 @@ class TestThrottle(unittest.TestCase):
             self.assertEqual(hud.starts, [])
         finally:
             ctx.__exit__(None, None, None)
+
+
+class TestIgnore(unittest.TestCase):
+    """Окно под `[ignore]` watcher не отслеживает: ни HUD, ни дропа."""
+
+    def test_excluded_window_is_not_armed(self):
+        watcher, ctx, applied = make_watcher(
+            GRID_CONF + "[ignore]\nXmessage* = \n",
+            is_excluded=lambda win, ignore: True,
+        )
+        with ctx:
+            self.assertFalse(watcher.on_press(INSIDE_TITLE, 1))
+            self.assertFalse(watcher.armed)
+            self.assertIsNone(watcher.drag_win)
+            watcher.on_release((1500, 300), 1)
+        self.assertEqual(applied, [])
+
+    def test_ignore_list_from_config_reaches_the_check(self):
+        seen = []
+
+        def is_excluded(win, ignore):
+            seen.append(list(ignore))
+            return True
+
+        watcher, ctx, _applied = make_watcher(
+            GRID_CONF + "[ignore]\nXmessage* = \n",
+            is_excluded=is_excluded,
+        )
+        with ctx:
+            self.assertFalse(watcher.on_press(INSIDE_TITLE, 1))
+        self.assertEqual(seen, [["Xmessage*"]])
 
 
 class TestZones(unittest.TestCase):
