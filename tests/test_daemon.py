@@ -1362,6 +1362,22 @@ class TestFocusMode(DaemonTestCase):
         self.assertEqual(self.iconified, [])
         self.assertEqual(self.applied, [])
 
+    def test_explicit_exit_switches_to_mode_workspace(self):
+        # Явный выход сам переходит на стол режима: без этого muffin не развернул
+        # бы окна (он игнорирует активацию окна не на активном столе).
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        d.x11 = object()  # «соединение есть»: без него переход пропускается
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        with mock.patch.object(zd.tiler, "switch_workspace") as switch:
+            d.ipc_focus({"off": True})
+        switch.assert_called_once()
+        self.assertEqual(switch.call_args.args, (0,))
+        self.assertEqual(self.deiconified, [0x2, 0x1])
+
     def test_target_disappearing_leaves_mode_and_restores_windows(self):
         self.current = 0
         self.setup_clients([0x1, 0x2])
@@ -1412,7 +1428,48 @@ class TestFocusMode(DaemonTestCase):
         state = zd.tiler.load_focus_state(path)
         self.assertEqual([r["window"] for r in state["windows"]], ["0x2"])
         self.assertEqual(state["workspace"], 0)
-        self.assertEqual(state["target"]["window"], "0x1")
+        # Стол и класс окна записаны на момент записи (`focus_records`), а цель
+        # в записи не нужна: она видима, разворачивать её не надо.
+        self.assertEqual(state["windows"][0]["workspace"], 0)
+        self.assertIsNone(state["target"])
+
+    def test_handoff_keeps_per_window_workspace(self):
+        # В файле могут сойтись окна разных столов: общий `workspace` старой
+        # записи не должен увести разворот на чужой стол (иначе окно осталось бы
+        # свёрнутым навсегда, а каждое `focus --off` ходило бы не туда).
+        self.current = 0
+        self.setup_clients([0x1, 0x2])
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        d = self.focus_daemon()
+        fd, path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        self.addCleanup(os.unlink, path)
+        d.focus_path = path
+        d.deiconify = lambda win, x11=None: None  # «разворот не действует»
+        # Чужая запись от ветки без демона: окно на третьем столе.
+        zd.tiler.save_focus_state(
+            {
+                "zone": None,
+                "workspace": 2,
+                "monitor": [],
+                "target": None,
+                "windows": [
+                    {"window": "0x9", "wm_class": "gimp", "workspace": 2}
+                ],
+            },
+            path,
+        )
+        self.workspaces[0x9] = 2
+        self.iconic = {0x9}  # чужое окно всё ещё свёрнуто — его и надо вернуть
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        d.ipc_focus({"off": True})
+        state = zd.tiler.load_focus_state(path)
+        by_window = {r["window"]: r for r in state["windows"]}
+        # Оба окна на своих столах — режима (0) и чужой записи (2), — а не на
+        # столе старой записи: иначе `focus --off` ходил бы не туда.
+        self.assertEqual(by_window["0x2"]["workspace"], 0)
+        self.assertEqual(by_window["0x9"]["workspace"], 2)
 
     def test_minimized_window_disappearing_keeps_mode(self):
         self.current = 0

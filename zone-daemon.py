@@ -1148,15 +1148,43 @@ class Daemon:
         )
         return restored, remaining, state
 
+    def _focus_records(self, windows):
+        """Записи окон для `focus.json` — через инъекции демона, а не через X напрямую.
+
+        Стол и `WM_CLASS` читаются **сейчас**: стол у каждого окна свой (в файле
+        могут сойтись окна разных столов), а без класса запись уклонялась бы от
+        защиты от переиспользованного XID.
+        """
+        records = []
+        for win in dict.fromkeys(windows):
+            try:
+                wm_class = getattr(self.read_meta(win), "wm_class", "") or ""
+            except (Exception, SystemExit) as exc:
+                self.log(f"не удалось прочитать метаданные 0x{win:x}: {exc}")
+                wm_class = ""
+            records.append(
+                {
+                    "window": hex(win),
+                    "wm_class": wm_class,
+                    "workspace": self._window_workspace(win),
+                }
+            )
+        return records
+
     def _focus_handoff(self, remaining, state):
         """Отдать неразвёрнутый остаток в `focus.json` — его доведёт `focus --off`.
 
         Окно на неактивном столе развернуть нельзя (`_NET_ACTIVE_WINDOW` muffin
         игнорирует для таких окон), а терять его нельзя тем более: демон режим
         больше не держит, и без записи оно осталось бы свёрнутым навсегда. Файл
-        читает CLI, а `focus --off` сам переходит на стол записи. Записи сливаются
-        по id: чужой остаток (от ветки без демона) не затирается, а разворот
-        идемпотентен (уже развёрнутое окно просто активируется).
+        читает CLI, а `focus --off` сам переходит на стол записи.
+
+        Записи строит `tiler.focus_records`: она читает `WM_CLASS` и **стол
+        каждого окна** прямо сейчас. Иначе окно из остатка унаследовало бы чужой
+        `workspace` старой записи (в ней могли остаться окна другого стола) — и
+        разворот переходил бы не на тот стол, а окно так и осталось бы свёрнутым.
+        Из старой записи остаются только те окна, которые ещё свёрнуты: уже
+        развёрнутые разворачивать больше не нужно.
         """
         if not remaining:
             return
@@ -1168,30 +1196,29 @@ class Daemon:
             )
             return
         old = tiler.load_focus_state(path)
-        records = [r for r in (old.get("windows") or []) if isinstance(r, dict)]
-        known = set()
-        for record in records:
+        still_iconic = []
+        for record in old.get("windows") or []:
+            if not isinstance(record, dict):
+                continue
             try:
-                known.add(int(record.get("window"), 0))
+                win = int(record.get("window"), 0)
             except (TypeError, ValueError):
                 continue
-        for win in remaining:
-            if win not in known:
-                records.append(
-                    {"window": hex(win), "wm_class": self.win_class.get(win, "")}
-                )
-        target = old.get("target") if isinstance(old.get("target"), dict) else None
-        if target is None:
-            target = {
-                "window": hex(state["target"]),
-                "wm_class": self.win_class.get(state["target"], ""),
-            }
+            if tiler.window_iconic(win):
+                still_iconic.append(win)
+        windows = still_iconic + [
+            win for win in remaining if win not in still_iconic
+        ]
+        records = self._focus_records(windows)
+        target = None
+        if state["target"] in windows:
+            target = self._focus_records([state["target"]])[0]
         try:
             tiler.save_focus_state(
                 {
-                    "zone": old.get("zone", state.get("zone")),
-                    "workspace": old.get("workspace", state.get("workspace")),
-                    "monitor": old.get("monitor") or list(state.get("monitor") or []),
+                    "zone": state.get("zone"),
+                    "workspace": state.get("workspace"),
+                    "monitor": list(state.get("monitor") or []),
                     "target": target,
                     "windows": records,
                 },

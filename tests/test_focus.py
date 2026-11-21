@@ -360,6 +360,63 @@ class TestFocusCommand(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 zt.cmd_focus(None, self.args(zone="main"))
 
+    def test_record_kept_when_restore_not_confirmed(self):
+        # Подтверждённого разворота не было — запись обязана остаться (иначе окно
+        # залипло бы свёрнутым без хозяина), и её надо переписать на остаток.
+        cleared, kept = [], []
+        state = {"windows": [{"window": "0x2"}]}
+        with mock.patch.object(zt, "daemon_request", return_value=None), \
+                mock.patch.object(zt, "load_focus_state", return_value=state), \
+                mock.patch.object(zt, "_focus_restore", return_value=([], [0x2])), \
+                mock.patch.object(zt, "clear_focus_state", side_effect=lambda: cleared.append(1)), \
+                mock.patch.object(zt, "_focus_keep", side_effect=lambda s, r: kept.append(r)), \
+                contextlib.redirect_stderr(io.StringIO()), \
+                contextlib.redirect_stdout(io.StringIO()):
+            zt.cmd_focus(None, self.args(off=True))
+        self.assertEqual(cleared, [])
+        self.assertEqual(kept, [[0x2]])
+
+    def test_record_cleared_when_restore_confirmed(self):
+        cleared, kept = [], []
+        state = {"windows": [{"window": "0x2"}]}
+        with mock.patch.object(zt, "daemon_request", return_value=None), \
+                mock.patch.object(zt, "load_focus_state", return_value=state), \
+                mock.patch.object(zt, "_focus_restore", return_value=([0x2], [])), \
+                mock.patch.object(zt, "clear_focus_state", side_effect=lambda: cleared.append(1)), \
+                mock.patch.object(zt, "_focus_keep", side_effect=lambda s, r: kept.append(r)), \
+                contextlib.redirect_stdout(io.StringIO()):
+            zt.cmd_focus(None, self.args(off=True))
+        self.assertEqual(cleared, [1])
+        self.assertEqual(kept, [])
+
+    def test_entry_writes_state_before_minimizing(self):
+        # Не записалось (нет XDG_STATE_HOME, нет места) — ни одно окно ещё не
+        # свёрнуто: команда падает честно, а не оставляет окна свёрнутыми молча.
+        calls = []
+        wa = (0, 0, 1000, 1000)
+        grid = types.SimpleNamespace(ignore=())
+        with mock.patch.object(zt, "active_window", return_value=0x1), \
+                mock.patch.object(zt, "monitors", return_value=[wa]), \
+                mock.patch.object(zt, "window_monitor", return_value=wa), \
+                mock.patch.object(zt, "current_workspace", return_value=0), \
+                mock.patch.object(zt, "read_client_list", return_value=[0x1, 0x2]), \
+                mock.patch.object(zt, "window_is_excluded", return_value=False), \
+                mock.patch.object(zt, "window_iconic", return_value=False), \
+                mock.patch.object(
+                    zt, "focus_entries",
+                    return_value=[(0x1, 0, wa), (0x2, 0, wa)],
+                ), \
+                mock.patch.object(zt, "X11", return_value=FakeX11()), \
+                mock.patch.object(
+                    zt, "iconify",
+                    side_effect=lambda *a, **kw: calls.append("iconify"),
+                ), \
+                mock.patch.object(zt, "save_focus_state", side_effect=OSError("нет места")), \
+                mock.patch.object(zt, "fail", side_effect=SystemExit(1)):
+            with self.assertRaises(SystemExit):
+                zt._focus_enter(grid, self.args())
+        self.assertEqual(calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()

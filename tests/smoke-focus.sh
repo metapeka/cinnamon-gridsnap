@@ -371,6 +371,73 @@ else
     DPID=""
 fi
 
+# --- 5. остаток режима при выходе демона ----------------------------------
+# Активацию окна не на активном столе muffin игнорирует, поэтому при остановке
+# демона неразвёрнутое уходит в `focus.json` — со своим столом у каждого окна,
+# а не со столом старой записи (иначе разворот ходил бы не туда, и окно
+# осталось бы свёрнутым навсегда).
+say ""
+say "5. Остаток режима уходит в focus.json и доводится focus --off"
+FOCUS_JSON="$STATE/gridsnap/focus.json"
+# Чужая запись от ветки без демона: тот же стол окна есть, но стол записи другой.
+mkdir -p "$(dirname "$FOCUS_JSON")"
+cat >"$FOCUS_JSON" <<EOF
+{
+  "version": 1,
+  "zone": null,
+  "workspace": 3,
+  "monitor": [],
+  "target": null,
+  "windows": [
+    {"window": "$(printf '0x%x' "$WB")", "wm_class": "Xmessage", "workspace": 3}
+  ]
+}
+EOF
+
+python3 "$DAEMON" --conf "$CONF" --verbose >"$DAEMON_LOG" 2>&1 &
+DPID=$!
+if ! wait_for 40 test -S "$RUNTIME/gridsnap/daemon.sock"; then
+    bad "демон не поднял сокет для проверки остатка ($(summary "$DAEMON_LOG"))"
+else
+    python3 "$CTL" focus main --window "$WA" >/dev/null 2>&1
+    xdotool set_desktop 1
+    sleep 1.5
+    python3 "$CTL" quit >/dev/null 2>&1
+    wait "$DPID" 2>/dev/null
+    DPID=""
+    if python3 - "$FOCUS_JSON" "$WB" <<'PY'
+import json, sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = json.load(fh)
+except (OSError, ValueError):
+    print("остаток не записан: файла нет")
+    raise SystemExit(1)
+win = hex(int(sys.argv[2], 0))
+records = {r.get("window"): r for r in data.get("windows") or []}
+record = records.get(win)
+print(f"стол записи {data.get('workspace')!r}, окно {win}: {record}")
+# Ни общий стол записи, ни стол окна не должны остаться от старой записи.
+if data.get("workspace") != 0 or not record or record.get("workspace") != 0:
+    raise SystemExit(1)
+PY
+    then
+        ok "остаток записан со столом режима, а не старой записи"
+    else
+        bad "остаток записан неверно (см. строку выше)"
+    fi
+    python3 "$TILER" focus --off --conf "$CONF" --quiet >"$LOGDIR/focus-5.log" 2>&1
+    RC=$?
+    DESK=$(xprop -root _NET_CURRENT_DESKTOP 2>/dev/null | sed -n 's/.*= *//p')
+    if [ "$RC" -eq 0 ] && both_normal "$WB" "$WC" >"$LOGDIR/focus-5.state" 2>&1 \
+            && [ "$DESK" = "0" ] && [ ! -f "$FOCUS_JSON" ]; then
+        ok "focus --off перешёл на стол режима, развернул окна и убрал запись"
+    else
+        bad "focus --off не довёл остаток: код $RC, стол $DESK, $(tail -1 "$LOGDIR/focus-5.state" 2>/dev/null) ($(summary "$LOGDIR/focus-5.log"))"
+    fi
+fi
+
 say ""
 if [ "$fails" -eq 0 ]; then
     say "Дымовой тест режима «только эта зона» пройден."

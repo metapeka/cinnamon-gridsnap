@@ -1188,6 +1188,26 @@ def focus_candidates(entries, target, workspace, wa):
     return out
 
 
+def focus_records(windows):
+    """Записи окон для `focus.json`: `WM_CLASS` и стол берутся прямо сейчас.
+
+    Стол читается у **каждого** окна, а не берётся из одного поля записи: в файле
+    сходятся окна разных столов (остаток CLI и остаток демона), а разворот
+    возможен только на активном столе — значит, стол нужен по каждому окну.
+    Здесь же читается и `WM_CLASS`: записи без класса уклоняются от защиты от
+    переиспользованного XID, а читать класс в момент записи дешевле, чем потом
+    развернуть чужое окно.
+    """
+    return [
+        {
+            "window": hex(win),
+            "wm_class": window_class_title(win)[0],
+            "workspace": window_workspace_for_zones(win),
+        }
+        for win in dict.fromkeys(windows)
+    ]
+
+
 def focus_entries(client_ids, monitors_):
     """`(окно, стол, рабочая область)` для каждого клиента — вход `focus_candidates`.
 
@@ -1743,6 +1763,8 @@ def cmd_focus(grid, args):
         # Запись убирается только когда разворот подтверждён: иначе окно
         # осталось бы свёрнутым без хозяина.
         clear_focus_state()
+    if state and remaining:
+        _focus_keep(state, remaining)
     if remaining and not args.quiet:
         print(
             f"zone-tiler: {len(remaining)} окон развернуть не удалось — "
@@ -1794,9 +1816,9 @@ def _focus_dry_run(grid, args, state):
 
     Живой демон — хозяин режима, его книга окон CLI не видна, поэтому при
     доступном сокете спрашивается `status`: иначе `--dry-run` врал бы про
-    «ноль свёрнутых».
+    «ноль свёрнутых» — и на входе, и на выходе.
     """
-    if not args.off and not state:
+    if not state:
         response = daemon_request({"cmd": "status"})
         mode = (response or {}).get("focus") if response and response.get("ok") else None
         if mode:
@@ -1887,14 +1909,8 @@ def _focus_enter(grid, args):
                 "zone": args.zone,
                 "workspace": workspace,
                 "monitor": list(wa),
-                "target": {
-                    "window": hex(window),
-                    "wm_class": window_class_title(window)[0],
-                },
-                "windows": [
-                    {"window": hex(win), "wm_class": window_class_title(win)[0]}
-                    for win in todo
-                ],
+                "target": focus_records([window])[0],
+                "windows": focus_records(todo),
             }
         )
         for win in todo:
@@ -1918,8 +1934,12 @@ def _focus_enter(grid, args):
 def _focus_restore(state, x11=None):
     """Развернуть окна из записи `focus.json`; вернёт `(развёрнутые, остаток)`.
 
-    Сначала — переключение на стол записи: `_NET_ACTIVE_WINDOW` muffin игнорирует
-    для окна не на активном столе (проверено дымом), а окна режима лежат на своём.
+    Окна разворачиваются **по столам записи**: `_NET_ACTIVE_WINDOW` muffin
+    игнорирует для окна не на активном столе (проверено дымом), а в файле могут
+    сойтись окна разных столов — у каждого окна свой стол (`focus_records`), а
+    общий `workspace` записи — только запасной вариант. Перед каждой группой стол
+    делается активным.
+
     Окно, которого больше нет в `_NET_CLIENT_LIST`, и окно с другим `WM_CLASS`
     (XID переиспользован другой программой) пропускаются: развернуть чужое окно
     хуже, чем не развернуть своё. Последней активируется цель — она и должна
@@ -1943,23 +1963,55 @@ def _focus_restore(state, x11=None):
     own = x11 is None
     if own:
         x11 = X11()
+    order, remaining = [], []
     try:
-        workspace = state.get("workspace")
-        if isinstance(workspace, int):
-            switch_workspace(workspace, x11=x11)
-        order = []
+        groups = {}
         for record in records:
             win = _focus_window_id(record)
             if win is None or win == target_id or not _focus_alive(win, record, alive):
                 continue
-            order.append(win)
+            groups.setdefault(_focus_workspace(record, state), []).append(win)
         if target_id is not None and _focus_alive(target_id, target, alive):
-            order.append(target_id)
-        remaining = deiconify_all(order, x11=x11)
+            groups.setdefault(_focus_workspace(target, state), []).append(target_id)
+        for workspace in sorted(groups, key=lambda ws: (ws is not None, ws or 0)):
+            if workspace is not None:
+                switch_workspace(workspace, x11=x11)
+            order += groups[workspace]
+            remaining += deiconify_all(groups[workspace], x11=x11)
     finally:
         if own:
             x11.close()
     return [win for win in order if win not in remaining], remaining
+
+
+def _focus_workspace(record, state):
+    """Стол окна из записи: свой, иначе общий стол записи; `None` — неизвестен."""
+    value = record.get("workspace", state.get("workspace"))
+    return value if isinstance(value, int) else None
+
+
+def _focus_keep(state, remaining):
+    """Оставить в `focus.json` только неразвёрнутое — со столом каждого окна сейчас.
+
+    Записи окон строит `focus_records`: она читает `WM_CLASS` и **стол каждого
+    окна** заново. Без этого у окна не было бы своего стола (или остался бы
+    чужой из старой записи), а разворот возможен только на активном столе —
+    следующий `focus --off` опять перешёл бы не туда. Не записалось — старая
+    запись остаётся целиком; повторный разворот идемпотентен, так что хуже не
+    будет.
+    """
+    try:
+        save_focus_state(
+            {
+                "zone": state.get("zone"),
+                "workspace": state.get("workspace"),
+                "monitor": state.get("monitor"),
+                "target": None,
+                "windows": focus_records(remaining),
+            }
+        )
+    except OSError as exc:
+        print(f"zone-tiler: не удалось переписать запись режима: {exc}", file=sys.stderr)
 
 
 def _focus_window_id(record):
