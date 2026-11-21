@@ -43,7 +43,8 @@ INI-файл (UTF-8), комментарии — `#`/`;`. По умолчани�
 ```
 zone-tiler.py list  [--monitor N|ИМЯ] [--workspace N|current|conf] [--conf PATH]
 zone-tiler.py apply <зона> [--monitor N|ИМЯ] [--workspace N|current|conf] [--window ID] [--dry-run|--verify|--quiet] [--conf PATH]
-zone-tiler.py keys  [--conf PATH]
+zone-tiler.py move <left|right|up|down> [--monitor N|ИМЯ] [--workspace N|current|conf] [--dry-run|--verify|--quiet] [--conf PATH]
+zone-tiler.py keys  [--move] [--conf PATH]
 zone-tiler.py arrange [--by auto|rules|order] [--workspace N|current|conf] [--offset N] [--dry-run|--verify|--quiet] [--conf PATH]
 zone-tiler.py stack <зона> [--monitor N|ИМЯ] [--workspace N|current|conf] [--offset N] [--dry-run|--verify|--quiet] [--conf PATH]
 zone-tiler.py undo [--all] [--verify|--quiet] [--conf PATH]
@@ -231,6 +232,33 @@ zone}`. `frame` — прежняя **внешняя** рамка окна (ка�
   неизвестное имя даёт код 2 и перечень доступных. `arrange` раскладывает окна группами по монитору,
   применяя набор зон этого монитора.
 - Секция монитора, которого сейчас нет в системе, остаётся в файле: раскладка «ждёт» его возвращения.
+
+## Переброс окна в соседнюю зону (`move`)
+
+`move <направление>` перекладывает активное окно в соседнюю зону — то же, что стрелки в оверлее, но без
+оверлея (нужно для клавиш и для watcher'а горячих краёв):
+
+- текущая рамка окна → доли рабочей области его монитора → зона под центром окна
+  (`zone_picker_nav.zone_at`); окно вне зон → зона по центру, иначе ближайшая;
+- сосед ищется **той же** функцией, что в пикере (`zone_picker_nav.move_selection`) — правила навигации не
+  дублируются;
+- на краю сетки соседа нет: окно не двигается, в stderr строка, код возврата 0 (это не ошибка);
+- удачный переезд пишется в историю, поэтому работает `undo`.
+
+Сочетания — секция `[move]` (необязательная):
+
+```ini
+[move]
+left  = <Super>Left
+right = <Super>Right
+up    = <Super>Up
+down  = <Super>Down
+```
+
+Секции нет — действуют эти значения по умолчанию. Ключи только `left/right/up/down`, неизвестный —
+ошибка конфига. `keys --move` печатает `направление<TAB>сочетание` для `setup-hotkeys.py`; при совпадении
+с родным `push-tile-*` muffin регистратор предупреждает в stderr, но настройки Cinnamon не меняет.
+
 
 ## Рабочие столы: сетка из профиля
 

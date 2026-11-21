@@ -5,11 +5,11 @@
 .\" (это проверяет `make check-version`).
 .TH GRIDSNAP 1 "2026-11-21" "gridsnap 0.1.0" "Пользовательские команды"
 .SH NAME
-gridsnap, gridsnap\-tiler, gridsnap\-daemon, gridsnap\-editor, gridsnap\-picker, gridsnap\-ctl, setup\-hotkeys \- раскладка окон по зонам для Cinnamon/X11
+gridsnap, gridsnap\-tiler, gridsnap\-daemon, gridsnap\-editor, gridsnap\-picker, gridsnap\-hotcorners, gridsnap\-ctl, setup\-hotkeys \- раскладка окон по зонам для Cinnamon/X11
 .SH SYNOPSIS
 .B gridsnap\-tiler
 [\fB\-\-monitor\fP \fIN\fP] [\fB\-\-conf\fP \fIПУТЬ\fP]
-{\fBlist\fP | \fBapply\fP \fIЗОНА\fP | \fBkeys\fP | \fBarrange\fP | \fBstack\fP \fIЗОНА\fP | \fBundo\fP | \fBprofile\fP}
+{\fBlist\fP | \fBapply\fP \fIЗОНА\fP | \fBmove\fP \fIНАПРАВЛЕНИЕ\fP | \fBkeys\fP | \fBarrange\fP | \fBstack\fP \fIЗОНА\fP | \fBundo\fP | \fBprofile\fP}
 [\fB\-\-dry\-run\fP] [\fB\-\-verify\fP] [\fB\-\-quiet\fP] ...
 .br
 .B gridsnap\-daemon
@@ -20,7 +20,11 @@ gridsnap, gridsnap\-tiler, gridsnap\-daemon, gridsnap\-editor, gridsnap\-picker,
 .br
 .B gridsnap\-picker
 [\fB\-\-conf\fP \fIПУТЬ\fP] [\fB\-\-monitor\fP \fIN\fP] [\fB\-\-window\fP \fIXID\fP] [\fB\-\-select\fP \fIЗОНА\fP]
+[\fB\-\-workspace\fP \fIN\fP|current|conf] [\fB\-\-hud\fP [\fB\-\-at\fP \fIX,Y\fP | \fB\-\-follow\fP]]
 [\fB\-\-dry\-run\fP] [\fB\-\-verify\fP] [\fB\-\-quiet\fP] [\fB\-\-shot\fP \fIФАЙЛ.png\fP]
+.br
+.B gridsnap\-hotcorners
+[\fB\-\-conf\fP \fIПУТЬ\fP] [\fB\-\-no\-hud\fP] [\fB\-\-dry\-run\fP] [\fB\-\-verbose\fP] [\fB\-\-version\fP]
 .br
 .B gridsnap\-ctl
 [\fB\-\-socket\fP \fIПУТЬ\fP] [\fB\-\-window\fP \fIXID\fP] [\fB\-\-monitor\fP \fIN\fP]
