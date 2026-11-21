@@ -293,6 +293,123 @@ class TestSaveMonitorZoneSets(ConfMixin, unittest.TestCase):
         self.assertIn("[rules]", self.read(path))
 
 
+class TestSaveZoneSets(ConfMixin, unittest.TestCase):
+    """Все наборы за один проход (`save_zone_sets`) и `[keys]` без повторов."""
+
+    def keys_of(self, path):
+        """Тело `[keys]` по строкам — не путать с подсказкой в шапке файла."""
+        body, inside = [], False
+        for line in self.read(path).splitlines():
+            stripped = line.strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                inside = stripped == "[keys]"
+                continue
+            if inside and "=" in line:
+                body.append(line)
+        return body
+
+    def test_writes_default_and_monitor_sets_in_one_call(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(
+            path,
+            [zc.Zone("main", 0, 0, 0.5, 1, "<Super><Alt>1")],
+            {"HDMI-1": [zc.Zone("wide", 0, 0, 1, 1, "<Super><Alt>2")],
+             "DP-2": [zc.Zone("top", 0, 0, 1, 0.5)]},
+        )
+        self.assertEqual(
+            zc.list_zone_sets(path),
+            {None: ["main"], "HDMI-1": ["wide"], "DP-2": ["top"]},
+        )
+        self.assertEqual(sections_in(self.read(path)), ["grid", "zones", "zones:HDMI-1",
+                                                       "zones:DP-2", "keys"])
+        self.assertEqual([z.binding for z in zc.load_zones(path, "HDMI-1")], ["<Super><Alt>2"])
+
+    def test_duplicate_zone_name_in_two_sets_gives_one_key_line(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(
+            path,
+            [zc.Zone("main", 0, 0, 0.5, 1, "<Super><Alt>1")],
+            {"HDMI-1": [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1"),
+                        zc.Zone("wide", 0, 0, 1, 0.5, "<Super><Alt>2")]},
+        )
+        self.assertEqual(self.keys_of(path), ["main = <Super><Alt>1",
+                                             "wide = <Super><Alt>2"])
+        # главный ключ — из общего набора, он пишется первым
+        sets = zc.load_zone_sets(path)
+        self.assertEqual([z.binding for z in sets[None]], ["<Super><Alt>1"])
+        self.assertEqual([z.binding for z in sets["HDMI-1"]], ["<Super><Alt>1", "<Super><Alt>2"])
+
+    def test_default_set_key_wins_over_monitor_key(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(
+            path,
+            [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1")],
+            {"HDMI-1": [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>5")]},
+        )
+        self.assertEqual(self.keys_of(path), ["main = <Super><Alt>1"])
+
+    def test_broken_keys_in_file_do_not_stop_the_rewrite(self):
+        # Файл, испорченный руками: повтор в [keys]. Читать его писателю не нужно —
+        # файл переписывается целиком, поэтому повтора в нём уже не будет.
+        path = self.conf(BASE_GRID + "[zones]\nmain = 0, 0, 1, 1\n"
+                         + "[keys]\nmain = <Super><Alt>1\nmain = <Super><Alt>9\n")
+        zc.save_zone_sets(path, [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1")])
+        self.assertEqual(self.keys_of(path), ["main = <Super><Alt>1"])
+        self.assertEqual([z.binding for z in zc.load_zones(path)], ["<Super><Alt>1"])
+
+    def test_sets_not_passed_are_not_kept(self):
+        # Новая API — полная запись: что не передали, того в файле не будет.
+        path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES)
+        zc.save_zone_sets(path, [zc.Zone("only", 0, 0, 1, 1)], {"HDMI-1": [zc.Zone("top", 0, 0, 1, 1)]})
+        self.assertEqual(zc.list_zone_sets(path),
+                         {None: ["only"], "HDMI-1": ["top"]})
+
+    def test_no_default_section_with_none(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(path, None, {"HDMI-1": [zc.Zone("top", 0, 0, 1, 1)]})
+        self.assertEqual(sections_in(self.read(path)), ["grid", "zones:HDMI-1"])
+        self.assertEqual(zc.list_zone_sets(path), {"HDMI-1": ["top"]})
+
+    def test_empty_set_and_empty_monitor_name_are_skipped(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(path, [zc.Zone("main", 0, 0, 1, 1)],
+                          {"HDMI-1": [], "  ": [zc.Zone("x", 0, 0, 1, 1)], None: []})
+        self.assertEqual(sections_in(self.read(path)), ["grid", "zones"])
+
+    def test_extras_are_written_and_keys_sit_between_them(self):
+        path = os.path.join(self.tmpdir, "zones.conf")
+        zc.save_zone_sets(
+            path,
+            [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1")],
+            {"HDMI-1": [zc.Zone("wide", 0, 0, 1, 0.5)]},
+            {"rules": ["Chrome = main"], "daemon": ["reflow = off"]},
+        )
+        text = self.read(path)
+        self.assertEqual(sections_in(text), ["grid", "zones", "zones:HDMI-1", "rules",
+                                             "keys", "daemon"])
+        self.assertIn("[rules]\nChrome = main", text)
+
+    def test_returns_path_and_creates_directory(self):
+        path = os.path.join(self.tmpdir, "nested", "zones.conf")
+        self.assertEqual(zc.save_zone_sets(path, [zc.Zone("main", 0, 0, 1, 1)]), path)
+        self.assertTrue(os.path.exists(path))
+
+
+class TestProfileKeys(ConfMixin, unittest.TestCase):
+    def test_profile_has_one_key_line_per_zone_name(self):
+        zones = [zc.Zone("main", 0, 0, 0.5, 1, "<Super><Alt>1")]
+        monitors = {"HDMI-1": [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1"),
+                                zc.Zone("wide", 0, 0, 1, 0.5, "<Super><Alt>2")]}
+        path = zc.save_profile("dupes", zones, None, os.path.join(self.tmpdir, "zones.conf"),
+                               monitor_sets=monitors)
+        text = self.read(path)
+        self.assertEqual(sum(1 for line in text.splitlines() if line.startswith("main = <")), 1,
+                         text)
+        conf = os.path.join(self.tmpdir, "zones.conf")
+        self.assertEqual([z.binding for z in zc.read_profile("dupes", conf)[0]],
+                         ["<Super><Alt>1"])
+
+
 class TestSaveZones(ConfMixin, unittest.TestCase):
     def test_writes_grid_zones_and_no_empty_sections(self):
         path = os.path.join(tempfile.mkdtemp(), "zones.conf")
