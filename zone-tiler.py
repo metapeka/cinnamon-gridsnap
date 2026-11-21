@@ -25,6 +25,20 @@ zone-tiler — раскладывает активное окно по зона�
 между перезагрузками и переподключениями кабеля; `[zones]` обязательна и служит
 набором по умолчанию для мониторов без своей секции. `[rules]` и `[keys]` общие.
 
+Перемещение активного окна в соседнюю зону — команда `move <направление>`, а
+сочетания для неё — в необязательной секции `[move]` (зона окна ищется по его
+центру, сосед — тем же правилом, что стрелки в пикере):
+
+  [move]
+  left  = <Super>Left
+  right = <Super>Right
+  up    = <Super>Up
+  down  = <Super>Down
+
+Секции нет — действуют эти же сочетания (их же muffin занимает своим
+`push-tile-*`, поэтому их и берём по умолчанию). Неизвестный ключ — ошибка
+конфига.
+
 Команды:
   zone-tiler.py list                      # показать зоны и их пиксельные рамки
   zone-tiler.py apply left                # вложить активное окно в зону "left"
@@ -33,6 +47,8 @@ zone-tiler — раскладывает активное окно по зона�
   zone-tiler.py apply left --monitor HDMI-1   # или по имени выхода (приоритетнее номера)
   zone-tiler.py apply left --window 0x3400007
   zone-tiler.py apply left --workspace 1  # зона сетки рабочего стола 1
+  zone-tiler.py move left                 # активное окно — в соседнюю зону слева
+  zone-tiler.py keys --move               # сочетания перемещения (для setup-hotkeys.py)
   zone-tiler.py arrange                   # разложить окна по зонам (по правилам и остатку)
   zone-tiler.py arrange --by order        # разложить окна по зонам по порядку списка
   zone-tiler.py stack main                # собрать окна в зону main стопкой (каскадом)
@@ -319,6 +335,10 @@ class Grid:
         )
         if not cp.read(path, encoding="utf-8"):
             fail(f"zone-tiler: не найден конфиг {path}", EXIT_CONFIG)
+        # Путь нужен там, где секции читает не сам Grid: `keys --move` берёт
+        # `[move]` через `zone_config.load_move_keys`, а `[move]` в профилях
+        # столов не живёт (она общая на файл).
+        self.path = path
         self.conf = cp
         self.cols = self._numlist(cp.get("grid", "cols", fallback="1.0"))
         self.rows = self._numlist(cp.get("grid", "rows", fallback="1.0"))
@@ -1235,7 +1255,7 @@ def cmd_list(grid, args, profile=None):
     апплет Cinnamon (регулярка `рабочая область монитора N: ...`).
     """
     outputs = monitor_outputs()
-    index, output = resolve_monitor(args.monitor, outputs)
+    index, output = resolve_monitor(monitor_arg(args), outputs)
     wa = outputs[index][1]
     note = "" if output == f"monitor-{index}" else f"  (выход {output})"
     if profile:
@@ -1315,7 +1335,7 @@ def apply_zone(window, rect, label="", x11=None, verify=False, quiet=False):
 
 def cmd_apply(grid, args):
     outputs = monitor_outputs()
-    index, output = resolve_monitor(args.monitor, outputs)
+    index, output = resolve_monitor(monitor_arg(args), outputs)
     wa = outputs[index][1]
     rect = grid.rect(args.zone, wa, monitor_name=output)
     if args.dry_run:
@@ -1331,6 +1351,129 @@ def cmd_apply(grid, args):
     apply_zone(window, rect, label=args.zone, verify=args.verify, quiet=args.quiet)
     if before is not None:
         remember("apply", [before], quiet=args.quiet)
+
+
+def monitor_arg(args):
+    """`--monitor` из аргументов: не задан — 0, как было у list/apply/stack.
+
+    У `move` «не задан» значит другое: монитор окна (см. `cmd_move`), поэтому
+    значение по умолчанию осталось `None`, а не `"0"`.
+    """
+    return "0" if args.monitor is None else args.monitor
+
+
+def picker_nav():
+    """Модуль `zone_picker_nav`: правила выбора соседа живут только там."""
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import zone_picker_nav  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+
+    return zone_picker_nav
+
+
+def nearest_zone(zones, fx, fy):
+    """Индекс зоны с ближайшим к точке `(fx, fy)` центром; `None` — зон нет.
+
+    Нужна для окна, которое свободно плавает мимо всех зон: без неё `move` из
+    такого окна молча ничего бы не делал («зоны под центром нет»). Чистая
+    функция — под тесты.
+    """
+    nav = picker_nav()
+    best, best_dist = None, None
+    for index, zone in enumerate(zones):
+        cx, cy = nav.center(zone)
+        dist = (cx - fx) ** 2 + (cy - fy) ** 2
+        if best_dist is None or dist < best_dist:
+            best, best_dist = index, dist
+    return best
+
+
+def move_zone_index(zones, direction, fx, fy):
+    """`(откуда, куда)` для `move`; равные индексы — соседа нет.
+
+    `zones` — зоны набора в порядке файла как кортежи `(x, y, w, h)` в долях
+    рабочей области, `(fx, fy)` — центр окна в тех же долях. Зона окна — та,
+    в которой его центр (`zone_picker_nav.zone_at`), а если центр мимо всех
+    зон — ближайшая по центру (`nearest_zone`). Сосед выбирается чужим правилом
+    `zone_picker_nav.move_selection`: пикер и `move` обязаны вести себя
+    одинаково, а не двумя похожими реализациями. Чистая функция — под тесты.
+    """
+    nav = picker_nav()
+    if not zones:
+        return None, None
+    index = nav.zone_at(zones, fx, fy)
+    if index is None:
+        index = nearest_zone(zones, fx, fy)
+    return index, nav.move_selection(zones, index, direction)
+
+
+def cmd_move(grid, args):
+    """Перебросить окно в соседнюю зону по направлению (left/right/up/down).
+
+    Зона окна — по центру его рамки в долях рабочей области **своего** монитора
+    (набор `[zones:<выход>]`, иначе общий `[zones]`); сосед — тот же, что
+    подсветил бы пикер (`move_zone_index`). Окно вне зон — ближайшая по центру
+    зона. На краю сетки соседа нет: это не ошибка — сообщаем в stderr и
+    выходим с кодом 0. Удачный переезд (не `--dry-run`) пишется в историю
+    операцией `move`, поэтому `undo` возвращает окно на прежнее место.
+    """
+    nav = picker_nav()
+    direction = (args.zone or "").strip().lower()
+    if direction not in nav.DIRECTIONS:
+        fail(
+            "zone-tiler: move — укажите направление: " + " | ".join(nav.DIRECTIONS),
+            EXIT_USAGE,
+        )
+    outputs = monitor_outputs()
+    window = args.window or active_window()
+    extents = frame_extents(window)
+    try:
+        frame = read_frame(window, extents)
+    except Exception as exc:
+        fail(f"zone-tiler: не удалось прочитать рамку окна 0x{window:x}: {exc}", EXIT_FAIL)
+    if args.monitor is None:
+        # Монитор окна — по центру его рамки (в рабочей области уже вычтена панель).
+        areas = [area for _, area in outputs]
+        wa = monitor_for_point(areas, (frame[0] + frame[2] // 2, frame[1] + frame[3] // 2))
+        index = areas.index(wa)
+        output = outputs[index][0]
+    else:
+        index, output = resolve_monitor(args.monitor, outputs)
+        wa = outputs[index][1]
+    names = list(grid.zones_for(output))
+    zones = [grid.fractions(name, monitor_name=output) for name in names]
+    wx, wy, ww, wh = wa
+    fx = (frame[0] + frame[2] / 2.0 - wx) / ww
+    fy = (frame[1] + frame[3] / 2.0 - wy) / wh
+    here, there = move_zone_index(zones, direction, fx, fy)
+    if here is None:
+        fail(f"zone-tiler: у монитора {index} ({output}) нет ни одной зоны", EXIT_CONFIG)
+    if there == here:
+        if not args.quiet:
+            print(
+                f"zone-tiler: у зоны '{names[here]}' соседа {direction} нет — "
+                "окно не двигаю",
+                file=sys.stderr,
+            )
+        return EXIT_OK
+    zone = names[there]
+    rect = grid.rect(zone, wa, monitor_name=output)
+    if args.dry_run:
+        x, y, w, h = rect
+        print(
+            f"окно 0x{window:x}: зона '{names[here]}' -> '{zone}': "
+            f"x={x} y={y} {w}x{h} (монитор {index}: {output})"
+        )
+        return EXIT_OK
+    before = None
+    try:
+        before = snapshot_window(window, zone=zone)
+    except Exception:
+        before = None  # геометрию не прочитать — без записи в историю
+    apply_zone(window, rect, label=zone, verify=args.verify, quiet=args.quiet)
+    if before is not None:
+        remember("move", [before], quiet=args.quiet)
+    return EXIT_OK
 
 
 def group_windows_by_monitor(client_ids, outputs):
@@ -1424,7 +1567,7 @@ def cmd_stack(grid, args):
             print("zone-tiler: нет окон для стопки")
         return
     outputs = monitor_outputs()
-    mon_index, output = resolve_monitor(args.monitor, outputs)
+    mon_index, output = resolve_monitor(monitor_arg(args), outputs)
     wa = outputs[mon_index][1]
     base = grid.rect(args.zone, wa, monitor_name=output)
     x11 = None if args.dry_run else X11()
@@ -1502,12 +1645,25 @@ def cmd_undo(grid, args):
         print(f"zone-tiler: возвращено окон: {restored}{tail}")
 
 
-def cmd_keys(grid):
+def cmd_keys(grid, move=False, conf=None):
     """Печатает пары 'зона<TAB>сочетание' из секции [keys] (для setup-hotkeys.py).
 
     `[keys]` общая для всех мониторов, а зона может быть описана только в
     секции конкретного монитора — поэтому проверка идёт по объединению наборов.
+
+    `move=True` — вместо зон печатаются направления перемещения
+    (`направление<TAB>сочетание`) из необязательной секции `[move]`: источник
+    для `setup-hotkeys.py`, который регистрирует `move <направление>`. Разбор
+    секции и умолчания — в `zone_config.load_move_keys` (неизвестный ключ —
+    ошибка конфига, код 3).
     """
+    if move:
+        import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как у редактора
+
+        keys = zc.load_move_keys(conf or grid.path)
+        for direction in zc.MOVE_DIRECTIONS:
+            print(f"{direction}\t{keys[direction]}")
+        return
     if not grid.conf.has_section("keys"):
         return
     known = set(grid.all_zone_names())
@@ -1636,14 +1792,19 @@ def main(argv=None):
     )
     ap.add_argument(
         "command",
-        choices=["list", "apply", "keys", "arrange", "stack", "undo", "profile"],
+        choices=["list", "apply", "move", "keys", "arrange", "stack", "undo", "profile"],
         help=(
-            "list/apply/keys — как раньше; arrange — разложить окна по зонам; "
-            "stack — собрать окна в зону стопкой; undo — вернуть рамки из истории; "
-            "profile — свои профили раскладок (зоны + правила + клавиши)"
+            "list/apply/keys — как раньше; move — перебросить окно в соседнюю зону; "
+            "arrange — разложить окна по зонам; stack — собрать окна в зону стопкой; "
+            "undo — вернуть рамки из истории; profile — свои профили раскладок "
+            "(зоны + правила + клавиши)"
         ),
     )
-    ap.add_argument("zone", nargs="?", help="имя зоны для apply/stack или действие profile")
+    ap.add_argument(
+        "zone",
+        nargs="?",
+        help="имя зоны для apply/stack, направление для move или действие profile",
+    )
     ap.add_argument("name", nargs="?", help="имя профиля или файл JSON для profile import")
     ap.add_argument(
         "target",
@@ -1652,8 +1813,11 @@ def main(argv=None):
     )
     ap.add_argument(
         "--monitor",
-        default="0",
-        help="монитор для list/apply/stack: имя выхода (HDMI-1) или номер (по умолчанию 0)",
+        default=None,
+        help=(
+            "монитор для list/apply/stack/move: имя выхода (HDMI-1) или номер "
+            "(по умолчанию 0; у move — монитор окна)"
+        ),
     )
     ap.add_argument(
         "--workspace",
@@ -1661,7 +1825,7 @@ def main(argv=None):
         default=None,
         type=workspace_spec,
         help=(
-            "рабочий стол для list/apply/arrange/stack: номер (EWMH, с нуля), "
+            "рабочий стол для list/apply/move/arrange/stack: номер (EWMH, с нуля), "
             "current (сетка активного стола — по умолчанию) или conf "
             "(всегда сетка zones.conf, без профилей столов)"
         ),
@@ -1697,6 +1861,11 @@ def main(argv=None):
         help="profile import: имя профиля (по умолчанию — из JSON)",
     )
     ap.add_argument("--dry-run", action="store_true", help="только посчитать рамку")
+    ap.add_argument(
+        "--move",
+        action="store_true",
+        help="keys: сочетания перемещения в соседнюю зону из секции [move]",
+    )
     ap.add_argument("--verify", action="store_true", help="перечитать реальную геометрию")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--conf", default=CONF)
@@ -1709,7 +1878,7 @@ def main(argv=None):
     # `[keys]` общая на файл, а undo возвращает прежние рамки: профиль стола им
     # не указ, поэтому читают сам zones.conf, а не сетку рабочего стола.
     if args.command == "keys":
-        cmd_keys(Grid(args.conf))
+        cmd_keys(Grid(args.conf), move=args.move, conf=args.conf)
         return EXIT_OK
     if args.command == "undo":
         cmd_undo(Grid(args.conf), args)
@@ -1726,6 +1895,9 @@ def main(argv=None):
         return EXIT_OK
     if args.command == "arrange":
         cmd_arrange(grid, args)
+        return EXIT_OK
+    if args.command == "move":
+        cmd_move(grid, args)
         return EXIT_OK
     if not args.zone:
         fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)
