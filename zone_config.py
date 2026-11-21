@@ -19,6 +19,8 @@ import json
 import os
 import re
 
+import zone_tabs
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 
@@ -52,6 +54,16 @@ DEFAULT_MOVE_KEYS = {
 # В :data:`RESERVED_SECTIONS` секция не входит намеренно: редактор её не правит,
 # а переносит дословно как чужую — так она и переживает сохранение раскладки.
 FOCUS_SECTION = "focus"
+
+# Вкладки в зоне: ``[tabs]``, ``key`` — сочетание «следующее окно зоны», ``height``
+# — высота полосы вкладок в пикселях (необязательна, умолчание —
+# :data:`zone_tabs.STRIP_HEIGHT`). Секция необязательная. Как и ``[focus]``, в
+# :data:`RESERVED_SECTIONS` она не входит: редактор её не правит, а переносит
+# дословно как чужую. Неизвестный ключ — ошибка конфига (опечатка оставила бы
+# человека без клавиши), мусор в ``height`` — тоже: полоса нулевой или
+# отрицательной высоты не рисуется, и вкладки молча стали бы невидимыми.
+TABS_SECTION = "tabs"
+TABS_FIELDS = ("key", "height")
 
 # Рабочие столы: ``[workspaces]``, ключ — номер стола как в интерфейсе Cinnamon
 # (с 1), значение — имя профиля из ``templates/<имя>.conf``.
@@ -254,6 +266,55 @@ def load_focus_keys(path):
         # Секция без сочетания — это не режим: без клавиши он недоступен.
         return None
     return {"key": key, "zone": zone}
+
+
+def load_tabs_config(path):
+    """Секция ``[tabs]``: ``{"key": сочетание | None, "height": высота полосы}``.
+
+    ``height`` — высота полосы вкладок в пикселях, целое больше нуля; нет
+    секции или нет ключа — :data:`zone_tabs.STRIP_HEIGHT` (умолчание полосы, а
+    не второе число в конфиге). ``key`` — сочетание Cinnamon для «следующего
+    окна зоны»:
+    ``None`` — клавиши нет, остальные поля при этом читаются. Мусор в
+    ``height`` (не число, ноль, отрицательное) и неизвестный ключ в секции —
+    ошибка конфига (код 3): полосы нулевой высоты не видно, и человек не понял
+    бы, почему вкладки перестали показываться.
+    """
+    config = {"key": None, "height": int(zone_tabs.STRIP_HEIGHT)}
+    cp = _read_conf(path, missing_ok=True)
+    if cp is None or not cp.has_section(TABS_SECTION):
+        return config
+    for name, value in cp.items(TABS_SECTION):
+        # ConfigParser приводит ключи к нижнему регистру, так что ``Key`` в
+        # файле тоже сойдёт.
+        field = str(name).strip().lower()
+        if field not in TABS_FIELDS:
+            zt.fail(
+                f"zone_config: в [{TABS_SECTION}] неизвестный ключ '{field}': "
+                f"можно {', '.join(TABS_FIELDS)}",
+                zt.EXIT_CONFIG,
+            )
+        text = str(value).strip()
+        if field == "key":
+            config["key"] = text or None
+            continue
+        config["height"] = _tabs_height(text)
+    return config
+
+
+def _tabs_height(text):
+    """Высота полосы вкладок из ``[tabs] height``: целое больше нуля, иначе код 3."""
+    try:
+        height = int(str(text).strip(), 10)
+    except (TypeError, ValueError):
+        height = 0
+    if height <= 0:
+        zt.fail(
+            f"zone_config: в [{TABS_SECTION}] height — целое число пикселей больше "
+            f"нуля, а не '{text}'",
+            zt.EXIT_CONFIG,
+        )
+    return height
 
 
 def _workspace_number(value):

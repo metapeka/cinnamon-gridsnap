@@ -39,6 +39,18 @@ zone-tiler — раскладывает активное окно по зона�
 `push-tile-*`, поэтому их и берём по умолчанию). Неизвестный ключ — ошибка
 конфига.
 
+Вкладки в зоне — необязательная секция `[tabs]`: `key` — сочетание «следующее
+окно зоны» (`tabs-next`), `height` — высота полосы вкладок в пикселях (по
+умолчанию 22). Несколько окон в одной зоне стоят на одной рамке (зона минус
+полоса), видно верхнее; полосу рисует отдельный процесс `zone-tabstrip.py`.
+
+  [tabs]
+  key    = <Super><Alt>g
+  height = 22
+
+Каскада больше нет: `--offset` и сдвиг стопки удалены, вызов с `--offset` —
+ошибка аргументов (код 2).
+
 Команды:
   zone-tiler.py list                      # показать зоны и их пиксельные рамки
   zone-tiler.py apply left                # вложить активное окно в зону "left"
@@ -51,7 +63,8 @@ zone-tiler — раскладывает активное окно по зона�
   zone-tiler.py keys --move               # сочетания перемещения (для setup-hotkeys.py)
   zone-tiler.py arrange                   # разложить окна по зонам (по правилам и остатку)
   zone-tiler.py arrange --by order        # разложить окна по зонам по порядку списка
-  zone-tiler.py stack main                # собрать окна в зону main стопкой (каскадом)
+  zone-tiler.py stack main                # собрать окна в зону main вкладками
+  zone-tiler.py tabs-next                 # поднять следующее окно зоны (клавиша)
   zone-tiler.py undo                      # вернуть окна из последней операции
   zone-tiler.py undo --all                # откатить всю историю раскладок
 
@@ -1324,7 +1337,8 @@ def choose_assignments(client_ids, metas, zones, rules, by="auto", ignore=None):
     by — режим:
       `rules` — только окна со сработавшим правилом, каждое в свою зону;
       `order` — все подвижные окна по порядку в зоны по порядку; лишним окнам
-                (сверх числа зон) достаётся последняя зона (там они — стопкой);
+                (сверх числа зон) достаётся последняя зона (там они —
+                вкладками);
       `auto`  — сначала правила, затем свободные (никем не занятые по правилу)
                 зоны по порядку для окон без правила; лишние не трогаются.
 
@@ -1366,21 +1380,47 @@ def choose_assignments(client_ids, metas, zones, rules, by="auto", ignore=None):
     return result
 
 
-def cascade_rect(base, index, step, bounds):
-    """Рамка `index`-го окна стопки: `base` сдвинута на `index*step` вниз-вправо.
+def zone_tabs_module():
+    """Модуль `zone_tabs`: арифметика вкладок в зоне живёт только там."""
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import zone_tabs  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
 
-    Окно не уменьшается и не прижимается к зоне: так у каждого окна остаётся
-    виден заголовок (обычно вверху-слева), даже если само окно частично уйдёт
-    за правый/нижний край зоны или рабочей области. Левый верхний угол при этом
-    не выпускается за `bounds` (рабочую область), чтобы окно вообще не уехало с
-    экрана. `step <= 0` отключает каскад. Чистая функция — под тесты.
+    return zone_tabs
+
+
+def in_zone_rect(zone_rect, count, height=None):
+    """Рамка окна в зоне: одно окно — ровно зона, несколько — рамка вкладки.
+
+    `count` — сколько окон оказалось в зоне, `height` — высота полосы вкладок
+    (`[tabs] height`, по умолчанию `zone_tabs.STRIP_HEIGHT`). Несколько окон
+    делят одну рамку вкладки (`zone_tabs.tab_rect`: зона минус полоса), а не
+    сдвигаются каскадом: сдвиг оставлял видимыми куски всех окон сразу и ломал
+    рамку зоны. В узкой зоне полосы нет и рамка вкладки — сама зона, но вкладки
+    всё равно работают. Чистая функция — под тесты. `arrange` и `stack` кладут
+    окна одним и тем же правилом.
     """
-    x, y, w, h = base
-    bx, by, bw, bh = bounds
-    shift = max(0, index) * max(0, step)
-    max_dx = max(0, bx + bw - 1 - x)
-    max_dy = max(0, by + bh - 1 - y)
-    return (x + min(shift, max_dx), y + min(shift, max_dy), w, h)
+    tabs = zone_tabs_module()
+    if int(count) < 2:
+        return tuple(int(round(v)) for v in zone_rect)
+    rect = tabs.tab_rect(
+        zone_rect, tabs.STRIP_HEIGHT if height is None else int(height)
+    )
+    # Рамки окон — пиксели: `tab_rect` считает float, а EWMH и вывод
+    # `--dry-run` ждут целых, как у `Grid.rect`.
+    return tuple(int(round(v)) for v in rect)
+
+
+def tabs_height(grid):
+    """Высота полосы вкладок из `[tabs] height`; нет секции — умолчание полосы.
+
+    Разбор секции живёт в `zone_config.load_tabs_config` (там же — ошибка на
+    мусор в высоте), чтобы раскладчик и полоса не разбирали `[tabs]` по-своему.
+    Импорт ленивый: `zone_config` сам загружает этот файл как модуль.
+    """
+    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как у редактора
+
+    return zc.load_tabs_config(grid.path)["height"]
 
 
 def state_home():
@@ -1721,6 +1761,37 @@ def daemon_request(request, timeout=DAEMON_TIMEOUT):
         fail(f"zone-tiler: демон ответил непонятно: {exc}", EXIT_FAIL)
     finally:
         conn.close()
+
+
+def cmd_tabs_next(args):
+    """Поднять следующую вкладку зоны активного окна (по клавише `[tabs] key`).
+
+    Хозяин вкладок — демон: он один знает, какие окна стоят на рамке вкладки, и
+    только он умеет активировать окно (`_NET_ACTIVE_WINDOW` + подъём). Поэтому
+    команда ничего не раскладывает сама, а шлёт ему `zone_tabs.tabs_next_command()`
+    тем же сокетом, что и `gridsnap-ctl` (ленивый клиент — `daemon_request`).
+    Демона нет — это код 1 с понятным сообщением, а не трейсбек: без демона
+    вкладок нет, а кнопка на клавише осталась. Окно вне зон демон считает тихим
+    no-op (код 0): переключать там нечего, и это не ошибка.
+    """
+    request = zone_tabs_module().tabs_next_command()
+    response = daemon_request(request)
+    if response is None:
+        fail(
+            "zone-tiler: демон не запущен — вкладки в зоне переключает он "
+            "(запустите gridsnap-daemon)",
+            EXIT_FAIL,
+        )
+    if not response.get("ok", True):
+        reason = response.get("error") or "причина не названа"
+        fail(f"zone-tiler: демон отказал: {reason}", EXIT_FAIL)
+    if args.quiet:
+        return
+    window = response.get("window")
+    if window is None:
+        print("zone-tiler: переключать нечего — в зоне активного окна одно окно")
+        return
+    print(f"zone-tiler: следующее окно зоны — {window}")
 
 
 def cmd_focus(grid, args):
@@ -2203,8 +2274,9 @@ def cmd_arrange(grid, args):
     Режим `--by` (auto/rules/order) выбирает окна чистой `choose_assignments`;
     окна группируются по монитору, и в каждой группе работает набор зон этого
     монитора (`[zones:<выход>]`) или общий `[zones]`. Несколько окон,
-    попавших в одну зону одного монитора, ложатся туда стопкой со сдвигом
-    `--offset`. Прежние рамки записываются в историю для `undo`.
+    попавших в одну зону одного монитора, получают общую рамку вкладки
+    (`in_zone_rect`): зона минус полоса `[tabs] height`; одно окно в зоне
+    ставится ровно по зоне. Прежние рамки записываются в историю для `undo`.
     """
     client_ids = read_client_list()
     if client_ids is None:
@@ -2228,15 +2300,13 @@ def cmd_arrange(grid, args):
             print("zone-tiler: нет окон, подходящих под раскладку")
         return
     x11 = None if args.dry_run else X11()
-    counts = {}
+    totals = collections.Counter((wa, zone) for _win, zone, _output, wa in assignments)
+    height = tabs_height(grid)
     records = []
     try:
         for win, zone, output, wa in assignments:
-            key = (wa, zone)
-            index = counts.get(key, 0)
-            counts[key] = index + 1
             base = grid.rect(zone, wa, monitor_name=output)
-            rect = base if index == 0 else cascade_rect(base, index, args.offset, wa)
+            rect = in_zone_rect(base, totals[(wa, zone)], height)
             if args.dry_run:
                 x, y, w, h = rect
                 print(f"окно 0x{win:x} -> зона '{zone}': x={x} y={y} {w}x{h}")
@@ -2261,7 +2331,12 @@ def cmd_arrange(grid, args):
 
 
 def cmd_stack(grid, args):
-    """Собрать подвижные клиентские окна в одну зону стопкой (каскадом)."""
+    """Собрать подвижные клиентские окна в одну зону вкладками.
+
+    Окна встают на одну рамку вкладки (`in_zone_rect`): зона минус полоса
+    `[tabs] height`, последнее окно списка — наверху. Одно окно в зоне ставится
+    ровно по зоне, без полосы. Переключение вкладок — `tabs-next`/клик по полосе.
+    """
     client_ids = read_client_list()
     if client_ids is None:
         fail("zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)", EXIT_FAIL)
@@ -2269,20 +2344,23 @@ def cmd_stack(grid, args):
     windows = movable_windows(client_ids, metas, grid.ignore)
     if not windows:
         if not args.quiet:
-            print("zone-tiler: нет окон для стопки")
+            print("zone-tiler: нет окон для вкладок")
         return
     outputs = monitor_outputs()
     mon_index, output = resolve_monitor(monitor_arg(args), outputs)
     wa = outputs[mon_index][1]
     base = grid.rect(args.zone, wa, monitor_name=output)
+    rect = in_zone_rect(base, len(windows), tabs_height(grid))
     x11 = None if args.dry_run else X11()
     records = []
     try:
         for index, win in enumerate(windows):
-            rect = base if index == 0 else cascade_rect(base, index, args.offset, wa)
             if args.dry_run:
                 x, y, w, h = rect
-                print(f"окно 0x{win:x} -> зона '{args.zone}' (стопка {index + 1}): x={x} y={y} {w}x{h}")
+                print(
+                    f"окно 0x{win:x} -> зона '{args.zone}' "
+                    f"(вкладка {index + 1} из {len(windows)}): x={x} y={y} {w}x{h}"
+                )
                 continue
             try:
                 before = snapshot_window(win, zone=args.zone)
@@ -2292,7 +2370,7 @@ def cmd_stack(grid, args):
                 apply_zone(win, rect, label=args.zone, x11=x11, quiet=args.quiet, verify=args.verify)
             except Exception as exc:
                 if not args.quiet:
-                    print(f"окно 0x{win:x}: не удалось положить в стопку ({exc})", file=sys.stderr)
+                    print(f"окно 0x{win:x}: не удалось положить во вкладки ({exc})", file=sys.stderr)
                 continue
             if before is not None:
                 records.append(before)
@@ -2495,9 +2573,13 @@ def cmd_profile(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Раскладка окон по зонам сетки (Cinnamon/X11)",
+        # Без сокращений: иначе удалённый `--offset` совпадает с `--off` и
+        # вместо «неизвестный флаг» человек получает ошибку про команду '20'.
+        allow_abbrev=False,
         epilog=(
             "Примеры: zone-tiler.py arrange --by order; zone-tiler.py stack main; "
-            "zone-tiler.py undo --all; zone-tiler.py profile use work"
+            "zone-tiler.py tabs-next; zone-tiler.py undo --all; "
+            "zone-tiler.py profile use work"
         ),
     )
     ap.add_argument(
@@ -2510,6 +2592,7 @@ def main(argv=None):
             "keys",
             "arrange",
             "stack",
+            "tabs-next",
             "undo",
             "profile",
         ],
@@ -2517,7 +2600,8 @@ def main(argv=None):
             "list/apply/keys — как раньше; move — перебросить окно в соседнюю зону; "
             "focus — режим «только эта зона» (окно в зону, остальные свёрнуты; "
             "повторно — выход); arrange — разложить окна по зонам; stack — собрать "
-            "окна в зону стопкой; undo — вернуть рамки из истории; profile — свои "
+            "окна в зону вкладками; tabs-next — поднять следующую вкладку зоны "
+            "(клавиша [tabs]); undo — вернуть рамки из истории; profile — свои "
             "профили раскладок (зоны + правила + клавиши)"
         ),
     )
@@ -2558,12 +2642,6 @@ def main(argv=None):
         default="auto",
         help="arrange: выбор окон — правила и остаток (auto), только правила, или по порядку",
     )
-    ap.add_argument(
-        "--offset",
-        type=int,
-        default=20,
-        help="сдвиг окна в стопке/каскаде, px (по умолчанию 20; 0 — без сдвига)",
-    )
     ap.add_argument("--all", action="store_true", help="undo: откатить всю историю, а не последнюю операцию")
     ap.add_argument(
         "--no-hotkeys",
@@ -2596,6 +2674,15 @@ def main(argv=None):
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--conf", default=CONF)
     ap.add_argument("--version", action="version", version=f"zone-tiler {VERSION}")
+    # `--offset` удалён вместе с каскадом. Без явной проверки argparse съедает
+    # его значение как команду и ругается на «20», а не на флаг: человек
+    # видит причину только в этом сообщении.
+    for value in sys.argv[1:] if argv is None else argv:
+        if value == "--offset" or value.startswith("--offset="):
+            ap.error(
+                "--offset удалён: окна одной зоны больше не сдвигаются каскадом, "
+                "а стоят вкладками на общей рамке (переключение — tabs-next)"
+            )
     args = ap.parse_args(argv)
 
     if args.command == "profile":
@@ -2608,6 +2695,11 @@ def main(argv=None):
         return EXIT_OK
     if args.command == "undo":
         cmd_undo(Grid(args.conf), args)
+        return EXIT_OK
+    # `tabs-next` не нужен ни конфиг, ни сетка: демон сам выбирает зону по
+    # активному окну, а высота полосы его не касается.
+    if args.command == "tabs-next":
+        cmd_tabs_next(args)
         return EXIT_OK
 
     # list/apply/arrange/stack работают сеткой своего стола: `--workspace N` или

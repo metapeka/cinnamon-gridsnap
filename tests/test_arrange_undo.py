@@ -2,7 +2,7 @@
 """Юнит-тесты раскладки одной командой и истории undo — без X и GTK.
 
 Покрыто: выбор подвижных окон (те же фильтры, что у демона), режимы `arrange`
-(`auto`/`rules`/`order`), каскад стопки, персистентная история в XDG-состоянии
+(`auto`/`rules`/`order`), общая рамка вкладки для окон одной зоны, персистентная история в XDG-состоянии
 (предел, битый файл), план `undo` (последняя операция и вся история), разбор
 воркспейса и CLI-ошибки новых команд.
 
@@ -117,35 +117,32 @@ class TestChooseAssignments(unittest.TestCase):
         )
 
 
-class TestCascadeRect(unittest.TestCase):
+class TestInZoneRect(unittest.TestCase):
     BASE = (100, 100, 400, 300)
-    BOUNDS = (0, 0, 1000, 1000)
 
-    def test_first_window_sits_on_zone(self):
-        self.assertEqual(zt.cascade_rect(self.BASE, 0, 20, self.BOUNDS), self.BASE)
+    def test_single_window_sits_exactly_on_zone(self):
+        self.assertEqual(zt.in_zone_rect(self.BASE, 1), self.BASE)
 
-    def test_each_next_window_shifts_by_step(self):
+    def test_two_windows_share_frame_below_strip(self):
+        # Полоса по умолчанию — 22 px: окно сдвинуто вниз на её высоту.
+        self.assertEqual(zt.in_zone_rect(self.BASE, 2), (100, 122, 400, 278))
+
+    def test_all_windows_of_zone_get_the_same_frame(self):
         self.assertEqual(
-            zt.cascade_rect(self.BASE, 2, 20, self.BOUNDS), (140, 140, 400, 300)
+            zt.in_zone_rect(self.BASE, 2), zt.in_zone_rect(self.BASE, 7)
         )
 
-    def test_shift_clamped_so_top_left_stays_on_screen(self):
-        # левый верхний угол не уходит за рабочую область, даже если окно шире её
-        base = (900, 100, 400, 300)
-        self.assertEqual(zt.cascade_rect(base, 3, 20, self.BOUNDS), (960, 160, 400, 300))
+    def test_custom_height_moves_window_down(self):
+        self.assertEqual(zt.in_zone_rect(self.BASE, 2, 30), (100, 130, 400, 270))
 
-    def test_window_keeps_size_and_may_overflow_bounds(self):
-        base = (900, 900, 400, 300)
-        x, y, w, h = zt.cascade_rect(base, 10, 20, self.BOUNDS)
-        self.assertEqual((w, h), (400, 300))  # размер не меняется — заголовок виден
-        self.assertLess(x, self.BOUNDS[2])
-        self.assertLess(y, self.BOUNDS[3])
+    def test_narrow_zone_has_no_strip_and_keeps_zone(self):
+        # Окну не остаётся 44 px под полосой — полосы нет, рамка — сама зона.
+        base = (100, 100, 400, 50)
+        self.assertEqual(zt.in_zone_rect(base, 3), base)
 
-    def test_zero_step_disables_cascade(self):
-        self.assertEqual(zt.cascade_rect(self.BASE, 5, 0, self.BOUNDS), self.BASE)
-
-    def test_negative_index_does_not_shift_backwards(self):
-        self.assertEqual(zt.cascade_rect(self.BASE, -3, 20, self.BOUNDS), self.BASE)
+    def test_frame_is_in_pixels(self):
+        rect = zt.in_zone_rect(self.BASE, 2)
+        self.assertTrue(all(isinstance(v, int) for v in rect), rect)
 
 
 class TestHistory(unittest.TestCase):
@@ -270,8 +267,10 @@ class TestCli(unittest.TestCase):
     def test_help_lists_new_commands(self):
         r = self.run_cli("--help")
         self.assertEqual(r.returncode, 0)
-        for word in ("arrange", "stack", "undo", "--by", "--offset", "--all"):
+        for word in ("arrange", "stack", "tabs-next", "undo", "--by", "--all", "[tabs]"):
             self.assertIn(word, r.stdout)
+        # Каскада больше нет: ни флага, ни упоминания в справке.
+        self.assertNotIn("--offset", r.stdout)
 
     def test_stack_unknown_zone_is_config_error(self):
         # Нет зоны ни в сетке стола, ни в общем [zones] — ошибка конфига (код 3),

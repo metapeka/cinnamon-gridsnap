@@ -4,11 +4,12 @@
 setup-hotkeys.py — регистрирует в Cinnamon горячие клавиши для зон из zones.conf.
 
 Читает секцию [keys] (зона = сочетание), необязательные [move] (направление =
-сочетание) и [focus] (сочетание режима «только эта зона») и создаёт
-пользовательские сочетания Cinnamon вида:
+сочетание), [focus] (сочетание режима «только эта зона») и [tabs] (сочетание
+«следующее окно зоны») и создаёт пользовательские сочетания Cinnamon вида:
     zone-tiler: main        ->  python3 .../zone-tiler.py apply main --quiet
     zone-tiler: move left   ->  python3 .../zone-tiler.py move left --quiet
     zone-tiler: focus       ->  python3 .../zone-tiler.py focus main --quiet
+    zone-tiler: tabs-next   ->  python3 .../zone-tiler.py tabs-next --quiet
 
   python3 setup-hotkeys.py            # установить/обновить
   python3 setup-hotkeys.py --list     # показать, что будет установлено
@@ -103,7 +104,8 @@ def planned(conf=None):
 
     Имя идёт в префикс `zone-tiler: `: по нему `drop_owned` отличает свои
     сочетания от чужих и не трогает чужие при переустановке. `focus` —
-    имя секции `[focus]`: без неё в плане ровно то же, что раньше.
+    имя секции `[focus]`, `tabs-next` — команда секции `[tabs]`: без этих
+    секций в плане ровно то же, что раньше.
     """
     items = []
     for zone, binding in zone_pairs(conf):
@@ -118,6 +120,16 @@ def planned(conf=None):
         if focus.get("zone"):
             command += f" {focus['zone']}"
         items.append(("focus", focus["key"], with_conf(command + " --quiet", conf)))
+    tabs = zone_config.load_tabs_config(conf)
+    if tabs.get("key"):
+        # Клавиша вкладок — тот же путь, что у `[focus]`: отдельный процесс
+        # раскладчика, который только передаёт демону `tabs-next`. Сам демон
+        # переключает вкладки, поэтому команда без зоны и без аргументов.
+        items.append((
+            "tabs-next",
+            tabs["key"],
+            with_conf(f"{sys.executable} {ZONEBIN} tabs-next --quiet", conf),
+        ))
     return items
 
 
