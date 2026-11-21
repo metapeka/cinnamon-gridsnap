@@ -10,6 +10,13 @@
     python3 zone-picker.py --shot out.png  # отрисовать оверлей в PNG и выйти
     python3 zone-picker.py --dry-run       # выбрать зону, но окно не двигать
     python3 zone-picker.py --workspace 2   # сетка рабочего стола 2 (профиль из [workspaces])
+    python3 zone-picker.py --hud --at 100,100        # HUD-сетка: зона под точкой, и выход
+    python3 zone-picker.py --hud --follow            # HUD-сетка: точки «X Y» из stdin
+
+Режим ``--hud`` — пассивная сетка для перетаскивания окна: подсвечены контуры
+всех зон и зона под точкой, которую присылает клиент (watcher перетаскивания).
+HUD не берёт фокус, не захватывает клавиатуру и прозрачен для ввода: во время
+перетаскивания ввод держит muffin, а мы только рисуем.
 
 Сетка берётся для своего рабочего стола так же, как у ``list``/``apply``
 (``zone-tiler.grid_for_workspace``): у стола может быть свой профиль из
@@ -22,6 +29,7 @@
 import argparse
 import math
 import os
+import signal
 import sys
 
 import cairo
@@ -47,6 +55,10 @@ PALETTE = [
 ACCENT = (1.0, 0.71, 0.33)
 BACKDROP = (0.07, 0.08, 0.10)
 HINT = "стрелки — выбор · Enter — вложить · Esc — отмена"
+# Подложка HUD и пауза однократной отрисовки: сетку видно, рабочий стол — тоже,
+# а сам процесс после кадра не висит.
+HUD_ALPHA = 0.25
+HUD_HOLD_MS = 500
 
 EXIT_OK = 0
 EXIT_FAIL = 1
@@ -103,6 +115,16 @@ def workspace_caption(workspace, profile):
     return f"стол {workspace + 1} · общий набор"
 
 
+def hud_caption(profile):
+    """Подпись HUD: имя профиля стола из ``[workspaces]``, если он сопоставлен.
+
+    В HUD нет подсказки про клавиши (их он не слушает), поэтому в углу остаётся
+    только ответ на вопрос «какая это сетка» — та же строка профиля, что и в
+    интерактивном оверлее, но без номера стола: рисовать больше нечего.
+    """
+    return f"профиль «{profile}»" if profile else ""
+
+
 def describe_grid(zones, caption):
     """Строка про показанную сетку: подпись стола и перечень зон.
 
@@ -138,15 +160,14 @@ def _label(cr, x, y, text, size, bold, rgba, width=None):
     PangoCairo.show_layout(cr, layout)
 
 
-def draw_overlay(cr, width, height, zones, selected, caption=""):
-    """Нарисовать оверлей: фон, зоны, подпись каждой, подсветка, подсказка и стол.
+def draw_zones(cr, width, height, zones, selected, caption="", hint=HINT):
+    """Нарисовать сетку без фона: зоны, подписи, подсветка, стол и подсказка.
 
     Координаты — в пикселях локального оверлея (он же — рабочая область монитора),
-    зоны заданы долями, поэтому ``zone_px`` просто умножает их на размеры.
+    зоны заданы долями, поэтому ``zone_px`` просто умножает их на размеры. Фон
+    рисует вызывающий: интерактивному оверлею нужна непрозрачная подложка, а HUD —
+    полупрозрачная. Пустой ``hint`` — подсказки про клавиши нет (HUD их не слушает).
     """
-    cr.set_source_rgba(*BACKDROP, 0.90)
-    cr.paint()
-
     # крупные зоны первыми, мелкие поверх — как в редакторе
     order = sorted(range(len(zones)), key=lambda i: zones[i].w * zones[i].h, reverse=True)
     for i in order:
@@ -185,17 +206,25 @@ def draw_overlay(cr, width, height, zones, selected, caption=""):
 
     # почему сетка такая: стол и его профиль из `[workspaces]`
     if caption:
-        _label(cr, 16, height - 48, caption, 11, True, (*ACCENT, 0.92))
-    _label(cr, 16, height - 30, HINT, 11, False, (1, 1, 1, 0.72))
+        _label(cr, 16, height - (48 if hint else 30), caption, 11, True, (*ACCENT, 0.92))
+    if hint:
+        _label(cr, 16, height - 30, hint, 11, False, (1, 1, 1, 0.72))
 
 
-def write_shot(path, width, height, zones, selected, caption=""):
-    """Отрисовать оверлей в PNG заданного размера — проверка без интерактива."""
+def draw_overlay(cr, width, height, zones, selected, caption=""):
+    """Интерактивный оверлей целиком: непрозрачная подложка и сетка поверх неё."""
+    cr.set_source_rgba(*BACKDROP, 0.90)
+    cr.paint()
+    draw_zones(cr, width, height, zones, selected, caption)
+
+
+def write_shot(path, width, height, zones, selected, caption="", hint=HINT):
+    """Отрисовать оверлей (или HUD, если ``hint`` пуст) в PNG — проверка без интерактива."""
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(width), int(height))
     cr = cairo.Context(surface)
     cr.set_source_rgb(*BACKDROP)  # непрозрачная подложка, чтобы снимок читался
     cr.paint()
-    draw_overlay(cr, width, height, zones, selected, caption)
+    draw_zones(cr, width, height, zones, selected, caption, hint)
     surface.write_to_png(path)
 
 
@@ -416,6 +445,199 @@ class Picker:
         Gtk.main_quit()
 
 
+# ------------------------------------------------------------------ HUD-оверлей
+
+
+def parse_point(text):
+    """Точка ``(x, y)`` из строки ``X,Y`` или ``X Y``; ``None`` — если это не пара.
+
+    Один разбор на два входа: ``--at X,Y`` и строки ``X Y`` в stdin у ``--follow``.
+    Watcher перетаскивания печатает позицию курсора именно строкой, поэтому
+    формат с пробелом — основной, а запятая — удобство для ручного запуска.
+    """
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", "replace")
+    if not text:
+        return None
+    parts = str(text).replace(",", " ").split()
+    if len(parts) != 2:
+        return None
+    try:
+        return int(parts[0], 10), int(parts[1], 10)
+    except ValueError:
+        return None
+
+
+def point_spec(text):
+    """``--at X,Y``: точка или понятная ошибка аргументов (код 2)."""
+    point = parse_point(text)
+    if point is None:
+        raise argparse.ArgumentTypeError(f"нужны экранные координаты X,Y, а не {text!r}")
+    return point
+
+
+class Hud:
+    """Пассивный оверлей сетки для перетаскивания: рисует, но не берёт ввод.
+
+    Отличие от :class:`Picker` — в трёх местах: окно не берёт фокус
+    (``set_accept_focus(False)``/``set_focus_on_map(False)``), клавиатура не
+    захватывается (нет ``Gdk.Seat.grab`` — её держит muffin) и окно прозрачно
+    для ввода, а точку подсветки присылает клиент (``--at`` или stdin). Фон
+    полупрозрачный, чтобы сетка не закрывала перетаскиваемое окно.
+    """
+
+    def __init__(self, zones, wa, caption=""):
+        self.zones = zones
+        self.wa = wa  # рабочая область монитора: (x, y, w, h) в экранных пикселях
+        self.caption = caption
+        self.selected = None
+        self._buf = ""
+        self.input_mode = "нет"
+
+        width, height = wa[2], wa[3]
+        self.win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
+        title = "Gridsnap — сетка"
+        if caption:
+            title += f" ({caption})"
+        self.win.set_title(title)
+        self.win.set_decorated(False)
+        self.win.set_resizable(False)
+        self.win.set_skip_taskbar_hint(True)
+        self.win.set_skip_pager_hint(True)
+        self.win.set_keep_above(True)
+        # Фокус и клавиатура — чужие: перетаскиванием владеет muffin.
+        self.win.set_accept_focus(False)
+        self.win.set_focus_on_map(False)
+        self.win.set_app_paintable(True)
+        self.win.set_type_hint(Gdk.WindowTypeHint.DOCK)
+        self.win.move(wa[0], wa[1])
+        self.win.set_default_size(width, height)
+        # Без RGBA-визуала полупрозрачный фон не скомпонуется и станет чёрным.
+        screen = self.win.get_screen()
+        visual = screen.get_rgba_visual() if screen is not None else None
+        if visual is not None and screen.is_composited():
+            self.win.set_visual(visual)
+        self.win.connect("draw", self.on_draw)
+        self.win.connect("destroy", lambda _widget: Gtk.main_quit())
+        # Сначала на экран, потом форма ввода: input shape ставится на живое окно
+        # (и GDK не перезатирает его при отображении).
+        self.win.show_all()
+        self.input_mode = self.make_input_transparent()
+
+    # ---- ввод не наш
+
+    def make_input_transparent(self):
+        """Сделать окно прозрачным для ввода: события X идут мимо него.
+
+        Работает не всё, что обещает имя: проверено под Xvfb, что
+        ``Gdk.Window.set_pass_through(True)`` выставляет только флаг GDK
+        (``get_pass_through()`` — True), а X input shape остаётся полным, и окно
+        продолжает ловить события. Поэтому сначала ставится пустой input shape
+        (``input_shape_combine_region`` с пустым ``cairo.Region``) — это
+        единственный механизм, который видит X-сервер (расширение SHAPE), — и
+        только потом, поверх, флаг ``set_pass_through``: он говорит самому GDK,
+        что искать окно под курсором надо глубже. Без SHAPE остаётся хотя бы он.
+        Возвращает, что сработало: запросить обратно input shape GDK не даёт.
+        """
+        gdk_win = self.win.get_window()
+        if gdk_win is None:
+            print("zone-picker: у HUD нет Gdk-окна — ввод не отключить", file=sys.stderr)
+            return "нет окна"
+        used = []
+        try:
+            gdk_win.input_shape_combine_region(cairo.Region(), 0, 0)
+            used.append("input_shape_combine_region")
+        except Exception as exc:  # X-сервер без SHAPE
+            print(f"zone-picker: input shape не поставить: {exc}", file=sys.stderr)
+        try:
+            gdk_win.set_pass_through(True)
+            used.append("set_pass_through")
+        except Exception as exc:  # старый GTK
+            print(f"zone-picker: set_pass_through не сработал: {exc}", file=sys.stderr)
+        return " + ".join(used) if used else "нет"
+
+    # ---- точка снаружи
+
+    def set_point(self, point):
+        """Подсветить зону под экранной точкой (``None`` — снять подсветку)."""
+        index = None if point is None else nav.zone_at_point(self.zones, self.wa, point)
+        if index != self.selected:
+            self.selected = index
+            self.win.queue_draw()
+        return index
+
+    def apply_point(self, point):
+        """Подсветить точку и сказать в stdout, что именно подсвечено.
+
+        Строка нужна watcher'у и дымовому тесту: по ней видно, что процесс жив
+        и точка дошла, не разглядывая окно.
+        """
+        index = self.set_point(point)
+        name = self.zones[index].name if index is not None else "мимо зон"
+        print(f"zone-picker: {point[0]},{point[1]} -> {name}", flush=True)
+        return index
+
+    def feed(self, data):
+        """Скормить кусок stdin: разобрать целые строки ``X Y`` и перерисовать.
+
+        Неполная строка ждёт продолжения (watcher может писать кусками),
+        мусорные строки пропускаются — подсветка от них не мигает.
+        """
+        self._buf += data.decode("utf-8", "replace") if isinstance(data, bytes) else str(data)
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            point = parse_point(line)
+            if point is not None:
+                self.apply_point(point)
+
+    # ---- рисование
+
+    def on_draw(self, widget, cr):
+        alloc = widget.get_allocation()
+        # OPERATOR_SOURCE: подложка заменяет содержимое окна целиком. С композитором
+        # виден рабочий стол сквозь HUD_ALPHA, без него — ровная тёмная подложка, а
+        # не остатки предыдущего кадра.
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(*BACKDROP, HUD_ALPHA)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        # Подсказки про клавиши нет: HUD их не слушает.
+        draw_zones(cr, alloc.width, alloc.height, self.zones, self.selected, self.caption, hint="")
+        return False
+
+
+def follow_stdin(hud):
+    """Подавать HUD точки из stdin до EOF; окно живёт в главном цикле GTK.
+
+    Никаких таймеров, двигающих окно или забирающих ввод: единственный источник
+    новых точек — строки ``X Y`` от watcher'а, а конец потока (EOF, SIGTERM)
+    завершает главный цикл. Перезапуск процесса на каждый кадр дал бы мигание.
+    """
+
+    def on_readable(fd, _condition):
+        try:
+            chunk = os.read(fd, 4096)
+        except OSError as exc:
+            print(f"zone-picker: stdin не читается: {exc}", file=sys.stderr)
+            chunk = b""
+        if not chunk:  # EOF или HUP: кормить больше некому
+            Gtk.main_quit()
+            return False
+        hud.feed(chunk)
+        return True
+
+    GLib.io_add_watch(
+        0, GLib.PRIORITY_DEFAULT, GLib.IOCondition.IN | GLib.IOCondition.HUP, on_readable
+    )
+
+    def on_quit(_signum=None):
+        Gtk.main_quit()
+        return False
+
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        GLib.unix_signal_add(GLib.PRIORITY_HIGH, signum, on_quit)
+
+
 # ------------------------------------------------------------------------- CLI
 
 
@@ -442,8 +664,55 @@ def parse_args(argv):
     )
     ap.add_argument("--verify", action="store_true", help="сверить рамку окна после вложения")
     ap.add_argument("--quiet", action="store_true", help="не печатать строку о вложении")
+    ap.add_argument(
+        "--hud",
+        action="store_true",
+        help="пассивная сетка с подсветкой зоны под точкой (для перетаскивания: без фокуса и ввода)",
+    )
+    ap.add_argument(
+        "--at",
+        metavar="X,Y",
+        type=point_spec,
+        help="--hud: точка подсветки в экранных координатах (один кадр и выход)",
+    )
+    ap.add_argument(
+        "--follow",
+        action="store_true",
+        help="--hud: читать точки «X Y» из stdin и перерисовывать подсветку (EOF/SIGTERM — выход)",
+    )
     ap.add_argument("--version", action="version", version=f"zone-picker {zt.VERSION}")
-    return ap.parse_args(argv)
+    args = ap.parse_args(argv)
+    validate_args(ap, args)
+    return args
+
+
+# Флаги интерактивного режима: в HUD они не имеют смысла — HUD ничего не выбирает,
+# не вкладывает и не печатает о вложении (--quiet только молчит, поэтому безвреден).
+HUD_INCOMPATIBLE = ("select", "window", "dry_run", "verify")
+
+
+def validate_args(ap, args):
+    """Сверить сочетания режимов; негодное — ошибка аргументов (код 2).
+
+    ``--hud`` — отдельный пассивный режим: он не двигает окна (поэтому нет
+    ``--select``/``--window``/``--dry-run``/``--verify``) и не работает без
+    источника точки. ``ap.error`` печатает usage и выходит с кодом 2 — тот же
+    контракт, что у остальных ошибок разбора.
+    """
+    if not args.hud:
+        if args.at is not None or args.follow:
+            ap.error("zone-picker: --at и --follow работают только вместе с --hud")
+        return
+    bad = [name for name in HUD_INCOMPATIBLE if getattr(args, name)]
+    if bad:
+        flags = ", ".join("--" + name.replace("_", "-") for name in bad)
+        ap.error(f"zone-picker: --hud несовместим с {flags}: HUD только рисует сетку")
+    if args.at is not None and args.follow:
+        ap.error("zone-picker: --at и --follow взаимоисключающие: --at — один кадр, --follow — поток")
+    if args.at is None and not args.follow:
+        ap.error("zone-picker: для --hud нужен источник точки: --at X,Y или --follow")
+    if args.follow and args.shot:
+        ap.error("zone-picker: --shot не работает с --follow: снимок — это один кадр (--at)")
 
 
 def main(argv=None):
@@ -471,9 +740,14 @@ def main(argv=None):
     if not monitors:
         fail("zone-picker: не удалось получить рабочие области мониторов")
     win_id = args.window
-    if win_id is None and not args.shot:
+    if win_id is None and not args.shot and not args.hud:
         win_id = active_window_quiet()
-    mon_index = pick_monitor(monitors, win_id, args)
+    if args.hud and args.at is not None and args.monitor is None:
+        # HUD без --monitor живёт на мониторе присланной точки, а не под курсором:
+        # точку задаёт клиент, и именно на его мониторе надо подсвечивать.
+        mon_index = monitors.index(zt.monitor_for_point(monitors, args.at))
+    else:
+        mon_index = pick_monitor(monitors, win_id, args)
     if not 0 <= mon_index < len(monitors):
         fail(f"zone-picker: монитора {mon_index} нет")
     wa = monitors[mon_index]
@@ -483,12 +757,45 @@ def main(argv=None):
         fail(f"zone-picker: в конфиге нет ни одной зоны для монитора {output}")
 
     if args.shot:
+        if args.hud:
+            # Снимок HUD — тот же PNG, только без подсказки и с подсветкой точки:
+            # именно по нему видно, что подсветка работает (разные точки — разные файлы).
+            selected = nav.zone_at_point(zones, wa, args.at)
+            write_shot(
+                args.shot,
+                wa[2],
+                wa[3],
+                zones,
+                selected,
+                hud_caption(profile),
+                hint="",
+            )
+            point = "мимо зон" if selected is None else zones[selected].name
+            print(
+                f"zone-picker: снимок HUD записан в {args.shot} ({wa[2]}x{wa[3]}), "
+                f"точка {args.at[0]},{args.at[1]} -> {point} — {describe_grid(zones, caption)}"
+            )
+            return EXIT_OK
         selected = select_by_name(zones, args.select)
         write_shot(args.shot, wa[2], wa[3], zones, selected, caption)
         print(
             f"zone-picker: снимок оверлея записан в {args.shot} "
             f"({wa[2]}x{wa[3]}) — {describe_grid(zones, caption)}"
         )
+        return EXIT_OK
+
+    if args.hud:
+        hud = Hud(zones, wa, hud_caption(profile))
+        # Диагностика: единственное доказательство, что окно прозрачно для ввода.
+        print(f"zone-picker: HUD не берёт ввод ({hud.input_mode})", file=sys.stderr)
+        if args.at is not None:
+            hud.apply_point(args.at)
+        if args.follow:
+            follow_stdin(hud)
+        else:
+            # --at без --shot: дать окну один кадр и выйти, без главного цикла «навсегда».
+            GLib.timeout_add(HUD_HOLD_MS, lambda: (Gtk.main_quit(), False)[1])
+        Gtk.main()
         return EXIT_OK
 
     if args.dry_run:
