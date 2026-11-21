@@ -621,6 +621,8 @@ def grid_for_workspace(conf_path, workspace=None):
     """
     import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как в редакторе
 
+    if workspace == WORKSPACE_CONF:
+        return Grid(conf_path)
     if workspace is None:
         workspace = current_workspace()
     if workspace is None:
@@ -638,6 +640,10 @@ def grid_for_workspace(conf_path, workspace=None):
 
 
 WORKSPACE_CURRENT = "current"
+# Значение `--workspace conf`: брать сетку прямо из zones.conf, не глядя на
+# `[workspaces]`. Нужно редактору: он рисует и правит сам `zones.conf`, поэтому
+# «проверить зону» обязано считать ту же сетку, что на холсте, а не профиль стола.
+WORKSPACE_CONF = "conf"
 
 
 def workspace_spec(text):
@@ -650,10 +656,13 @@ def workspace_spec(text):
     value = "" if text is None else str(text).strip()
     if not value or value.lower() == WORKSPACE_CURRENT:
         return WORKSPACE_CURRENT
+    if value.lower() == WORKSPACE_CONF:
+        return WORKSPACE_CONF
     if re.fullmatch(r"\d+", value):
         return int(value)
     raise argparse.ArgumentTypeError(
-        f"неверный рабочий стол '{text}': нужен номер стола (0, 1, …) или {WORKSPACE_CURRENT}"
+        f"неверный рабочий стол '{text}': нужен номер стола (0, 1, …), "
+        f"{WORKSPACE_CURRENT} или {WORKSPACE_CONF}"
     )
 
 
@@ -665,6 +674,8 @@ def resolve_workspace(spec):
     """
     if spec is None or spec == WORKSPACE_CURRENT:
         return current_workspace()
+    if spec == WORKSPACE_CONF:
+        return WORKSPACE_CONF
     return int(spec)
 
 
@@ -677,7 +688,7 @@ def workspace_profile(conf_path, workspace):
     :func:`grid_for_workspace`, — чтобы подпись в `list` не расходилась с тем,
     что команда реально показала.
     """
-    if workspace is None:
+    if workspace is None or workspace == WORKSPACE_CONF:
         return None
     import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как в редакторе
 
@@ -1603,8 +1614,9 @@ def main(argv=None):
         default=None,
         type=workspace_spec,
         help=(
-            "рабочий стол для list/apply/arrange/stack: номер (EWMH, с нуля) или "
-            "current (по умолчанию — сетка активного стола)"
+            "рабочий стол для list/apply/arrange/stack: номер (EWMH, с нуля), "
+            "current (сетка активного стола — по умолчанию) или conf "
+            "(всегда сетка zones.conf, без профилей столов)"
         ),
     )
     ap.add_argument("--window", type=lambda s: int(s, 0), help="id окна (по умолчанию активное)")

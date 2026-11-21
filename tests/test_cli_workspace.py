@@ -309,3 +309,40 @@ class KeysAndProfileUnaffectedTest(WorkspaceCliCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class ConfWorkspaceTest(WorkspaceCliCase):
+    """`--workspace conf` — сетка zones.conf без профилей столов.
+
+    Это нужно редактору: холст показывает зоны самого `zones.conf`, поэтому
+    «проверить зону» обязано считать ту же сетку, даже когда активный стол
+    сопоставлен профилю.
+    """
+
+    def test_spec_parses_conf(self):
+        self.assertEqual(self.zt.workspace_spec("conf"), self.zt.WORKSPACE_CONF)
+        self.assertEqual(self.zt.workspace_spec("CONF"), self.zt.WORKSPACE_CONF)
+
+    def test_grid_is_general_even_for_mapped_workspace(self):
+        # Активный стол — второй (индекс 1) и он сопоставлен профилю cinema.
+        with mock.patch.object(self.zt, "current_workspace", lambda: 1):
+            grid = self.zt.grid_for_workspace(self.conf, self.zt.WORKSPACE_CONF)
+        self.assertEqual(sorted(grid.zones), ["main"])
+
+    def test_profile_name_is_none(self):
+        self.assertIsNone(self.zt.workspace_profile(self.conf, self.zt.WORKSPACE_CONF))
+
+    def test_list_shows_general_zones_and_no_profile_note(self):
+        code, out, _err = self.run_cli("list", "--workspace", "conf")
+        self.assertEqual(code, 0)
+        self.assertIn("main", out)
+        self.assertNotIn("video", out)
+        self.assertNotIn("профиль", out)
+
+    def test_apply_uses_general_zones(self):
+        # Зона профиля на этом столе недоступна: сетка взята из zones.conf.
+        code, _out, err = self.run_cli(
+            "apply", "video", "--workspace", "conf", "--dry-run"
+        )
+        self.assertEqual(code, 3)
+        self.assertIn("main", err)

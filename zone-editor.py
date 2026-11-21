@@ -1016,8 +1016,15 @@ class Editor(Gtk.Window):
         self._apply(zone, monitor)
 
     def _apply(self, zone, monitor=None):
-        """Запустить ``zone-tiler.py apply`` (с монитором, если задан) и сказать итог."""
-        cmd = [sys.executable, ZONEBIN, "apply", zone, "--verify"]
+        """Запустить ``zone-tiler.py apply`` (с монитором, если задан) и сказать итог.
+
+        ``--conf`` — тот файл, который открыт в редакторе, а ``--workspace conf``
+        гасит сопоставление «рабочий стол → профиль»: холст показывает зоны самого
+        ``zones.conf``, значит и проверка обязана считать ту же сетку, иначе окно
+        уедет в зону из профиля текущего стола.
+        """
+        cmd = [sys.executable, ZONEBIN, "apply", zone, "--verify",
+               "--conf", self.conf_path, "--workspace", "conf"]
         if monitor:
             cmd += ["--monitor", monitor]
         r = subprocess.run(cmd, text=True, capture_output=True)
