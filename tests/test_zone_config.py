@@ -190,6 +190,15 @@ class TestMonitorZoneSets(ConfMixin, unittest.TestCase):
         path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + RULES)
         self.assertEqual(set(zc.load_extra_sections(path)), {"rules"})
 
+    def test_ignore_section_survives_editor_save(self):
+        # `[ignore]` — «чужая» для редактора секция: сохранение раскладки её не теряет
+        path = self.conf(BASE_GRID + RECT_ZONES + "[ignore]\nChrome = заметка\n")
+        extra = zc.load_extra_sections(path)
+        self.assertEqual(extra.get("ignore"), ["Chrome = заметка"])
+        zc.save_zones(path, [zc.Zone("main", 0, 0, 1, 1)], extra)
+        self.assertIn("[ignore]", self.read(path))
+        self.assertIn("Chrome = заметка", self.read(path))
+
 
 class TestZoneSetList(ConfMixin, unittest.TestCase):
     """``list_zone_sets`` — какие наборы есть в файле (для редактора и CLI)."""
