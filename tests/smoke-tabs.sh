@@ -75,12 +75,13 @@ for c in Xvfb muffin xmessage xdotool python3; do
     fi
 done
 
-XPID=""; MPID=""; DPID=""; WA=""; WB=""; WC=""
+XPID=""; MPID=""; DPID=""; WA=""; WB=""; WC=""; WD=""
 cleanup() {
     [ -n "$DPID" ] && kill "$DPID" 2>/dev/null
     [ -n "$WA" ] && kill "$WA" 2>/dev/null
     [ -n "$WB" ] && kill "$WB" 2>/dev/null
     [ -n "$WC" ] && kill "$WC" 2>/dev/null
+    [ -n "$WD" ] && kill "$WD" 2>/dev/null
     [ -n "$MPID" ] && kill "$MPID" 2>/dev/null
     [ -n "$XPID" ] && kill "$XPID" 2>/dev/null
     sleep 1
@@ -187,6 +188,38 @@ wm_state() {  # $1 = окно -> Normal|Iconic|?
         | sed -n 's/.*window state: *\([A-Za-z]*\).*/\1/p' | head -1
 }
 
+# Окно полосы вкладок: override-redirect над верхней кромкой зоны. Имени у него
+# нет (POPUP/override-redirect), поэтому ищем по геометрии — но не запускаем
+# xwininfo на каждое окно Xvfb (их сотни): `xwininfo -root -children` печатает
+# размер и место детей сама, и xwininfo нужен только совпавшим по ним.
+strip_window() {  # $1 = ширина, $2 = высота, $3 = x, $4 = y -> id или пусто
+    for _id in $(xwininfo -root -children 2>/dev/null \
+        | grep -F "$1x$2+$3+$4" | awk '{print $1}' | sort -u); do
+        if xwininfo -id "$_id" 2>/dev/null | grep -q "Override Redirect State: yes"; then
+            printf '%s\n' "$_id"
+            return 0
+        fi
+    done
+    return 1
+}
+
+strip_report() {  # $1 = ширина, $2 = высота -> что видно про полосу
+    _id=$(strip_window "$1" "$2" 0 0)
+    if [ -z "$_id" ]; then
+        printf 'окна полосы нет'
+        return 0
+    fi
+    xwininfo -id "$_id" 2>/dev/null | sed -n \
+        -e 's/^  Width: \(.*\)$/ширина \1/p' \
+        -e 's/^  Height: \(.*\)$/высота \1/p' \
+        -e 's/^  Override Redirect State: \(.*\)$/override \1/p' | tr '\n' ' '
+    printf '\n'
+}
+
+strip_is() {  # молча: полоса такого размера над верхней кромкой зоны есть
+    [ -n "$(strip_window "$1" "$2" 0 0)" ]
+}
+
 summary() { tail -3 "$1" 2>/dev/null | tr '\n' ' '; }
 
 # Правило по заголовку: у xmessage один и тот же WM_CLASS на все окна, поэтому
@@ -204,6 +237,7 @@ right = 0.5, 0, 0.5, 1
 [rules]
 re:gridsnap-tabs-a\$ = main
 re:gridsnap-tabs-b\$ = main
+re:gridsnap-tabs-d\$ = main
 re:gridsnap-tabs-c\$ = right
 
 [tabs]
@@ -284,23 +318,52 @@ else
     bad "первая вкладка осталась на прежней рамке: $(frame_report "${WAID:-0}" main 2)"
 fi
 
-# --- 3. переключение вкладок по сокету ----------------------------------
+# --- 2.1 полоса вкладок -------------------------------------------------
 say ""
-say "3. tabs-next поднимает соседнюю вкладку"
-# Кто из двух вкладок активен сейчас — не важно: в кольце из двух «следующая»
-# всегда другая, и проверка не зависит от того, кого muffin сделал активным.
-# Сравниваем с окном, которое демон сам назвал в ответе: окно у xmessage и
-# клиент, и его рамка — разные XID, и словари у xdotool и демона расходятся.
+say "2.1 Полоса вкладок нарисована над зоной"
+# Полосу рисует отдельный процесс `zone-tabstrip.py`, которого демон поднимает
+# сам, а снимок уходит ему в stdin. Проверяем не процесс, а окно на экране:
+# override-redirect над верхней кромкой зоны, высотой из `[tabs] height`.
+_left=40
+while [ "$_left" -gt 0 ]; do
+    strip_is 960 "$TABS_H" && break
+    sleep 0.5
+    _left=$((_left - 1))
+done
+if strip_is 960 "$TABS_H"; then
+    ok "полоса над зоной main: $(strip_report 960 "$TABS_H")"
+else
+    bad "полосы над зоной main нет: $(strip_report 960 "$TABS_H"); демон: $(summary "$DAEMON_LOG")"
+fi
+
+# --- 3. переключение вкладок клавишей -----------------------------------
+say ""
+say "3. zone-tiler.py tabs-next поднимает соседнюю вкладку"
+# Так её зовёт клавиша `[tabs] key`: путь пользователя, а не только сокет.
 BEFORE=$(active_window)
+python3 "$TILER" tabs-next --quiet --conf "$CONF" >"$LOGDIR/tabs-next.log" 2>&1
+RC=$?
+AFTER=$(active_window)
+if [ "$RC" -eq 0 ] && [ -n "$AFTER" ] && [ "$BEFORE" != "$AFTER" ] && frame_is "$AFTER" main 2; then
+    ok "клавиша переключила вкладку: $BEFORE -> $AFTER"
+else
+    bad "tabs-next не сработал: код $RC, $BEFORE -> $AFTER, рамка $(frame_of "${AFTER:-0}"), $(summary "$LOGDIR/tabs-next.log")"
+fi
+
+# --- 3.1 ответ демона на переключение -----------------------------------
+say ""
+say "3.1 tabs-next по сокету отвечает, кого поднял"
+# Кто из двух вкладок активен — не важно: в кольце из двух «следующая» всегда
+# другая. Сравниваем с окном, которое демон сам назвал в ответе: у xmessage
+# клиент и его рамка — разные XID, и словари xdotool и демона расходятся.
 RESP=$(ipc_call '{"cmd": "tabs-next"}')
 AFTER=$(active_window)
 WANT=$(($(jget "$RESP" window)))
-if [ "$(jget "$RESP" switched)" = "True" ] && [ "$BEFORE" != "$AFTER" ] \
-        && [ -n "$AFTER" ] && [ "$AFTER" = "$WANT" ] \
+if [ "$(jget "$RESP" switched)" = "True" ] && [ -n "$AFTER" ] && [ "$AFTER" = "$WANT" ] \
         && frame_is "$AFTER" main 2; then
-    ok "переключение подняло другую вкладку зоны: $BEFORE -> $AFTER ($RESP)"
+    ok "демон поднял вкладку и назвал её: $AFTER ($RESP)"
 else
-    bad "переключение не сработало: $BEFORE -> $AFTER, ожидалось $WANT, рамка $(frame_of "${AFTER:-0}"), ответ $RESP"
+    bad "ответ демона не сошёлся: активно $AFTER, ожидалось $WANT, рамка $(frame_of "${AFTER:-0}"), ответ $RESP"
 fi
 
 # --- 4. focus на зоне со вкладками --------------------------------------
@@ -338,6 +401,33 @@ else
     else
         bad "режим свернул вкладки зоны-цели: $WAID=$SA $WBID=$SB"
     fi
+
+    # --- 4.1 новое окно в зоне-цели во время режима ---------------------
+    # Режим называется «только эта зона»: окно, которое правило положило в ту же
+    # зону уже во время режима, становится вкладкой и остаётся видимым — свернуть
+    # его значит спрятать окно той самой зоны, которую пользователь оставил.
+    say ""
+    say "4.1 Новая вкладка зоны-цели во время режима остаётся видимой"
+    DISPLAY="$DISP" xmessage -title "gridsnap-tabs-d" -buttons OK:0 "четвёртое" >/dev/null 2>&1 &
+    WD=$!
+    _left=60
+    while [ "$_left" -gt 0 ]; do
+        WDID=$(xdotool search --name '^gridsnap-tabs-d$' 2>/dev/null | head -1)
+        [ -n "$WDID" ] && frame_is "$WDID" main 3 && break
+        sleep 0.5
+        _left=$((_left - 1))
+    done
+    if [ -n "${WDID:-}" ] && frame_is "$WDID" main 3; then
+        ok "новое окно встало третьей вкладкой зоны: $(frame_report "$WDID" main 3)"
+    else
+        bad "новое окно не встало вкладкой зоны: $(frame_report "${WDID:-0}" main 3)"
+    fi
+    if [ "$(wm_state "${WDID:-0}")" = "Normal" ]; then
+        ok "новая вкладка зоны-цели осталась видимой"
+    else
+        bad "новая вкладка зоны-цели свёрнута режимом: ${WDID:-0}=$(wm_state "${WDID:-0}")"
+    fi
+
     python3 "$CTL" focus --off >"$LOGDIR/ctl-off.log" 2>&1
     RC=$?
     if [ "$RC" -eq 0 ] && [ "$(wm_state "$WCID")" = "Normal" ]; then
@@ -350,6 +440,11 @@ fi
 # --- 5. закрытие вкладки возвращает зону оставшейся ---------------------
 say ""
 say "5. Закрытие вкладки возвращает оставшейся всю зону"
+# Закрываем сначала вкладку, пришедшую во время режима, потом вторую: зона
+# возвращается оставшейся, только когда в стопке не осталось никого, кроме неё.
+kill "$WD" 2>/dev/null
+WD=""
+sleep 1
 kill "$WB" 2>/dev/null
 _left=60
 while [ "$_left" -gt 0 ]; do
@@ -364,9 +459,46 @@ else
 fi
 WB=""
 
+# --- 5.1 полосы больше нет ----------------------------------------------
+say ""
+say "5.1 Полоса убрана: вкладка осталась одна"
+_left=40
+while [ "$_left" -gt 0 ]; do
+    strip_is 960 "$TABS_H" || break
+    sleep 0.5
+    _left=$((_left - 1))
+done
+if strip_is 960 "$TABS_H"; then
+    bad "полоса осталась над зоной с одной вкладкой: $(strip_report 960 "$TABS_H")"
+else
+    ok "полосы над зоной нет: окно занимает зону целиком"
+fi
+
+# --- 6. каскад удалён ---------------------------------------------------
+say ""
+say "6. --offset удалён, а не молча проигнорирован"
+python3 "$TILER" --offset 20 list --conf "$CONF" >"$LOGDIR/offset.log" 2>&1
+RC=$?
+if [ "$RC" -eq 2 ]; then
+    ok "вызов с --offset — ошибка аргументов (код 2)"
+else
+    bad "--offset дал код $RC вместо 2: $(summary "$LOGDIR/offset.log")"
+fi
+
 python3 "$CTL" quit >/dev/null 2>&1
 wait "$DPID" 2>/dev/null
 DPID=""
+
+# --- 7. без демона вкладок нет ------------------------------------------
+say ""
+say "7. Без демона tabs-next говорит, что переключать некому"
+python3 "$TILER" tabs-next --quiet --conf "$CONF" >"$LOGDIR/tabs-next-off.log" 2>&1
+RC=$?
+if [ "$RC" -eq 1 ]; then
+    ok "tabs-next без демона — код 1: $(summary "$LOGDIR/tabs-next-off.log")"
+else
+    bad "tabs-next без демона дал код $RC вместо 1: $(summary "$LOGDIR/tabs-next-off.log")"
+fi
 
 say ""
 if [ "$fails" -eq 0 ]; then
