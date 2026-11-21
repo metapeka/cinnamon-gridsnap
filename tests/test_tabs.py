@@ -194,6 +194,20 @@ class TestCommands(unittest.TestCase):
         self.assertEqual(tabs.TABS_NEXT, "tabs-next")
 
 
+class TestStackRect(unittest.TestCase):
+    def test_single_tab_keeps_the_whole_zone(self):
+        self.assertEqual(tabs.stack_rect(ZONE, 1), (0.0, 0.0, 960.0, 1080.0))
+        self.assertEqual(tabs.stack_rect(ZONE, 0), tabs.stack_rect(ZONE, 1))
+
+    def test_two_tabs_get_the_tab_frame(self):
+        self.assertEqual(tabs.stack_rect(ZONE, 2), tabs.tab_rect(ZONE))
+        self.assertEqual(tabs.stack_rect(ZONE, 7), tabs.tab_rect(ZONE))
+
+    def test_narrow_zone_is_the_same_rect_for_any_count(self):
+        # Полоса не влезает — рамка вкладки совпадает с зоной, и «сжатия» не происходит.
+        self.assertEqual(tabs.stack_rect(NARROW, 1), tabs.stack_rect(NARROW, 3))
+
+
 class TestDefaults(unittest.TestCase):
     """Умолчания полосы: их читает и человек, и ``[tabs] height`` из конфига."""
 

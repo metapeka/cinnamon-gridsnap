@@ -10,9 +10,10 @@
 
 Что здесь есть:
 
-* геометрия — :func:`strip_rect` (где полоса вкладок) и :func:`tab_rect` (рамка
-  окна-вкладки: зона минус полоса). Узкая зона полосы не получает: `strip_rect`
-  вернёт ``None``, а `tab_rect` — рамку зоны целиком;
+* геометрия — :func:`strip_rect` (где полоса вкладок), :func:`tab_rect` (рамка
+  окна-вкладки: зона минус полоса) и :func:`stack_rect` (то же правило по числу вкладок:
+  одна — вся зона). Узкая зона полосы не получает: `strip_rect` вернёт ``None``, а
+  `tab_rect` — рамку зоны целиком;
 * выбор окон — :func:`tabs_of_zone` (какие окна стоят вкладками этой зоны, снизу
   вверх) и :func:`next_tab` (следующее по кругу);
 * протокол «демон → полоса» — :func:`strip_record`/:func:`strips_payload`:
@@ -70,6 +71,18 @@ def tab_rect(zone_rect, height=STRIP_HEIGHT, min_window_h=MIN_WINDOW_H):
     if strip_rect(zone_rect, height, min_window_h) is None:
         return (x, y, w, h)
     return (x, y + float(height), w, h - float(height))
+
+
+def stack_rect(zone_rect, count, height=STRIP_HEIGHT, min_window_h=MIN_WINDOW_H):
+    """Рамка окон зоны по числу её вкладок.
+
+    Одна вкладка — зона целиком: полосы нет, и окно занимает всю зону, как до волны вкладок. Две и
+    больше — рамка вкладки (:func:`tab_rect`), потому что сверху появилась полоса. Правило одно на
+    демон и раскладчик (`apply`/`arrange`/`stack`), иначе они разойдутся на одном и том же числе окон.
+    """
+    if count < 2:
+        return tuple(float(v) for v in zone_rect)
+    return tab_rect(zone_rect, height, min_window_h)
 
 
 def _same_rect(left, right, tolerance):
