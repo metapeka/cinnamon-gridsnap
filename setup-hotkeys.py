@@ -3,10 +3,12 @@
 """
 setup-hotkeys.py — регистрирует в Cinnamon горячие клавиши для зон из zones.conf.
 
-Читает секцию [keys] (зона = сочетание) и необязательную [move] (направление =
-сочетание) и создаёт пользовательские сочетания Cinnamon вида:
+Читает секцию [keys] (зона = сочетание), необязательные [move] (направление =
+сочетание) и [focus] (сочетание режима «только эта зона») и создаёт
+пользовательские сочетания Cinnamon вида:
     zone-tiler: main        ->  python3 .../zone-tiler.py apply main --quiet
     zone-tiler: move left   ->  python3 .../zone-tiler.py move left --quiet
+    zone-tiler: focus       ->  python3 .../zone-tiler.py focus main --quiet
 
   python3 setup-hotkeys.py            # установить/обновить
   python3 setup-hotkeys.py --list     # показать, что будет установлено
@@ -29,6 +31,11 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+import zone_config  # noqa: E402  (ищем рядом с собой, как устанавливается)
+
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 LIST_SCHEMA = "org.cinnamon.desktop.keybindings"
 CB_SCHEMA = "org.cinnamon.desktop.keybindings.custom-keybinding"
@@ -92,10 +99,11 @@ def with_conf(command, conf=None):
 
 
 def planned(conf=None):
-    """Что установить: `(имя, сочетание, команда)` по порядку зон, затем направлений.
+    """Что установить: `(имя, сочетание, команда)` по порядку зон, направлений, режима.
 
     Имя идёт в префикс `zone-tiler: `: по нему `drop_owned` отличает свои
-    сочетания от чужих и не трогает чужие при переустановке.
+    сочетания от чужих и не трогает чужие при переустановке. `focus` —
+    имя секции `[focus]`: без неё в плане ровно то же, что раньше.
     """
     items = []
     for zone, binding in zone_pairs(conf):
@@ -104,6 +112,12 @@ def planned(conf=None):
     for direction, binding in zone_pairs(conf, "--move"):
         command = with_conf(f"{sys.executable} {ZONEBIN} move {direction} --quiet", conf)
         items.append((f"move {direction}", binding, command))
+    focus = zone_config.load_focus_keys(conf)
+    if focus:
+        command = f"{sys.executable} {ZONEBIN} focus"
+        if focus.get("zone"):
+            command += f" {focus['zone']}"
+        items.append(("focus", focus["key"], with_conf(command + " --quiet", conf)))
     return items
 
 

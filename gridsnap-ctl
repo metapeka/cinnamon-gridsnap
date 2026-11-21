@@ -9,6 +9,10 @@
     gridsnap-ctl apply main                 # вложить активное окно в зону main
     gridsnap-ctl apply main --window 0x1a00007
     gridsnap-ctl apply main --monitor 1
+    gridsnap-ctl focus main                 # окно в зону main + свернуть остальные (toggle)
+    gridsnap-ctl focus                      # свернуть всё, кроме активного окна
+    gridsnap-ctl focus main --window 0x1a00007
+    gridsnap-ctl focus --off                # выйти из режима
     gridsnap-ctl reload                     # демон перечитает zones.conf
     gridsnap-ctl quit                       # попросить демон завершиться
 
@@ -69,6 +73,30 @@ def build_request(args):
             request["window"] = args.window
         if args.monitor is not None:
             request["monitor"] = args.monitor
+    elif args.command == "focus":
+        if args.monitor is not None:
+            # Режим сворачивает окна того монитора, где лежит целевое окно:
+            # чужой монитор в запросе ему не нужен.
+            print(
+                "gridsnap-ctl: у focus нет --monitor: режим берёт монитор "
+                "целевого окна",
+                file=sys.stderr,
+            )
+            raise SystemExit(EXIT_USAGE)
+        if args.off and args.zone:
+            print(
+                "gridsnap-ctl: у focus либо зона, либо --off, а не оба сразу",
+                file=sys.stderr,
+            )
+            raise SystemExit(EXIT_USAGE)
+        if args.off:
+            request["off"] = True
+        elif args.zone:
+            request["zone"] = args.zone
+        # Без зоны и без `--off` — «свернуть всё, кроме этого окна»: окно
+        # остаётся на месте, в запросе нет ни `zone`, ни `off`.
+        if args.window is not None:
+            request["window"] = args.window
     elif args.zone or args.window is not None or args.monitor is not None:
         print(
             f"gridsnap-ctl: у команды {args.command} нет зоны/окна/монитора",
@@ -83,21 +111,33 @@ def main(argv=None):
         description="Управление демоном GridSnap через локальный IPC-сокет",
         epilog=(
             "Примеры: gridsnap-ctl status; gridsnap-ctl apply main; "
-            "gridsnap-ctl quit"
+            "gridsnap-ctl focus main; gridsnap-ctl focus --off; gridsnap-ctl quit"
         ),
     )
     ap.add_argument(
         "command",
-        choices=["status", "apply", "reload", "quit"],
-        help="status — состояние; apply — вложить окно в зону; reload — перечитать конфиг; quit — выйти",
+        choices=["status", "apply", "focus", "reload", "quit"],
+        help=(
+            "status — состояние; apply — вложить окно в зону; focus — режим «только эта "
+            "зона»; reload — перечитать конфиг; quit — выйти"
+        ),
     )
-    ap.add_argument("zone", nargs="?", help="имя зоны для apply")
+    ap.add_argument(
+        "zone",
+        nargs="?",
+        help="имя зоны для apply и focus (у focus необязательна)",
+    )
     ap.add_argument(
         "--window",
         type=lambda s: int(s, 0),
-        help="id окна для apply (по умолчанию активное окно)",
+        help="id окна для apply и focus (по умолчанию активное окно)",
     )
     ap.add_argument("--monitor", type=int, help="номер монитора для apply")
+    ap.add_argument(
+        "--off",
+        action="store_true",
+        help="focus: выйти из режима «только эта зона»",
+    )
     ap.add_argument(
         "--socket",
         default=None,
