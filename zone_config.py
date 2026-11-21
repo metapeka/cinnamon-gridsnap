@@ -28,6 +28,10 @@ RESERVED_SECTIONS = frozenset({"grid", "zones", "keys"})
 # не имя зоны, поэтому в кавычки/дефисы оно не приводится.
 MONITOR_SECTION_PREFIX = "zones:"
 
+# Рабочие столы: ``[workspaces]``, ключ — номер стола как в интерфейсе Cinnamon
+# (с 1), значение — имя профиля из ``templates/<имя>.conf``.
+WORKSPACES_SECTION = "workspaces"
+
 # Порядок «чужих» секций при сохранении: [rules] до [keys], [daemon] после.
 BEFORE_KEYS = ("rules",)
 AFTER_KEYS = ("daemon",)
@@ -105,6 +109,39 @@ class _SpecParser:
         if spec is None:
             zt.fail(f"zone-tiler: зоны '{zone}' нет в наборе", zt.EXIT_CONFIG)
         return spec
+
+
+def load_workspace_map(path):
+    """``{номер_стола: имя_профиля}`` из секции ``[workspaces]``; нет секции — ``{}``.
+
+    Ключи — **с 1**, как номера столов в интерфейсе Cinnamon («Рабочий стол 1»),
+    а в EWMH ``_NET_CURRENT_DESKTOP`` они с нуля; переводит коды в имена
+    ``zone-tiler.grid_for_workspace()``. Значение — имя профиля
+    (``templates/<имя>.conf``), существование файла проверяется в момент
+    использования: профиль может появиться позже, и это не повод ломать чтение
+    всего конфига.
+    """
+    cp = _read_conf(path, missing_ok=True)
+    if cp is None or not cp.has_section(WORKSPACES_SECTION):
+        return {}
+    mapping = {}
+    for key, value in cp.items(WORKSPACES_SECTION):
+        number = str(key).strip()
+        if not number.isdigit() or int(number) < 1:
+            zt.fail(
+                f"zone_config: в [{WORKSPACES_SECTION}] номер стола должен быть "
+                f"целым с 1, а не '{number}'",
+                zt.EXIT_CONFIG,
+            )
+        profile = sanitize_profile_name(value)
+        if not profile:
+            zt.fail(
+                f"zone_config: в [{WORKSPACES_SECTION}] у стола {number} пустое "
+                "имя профиля",
+                zt.EXIT_CONFIG,
+            )
+        mapping[int(number)] = profile
+    return mapping
 
 
 def _clean_monitor(monitor):

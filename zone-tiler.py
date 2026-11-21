@@ -568,6 +568,68 @@ def window_workspace(win):
     return int(found.group(1)) if found else None
 
 
+def current_workspace():
+    """Номер активного рабочего стола (`_NET_CURRENT_DESKTOP`) или None.
+
+    Ноль — первый стол: так его нумерует EWMH. В ``[workspaces]`` ключи на
+    единицу больше (как в интерфейсе Cinnamon), перевод — в
+    :func:`grid_for_workspace`.
+    """
+    try:
+        out = subprocess.check_output(
+            ["xprop", "-root", "_NET_CURRENT_DESKTOP"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return None
+    found = re.search(r"=\s*(-?\d+)", out)
+    if not found:
+        return None
+    number = int(found.group(1))
+    return number if number >= 0 else None
+
+
+def window_workspace_for_zones(win):
+    """Стол окна для выбора сетки: ``None`` у «липких» и неопознанных.
+
+    ``_NET_WM_DESKTOP = 0xFFFFFFFF`` по EWMH значит «на всех столах». Решено:
+    такие окна живут в сетке по умолчанию (``zones.conf``), а не в профиле
+    конкретного стола, — иначе липкое окно меняло бы сетку вместе со столом.
+    """
+    workspace = window_workspace(win)
+    if workspace is None or workspace >= 0xFFFFFFF0:
+        return None
+    return workspace
+
+
+def grid_for_workspace(conf_path, workspace=None):
+    """Сетка для рабочего стола: профиль из ``[workspaces]`` или сам конфиг.
+
+    ``workspace`` — номер из EWMH (с нуля); ``None`` — взять активный стол
+    (`current_workspace()`). Если стол не сопоставлен профилю, стол неизвестен,
+    или профиля нет на диске, возвращается обычный ``Grid(conf_path)``: молчаливая
+    деградация до общего набора зон лучше, чем отказ, — раскладку на столе без
+    профиля пользователь всё равно ожидает получить.
+    """
+    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как в редакторе
+
+    if workspace is None:
+        workspace = current_workspace()
+    if workspace is None:
+        return Grid(conf_path)
+    profile = zc.load_workspace_map(conf_path).get(workspace + 1)
+    if profile is None:
+        return Grid(conf_path)
+    try:
+        path = zc.profile_path(profile, conf_path)
+    except ValueError:
+        return Grid(conf_path)
+    if not os.path.exists(path):
+        return Grid(conf_path)
+    return Grid(path)
+
+
 def monitors():
     try:
         import gi
