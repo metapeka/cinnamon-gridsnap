@@ -327,6 +327,26 @@ def _zone_lines(zones):
     return [f"{z.name} = {z.fmt()}" for z in zones]
 
 
+def _key_lines(zones):
+    """Строки ``[keys]`` без повторов: одна клавиша на имя зоны.
+
+    ``[keys]`` одна на файл, а зона одного имени может стоять и в общем наборе,
+    и в наборах мониторов. Повтор имени в секции — это не только лишняя строка:
+    ``ConfigParser`` падает на повторной опции, и файл перестаёт читаться.
+    Поэтому привязка пишется только при первом появлении имени: наборы идут в
+    порядке записи (общий первым), и его клавиша главная. Пустые привязки не
+    пишутся вовсе.
+    """
+    out, seen = [], set()
+    for zone in zones:
+        binding = zone.binding.strip()
+        if not binding or zone.name in seen:
+            continue
+        seen.add(zone.name)
+        out.append(f"{zone.name} = {binding}")
+    return out
+
+
 def _write_config(path, default_zones, monitor_sets=None, extra=None):
     """Записать ``zones.conf``: ``[grid]``, наборы зон, ``[keys]`` и чужие секции.
 
@@ -368,11 +388,10 @@ def _write_config(path, default_zones, monitor_sets=None, extra=None):
     for name in BEFORE_KEYS:
         append_section(name)
 
-    bindings = [z for z in written_zones if z.binding.strip()]
-    if bindings:
+    key_lines = _key_lines(written_zones)
+    if key_lines:
         lines += ["", "[keys]"]
-        for z in bindings:
-            lines.append(f"{z.name} = {z.binding.strip()}")
+        lines.extend(key_lines)
 
     written = set(BEFORE_KEYS) | set(AFTER_KEYS)
     for name in AFTER_KEYS:
@@ -390,6 +409,32 @@ def _write_config(path, default_zones, monitor_sets=None, extra=None):
         fh.write("\n".join(lines) + "\n")
 
 
+def save_zone_sets(path, default_zones, monitor_sets=None, extra=None):
+    """Записать все наборы зон за один проход файла.
+
+    ``default_zones`` — набор по умолчанию: список зон, ``None`` — секции
+    ``[zones]`` в файле не будет. ``monitor_sets`` — ``{имя выхода: [Zone]}``;
+    пустые наборы и пустые имена выходов отбрасываются, имя выхода берётся как
+    есть (регистр значим). ``extra`` — словарь вида
+    :func:`load_extra_sections` (``{секция: [строки]}``): секции, которых в нём
+    нет, в файл не попадают.
+
+    Файл переписывается целиком, поэтому читать его не нужно: битый ``[keys]``
+    с повтором имени не мешает записи (он и появлялся от таких повторов).
+    ``[keys]`` собирается со всех записанных наборов без повторов — по клавише
+    на имя зоны, главная из набора по умолчанию (он пишется первым). Порядок:
+    ``[grid]``, ``[zones]``, ``[zones:*]``, ``[rules]``, ``[keys]``, ``[daemon]``,
+    остальные — после. Возвращает путь.
+    """
+    sets = {}
+    for monitor, zones in (monitor_sets or {}).items():
+        name = _clean_monitor(monitor)
+        if name is not None and zones:
+            sets[name] = list(zones)
+    _write_config(path, default_zones, sets, extra)
+    return path
+
+
 def save_zones(path, zones, extra=None, monitor=None):
     """Записать набор зон: ``[zones]`` без ``monitor``, ``[zones:<монитор>]`` с ним.
 
@@ -397,8 +442,9 @@ def save_zones(path, zones, extra=None, monitor=None):
     секции, которых в нём нет, в файл не попадают. Остальные наборы мониторов
     берутся из текущего файла, поэтому сохранение одного набора не теряет
     соседние (и их привязки в ``[keys]``). Пустой набор монитора удаляет его
-    секцию: набор без зон — невалидный конфиг. Порядок: ``[grid]``, ``[zones]``,
-    ``[zones:*]``, ``[rules]``, ``[keys]``, ``[daemon]``, остальные — после.
+    секцию: набор без зон — невалидный конфиг. Это удобная обёртка над
+    :func:`save_zone_sets` для одного набора; когда записываются все наборы
+    сразу (редактор), дешевле позвать её.
     """
     target = _clean_monitor(monitor)
     default, monitors = _zone_sets(path)
@@ -408,7 +454,7 @@ def save_zones(path, zones, extra=None, monitor=None):
         monitors[target] = list(zones)
     else:
         monitors.pop(target, None)
-    _write_config(path, default, monitors, extra)
+    return save_zone_sets(path, default, monitors, extra)
 
 
 # ------------------------------------------------- проверка правил [rules]
@@ -605,11 +651,10 @@ def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None):
     if rules:
         lines += ["", "[rules]"]
         lines.extend(_section_lines(rules))
-    bindings = [z for z in written if z.binding.strip()]
-    if bindings:
+    key_lines = _key_lines(written)
+    if key_lines:
         lines += ["", "[keys]"]
-        for z in bindings:
-            lines.append(f"{z.name} = {z.binding.strip()}")
+        lines.extend(key_lines)
     directory = os.path.dirname(path)
     try:
         if directory:

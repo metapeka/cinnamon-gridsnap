@@ -289,60 +289,33 @@ def save_plan(default_zones, monitor_sets, edited=(), onscreen=None, existing=No
     return write, drop
 
 
-def dedupe_key_lines(text):
-    """Текст конфига без повторов в `[keys]`: одна клавиша на имя зоны.
-
-    `zone_config.save_zones` собирает `[keys]` из всех записанных наборов, а при
-    чтении раздаёт привязки всем наборам — поэтому зона, которая есть и в
-    `[zones]`, и в `[zones:<выход>]`, попадает в `[keys]` дважды, и такой файл
-    больше не читается (ConfigParser падает на повторной опции). Оставляем первую
-    строку: общий набор пишется первым, его клавиша и главная. Остальной текст не
-    меняется.
-    """
-    lines, section, seen = [], None, set()
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            section = stripped[1:-1].strip().lower()
-        elif section == "keys" and "=" in stripped and stripped[:1] not in ("#", ";"):
-            name = stripped.split("=", 1)[0].strip()
-            if name in seen:
-                continue
-            seen.add(name)
-        lines.append(line)
-    return "\n".join(lines) + "\n"
-
-
-def _save_section(path, zones, extra, monitor=None):
-    """Один шаг записи: `save_zones` и чистка повторов в `[keys]` (см. выше)."""
-    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, см. apply_save_plan
-
-    zc.save_zones(path, list(zones), extra, monitor=monitor)
-    try:
-        with open(path, encoding="utf-8") as fh:
-            text = fh.read()
-        fixed = dedupe_key_lines(text)
-        if fixed != text:
-            with open(path, "w", encoding="utf-8") as fh:
-                fh.write(fixed)
-    except OSError as exc:
-        raise OSError(f"не удалось почистить [keys] в {path}: {exc}") from exc
-
-
 def apply_save_plan(path, default_zones, plan, extra=None):
     """Записать `zones.conf` по плану :func:`save_plan`; возвращает путь.
 
     ``zone_config`` импортируется здесь, а не наверху модуля: геометрия не
-    должна тянуть конфиг-слой и `zone-tiler.py` только ради импорта. Запись идёт
-    через публичный `save_zones`: сначала общий ``[zones]``, затем удаление
-    лишних секций (пустой набор), затем секции мониторов. Чужие секции самого
+    должна тянуть конфиг-слой и `zone-tiler.py` только ради импорта. Файл
+    переписывается одним проходом через :func:`zone_config.save_zone_sets`:
+    наборы мониторов читаются из файла один раз, из них убираются секции из
+    ``drop``, к ним добавляются записываемые из ``write``. Чужие секции самого
     файла (`[rules]`, `[daemon]`, `[zones:*]` отключённых выходов) при этом
-    сохраняются — их берёт из файла сам `save_zones`.
+    сохраняются — их берёт из файла сам `save_zone_sets`.
+
+    Повторов в `[keys]` не будет: их отсекает сам писатель, поэтому никакой
+    текстовой чистки после записи не нужно.
     """
+    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, см. docstring
+
     write, drop = plan
-    _save_section(path, default_zones, extra)
+    monitors = {
+        monitor: zones
+        for monitor, zones in zc.load_zone_sets(path).items()
+        if monitor is not None
+    }
     for monitor in drop:
-        _save_section(path, [], extra, monitor=monitor)
+        monitors.pop(monitor, None)
     for monitor, zones in write.items():
-        _save_section(path, zones, extra, monitor=monitor)
-    return path
+        if zones:
+            monitors[monitor] = list(zones)
+        else:
+            monitors.pop(monitor, None)
+    return zc.save_zone_sets(path, list(default_zones), monitors, extra)
