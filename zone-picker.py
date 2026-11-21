@@ -9,6 +9,11 @@
     python3 zone-picker.py                 # интерактивный оверлей
     python3 zone-picker.py --shot out.png  # отрисовать оверлей в PNG и выйти
     python3 zone-picker.py --dry-run       # выбрать зону, но окно не двигать
+    python3 zone-picker.py --workspace 2   # сетка рабочего стола 2 (профиль из [workspaces])
+
+Сетка берётся для своего рабочего стола так же, как у ``list``/``apply``
+(``zone-tiler.grid_for_workspace``): у стола может быть свой профиль из
+``[workspaces]``, у монитора — свой набор ``[zones:<выход>]``.
 
 Чистая логика навигации — в ``zone_picker_nav`` (без GTK и X), применение окна —
 через ``zone-tiler.apply_zone``/``Grid.rect``. GTK и cairo живут только здесь.
@@ -52,6 +57,62 @@ def fail(message, code=EXIT_FAIL):
     sys.exit(code)
 
 
+# -------------------------------------------------------- сетка рабочего стола
+
+
+def zone_bindings(grid):
+    """Привязки зон из ``[keys]`` сетки: имя зоны -> сочетание клавиш.
+
+    ``[keys]`` лежит в том же файле, что и набор зон, поэтому профиль стола
+    приносит и свои сочетания. Секции нет — привязок нет: подпись зоны просто
+    не покажет клавишу.
+    """
+    if not grid.conf.has_section("keys"):
+        return {}
+    return {name.strip(): value.strip() for name, value in grid.conf.items("keys")}
+
+
+def zones_from_grid(grid, output=None):
+    """Зоны набора монитора из уже выбранной сетки (с привязками ``[keys]``).
+
+    Имена и доли берутся у одного и того же ``Grid``: у монитора может быть свой
+    набор ``[zones:<выход>]``, а у стола — свой профиль, и оверлей обязан рисовать
+    ровно то, что печатает ``list``. Отдельное чтение файла тут не годится: имена
+    зон разошлись бы с геометрией, которой пикер двигает окно.
+    """
+    keys = zone_bindings(grid)
+    zones = []
+    for name in grid.zones_for(output):
+        x, y, w, h = grid.fractions(name, output)
+        zones.append(zc.Zone(name, x, y, w, h, keys.get(name, "")))
+    return zones
+
+
+def workspace_caption(workspace, profile):
+    """Подпись к сетке: какой стол её дал и почему набор зон такой.
+
+    Пусто, если стол неизвестен (нет ``_NET_CURRENT_DESKTOP``): тогда работает
+    общий ``[zones]``, и подписывать нечего.
+    """
+    if workspace == zt.WORKSPACE_CONF:
+        return "zones.conf, без профилей столов"
+    if not isinstance(workspace, int):
+        return ""
+    if profile:
+        return f"стол {workspace + 1} · профиль «{profile}»"
+    return f"стол {workspace + 1} · общий набор"
+
+
+def describe_grid(zones, caption):
+    """Строка про показанную сетку: подпись стола и перечень зон.
+
+    Нужна ``--dry-run`` и ``--shot``: по ней видно, какая сетка нарисована, не
+    разглядывая оверлей (это и проверяет ``tests/smoke-picker-workspace.sh``).
+    """
+    head = f"{caption} · " if caption else ""
+    return head + f"зон {len(zones)}: " + ", ".join(z.name for z in zones)
+
+
 # ------------------------------------------------------------------- рисование
 
 
@@ -77,8 +138,8 @@ def _label(cr, x, y, text, size, bold, rgba, width=None):
     PangoCairo.show_layout(cr, layout)
 
 
-def draw_overlay(cr, width, height, zones, selected):
-    """Нарисовать оверлей: фон, зоны, подпись каждой, подсветка выделения и подсказка.
+def draw_overlay(cr, width, height, zones, selected, caption=""):
+    """Нарисовать оверлей: фон, зоны, подпись каждой, подсветка, подсказка и стол.
 
     Координаты — в пикселях локального оверлея (он же — рабочая область монитора),
     зоны заданы долями, поэтому ``zone_px`` просто умножает их на размеры.
@@ -122,16 +183,19 @@ def draw_overlay(cr, width, height, zones, selected):
         cr.set_source_rgba(*ACCENT, 1.0)
         cr.stroke()
 
+    # почему сетка такая: стол и его профиль из `[workspaces]`
+    if caption:
+        _label(cr, 16, height - 48, caption, 11, True, (*ACCENT, 0.92))
     _label(cr, 16, height - 30, HINT, 11, False, (1, 1, 1, 0.72))
 
 
-def write_shot(path, width, height, zones, selected):
+def write_shot(path, width, height, zones, selected, caption=""):
     """Отрисовать оверлей в PNG заданного размера — проверка без интерактива."""
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(width), int(height))
     cr = cairo.Context(surface)
     cr.set_source_rgb(*BACKDROP)  # непрозрачная подложка, чтобы снимок читался
     cr.paint()
-    draw_overlay(cr, width, height, zones, selected)
+    draw_overlay(cr, width, height, zones, selected, caption)
     surface.write_to_png(path)
 
 
@@ -184,13 +248,15 @@ def select_by_name(zones, name):
 
 
 class Picker:
-    def __init__(self, zones, grid, wa, mon_index, args, win_id):
+    def __init__(self, zones, grid, wa, output, mon_index, args, win_id, caption=""):
         self.zones = zones
         self.grid = grid
         self.wa = wa
+        self.output = output  # имя выхода: у монитора может быть свой набор зон
         self.mon_index = mon_index
         self.args = args
         self.win_id = win_id
+        self.caption = caption
         self.exit_code = EXIT_OK
 
         width, height = wa[2], wa[3]
@@ -199,7 +265,10 @@ class Picker:
         self._grab_tries = 0
 
         self.win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
-        self.win.set_title("Gridsnap — выбор зоны")
+        title = "Gridsnap — выбор зоны"
+        if caption:
+            title += f" ({caption})"
+        self.win.set_title(title)
         self.win.set_decorated(False)
         self.win.set_resizable(False)
         self.win.set_skip_taskbar_hint(True)
@@ -307,7 +376,7 @@ class Picker:
 
     def on_draw(self, widget, cr):
         alloc = widget.get_allocation()
-        draw_overlay(cr, alloc.width, alloc.height, self.zones, self.selected)
+        draw_overlay(cr, alloc.width, alloc.height, self.zones, self.selected, self.caption)
         return False
 
     def on_destroy(self, _widget):
@@ -319,7 +388,8 @@ class Picker:
         if self.selected is None:
             return
         name = self.zones[self.selected].name
-        rect = self.grid.rect(name, self.wa)
+        # геометрия из того же набора, что и нарисованные зоны (монитор стола)
+        rect = self.grid.rect(name, self.wa, self.output)
         x, y, w, h = rect
         if self.args.dry_run:
             print(f"{name}: x={x} y={y} {w}x{h} (монитор {self.mon_index})")
@@ -360,6 +430,16 @@ def parse_args(argv):
     ap.add_argument("--window", type=lambda s: int(s, 0), metavar="XID", help="окно для вложения (по умолчанию активное)")
     ap.add_argument("--monitor", type=int, metavar="N", help="монитор (по умолчанию — монитор активного окна)")
     ap.add_argument("--select", metavar="ЗОНА", help="начальное выделение по имени зоны")
+    ap.add_argument(
+        "--workspace",
+        metavar="N|current|conf",
+        default=None,
+        type=zt.workspace_spec,
+        help=(
+            "рабочий стол для сетки: номер (EWMH, с нуля), current (сетка активного "
+            "стола — по умолчанию) или conf (всегда zones.conf, без профилей столов)"
+        ),
+    )
     ap.add_argument("--verify", action="store_true", help="сверить рамку окна после вложения")
     ap.add_argument("--quiet", action="store_true", help="не печатать строку о вложении")
     ap.add_argument("--version", action="version", version=f"zone-picker {zt.VERSION}")
@@ -371,16 +451,25 @@ def main(argv=None):
     conf = args.conf or zt.default_conf()
     if not os.path.exists(conf):
         fail(f"zone-picker: не найден конфиг {conf}")
-    grid = zt.Grid(conf)
-    zones = zc.load_zones(conf)
-    if not zones:
-        fail("zone-picker: в конфиге нет ни одной зоны")
+    # Сетка своего стола — как у list/apply/arrange: `--workspace N`, иначе
+    # активный стол. Стол без профиля молча живёт в общем [zones] (та же
+    # деградация, что в zone-tiler.grid_for_workspace), поэтому подпись стола
+    # и показанная сетка не расходятся.
+    workspace = zt.resolve_workspace(args.workspace)
+    profile = zt.workspace_profile(conf, workspace)
+    grid = zt.grid_for_workspace(conf, workspace)
+    caption = workspace_caption(workspace, profile)
 
     try:
         Gtk.init()
     except Exception as exc:
         fail(f"zone-picker: не удалось открыть дисплей: {exc}")
-    monitors = zt.monitors()
+    # Имена выходов нужны для набора зон монитора `[zones:<выход>]`; порядок
+    # областей тот же, что у zt.monitors(), — по нему и нумеруется `--monitor`.
+    outputs = zt.monitor_outputs()
+    monitors = [wa for _, wa in outputs]
+    if not monitors:
+        fail("zone-picker: не удалось получить рабочие области мониторов")
     win_id = args.window
     if win_id is None and not args.shot:
         win_id = active_window_quiet()
@@ -388,14 +477,24 @@ def main(argv=None):
     if not 0 <= mon_index < len(monitors):
         fail(f"zone-picker: монитора {mon_index} нет")
     wa = monitors[mon_index]
+    output = outputs[mon_index][0]
+    zones = zones_from_grid(grid, output)
+    if not zones:
+        fail(f"zone-picker: в конфиге нет ни одной зоны для монитора {output}")
 
     if args.shot:
         selected = select_by_name(zones, args.select)
-        write_shot(args.shot, wa[2], wa[3], zones, selected)
-        print(f"zone-picker: снимок оверлея записан в {args.shot} ({wa[2]}x{wa[3]}, зон {len(zones)})")
+        write_shot(args.shot, wa[2], wa[3], zones, selected, caption)
+        print(
+            f"zone-picker: снимок оверлея записан в {args.shot} "
+            f"({wa[2]}x{wa[3]}) — {describe_grid(zones, caption)}"
+        )
         return EXIT_OK
 
-    picker = Picker(zones, grid, wa, mon_index, args, win_id)
+    if args.dry_run:
+        print(f"zone-picker: сетка {describe_grid(zones, caption)}")
+
+    picker = Picker(zones, grid, wa, output, mon_index, args, win_id, caption)
     Gtk.main()
     return picker.exit_code
 
