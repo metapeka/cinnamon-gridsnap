@@ -390,5 +390,56 @@ class TestApplySavePlan(ConfCase):
         self.assertEqual([z.as_tuple() for z in zc.load_zone_sets(self.conf)["VGA-1"]], before)
 
 
+class WorkspaceDialogRowsTest(unittest.TestCase):
+    """Строки диалога «Профили столов» — чистая функция без GTK.
+
+    Диалог показывает столько строк, сколько столов в Cinnamon, и не теряет
+    запись стола, даже если профиля нет на диске: её видно в списке, и она
+    остаётся в конфиге до сохранения.
+    """
+
+    def test_row_per_desktop(self):
+        rows = zc.workspace_dialog_rows({}, ["work", "cinema"], 3)
+        self.assertEqual([row[0] for row in rows], [1, 2, 3])
+
+    def test_unread_desktops_falls_back_to_four(self):
+        for value in (None, 0, -2, "нет"):
+            rows = zc.workspace_dialog_rows({}, [], value)
+            self.assertEqual(len(rows), zc.WORKSPACE_DESKTOPS_DEFAULT, value)
+            self.assertEqual(len(rows), 4, value)
+
+    def test_unmapped_desk_is_shared_set(self):
+        number, profile, options, warning = zc.workspace_dialog_rows({}, ["work"], 1)[0]
+        self.assertEqual(number, 1)
+        self.assertIsNone(profile)
+        self.assertEqual(options, [zc.WORKSPACE_SHARED, "work"])
+        self.assertEqual(warning, "")
+
+    def test_mapped_desk_selects_its_profile(self):
+        number, profile, options, warning = zc.workspace_dialog_rows(
+            {2: "cinema"}, ["cinema", "work"], 2
+        )[1]
+        self.assertEqual((number, profile, warning), (2, "cinema", ""))
+        self.assertEqual(options, [zc.WORKSPACE_SHARED, "cinema", "work"])
+
+    def test_missing_profile_warns_but_keeps_the_mapping(self):
+        number, profile, options, warning = zc.workspace_dialog_rows(
+            {2: "cinema"}, ["work"], 2
+        )[1]
+        self.assertEqual(profile, "cinema")
+        self.assertIn("cinema", options)
+        self.assertIn("cinema", warning)
+        self.assertIn("нет на диске", warning)
+
+    def test_mapping_beyond_desktops_is_shown(self):
+        # Иначе сохранение молча потеряло бы сопоставление стола 5.
+        rows = zc.workspace_dialog_rows({5: "cinema"}, ["cinema"], 2)
+        self.assertEqual([row[0] for row in rows], [1, 2, 5])
+
+    def test_profile_names_from_disk_are_sorted_and_unique(self):
+        options = zc.workspace_dialog_rows({}, ["work", "cinema", "work"], 1)[0][2]
+        self.assertEqual(options, [zc.WORKSPACE_SHARED, "cinema", "work"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

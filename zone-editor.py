@@ -18,6 +18,7 @@ zone-editor.py — визуальный редактор сетки зон дл�
 import argparse
 import math
 import os
+import re
 import subprocess
 import sys
 
@@ -32,17 +33,23 @@ from gi.repository import Gdk, Gtk, Pango, PangoCairo  # noqa: E402  # type: ign
 
 import zone_geom as geom  # noqa: E402
 from zone_config import (  # noqa: E402
+    WORKSPACE_SHARED,
+    WORKSPACES_SECTION,
     Zone,
     list_profiles,
     load_extra_sections,
+    load_workspace_map,
     load_zone_sets,
     missing_rule_targets,
+    profile_path,
     read_profile,
     remove_profile,
     sanitize_name,
     sanitize_profile_name,
     save_profile,
+    save_workspace_map,
     unique_name,
+    workspace_dialog_rows,
     zt,
 )
 
@@ -59,6 +66,24 @@ ACCENT = (1.0, 0.71, 0.33)
 
 
 CONF = zt.default_conf()
+
+
+def desktops_count():
+    """Число рабочих столов из ``_NET_NUMBER_OF_DESKTOPS`` или ``None``.
+
+    Читается только когда диалог открывают: свойство меняют настройки
+    Cinnamon, и держать его в строке статуса незачем.
+    """
+    try:
+        out = subprocess.check_output(
+            ["xprop", "-root", "_NET_NUMBER_OF_DESKTOPS"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return None
+    found = re.search(r"=\s*(\d+)", out)
+    return int(found.group(1)) if found else None
 
 
 def templates():
@@ -405,6 +430,10 @@ class Editor(Gtk.Window):
         self.set_default_size(1120, 700)
         self.set_border_width(10)
         self.connect("key-press-event", self.on_key)
+        # Вернулись в окно — возможно, сменили стол: подпись про стол обновляем
+        # здесь, а не в каждом update_status (это вызов xprop).
+        self.connect("focus-in-event", self.on_focus)
+        self.workspace_note = self.workspace_hint()
         self.build_ui()
         if self.combo_entries:
             self.show_monitor(self.combo_entries[0][0])
@@ -558,8 +587,45 @@ class Editor(Gtk.Window):
         self.update_status()
 
     def update_status(self):
-        hint = self.set_hint()
-        self.status.set_text(f"{hint} · {self.message}" if self.message else hint)
+        parts = [self.set_hint()]
+        if getattr(self, "workspace_note", ""):
+            parts.append(self.workspace_note)
+        if self.message:
+            parts.append(self.message)
+        self.status.set_text(" · ".join(parts))
+
+    def workspace_hint(self):
+        """Подпись про активный стол: какой профиль он использует.
+
+        В EWMH столы считаются с нуля, в ``[workspaces]`` — с 1. Кнопка
+        «Проверить зону» ходит в сетку самого ``zones.conf``
+        (``--workspace conf``), поэтому без этой подписи непонятно, почему на
+        столе с профилем зоны редактора не находятся.
+        """
+        workspace = zt.current_workspace()
+        if workspace is None:
+            return ""
+        number = workspace + 1
+        try:
+            profile = load_workspace_map(self.conf_path).get(number)
+        except (SystemExit, ValueError, OSError):
+            return ""
+        if not profile:
+            return ""
+        try:
+            exists = os.path.exists(profile_path(profile, self.conf_path))
+        except ValueError:
+            exists = False
+        tail = "" if exists else " (файла профиля нет — стол раскладывается общим набором)"
+        return (f"стол {number} использует профиль «{profile}»{tail}; "
+                "редактор правит общий zones.conf")
+
+    def refresh_workspace_hint(self):
+        """Пересчитать подпись про стол и обновить статус."""
+        self.workspace_note = self.workspace_hint()
+        # Событие фокуса может прийти до build_ui — тогда статуса ещё нет.
+        if getattr(self, "status", None) is not None:
+            self.update_status()
 
     def set_hint(self):
         """Свой набор, наследование или общий `[zones]` — по текущему монитору."""
@@ -610,7 +676,7 @@ class Editor(Gtk.Window):
         self.mon_combo.set_active(index)
         self._loading = False
         self.refresh_panel()
-        self.update_status()
+        self.refresh_workspace_hint()
         self.canvas.queue_draw()
 
     def set_zones(self, zones):
@@ -760,6 +826,11 @@ class Editor(Gtk.Window):
             return True
         return False
 
+    def on_focus(self, *_args):
+        """Окно снова в фокусе — обновить подпись про активный стол."""
+        self.refresh_workspace_hint()
+        return False
+
     # ---- действия
 
     def _unique_name(self, base="zone"):
@@ -836,6 +907,10 @@ class Editor(Gtk.Window):
             self.prof_box.pack_start(b, False, False, 0)
         if names:
             self.prof_box.pack_start(Gtk.Separator(), False, False, 2)
+        desks_btn = Gtk.ModelButton()
+        desks_btn.set_label("Профили столов…")
+        desks_btn.connect("clicked", lambda _w: self.workspace_profiles_dialog())
+        self.prof_box.pack_start(desks_btn, False, False, 0)
         save_btn = Gtk.ModelButton()
         save_btn.set_label("Сохранить текущую раскладку как профиль…")
         save_btn.connect("clicked", lambda _w: self.save_profile_dialog())
@@ -920,6 +995,89 @@ class Editor(Gtk.Window):
             self.set_status(f"профиль не сохранён: {exc}")
             return
         self.set_status(f"профиль «{safe}» сохранён: {path}")
+
+    def workspace_profiles_dialog(self):
+        """Диалог «Профили столов»: какой профиль использует каждый стол.
+
+        Строк столько, сколько столов в Cinnamon (`_NET_NUMBER_OF_DESKTOPS`),
+        без X — четыре (:data:`zone_config.WORKSPACE_DESKTOPS_DEFAULT`). В
+        выпадающем списке — сохранённые профили и «общий набор» (без профиля).
+        Пишется только секция `[workspaces]` через `save_workspace_map`: чужие
+        секции файла остаются на месте, а `extra_sections` перечитываются,
+        чтобы следующий Ctrl+S её не откатил.
+        """
+        try:
+            mapping = load_workspace_map(self.conf_path)
+        except (SystemExit, ValueError, OSError) as exc:
+            self.set_status(f"профили столов не прочитаны: {exc}")
+            return
+        rows = workspace_dialog_rows(mapping, list_profiles(self.conf_path), desktops_count())
+        dlg = Gtk.Dialog(title="Профили столов", transient_for=self, modal=True)
+        dlg.add_button("Отмена", Gtk.ResponseType.CANCEL)
+        dlg.add_button("Сохранить", Gtk.ResponseType.OK)
+        dlg.set_default_response(Gtk.ResponseType.OK)
+        grid = Gtk.Grid(row_spacing=6, column_spacing=8, border_width=10)
+        dlg.get_content_area().add(grid)
+        hint = Gtk.Label(
+            label="Профиль задаёт столу его сетку зон; «общий набор» — стол без профиля.",
+            xalign=0,
+        )
+        hint.get_style_context().add_class("dim-label")
+        grid.attach(hint, 0, 0, 2, 1)
+        combos = []
+        line = 1
+        for number, profile, options, warning in rows:
+            grid.attach(Gtk.Label(label=f"Стол {number}", xalign=0), 0, line, 1, 1)
+            combo = Gtk.ComboBoxText()
+            for option in options:
+                combo.append_text(option)
+            combo.set_active(options.index(profile if profile is not None else WORKSPACE_SHARED))
+            grid.attach(combo, 1, line, 1, 1)
+            combos.append((number, combo))
+            line += 1
+            if warning:
+                note = Gtk.Label(label=warning, xalign=0)
+                note.set_line_wrap(True)
+                note.set_max_width_chars(60)
+                note.get_style_context().add_class("dim-label")
+                grid.attach(note, 1, line, 1, 1)
+                line += 1
+        dlg.show_all()
+        resp = dlg.run()
+        chosen = {}
+        for number, combo in combos:
+            text = combo.get_active_text() or WORKSPACE_SHARED
+            if text != WORKSPACE_SHARED:
+                chosen[number] = text
+        dlg.destroy()
+        if resp != Gtk.ResponseType.OK:
+            return
+        try:
+            save_workspace_map(self.conf_path, chosen)
+        except (ValueError, OSError) as exc:
+            self.set_status(f"профили столов не сохранены: {exc}")
+            return
+        self.sync_workspace_extra()
+        self.refresh_workspace_hint()
+        self.set_status(f"профили столов сохранены: {self.conf_path} — "
+                        f"сопоставлений: {len(chosen)}")
+
+    def sync_workspace_extra(self):
+        """Перечитать `[workspaces]` в «чужие» секции — чтобы Ctrl+S её не откатил.
+
+        Остальные секции в памяти не трогаем: в `[rules]` может лежать
+        черновик, загруженный из профиля и ещё не сохранённый.
+        """
+        try:
+            section = load_extra_sections(
+                self.conf_path, sections=[WORKSPACES_SECTION]
+            ).get(WORKSPACES_SECTION)
+        except OSError:
+            return
+        if section:
+            self.extra_sections[WORKSPACES_SECTION] = section
+        else:
+            self.extra_sections.pop(WORKSPACES_SECTION, None)
 
     def remove_profile_dialog(self):
         names = list_profiles(self.conf_path)

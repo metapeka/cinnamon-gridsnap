@@ -581,5 +581,88 @@ class TestNames(unittest.TestCase):
         self.assertEqual(zc.unique_name([]), "zone1")
 
 
+class TestSaveWorkspaceMap(ConfMixin, unittest.TestCase):
+    """`[workspaces]`: запись «номер стола → профиль» без потерь соседних секций."""
+
+    def full_conf(self):
+        """Конфиг «как после ручной правки»: оба набора зон, клавиши, чужие секции."""
+        return (BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES
+                + RULES + "[keys]\nmain = <Super><Alt>1\n" + DAEMON)
+
+    def test_round_trip(self):
+        path = self.conf(BASE_GRID + RECT_ZONES)
+        zc.save_workspace_map(path, {3: "cinema", 1: "work"})
+        self.assertEqual(zc.load_workspace_map(path), {1: "work", 3: "cinema"})
+
+    def test_format_is_number_space_profile(self):
+        # Формат из задания: `{2: "cinema"}` → `[workspaces]` и `2 = cinema`.
+        path = self.conf(BASE_GRID + RECT_ZONES)
+        zc.save_workspace_map(path, {2: "cinema"})
+        self.assertIn("[workspaces]\n2 = cinema\n", self.read(path))
+        self.assertEqual(self.read(path).count("[workspaces]"), 1)
+
+    def test_empty_map_removes_section(self):
+        path = self.conf(BASE_GRID + RECT_ZONES + "[workspaces]\n2 = cinema\n")
+        zc.save_workspace_map(path, {})
+        self.assertEqual(zc.load_workspace_map(path), {})
+        self.assertNotIn("workspaces", self.read(path))
+
+    def test_other_sections_and_zone_sets_survive(self):
+        path = self.conf(self.full_conf())
+        zc.save_workspace_map(path, {1: "work"})
+        self.assertEqual(sections_in(self.read(path)),
+                         ["grid", "zones", "zones:HDMI-1", "zones:DP-2", "rules",
+                          "keys", "daemon", "workspaces"])
+        self.assertEqual(zc.list_zone_sets(path),
+                         {None: ["main", "top-right"],
+                          "HDMI-1": ["top", "bottom"],
+                          "DP-2": ["wide"]})
+        text = self.read(path)
+        self.assertIn("[rules]\nChrome = main\nre:^(Navigator|firefox) = top-right", text)
+        self.assertIn("[daemon]\nreflow = off   # off | neighbors", text)
+        self.assertIn("[keys]\nmain = <Super><Alt>1", text)
+
+    def test_existing_section_is_replaced_in_place(self):
+        # Секция не в конце файла: она обновляется, соседи остаются на местах.
+        path = self.conf(BASE_GRID + "[workspaces]\n1 = old\n2 = old2\n" + RECT_ZONES)
+        zc.save_workspace_map(path, {1: "new"})
+        self.assertEqual(zc.load_workspace_map(path), {1: "new"})
+        self.assertEqual(sections_in(self.read(path)), ["grid", "workspaces", "zones"])
+        self.assertIn("[workspaces]\n1 = new\n", self.read(path))
+
+    def test_profile_names_are_sanitized(self):
+        path = self.conf(BASE_GRID + RECT_ZONES)
+        zc.save_workspace_map(path, {"2": " my cinema "})
+        self.assertEqual(zc.load_workspace_map(path), {2: "my-cinema"})
+
+    def test_numbers_are_written_in_order(self):
+        path = self.conf(BASE_GRID + RECT_ZONES)
+        zc.save_workspace_map(path, {3: "cinema", 1: "work", 2: "mail"})
+        self.assertIn("[workspaces]\n1 = work\n2 = mail\n3 = cinema\n", self.read(path))
+
+    def test_bad_key_or_empty_name_is_value_error(self):
+        for mapping in ({0: "work"}, {1: ""}, {1: "  "}, {"first": "work"}):
+            path = self.conf(BASE_GRID)
+            with self.assertRaises(ValueError, msg=mapping):
+                zc.save_workspace_map(path, mapping)
+            self.assertEqual(self.read(path), BASE_GRID)
+
+    def test_missing_file_gets_only_the_section(self):
+        path = os.path.join(self.tmpdir, "new", "zones.conf")
+        self.assertEqual(zc.save_workspace_map(path, {1: "work"}), path)
+        self.assertEqual(self.read(path), "[workspaces]\n1 = work\n")
+        self.assertEqual(zc.load_workspace_map(path), {1: "work"})
+
+    def test_extra_section_keeps_map_for_ctrl_s(self):
+        # Так редактор сохраняет Ctrl+S: `[workspaces]` едет среди чужих секций
+        # дословно и после записи зон остаётся в файле.
+        path = self.conf(BASE_GRID + RECT_ZONES)
+        zc.save_workspace_map(path, {2: "cinema"})
+        extra = zc.load_extra_sections(path)
+        self.assertEqual(extra.get("workspaces"), ["2 = cinema"])
+        zc.save_zone_sets(path, [zc.Zone("main", 0, 0, 1, 1)], extra=extra)
+        self.assertEqual(zc.load_workspace_map(path), {2: "cinema"})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
