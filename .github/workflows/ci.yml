@@ -123,3 +123,5 @@ jobs:
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-arrange.sh
       - name: Дымовой тест выбора зоны
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-picker.sh
+      - name: Дымовой тест двух мониторов
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-monitors.sh
