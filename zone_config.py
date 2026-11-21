@@ -23,11 +23,26 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 
 # Секции, которыми управляет сам редактор: их нельзя переносить как «чужие».
-RESERVED_SECTIONS = frozenset({"grid", "zones", "keys"})
+RESERVED_SECTIONS = frozenset({"grid", "zones", "keys", "move"})
 
 # Набор зон монитора: ``[zones:<имя выхода>]``. Имя выхода (eDP-1, HDMI-1) —
 # не имя зоны, поэтому в кавычки/дефисы оно не приводится.
 MONITOR_SECTION_PREFIX = "zones:"
+
+# Перемещение окна в соседнюю зону: ``[move]``, ключ — направление, значение —
+# сочетание Cinnamon. Секция необязательная: нет её — действуют значения по
+# умолчанию. Ключи не из направлений — ошибка конфига: молча проигнорированная
+# опечатка оставила бы человека без клавиши, а он бы этого не заметил.
+MOVE_SECTION = "move"
+MOVE_DIRECTIONS = ("left", "right", "up", "down")
+# ``Win``+стрелки — сочетания, которые Cinnamon (muffin) занимает своим
+# ``push-tile-*``; поэтому их и берём по умолчанию, но человек может поменять.
+DEFAULT_MOVE_KEYS = {
+    "left": "<Super>Left",
+    "right": "<Super>Right",
+    "up": "<Super>Up",
+    "down": "<Super>Down",
+}
 
 # Рабочие столы: ``[workspaces]``, ключ — номер стола как в интерфейсе Cinnamon
 # (с 1), значение — имя профиля из ``templates/<имя>.conf``.
@@ -41,6 +56,9 @@ WORKSPACE_SHARED = "общий набор"
 WORKSPACE_DESKTOPS_DEFAULT = 4
 
 # Порядок «чужих» секций при сохранении: [rules] до [keys], [daemon] после.
+# ``[move]`` пишется сама: она «своя» (см. :data:`RESERVED_SECTIONS`), но
+# редактор её не правит и обязан сохранить — тело берётся из прежнего файла
+# (или из ``extra``, если его передали явно).
 BEFORE_KEYS = ("rules",)
 AFTER_KEYS = ("daemon",)
 
@@ -150,6 +168,44 @@ def load_workspace_map(path):
             )
         mapping[int(number)] = profile
     return mapping
+
+
+def load_move_keys(path):
+    """``{направление: сочетание}`` из секции ``[move]``; секции нет — умолчания.
+
+    Ключи — только направления :data:`MOVE_DIRECTIONS` (``left``/``right``/
+    ``up``/``down``), значения — сочетания в синтаксисе Cinnamon
+    (``<Super>Left``). Нет файла или секции — :data:`DEFAULT_MOVE_KEYS`
+    целиком, так что файл без ``[move]`` работает как раньше.
+
+    Неизвестный ключ или пустое сочетание — ошибка конфига (код 3): это
+    опечатка, из-за которой человек остался бы без клавиши и не понял почему.
+    Недостающие в секции направления добираются умолчаниями — писать все
+    четыре ради одной замены не нужно.
+    """
+    keys = dict(DEFAULT_MOVE_KEYS)
+    cp = _read_conf(path, missing_ok=True)
+    if cp is None or not cp.has_section(MOVE_SECTION):
+        return keys
+    for name, value in cp.items(MOVE_SECTION):
+        # ConfigParser приводит ключи к нижнему регистру, так что ``Left`` в
+        # файле тоже сойдёт за направление.
+        direction = str(name).strip().lower()
+        if direction not in MOVE_DIRECTIONS:
+            zt.fail(
+                f"zone_config: в [{MOVE_SECTION}] неизвестное направление "
+                f"'{direction}': можно {', '.join(MOVE_DIRECTIONS)}",
+                zt.EXIT_CONFIG,
+            )
+        combo = str(value).strip()
+        if not combo:
+            zt.fail(
+                f"zone_config: в [{MOVE_SECTION}] у направления '{direction}' "
+                "пустое сочетание",
+                zt.EXIT_CONFIG,
+            )
+        keys[direction] = combo
+    return keys
 
 
 def _workspace_number(value):
@@ -517,6 +573,36 @@ def load_config(path):
     return load_zones(path), load_extra_sections(path)
 
 
+def _raw_section(path, name):
+    """Тело секции ``name`` из файла дословно; ``None`` — секции нет.
+
+    Нужно для секций, которых нет в ``extra``, но которые обязаны пережить
+    сохранение зон. ``[move]`` — как раз такая: она «своя»
+    (:data:`RESERVED_SECTIONS`), поэтому :func:`load_extra_sections` её не
+    отдаёт, а терять чужие сочетания при сохранении раскладки нельзя.
+    Пустая секция — ``[]`` (заголовок будет записан, тело — нет).
+    """
+    if not path or not os.path.exists(path):
+        return None
+    wanted = str(name).strip().lower()
+    body, current = None, False
+    with open(path, encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.rstrip("\n").rstrip("\r")
+            match = _SECTION_RE.match(line)
+            if match:
+                current = match.group(1).strip().lower() == wanted
+                if current and body is None:
+                    body = []
+                continue
+            if current:
+                body.append(line)
+    if body is None:
+        return None
+    _trim_blank(body)
+    return body
+
+
 def _section_lines(body):
     """Тело секции как строки: готовые строки пишутся как есть, пары ``(k, v)`` — как ``k = v``."""
     out = []
@@ -559,6 +645,10 @@ def _write_config(path, default_zones, monitor_sets=None, extra=None):
     ``default_zones=None`` — секции ``[zones]`` в файле не будет (набор по
     умолчанию не задан). Привязки ``[keys]`` собираются со всех записанных
     наборов, поэтому горячие клавиши соседних мониторов не теряются.
+
+    ``[move]`` пишется перед ``[daemon]``: тело берётся из ``extra``, а если
+    его там нет — дословно из прежнего файла (:func:`_raw_section`). Так
+    сохранение зон не сбрасывает переопределённые человеком сочетания.
     """
     extra = {str(k).strip().lower(): list(v) for k, v in (extra or {}).items()}
     lines = [
@@ -599,6 +689,15 @@ def _write_config(path, default_zones, monitor_sets=None, extra=None):
         lines += ["", "[keys]"]
         lines.extend(key_lines)
 
+    # ``[move]`` — своя секция (её читает zone_config), но редактор её не правит:
+    # сохраняем как было, чтобы переопределённые сочетания не терялись.
+    move_body = extra.pop(MOVE_SECTION, None)
+    if move_body is None:
+        move_body = _raw_section(path, MOVE_SECTION)
+    if move_body is not None:
+        lines += ["", f"[{MOVE_SECTION}]"]
+        lines.extend(_section_lines(move_body))
+
     written = set(BEFORE_KEYS) | set(AFTER_KEYS)
     for name in AFTER_KEYS:
         append_section(name)
@@ -627,10 +726,12 @@ def save_zone_sets(path, default_zones, monitor_sets=None, extra=None):
 
     Файл переписывается целиком, поэтому читать его не нужно: битый ``[keys]``
     с повтором имени не мешает записи (он и появлялся от таких повторов).
+    Исключение — ``[move]``: её тело читается из прежнего файла (или берётся
+    из ``extra``), чтобы сохранение зон не сбросило настройку клавиш.
     ``[keys]`` собирается со всех записанных наборов без повторов — по клавише
     на имя зоны, главная из набора по умолчанию (он пишется первым). Порядок:
-    ``[grid]``, ``[zones]``, ``[zones:*]``, ``[rules]``, ``[keys]``, ``[daemon]``,
-    остальные — после. Возвращает путь.
+    ``[grid]``, ``[zones]``, ``[zones:*]``, ``[rules]``, ``[keys]``, ``[move]``,
+    ``[daemon]``, остальные — после. Возвращает путь.
     """
     sets = {}
     for monitor, zones in (monitor_sets or {}).items():
