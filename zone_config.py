@@ -15,6 +15,7 @@
 
 import configparser
 import importlib.util
+import json
 import os
 import re
 
@@ -729,6 +730,15 @@ def unique_name(zones, base="zone"):
 
 PROFILE_EXT = ".conf"
 
+# Переносимый формат профиля (JSON). Ключ версии обязателен: чужая версия —
+# не повод угадывать, что имел в виду автор файла.
+PROFILE_JSON_KEY = "gridsnap_profile"
+PROFILE_JSON_VERSION = 1
+
+# Доли в JSON округляются до 4 знаков — столько же, сколько пишет ``Zone.fmt``
+# в ``.conf``; больше знаков файл профиля всё равно не сохранит.
+PROFILE_JSON_DIGITS = 4
+
 
 def profiles_dir(conf_path=None):
     """Каталог профилей.
@@ -881,6 +891,238 @@ def remove_profile(name, conf_path=None):
     except OSError as exc:
         raise _profile_missing(sanitize_profile_name(name)) from exc
     return path
+
+
+class ProfileJsonError(ValueError):
+    """Ошибка JSON-профиля: формат, версия или значения (в CLI — код 3)."""
+
+
+# --------------------------------------------- перенос профиля в JSON
+def _json_number(value):
+    """Доля в JSON: целое остаётся целым (0, 1), остальное — float."""
+    number = round(float(value), PROFILE_JSON_DIGITS)
+    return int(number) if number == int(number) else number
+
+
+def _json_zone(zones):
+    """Набор зон как ``{имя: [x, y, w, h]}`` в порядке зон набора."""
+    return {z.name: [_json_number(v) for v in z.as_tuple()] for z in zones or []}
+
+
+def _zone_keys(zones, monitor_sets=None):
+    """``{зона: сочетание}`` из привязок наборов.
+
+    Привязки лежат в ``[keys]`` и проставляются зонам при чтении. Одна зона
+    может стоять в нескольких наборах, а ``[keys]`` пишется по первому
+    появлению имени (:func:`_key_lines`), поэтому и здесь главное — первое.
+    """
+    keys = {}
+    chunks = [zones or []] + list((monitor_sets or {}).values())
+    for chunk in chunks:
+        for zone in chunk:
+            binding = (zone.binding or "").strip()
+            if binding and zone.name not in keys:
+                keys[zone.name] = binding
+    return keys
+
+
+def profile_to_dict(name, conf_path=None):
+    """Профиль → dict переносимого формата (``gridsnap_profile`` версии 1).
+
+    ``zones`` — набор по умолчанию (пустой словарь, если секции ``[zones]``
+    нет), ``monitors`` — наборы ``[zones:<выход>]`` (ключа нет, если их нет),
+    ``rules`` — строки ``[rules]`` как в файле, ``keys`` — ``{зона:
+    сочетание}`` из ``[keys]``. Доли округлены до :data:`PROFILE_JSON_DIGITS`.
+    Профиля нет — ``FileNotFoundError``; битый ``.conf`` — ``SystemExit``.
+    """
+    zones, rules, monitor_sets = read_profile_sets(name, conf_path)
+    data = {
+        PROFILE_JSON_KEY: PROFILE_JSON_VERSION,
+        "name": sanitize_profile_name(name),
+        "zones": _json_zone(zones),
+    }
+    if monitor_sets:
+        data["monitors"] = {m: _json_zone(zs) for m, zs in monitor_sets.items()}
+    data["rules"] = list(rules or [])
+    data["keys"] = _zone_keys(zones, monitor_sets)
+    return data
+
+
+def dumps_profile(data):
+    """Стабильный текст JSON-профиля: ключи по алфавиту, отступ 2, UTF-8 как есть.
+
+    Стабильность нужна для git: один и тот же профиль должен давать один и тот
+    же файл, иначе диффы гуляют от порядка обхода словаря.
+    """
+    return json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+
+
+def write_profile_json(data, path):
+    """Записать JSON-профиль в файл (каталог создаётся); возвращает путь.
+
+    Кривой путь или отказ файловой системы — ``ProfileJsonError`` с подсказкой.
+    """
+    directory = os.path.dirname(path)
+    try:
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(dumps_profile(data))
+    except OSError as exc:
+        raise ProfileJsonError(f"не удалось записать JSON-профиль {path}: {exc}") from exc
+    return path
+
+
+def read_profile_json(path):
+    """Прочитать dict из файла JSON-профиля; кривой JSON — ``ProfileJsonError``."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except OSError as exc:
+        raise ProfileJsonError(f"не удалось прочитать JSON-профиль {path}: {exc}") from exc
+    except ValueError as exc:
+        raise ProfileJsonError(f"{path} — не JSON: {exc}") from exc
+
+
+def profile_zone_total(data):
+    """Сколько зон в dict профиля: набор по умолчанию плюс наборы мониторов."""
+    total = len(data.get("zones") or {})
+    for body in (data.get("monitors") or {}).values():
+        total += len(body or {})
+    return total
+
+
+def _dict_zone_rect(name, spec):
+    """``[x, y, w, h]`` из JSON с проверками; ошибка — ``ProfileJsonError``."""
+    if isinstance(spec, (str, bytes, dict)):
+        raise ProfileJsonError(f"зона '{name}': ожидался список [x, y, w, h], а не {spec!r}")
+    try:
+        values = list(spec)
+    except TypeError:
+        raise ProfileJsonError(
+            f"зона '{name}': ожидался список [x, y, w, h], а не {spec!r}"
+        ) from None
+    if len(values) != 4:
+        raise ProfileJsonError(f"зона '{name}': ожидалось 4 доли [x, y, w, h], а не {spec!r}")
+    numbers = []
+    for item in values:
+        if isinstance(item, bool) or not isinstance(item, (int, float)):
+            raise ProfileJsonError(f"зона '{name}': доли должны быть числами, а не {item!r}")
+        numbers.append(float(item))
+    x, y, w, h = numbers
+    if not (
+        0 <= x < 1
+        and 0 <= y < 1
+        and w > 0
+        and h > 0
+        and x + w <= 1.0001
+        and y + h <= 1.0001
+    ):
+        raise ProfileJsonError(
+            f"зона '{name}': доли вне 0..1 или w/h ≤ 0: {spec!r}"
+        )
+    return x, y, w, h
+
+
+def _dict_zones(body, where):
+    """``{имя: [x, y, w, h]}`` из JSON → ``[Zone]`` с проверками."""
+    if body is None:
+        return []
+    if not isinstance(body, dict):
+        raise ProfileJsonError(
+            f"в JSON-профиле {where} должен быть объектом {{зона: [x, y, w, h]}}"
+        )
+    zones = []
+    for raw_name, spec in body.items():
+        name = str(raw_name).strip()
+        if not name:
+            raise ProfileJsonError(f"в JSON-профиле {where}: пустое имя зоны")
+        zones.append(Zone(name, *_dict_zone_rect(name, spec)))
+    return zones
+
+
+def profile_from_dict(data, name=None, conf_path=None):
+    """dict ``gridsnap_profile`` → файл профиля ``templates/<имя>.conf``.
+
+    Имя берётся из аргумента ``name``, иначе из ``data["name"]``, и санируется
+    (:func:`sanitize_profile_name`); пустое — ``ValueError``. Ошибки формата —
+    :class:`ProfileJsonError` (в CLI это код 3): не та или отсутствующая
+    версия, нет ни одной зоны, зона вне 0..1 или с неположительными ``w``/``h``,
+    правило на несуществующую зону, кривые типы. Клавиши к зонам, которых в
+    профиле нет, отбрасываются молча — ``[keys]`` пишется по зонам набора.
+    Порядок зон внутри набора — как в JSON-объекте (после файла на диске — по
+    алфавиту, так работает ``sort_keys``): имена, доли и привязки значат, а
+    порядок в ``.conf`` — только вид.
+    Возвращает путь записанного профиля.
+    """
+    if not isinstance(data, dict):
+        raise ProfileJsonError("в JSON-профиле ожидался объект {...}")
+    version = data.get(PROFILE_JSON_KEY)
+    if isinstance(version, bool) or version != PROFILE_JSON_VERSION:
+        raise ProfileJsonError(
+            f"в JSON-профиле {PROFILE_JSON_KEY} должно быть "
+            f"{PROFILE_JSON_VERSION}, а не {version!r}"
+        )
+
+    safe = sanitize_profile_name(name if name is not None else data.get("name"))
+    if not safe:
+        raise ValueError(
+            "плохое имя профиля: укажите --name, в JSON имя "
+            f"{data.get('name')!r} не годится"
+        )
+
+    zones = _dict_zones(data.get("zones"), "zones")
+    raw_monitors = data.get("monitors")
+    if raw_monitors is None:
+        raw_monitors = {}
+    if not isinstance(raw_monitors, dict):
+        raise ProfileJsonError(
+            "в JSON-профиле monitors должен быть объектом {выход: {зона: [x, y, w, h]}}"
+        )
+    monitor_sets = {}
+    for raw_monitor, body in raw_monitors.items():
+        monitor = _clean_monitor(raw_monitor)
+        if monitor is None:
+            raise ProfileJsonError("в JSON-профиле пустое имя монитора в monitors")
+        parsed = _dict_zones(body, f"monitors.{monitor}")
+        if parsed:
+            monitor_sets[monitor] = parsed
+
+    names = {z.name for z in zones}
+    for chunk in monitor_sets.values():
+        names |= {z.name for z in chunk}
+    if not names:
+        raise ProfileJsonError("в JSON-профиле нет ни одной зоны")
+
+    rules = data.get("rules")
+    if rules is None:
+        rules = []
+    if isinstance(rules, str) or not isinstance(rules, (list, tuple)):
+        raise ProfileJsonError("в JSON-профиле rules должен быть списком строк")
+    rules = [str(line) for line in rules]
+    for line in rules:
+        text = line.strip()
+        if not text or text[0] in "#;":
+            continue
+        if "=" not in _INLINE_COMMENT_RE.sub("", text):
+            raise ProfileJsonError(f"правило без «селектор = зона»: {line!r}")
+    for selector, target in _rule_pairs(rules):
+        if target not in names:
+            raise ProfileJsonError(
+                f"правило «{selector} = {target}» ссылается на неизвестную зону '{target}'"
+            )
+
+    keys = data.get("keys")
+    if keys is None:
+        keys = {}
+    if not isinstance(keys, dict):
+        raise ProfileJsonError("в JSON-профиле keys должен быть объектом {зона: сочетание}")
+    bindings = {str(k).strip(): str(v).strip() for k, v in keys.items()}
+    for chunk in [zones] + list(monitor_sets.values()):
+        for zone in chunk:
+            zone.binding = bindings.get(zone.name, "")
+
+    return save_profile(safe, zones, rules, conf_path, monitor_sets=monitor_sets)
 
 
 def apply_profile(name, conf_path=None):
