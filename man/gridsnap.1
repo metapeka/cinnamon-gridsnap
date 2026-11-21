@@ -68,6 +68,23 @@ muffin с компенсацией рамки окна, поэтому рамк�
 «совпало с зоной» или «не совпало!». Удачное \fBapply\fP (кроме \fB\-\-dry\-run\fP) пишется
 в историю для \fBundo\fP.
 .TP
+.B focus [\fIЗОНА\fP]
+Режим «только эта зона»: активное окно (\fB\-\-window\fP \fIXID\fP задаёт окно вручную)
+кладётся в зону, а остальные окна \fIтого же рабочего стола и монитора\fP сворачиваются
+(\fIWM_CHANGE_STATE\fP со значением \fIIconicState\fP). Без зоны окно остаётся где стоит —
+режим значит «только это окно». Повторный \fBfocus\fP при активном режиме выходит из него и
+разворачивает \fIтолько те\fP окна, которые свернул режим (\fI_NET_ACTIVE_WINDOW\fP, последней —
+цель); свёрнутое вручную остаётся свёрнутым, а окна под \fB[ignore]\fP и служебные типы
+(диалоги, splash) не сворачиваются и не мешают. \fB\-\-off\fP — явный выход для скриптов и
+второй клавиши. \fB\-\-dry\-run\fP печатает, что было бы сделано, ничего не двигая. Режим живёт на
+своём рабочем столе и сменой стола не снимается (разворот возможен только на активном столе), а
+выключается сам лишь с закрытием целевого окна **при запущенном демоне**; выход работает с любого
+стола — команда сама переходит на стол режима и разворачивает окна.
+.IP
+При запущенном \fBgridsnap\-daemon\fP команда отдаёт работу ему по IPC (если сокет отвечает):
+только демон доворачивает окна, появившиеся уже в режиме. Без демона режим работает разово,
+а список свёрнутых хранится в \fI$XDG_STATE_HOME/gridsnap/focus.json\fP.
+.TP
 .B keys
 Печатает пары «зона, табуляция, сочетание» из секции \fB[keys]\fP. Это источник для
 \fBsetup\-hotkeys\fP. Зона из \fB[keys]\fP, которой нет в \fB[zones]\fP, пропускается
@@ -156,6 +173,13 @@ muffin с компенсацией рамки окна, поэтому рамк�
 \fB\-\-once\fP обрабатывает одно изменение списка и выходит; если события не пришло, ждёт
 2 секунды и выходит (для дымовых проверок). Останов — Ctrl-C (\fBSIGINT\fP) или
 \fBgridsnap\-ctl quit\fP.
+.PP
+Демон ведёт и режим «только эта зона» (IPC-команда \fBfocus\fP): окно кладётся в зону, а
+остальные окна его стола и монитора сворачиваются; окна, появившиеся уже в режиме, демон
+сворачивает сразу. Смена рабочего стола режим не снимает (разворот возможен только на активном
+столе), а снимается он повторной командой, исчезновением цели и завершением демона;
+неразвёрнутый остаток демон отдаёт в файл состояния режима, откуда его доводит
+\fBgridsnap\-tiler focus \-\-off\fP.
 .SS "gridsnap\-editor — визуальный редактор зон"
 Окно GTK 3 с рабочей областью монитора в натуральном масштабе. Зону можно таскать мышью и
 тянуть за край или угол; прилипание — к краям экрана, к соседним зонам и к линиям 1/4, 1/3,
@@ -194,6 +218,12 @@ reflow).
 \fB\-\-monitor\fP \fIN\fP. Успех записывается в трекер демона, поэтому закрытие окна затем
 штатно запускает reflow.
 .TP
+.B focus [\fIЗОНА\fP]
+Режим «только эта зона»: свернуть все окна того же стола и монитора, кроме целевого
+(\fB\-\-window\fP \fIXID\fP, по умолчанию активное), и положить его в \fIЗОНА\fP; без зоны
+окно не двигается. Повторная команда и \fB\-\-off\fP — выход. \fB\-\-monitor\fP у \fBfocus\fP
+нет: область берётся у целевого окна.
+.TP
 .B reload
 Перечитать \fIzones.conf\fP (сетка, правила, reflow); кэш мониторов сбрасывается.
 .TP
@@ -203,11 +233,14 @@ reflow).
 \fB\-\-socket\fP \fIПУТЬ\fP задаёт путь сокета, \fB\-\-raw\fP печатает ответ одной строкой,
 \fB\-\-quiet\fP ничего не печатает при успехе.
 .SS "setup\-hotkeys — сочетания клавиш Cinnamon"
-Читает \fB[keys]\fP через \fBgridsnap\-tiler keys\fP и создаёт пользовательские сочетания
-Cinnamon (схемы \fIorg.cinnamon.desktop.keybindings\fP) с именем «zone-tiler: <зона>» и
-командой \fBpython3 <каталог кода>/zone\-tiler.py apply <зона> \-\-quiet\fP (с \fB\-\-conf\fP,
-если он задан). Сочетания, поставленные прошлыми запусками (по префиксу имени), сначала
-снимаются, чтобы не осталось мусора.
+Читает \fB[keys]\fP через \fBgridsnap\-tiler keys\fP (и \fB[move]\fP — через \fBkeys \-\-move\fP)
+и создаёт пользовательские сочетания Cinnamon (схемы \fIorg.cinnamon.desktop.keybindings\fP)
+с именем «zone-tiler: <зона>» и командой
+\fBpython3 <каталог кода>/zone\-tiler.py apply <зона> \-\-quiet\fP (с \fB\-\-conf\fP,
+если он задан). Необязательная секция \fB[focus]\fP даёт одно сочетание
+«zone-tiler: focus» для режима «только эта зона»; оно читается из \fIzones.conf\fP самим скриптом
+(через \fBzone_config.load_focus_keys\fP). Сочетания, поставленные прошлыми запусками
+(по префиксу имени), сначала снимаются, чтобы не осталось мусора.
 \fB\-\-list\fP только показывает план, \fB\-\-remove\fP удаляет сочетания GridSnap и ничего
 не ставит, \fB\-\-conf\fP \fIПУТЬ\fP указывает конфиг.
 .SH ПАРАМЕТРЫ
@@ -225,7 +258,12 @@ Cinnamon (схемы \fIorg.cinnamon.desktop.keybindings\fP) с именем «z
 \fBstack\fP.
 .TP
 .BI \-\-window " XID"
-Идентификатор окна для \fBapply\fP: десятичный или \fI0x…\fP. По умолчанию активное окно.
+Идентификатор окна для \fBapply\fP и \fBfocus\fP: десятичный или \fI0x…\fP. По умолчанию
+активное окно.
+.TP
+.B \-\-off
+\fBfocus\fP: явно выйти из режима «только эта зона» (развернуть свёрнутое режимом), а не
+входить в него.
 .TP
 .BI \-\-by " auto|rules|order"
 Способ выбора окон для \fBarrange\fP (по умолчанию \fIauto\fP), см. выше.
@@ -294,6 +332,12 @@ ConfigParser):
 его можно, только убрав правило.
 .SS "[keys]"
 Привязки клавиш: \fIимя зоны = сочетание\fP Cinnamon, например \fI<Super><Alt>1\fP.
+.SS "[focus]"
+Секция необязательна. \fBkey\fP — сочетание режима «только эта зона» в синтаксисе Cinnamon;
+\fBzone\fP — зона, в которую кладётся окно (необязательна). Без \fBzone\fP сочетание только
+сворачивает окна, не двигая цель. Неизвестный ключ в секции и пустое значение \fBzone\fP —
+ошибка конфига (код 3). Секцию переносят \fBsetup\-hotkeys\fP (имя «zone-tiler: focus») и
+редактор; в профили раскладок она не входит.
 .SS "[daemon]"
 Секция необязательна. \fBreflow = off | neighbors\fP (по умолчанию \fIoff\fP; регистр и пробелы не важны,
 неизвестное значение трактуется как \fIoff\fP). Режим \fIneighbors\fP описан в разделе
@@ -306,6 +350,8 @@ gridsnap\-tiler apply bottom \-\-monitor 1 \-\-verify
 gridsnap\-tiler arrange \-\-by order
 gridsnap\-tiler stack main \-\-offset 0
 gridsnap\-tiler undo \-\-all
+gridsnap\-tiler focus main
+gridsnap\-tiler focus \-\-off
 gridsnap\-tiler profile save work
 gridsnap\-tiler profile use work \-\-no\-hotkeys
 gridsnap\-tiler keys
@@ -313,6 +359,8 @@ gridsnap\-daemon \-\-verbose
 gridsnap\-daemon \-\-once \-\-conf ~/.config/gridsnap/zones.conf
 gridsnap\-ctl status
 gridsnap\-ctl apply main \-\-monitor 1
+gridsnap\-ctl focus main
+gridsnap\-ctl focus \-\-off
 setup\-hotkeys \-\-list
 gridsnap\-picker \-\-select top\-right
 gridsnap\-editor \-\-conf ~/.config/gridsnap/zones.conf
@@ -327,6 +375,10 @@ gridsnap\-editor \-\-conf ~/.config/gridsnap/zones.conf
 В поставляемом \fIzones.conf\fP четыре зоны и четыре сочетания: \fImain\fP — \fI<Super><Alt>1\fP,
 \fItop\-right\fP — \fI<Super><Alt>2\fP, \fItop\-far\fP — \fI<Super><Alt>3\fP,
 \fIbottom\fP — \fI<Super><Alt>4\fP.
+.PP
+Необязательная секция \fB[focus]\fP даёт клавишу режима «только эта зона»
+(\fBgridsnap\-tiler focus\fP): она регистрируется под именем «zone-tiler: focus», поэтому
+\fBsetup\-hotkeys \-\-remove\fP снимает её вместе с клавишами зон.
 .PP
 Смена профиля одной клавишей — обычное пользовательское сочетание Cinnamon, вызывающее
 \fBgridsnap\-tiler profile use <имя>\fP: своих клавиш для профилей проект не заводит.

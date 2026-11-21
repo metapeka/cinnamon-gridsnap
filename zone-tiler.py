@@ -93,6 +93,7 @@ import fnmatch
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -1010,6 +1011,8 @@ SUBSTRUCTURE_MASK = (1 << 19) | (1 << 20)  # Notify | Redirect
 X_FLAGS = 1 | 2 | 4 | 8  # X, Y, Width, Height
 GRAVITY_NORTH_WEST = 1
 SOURCE_PAGER = 2
+# `WM_CHANGE_STATE` со значением IconicState (ICCCM) — просьба WM свернуть окно.
+ICONIC_STATE = 3
 
 
 class X11:
@@ -1076,6 +1079,211 @@ class X11:
     def move_resize(self, win, x, y, w, h):
         flags = (SOURCE_PAGER << 12) | (X_FLAGS << 8) | GRAVITY_NORTH_WEST
         self.send(win, "_NET_MOVERESIZE_WINDOW", [flags, x, y, w, h])
+
+    def iconify(self, win):
+        """Свернуть окно: `WM_CHANGE_STATE` со значением `IconicState`."""
+        self.send(win, "WM_CHANGE_STATE", [ICONIC_STATE, 0, 0, 0, 0])
+
+    def activate(self, win):
+        """Развернуть и поднять окно: `_NET_ACTIVE_WINDOW` от имени pager'а.
+
+        `data.l[0] = 2` (source indication, pager) и нулевой timestamp: muffin
+        принимает активацию от pager'а, а устаревший ненулевой timestamp может
+        отклонить (focus-stealing prevention) — и окно осталось бы свёрнутым.
+
+        Важно: для окна **не на активном рабочем столе** muffin это сообщение
+        игнорирует (проверено дымом) — сначала нужен `set_current_desktop`.
+        """
+        self.send(win, "_NET_ACTIVE_WINDOW", [SOURCE_PAGER, 0, 0, 0, 0])
+
+    def set_current_desktop(self, desktop):
+        """Переключить активный рабочий стол: `_NET_CURRENT_DESKTOP` в root.
+
+        `ev.window` — сам root, как это делают wmctrl/xdotool: muffin принимает
+        такой запрос с нулевым timestamp (проверено дымом).
+        """
+        self.send(self.root, "_NET_CURRENT_DESKTOP", [desktop, 0, 0, 0, 0])
+
+
+# --------------------------------------------- сворачивание (режим «только эта зона»)
+
+
+def window_iconic(win):
+    """Свёрнуто ли окно сейчас — `WM_STATE: Iconic` или `_NET_WM_STATE_HIDDEN`.
+
+    muffin при `WM_CHANGE_STATE` ставит оба признака (проверено дымом на
+    Cinnamon/muffin), поэтому читается настоящий EWMH/ICCCM-признак, а не
+    догадка по геометрии. Не прочитать свойство — окно считается видимым.
+    """
+    try:
+        txt = subprocess.check_output(
+            ["xprop", "-id", hex(win), "WM_STATE", "_NET_WM_STATE"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return False
+    return "Iconic" in txt or "_NET_WM_STATE_HIDDEN" in txt
+
+
+def iconify(window, x11=None, quiet=True):
+    """Свернуть окно. Своё X-соединение закрывает, чужое не трогает.
+
+    Единственный работающий путь: muffin игнорирует и `XMapWindow`, и
+    `WM_CHANGE_STATE` с `NormalState`, а `_NET_WM_STATE_HIDDEN` принадлежит WM
+    и снять его клиент не может (проверено дымом). `x11` подменяется в тестах;
+    демон передаёт своё долгоживущее соединение.
+    """
+    own = x11 is None
+    if own:
+        x11 = X11()
+    try:
+        x11.iconify(window)
+        if not quiet:
+            print(f"окно 0x{window:x} -> свёрнуто")
+    finally:
+        if own:
+            x11.close()
+
+
+def deiconify(window, x11=None):
+    """Развернуть окно; заодно поднимает и фокусирует.
+
+    Поэтому зовётся по одному окну, а последним — то, на котором должно
+    остаться внимание (цель режима). `x11` — как у :func:`iconify`.
+    """
+    own = x11 is None
+    if own:
+        x11 = X11()
+    try:
+        x11.activate(window)
+    finally:
+        if own:
+            x11.close()
+
+
+def focus_candidates(entries, target, workspace, wa):
+    """Окна, которые сворачивает режим «только эта зона». Чистая функция.
+
+    `entries` — `(окно, стол, рабочая область)` в порядке `_NET_CLIENT_LIST`
+    (демон отдаёт то же, что хранит в `win_workspace`/`win_monitor`). Берутся
+    окна **той же рабочей области** и того же стола, кроме цели; липкое окно
+    (`workspace is None`) видно везде и потому подходит. Активный стол не
+    прочитан (`workspace is None`) — подходят только липкие окна: сворачивать
+    вслепую окна чужих столов хуже, чем не сворачивать ничего.
+
+    Исключения (`window_excluded`) и уже свёрнутые отсеивает вызывающий: у него
+    есть метаданные окна и `window_iconic`, а у чистой функции их нет.
+    """
+    out = []
+    for win, entry_workspace, entry_wa in entries:
+        if win == target or entry_wa != wa:
+            continue
+        if workspace is None:
+            if entry_workspace is not None:
+                continue
+        elif entry_workspace is not None and entry_workspace != workspace:
+            continue
+        out.append(win)
+    return out
+
+
+def focus_records(windows):
+    """Записи окон для `focus.json`: `WM_CLASS` и стол берутся прямо сейчас.
+
+    Стол читается у **каждого** окна, а не берётся из одного поля записи: в файле
+    сходятся окна разных столов (остаток CLI и остаток демона), а разворот
+    возможен только на активном столе — значит, стол нужен по каждому окну.
+    Здесь же читается и `WM_CLASS`: записи без класса уклоняются от защиты от
+    переиспользованного XID, а читать класс в момент записи дешевле, чем потом
+    развернуть чужое окно.
+    """
+    return [
+        {
+            "window": hex(win),
+            "wm_class": window_class_title(win)[0],
+            "workspace": window_workspace_for_zones(win),
+        }
+        for win in dict.fromkeys(windows)
+    ]
+
+
+def focus_entries(client_ids, monitors_):
+    """`(окно, стол, рабочая область)` для каждого клиента — вход `focus_candidates`.
+
+    Читает `_NET_WM_DESKTOP` и центр окна (`xwininfo`). Монитор не прочитался —
+    окно попадает с `None` и кандидатом не станет: сворачивать окно, которого
+    не видно, вслепую хуже, чем не сворачивать. Читает X, но решений не
+    принимает — отбор делает чистая `focus_candidates`.
+    """
+    return [
+        (win, window_workspace_for_zones(win), window_monitor(win, monitors_))
+        for win in client_ids
+    ]
+
+
+# Сколько раз перечитать состояние окна после запроса и с какой паузой: и разворот,
+# и смена стола — клиентские сообщения, WM применяет их не мгновенно.
+FOCUS_VERIFY_TRIES = 5
+FOCUS_VERIFY_DELAY = 0.2
+
+
+def switch_workspace(desktop, x11=None, read_current=None):
+    """Переключить активный стол и дождаться, что он стал активным.
+
+    Нужно **до** разворота: `_NET_ACTIVE_WINDOW` muffin игнорирует для окна не
+    на активном столе (проверено дымом), а окна режима лежат на своём столе.
+    `read_current` подменяется в тестах. `True` — стол нужный (был или стал).
+    """
+    reader = read_current or current_workspace
+    own = x11 is None
+    if own:
+        x11 = X11()
+    try:
+        if reader() == desktop:
+            return True
+        x11.set_current_desktop(desktop)
+        for _ in range(FOCUS_VERIFY_TRIES):
+            time.sleep(FOCUS_VERIFY_DELAY)
+            if reader() == desktop:
+                return True
+        return reader() == desktop
+    finally:
+        if own:
+            x11.close()
+
+
+def deiconify_all(windows, x11=None, deiconify_fn=None):
+    """Развернуть окна и перечитать их состояние; вернёт **не развернувшиеся**.
+
+    `deiconify` — клиентское сообщение, и WM обрабатывает его не мгновенно,
+    поэтому состояние (`window_iconic`) перечитывается с паузами. Оставшееся
+    свёрнутым окно почти наверняка на неактивном столе: muffin игнорирует
+    активацию таких окон (проверено дымом). Вызывающий решает, что с остатком
+    делать, — молча считать его развёрнутым нельзя.
+
+    `deiconify_fn` подменяется в тестах (и демон передаёт свою инъекцию): с ней
+    X-соединение не открывается вовсе.
+    """
+    pending = list(dict.fromkeys(windows))
+    if not pending:
+        return []
+    send = deiconify_fn or deiconify
+    own = deiconify_fn is None and x11 is None
+    if own:
+        x11 = X11()
+    try:
+        for win in pending:
+            send(win, x11=x11)
+        for _ in range(FOCUS_VERIFY_TRIES):
+            time.sleep(FOCUS_VERIFY_DELAY)
+            pending = [win for win in pending if window_iconic(win)]
+            if not pending:
+                return []
+        return pending
+    finally:
+        if own:
+            x11.close()
 
 
 # --------------------------------------------- раскладка и история (без X)
@@ -1234,6 +1442,69 @@ class History:
         ops = self.load()
         ops.append(operation)
         self.save(ops)
+
+
+# --------------------------------------------------- режим «только эта зона»
+
+# Версия `focus.json` — состояния режима для ветки без демона.
+FOCUS_STATE_VERSION = 1
+
+
+def focus_path():
+    """Путь состояния режима «только эта зона» (`$XDG_STATE_HOME/gridsnap/focus.json`).
+
+    Файл нужен только ветке без демона: у запущенного демона режим живёт в
+    памяти. Это состояние (переживает выход процесса), а не конфиг и не кэш.
+    """
+    return os.path.join(state_home(), "gridsnap", "focus.json")
+
+
+def load_focus_state(path=None):
+    """Состояние режима из файла; `{}` — режим не активен.
+
+    Битый файл, чужая версия и неполная запись читаются как «режим не
+    активен»: испорченное состояние не должно ронять раскладку. Переоткрытое
+    окно (новый XID) остаётся в записи и отсеивается при разворачивании — по
+    `wm_class`, как это делает память демона об укладках.
+    """
+    path = path or focus_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict) or data.get("version") != FOCUS_STATE_VERSION:
+        return {}
+    if not isinstance(data.get("windows"), list):
+        return {}
+    return data
+
+
+def save_focus_state(state, path=None):
+    """Записать состояние режима атомарно (`.tmp` + `os.replace`). Райзит OSError."""
+    path = path or focus_path()
+    payload = dict(state)
+    payload["version"] = FOCUS_STATE_VERSION
+    directory = os.path.dirname(path)
+    tmp = f"{path}.tmp"
+    try:
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        os.replace(tmp, path)
+    except OSError:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def clear_focus_state(path=None):
+    """Убрать файл состояния режима (выход из режима без демона). Идемпотентно."""
+    path = path or focus_path()
+    with contextlib.suppress(OSError):
+        os.unlink(path)
 
 
 def undo_targets(operations, all_=False):
@@ -1409,6 +1680,372 @@ def cmd_apply(grid, args):
     apply_zone(window, rect, label=args.zone, verify=args.verify, quiet=args.quiet)
     if before is not None:
         remember("apply", [before], quiet=args.quiet)
+
+
+# -------------------------------------------------- режим «только эта зона» (CLI)
+
+# Сколько ждать ответа демона, секунд (тот же порядок, что у `gridsnap-ctl`).
+DAEMON_TIMEOUT = 5.0
+
+
+def daemon_request(request, timeout=DAEMON_TIMEOUT):
+    """Отправить одну команду живому демону; `None` — демона нет.
+
+    `zone_ipc` подключается лениво (как `picker_nav`): без демона раскладчику
+    этот модуль не нужен. Мёртвый сокет/отсутствие демона (`OSError`) — это
+    `None`: вызывающий сделает то же самое разово. Демон жив, но не ответил за
+    `timeout`, или ответил непонятно — это уже не «демона нет», и второй хозяин
+    режима не заводится: отказ с внятным сообщением.
+    """
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import zone_ipc  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+
+    conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    conn.settimeout(timeout)
+    try:
+        conn.connect(zone_ipc.default_socket_path())
+    except OSError:
+        conn.close()
+        return None
+    try:
+        conn.sendall(zone_ipc.encode_message(request))
+        return zone_ipc.read_response(conn)
+    except TimeoutError:
+        fail(
+            f"zone-tiler: демон не ответил за {timeout:g} с — режим не переключаю "
+            "(работающего демона нельзя обойти снаружи)",
+            EXIT_FAIL,
+        )
+    except zone_ipc.ProtocolError as exc:
+        fail(f"zone-tiler: демон ответил непонятно: {exc}", EXIT_FAIL)
+    finally:
+        conn.close()
+
+
+def cmd_focus(grid, args):
+    """Режим «только эта зона»: окно в зону, остальные окна монитора — свёрнуты.
+
+    Вход и выход — **одна** команда (toggle): повторный `focus` при активном
+    режиме разворачивает окна, свёрнутые режимом, и больше ничего; свёрнутое
+    вручную остаётся свёрнутым. `--off` — явный выход для скриптов и второй
+    клавиши. Зона необязательна: без неё окно остаётся где стоит, и режим
+    значит «только это окно» (это форма клавиши `[focus]` без `zone`). Область —
+    рабочий стол и монитор целевого окна: другие экраны и столы не трогаются, а
+    исключения (`window_excluded`) и диалоги — тем более.
+
+    С живым демоном команда **делегирует ему**: у режима должен быть один
+    хозяин, и только демон умеет сворачивать окна, появляющиеся после входа.
+    Без демона работает разово, а список свёрнутых держит в `focus.json`
+    (см. `focus_path`) — новые окна в таком режиме не отслеживаются.
+    """
+    request = {"cmd": "focus"}
+    if args.off:
+        request["off"] = True
+    elif args.zone:
+        request["zone"] = args.zone
+    if args.window is not None:
+        request["window"] = args.window
+
+    state = load_focus_state()
+    if args.dry_run:
+        _focus_dry_run(grid, args, state)
+        return
+
+    # Toggle: `--off` или уже активный режим — выход, а не вход. Решается до
+    # делегирования, потому что вход и выход идут по сокету разными командами.
+    exiting = bool(request.get("off")) or bool(state)
+    # Запись CLI разворачивает сам CLI: демон мог быть поднят уже в режиме, и
+    # тогда эти окна для него — «свёрнутые не им». Разворот идёт до команды
+    # демону, иначе тот принял бы их за уже свёрнутые и не запомнил.
+    restored, remaining = _focus_restore(state) if state else ([], [])
+    if state and not remaining:
+        # Запись убирается только когда разворот подтверждён: иначе окно
+        # осталось бы свёрнутым без хозяина.
+        clear_focus_state()
+    if state and remaining:
+        _focus_keep(state, remaining)
+    if remaining and not args.quiet:
+        print(
+            f"zone-tiler: {len(remaining)} окон развернуть не удалось — "
+            "запись режима сохранена, повторите focus --off",
+            file=sys.stderr,
+        )
+
+    if exiting:
+        # У демона — свой режим со своей книгой: просим выйти и складываем счёт.
+        response = daemon_request({"cmd": "focus", "off": True})
+        if response is not None:
+            if not response.get("ok"):
+                fail(
+                    f"zone-tiler: {response.get('error', 'демон отклонил focus')}",
+                    EXIT_FAIL,
+                )
+            restored += _focus_ids(response.get("restored"))
+        if not args.quiet:
+            print(f"режим «только эта зона» выключен: развёрнуто окон — {len(restored)}")
+        return
+
+    # Живой демон — единственный хозяин режима: он видит `_NET_CLIENT_LIST`
+    # и умеет довернуть окна, появившиеся после входа. Без демона — разово.
+    response = daemon_request(request)
+    if response is not None:
+        if not response.get("ok"):
+            fail(
+                f"zone-tiler: {response.get('error', 'демон отклонил focus')}",
+                EXIT_FAIL,
+            )
+        _print_focus_response(response, quiet=args.quiet)
+        return
+
+    _focus_enter(grid, args)
+
+
+def _focus_ids(values):
+    """Идентификаторы окон из ответа демона (`["0x2", …]`) — числа; мусор отброшен."""
+    out = []
+    for value in values or []:
+        win = _focus_window_id({"window": value})
+        if win is not None:
+            out.append(win)
+    return out
+
+
+def _focus_dry_run(grid, args, state):
+    """Показать, что сделал бы `focus`, ничего не двигая и не сворачивая.
+
+    Живой демон — хозяин режима, его книга окон CLI не видна, поэтому при
+    доступном сокете спрашивается `status`: иначе `--dry-run` врал бы про
+    «ноль свёрнутых» — и на входе, и на выходе.
+    """
+    if not state:
+        response = daemon_request({"cmd": "status"})
+        mode = (response or {}).get("focus") if response and response.get("ok") else None
+        if mode:
+            print(
+                f"режим «только эта зона»: держит демон (зона "
+                f"'{mode.get('zone') or 'без зоны'}', цель {mode.get('window')}, "
+                f"свёрнуто {mode.get('minimized')}) — выключился бы"
+            )
+            return
+    if args.off or state:
+        windows = state.get("windows") or []
+        print(f"режим «только эта зона»: выключился бы, развернулось бы окон — {len(windows)}")
+        return
+    window = args.window or active_window()
+    if args.zone:
+        require_zone(grid, args.zone)
+    wa = window_monitor(window, monitors())
+    if wa is None:
+        fail(f"zone-tiler: не удалось определить монитор окна 0x{window:x}", EXIT_FAIL)
+    candidates = focus_candidates(
+        focus_entries(read_client_list() or [], monitors()), window,
+        current_workspace(), wa,
+    )
+    todo = [
+        win
+        for win in candidates
+        if not window_is_excluded(win, grid.ignore) and not window_iconic(win)
+    ]
+    where = "остаётся на месте" if not args.zone else "зона '{}'".format(args.zone)
+    if args.zone:
+        x, y, w, h = grid.rect(args.zone, wa)
+        where += f" x={x} y={y} {w}x{h}"
+    print(
+        f"режим «только эта зона»: окно 0x{window:x} -> {where}, "
+        f"свернулось бы окон — {len(todo)}"
+    )
+
+
+def _focus_enter(grid, args):
+    """Разовый вход в режим без демона: цель в зону (если задана), остальные — свёрнуты."""
+    window = args.window or active_window()
+    if args.zone:
+        require_zone(grid, args.zone)
+    if window_is_excluded(window, grid.ignore):
+        if not args.quiet:
+            print(
+                f"zone-tiler: окно 0x{window:x} под исключением "
+                "([ignore]/служебный тип) — режим не включаю",
+                file=sys.stderr,
+            )
+        return
+    workspace = current_workspace()
+    if workspace is None:
+        fail("zone-tiler: не удалось определить активный рабочий стол", EXIT_FAIL)
+    monitors_ = monitors()
+    wa = window_monitor(window, monitors_)
+    if wa is None:
+        fail(f"zone-tiler: не удалось определить монитор окна 0x{window:x}", EXIT_FAIL)
+    # Зона проверяется на этой рабочей области — до того, как что-то двинулось.
+    rect = grid.rect(args.zone, wa) if args.zone else None
+    entries = focus_entries(read_client_list() or [], monitors_)
+    todo = [
+        win
+        for win in focus_candidates(entries, window, workspace, wa)
+        if not window_is_excluded(win, grid.ignore) and not window_iconic(win)
+    ]
+
+    before = None
+    if rect is not None:
+        try:
+            before = snapshot_window(window, zone=args.zone)
+        except Exception:
+            before = None  # геометрию не прочитать — без записи в историю
+
+    # Одно X-соединение на всю операцию: `iconify` чужое соединение не закрывает.
+    x11 = X11()
+    minimized = []
+    try:
+        if rect is not None:
+            apply_zone(window, rect, label=args.zone, x11=x11, quiet=True)
+        # Состояние пишется ДО сворачивания: не записалось — ни одно окно ещё не
+        # свёрнуто, и команда честно падает вместо того, чтобы оставить окна
+        # свёрнутыми без записи (при переполнении диска или недоступном
+        # XDG_STATE_HOME). Список окон известен заранее, так что запись ничего
+        # не врёт: лишние окна при развороте просто активируются.
+        save_focus_state(
+            {
+                "zone": args.zone,
+                "workspace": workspace,
+                "monitor": list(wa),
+                "target": focus_records([window])[0],
+                "windows": focus_records(todo),
+            }
+        )
+        for win in todo:
+            iconify(win, x11=x11, quiet=True)
+            minimized.append(win)
+    except OSError as exc:
+        fail(f"zone-tiler: не удалось записать состояние режима: {exc}", EXIT_FAIL)
+    finally:
+        x11.close()
+    if before is not None:
+        remember("apply", [before], quiet=args.quiet)
+
+    if not args.quiet:
+        where = f" -> зона '{args.zone}'" if args.zone else ""
+        print(
+            f"режим «только эта зона»: окно 0x{window:x}{where}, "
+            f"свёрнуто окон — {len(minimized)}"
+        )
+
+
+def _focus_restore(state, x11=None):
+    """Развернуть окна из записи `focus.json`; вернёт `(развёрнутые, остаток)`.
+
+    Окна разворачиваются **по столам записи**: `_NET_ACTIVE_WINDOW` muffin
+    игнорирует для окна не на активном столе (проверено дымом), а в файле могут
+    сойтись окна разных столов — у каждого окна свой стол (`focus_records`), а
+    общий `workspace` записи — только запасной вариант. Перед каждой группой стол
+    делается активным.
+
+    Окно, которого больше нет в `_NET_CLIENT_LIST`, и окно с другим `WM_CLASS`
+    (XID переиспользован другой программой) пропускаются: развернуть чужое окно
+    хуже, чем не развернуть своё. Последней активируется цель — она и должна
+    остаться в фокусе. Записей нет — и X не нужен.
+
+    `остаток` — окна, которые так и остались свёрнутыми: вызывающий обязан
+    сохранить их запись, а не считать развёрнутыми на веру.
+    """
+    records = [
+        record
+        for record in (state.get("windows") or [])
+        if _focus_window_id(record) is not None
+    ]
+    target = state.get("target") if isinstance(state.get("target"), dict) else None
+    target_id = _focus_window_id(target) if target else None
+    if not records and target_id is None:
+        return [], []
+
+    alive = read_client_list()
+    alive = set(alive) if alive is not None else None
+    own = x11 is None
+    if own:
+        x11 = X11()
+    order, remaining = [], []
+    try:
+        groups = {}
+        for record in records:
+            win = _focus_window_id(record)
+            if win is None or win == target_id or not _focus_alive(win, record, alive):
+                continue
+            groups.setdefault(_focus_workspace(record, state), []).append(win)
+        if target_id is not None and _focus_alive(target_id, target, alive):
+            groups.setdefault(_focus_workspace(target, state), []).append(target_id)
+        for workspace in sorted(groups, key=lambda ws: (ws is not None, ws or 0)):
+            if workspace is not None:
+                switch_workspace(workspace, x11=x11)
+            order += groups[workspace]
+            remaining += deiconify_all(groups[workspace], x11=x11)
+    finally:
+        if own:
+            x11.close()
+    return [win for win in order if win not in remaining], remaining
+
+
+def _focus_workspace(record, state):
+    """Стол окна из записи: свой, иначе общий стол записи; `None` — неизвестен."""
+    value = record.get("workspace", state.get("workspace"))
+    return value if isinstance(value, int) else None
+
+
+def _focus_keep(state, remaining):
+    """Оставить в `focus.json` только неразвёрнутое — со столом каждого окна сейчас.
+
+    Записи окон строит `focus_records`: она читает `WM_CLASS` и **стол каждого
+    окна** заново. Без этого у окна не было бы своего стола (или остался бы
+    чужой из старой записи), а разворот возможен только на активном столе —
+    следующий `focus --off` опять перешёл бы не туда. Не записалось — старая
+    запись остаётся целиком; повторный разворот идемпотентен, так что хуже не
+    будет.
+    """
+    try:
+        save_focus_state(
+            {
+                "zone": state.get("zone"),
+                "workspace": state.get("workspace"),
+                "monitor": state.get("monitor"),
+                "target": None,
+                "windows": focus_records(remaining),
+            }
+        )
+    except OSError as exc:
+        print(f"zone-tiler: не удалось переписать запись режима: {exc}", file=sys.stderr)
+
+
+def _focus_window_id(record):
+    """Идентификатор окна из записи `focus.json` (число или `0x…`); иначе None."""
+    value = record.get("window") if isinstance(record, dict) else record
+    try:
+        return int(value, 0) if isinstance(value, str) else int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _focus_alive(win, record, alive):
+    """Наше ли это ещё окно: в списке клиентов и с тем же `WM_CLASS`."""
+    if alive is not None and win not in alive:
+        return False
+    expected = record.get("wm_class") if isinstance(record, dict) else ""
+    if not expected:
+        return True
+    return window_class_title(win)[0] == expected
+
+
+def _print_focus_response(response, quiet=False):
+    """Напечатать ответ демона на `focus` по-человечески (`--quiet` — молча)."""
+    if quiet:
+        return
+    if response.get("off"):
+        count = len(response.get("restored") or [])
+        print(f"режим «только эта зона» выключен: развёрнуто окон — {count}")
+        return
+    count = len(response.get("minimized") or [])
+    print(
+        f"режим «только эта зона»: окно {response.get('window')} -> зона "
+        f"'{response.get('zone')}', свёрнуто окон — {count}"
+    )
 
 
 def monitor_arg(args):
@@ -1865,12 +2502,23 @@ def main(argv=None):
     )
     ap.add_argument(
         "command",
-        choices=["list", "apply", "move", "keys", "arrange", "stack", "undo", "profile"],
+        choices=[
+            "list",
+            "apply",
+            "move",
+            "focus",
+            "keys",
+            "arrange",
+            "stack",
+            "undo",
+            "profile",
+        ],
         help=(
             "list/apply/keys — как раньше; move — перебросить окно в соседнюю зону; "
-            "arrange — разложить окна по зонам; stack — собрать окна в зону стопкой; "
-            "undo — вернуть рамки из истории; profile — свои профили раскладок "
-            "(зоны + правила + клавиши)"
+            "focus — режим «только эта зона» (окно в зону, остальные свёрнуты; "
+            "повторно — выход); arrange — разложить окна по зонам; stack — собрать "
+            "окна в зону стопкой; undo — вернуть рамки из истории; profile — свои "
+            "профили раскладок (зоны + правила + клавиши)"
         ),
     )
     ap.add_argument(
@@ -1935,6 +2583,11 @@ def main(argv=None):
     )
     ap.add_argument("--dry-run", action="store_true", help="только посчитать рамку")
     ap.add_argument(
+        "--off",
+        action="store_true",
+        help="focus: явно выйти из режима «только эта зона» (развернуть свёрнутое режимом)",
+    )
+    ap.add_argument(
         "--move",
         action="store_true",
         help="keys: сочетания перемещения в соседнюю зону из секции [move]",
@@ -1971,6 +2624,9 @@ def main(argv=None):
         return EXIT_OK
     if args.command == "move":
         cmd_move(grid, args)
+        return EXIT_OK
+    if args.command == "focus":
+        cmd_focus(grid, args)
         return EXIT_OK
     if not args.zone:
         fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)

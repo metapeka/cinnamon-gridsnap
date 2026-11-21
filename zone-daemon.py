@@ -42,8 +42,13 @@ zone-daemon — долгоживущий демон GridSnap: сам вклад�
 
 IPC — локальный UNIX-сокет (по умолчанию `$XDG_RUNTIME_DIR/gridsnap/daemon.sock`,
 права 0600): по одной JSON-команде на соединение, ответ — тоже JSON-строка.
-Команды: `status`, `apply`, `reload`, `quit`; говорит с сокетом клиент
+Команды: `status`, `apply`, `focus`, `reload`, `quit`; говорит с сокетом клиент
 `gridsnap-ctl`. Кадрирование и диспетчер живут в чистом `zone_ipc.py`.
+
+Режим «только эта зона» (`focus`): окно-цель ложится в зону, а остальные окна
+его стола и монитора сворачиваются. Живёт режим здесь, в демоне, потому что
+только он видит `_NET_CLIENT_LIST` и потому умеет свернуть окна, появившиеся
+после входа; повторная команда — toggle, `{"off": true}` — явный выход.
 """
 
 import argparse
@@ -374,6 +379,12 @@ class Daemon:
     реконсиляция его не видит: окно остаётся в трекере, соседей не двигаем.
     Смена активного стола (`on_workspace_change`) обновляет только
     `self.workspace` — окна не переставляются.
+
+    Режим «только эта зона» (`self.focus`, команда `focus`): окно-цель ложится
+    в зону, а окна того же стола и монитора сворачиваются; их id попадают в
+    `minimized`, и на выходе разворачиваются только они (свёрнутое вручную
+    остаётся свёрнутым). Режим снимается сам, когда цель исчезла, сменился
+    активный стол или демон завершается — и тогда окна возвращаются.
     """
 
     def __init__(
@@ -389,6 +400,10 @@ class Daemon:
         state_path=None,
         read_rect=None,
         session_id=None,
+        focus_path=None,
+        iconify=None,
+        deiconify=None,
+        read_clients=None,
         verbose=False,
     ):
         self.conf_path = conf_path or tiler.default_conf()
@@ -403,8 +418,17 @@ class Daemon:
         self.read_window_workspace = window_workspace or tiler.window_workspace_for_zones
         # Рамку окна читает память об укладках (сравнение «окно на месте/ушло»).
         self.read_rect = read_rect or window_rect
+        # Сворачивание/разворот и список клиентов — инъекция как у apply/read_meta:
+        # тесты не должны трогать X, а демон в работе зовёт общие примитивы
+        # раскладчика (`tiler.iconify`/`tiler.deiconify`).
+        self.iconify = iconify or tiler.iconify
+        self.deiconify = deiconify or tiler.deiconify
+        self.read_clients = read_clients or read_client_list
         # Путь файла состояния; `None` — только в памяти (тесты, утилитный запуск).
         self.state_path = state_path
+        # Путь `focus.json` — куда отдаётся неразвёрнутый остаток режима при
+        # завершении демона. `None` (тесты, утилитный запуск) — только в журнал.
+        self.focus_path = focus_path
         # Идентификатор X-сессии: запись из другой сессии (те же XID, но чужая)
         # не подхватывается. `None` — проверка выключена.
         self.session_id = session_id
@@ -441,6 +465,10 @@ class Daemon:
         # Все id из последнего `_NET_CLIENT_LIST` (и уложенные, и без правила) —
         # чтобы не читать метаданные повторно на каждой реконсиляции.
         self.seen = set()
+        # Режим «только эта зона» (None — выключен): словарь с полями
+        # `zone`, `target`, `workspace`, `monitor` и множеством `minimized` —
+        # окна, которые свернул именно режим (их и только их он разворачивает).
+        self.focus = None
         self._wa_cache = None
         self._mons_cache = None
         # Команда `quit` по сокету: цикл `serve` проверяет флаг и выходит.
@@ -847,6 +875,7 @@ class Daemon:
             {
                 "status": self.ipc_status,
                 "apply": self.ipc_apply,
+                "focus": self.ipc_focus,
                 "reload": self.ipc_reload,
                 "quit": self.ipc_quit,
             }
@@ -866,7 +895,8 @@ class Daemon:
         зона — доля рабочей области, а у монитора своя область. Поля
         `windows[].zone/window/monitor` — прежние: апплет и тесты читают их как
         раньше; `workspace` (номер активного стола и стол каждого окна и
-        покрытия) добавлен рядом, а не вместо.
+        покрытия) добавлен рядом, а не вместо. `focus` — режим «только эта
+        зона»: `None` или `{zone, window, minimized (число)}`.
         """
         zones = {name: list(self.grid.fractions(name)) for name in sorted(self.grid.zones)}
         monitors = self._monitor_list()
@@ -913,6 +943,14 @@ class Daemon:
             "zones_px": zones_px,
             "windows": windows,
             "filled": filled,
+            # Режим «только эта зона»: None или зона, цель и число свёрнутых.
+            "focus": None
+            if self.focus is None
+            else {
+                "zone": self.focus["zone"],
+                "window": hex(self.focus["target"]),
+                "minimized": len(self.focus["minimized"]),
+            },
         }
 
     def _monitor_for_command(self, request, window):
@@ -984,6 +1022,326 @@ class Daemon:
             "rect": list(rect),
         }
 
+    def _focus_covers(self, win, workspace, wa=None):
+        """Сворачивает ли активный режим это окно: тот же стол и монитор режима.
+
+        Правило отбора — то же, что у `tiler.focus_candidates` (чистая функция —
+        один источник истины), одна запись: само окно, его стол и его рабочая
+        область. `wa` передаётся, если монитор уже прочитан. Монитор окна не
+        прочитать — не сворачиваем: хуже угадать и спрятать чужое.
+        """
+        state = self.focus
+        if state is None:
+            return False
+        if wa is None:
+            wa = self._monitor_of(win)
+        if wa is None:
+            return False
+        entries = [(win, workspace, wa)]
+        return bool(
+            tiler.focus_candidates(
+                entries, state["target"], state["workspace"], state["monitor"]
+            )
+        )
+
+    def _focus_candidates(self, target, wa):
+        """Окна, которые режим сворачивает сейчас, в порядке `_NET_CLIENT_LIST`.
+
+        Список клиентов читает демон (`read_clients`): только он видит окна,
+        появившиеся после входа в режим. Отбор окон того же стола и монитора —
+        `tiler.focus_candidates`; здесь же отсеиваются исключения
+        (`window_excluded`: диалоги, `[ignore]`, служебные типы остаются
+        видимыми — это требование продукта) и свёрнутое вручную: такое окно
+        режим не сворачивал и на выходе не развернёт.
+        """
+        try:
+            client_ids = self.read_clients() or []
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось прочитать список клиентов: {exc}")
+            return []
+        entries = [
+            (win, self._window_workspace(win), self._monitor_of(win))
+            for win in client_ids
+        ]
+        out = []
+        for win in tiler.focus_candidates(entries, target, self.workspace, wa):
+            if win in out:
+                continue  # дубль в списке клиентов
+            try:
+                meta = self.read_meta(win)
+            except (Exception, SystemExit) as exc:
+                self.log(f"не удалось прочитать метаданные 0x{win:x}: {exc}")
+                continue
+            if window_excluded(
+                getattr(meta, "wm_class", "") or "",
+                getattr(meta, "wm_title", "") or "",
+                getattr(meta, "window_type", ()),
+                self.grid.ignore,
+            ):
+                self.log(f"окно 0x{win:x} под исключением — в режиме остаётся видимым")
+                continue
+            try:
+                iconic = tiler.window_iconic(win)
+            except (Exception, SystemExit) as exc:
+                self.log(f"не удалось узнать состояние окна 0x{win:x}: {exc}")
+                iconic = False
+            if iconic:
+                self.log(f"окно 0x{win:x} свёрнуто не режимом — не трогаю")
+                continue
+            out.append(win)
+        return out
+
+    def _focus_minimize(self, win):
+        """Свернуть окно и запомнить, что свернул именно режим; `False` — не вышло."""
+        try:
+            self.iconify(win, x11=self.x11, quiet=True)
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось свернуть окно 0x{win:x}: {exc}")
+            return False
+        if self.focus is not None:
+            self.focus["minimized"].add(win)
+        self.log(f"окно 0x{win:x} свёрнуто режимом «только эта зона»")
+        return True
+
+    def leave_focus(self, switch=False):
+        """Выйти из режима: развернуть то, что свернул он сам.
+
+        Возвращает `(развёрнутые, остаток, состояние режима)`: состояние — уже
+        снятое с `self.focus`, оно нужно вызывающему, чтобы отдать остаток в
+        `focus.json` (`_focus_handoff`).
+
+        `tiler.deiconify_all` перечитывает состояние, поэтому в остатке — окна,
+        которые так и остались свёрнутыми. Чаще всего это окна не на активном
+        столе: muffin игнорирует активацию таких окон (проверено дымом). Что
+        делать с остатком, решает вызывающий — `_focus_handoff` отдаёт его в
+        `focus.json`, а не теряет.
+
+        `switch=True` — сначала перейти на стол режима: так делает **явный** выход
+        (toggle/`off`), ведь пользователь попросил вернуть окна. Неявные (цель
+        исчезла, демон завершается) рабочий стол не трогают: дёргать пользователя
+        из-за чужого окна хуже, чем оставить список CLI.
+        """
+        state, self.focus = self.focus, None
+        if state is None:
+            return [], [], None
+        if switch and self.x11 is not None and isinstance(state.get("workspace"), int):
+            try:
+                tiler.switch_workspace(state["workspace"], x11=self.x11)
+            except (Exception, SystemExit) as exc:  # стол нужен, но не обязателен
+                self.log(f"не удалось переключить рабочий стол: {exc}")
+        order = [win for win in sorted(state["minimized"]) if win != state["target"]]
+        try:
+            remaining = tiler.deiconify_all(
+                order + [state["target"]], x11=self.x11, deiconify_fn=self.deiconify
+            )
+        except (Exception, SystemExit) as exc:
+            self.log(f"не удалось развернуть окна режима: {exc}")
+            remaining = list(order) + [state["target"]]
+        restored = [
+            win
+            for win in order
+            if win in state["minimized"] and win not in remaining
+        ]
+        self.log(
+            f"режим «только эта зона» выключен (зона '{state['zone'] or 'без зоны'}'): "
+            f"развёрнуто {len(restored)} из {len(state['minimized'])}"
+        )
+        return restored, remaining, state
+
+    def _focus_records(self, windows):
+        """Записи окон для `focus.json` — через инъекции демона, а не через X напрямую.
+
+        Стол и `WM_CLASS` читаются **сейчас**: стол у каждого окна свой (в файле
+        могут сойтись окна разных столов), а без класса запись уклонялась бы от
+        защиты от переиспользованного XID.
+        """
+        records = []
+        for win in dict.fromkeys(windows):
+            try:
+                wm_class = getattr(self.read_meta(win), "wm_class", "") or ""
+            except (Exception, SystemExit) as exc:
+                self.log(f"не удалось прочитать метаданные 0x{win:x}: {exc}")
+                wm_class = ""
+            records.append(
+                {
+                    "window": hex(win),
+                    "wm_class": wm_class,
+                    "workspace": self._window_workspace(win),
+                }
+            )
+        return records
+
+    def _focus_handoff(self, remaining, state):
+        """Отдать неразвёрнутый остаток в `focus.json` — его доведёт `focus --off`.
+
+        Окно на неактивном столе развернуть нельзя (`_NET_ACTIVE_WINDOW` muffin
+        игнорирует для таких окон), а терять его нельзя тем более: демон режим
+        больше не держит, и без записи оно осталось бы свёрнутым навсегда. Файл
+        читает CLI, а `focus --off` сам переходит на стол записи.
+
+        Записи строит `tiler.focus_records`: она читает `WM_CLASS` и **стол
+        каждого окна** прямо сейчас. Иначе окно из остатка унаследовало бы чужой
+        `workspace` старой записи (в ней могли остаться окна другого стола) — и
+        разворот переходил бы не на тот стол, а окно так и осталось бы свёрнутым.
+        Из старой записи остаются только те окна, которые ещё свёрнуты: уже
+        развёрнутые разворачивать больше не нужно.
+        """
+        if not remaining:
+            return
+        path = getattr(self, "focus_path", None)
+        if not path:
+            self.log(
+                f"{len(remaining)} окон режима развернуть не удалось, но файла "
+                "состояния нет — разверните их вручную"
+            )
+            return
+        old = tiler.load_focus_state(path)
+        still_iconic = []
+        for record in old.get("windows") or []:
+            if not isinstance(record, dict):
+                continue
+            try:
+                win = int(record.get("window"), 0)
+            except (TypeError, ValueError):
+                continue
+            if tiler.window_iconic(win):
+                still_iconic.append(win)
+        windows = still_iconic + [
+            win for win in remaining if win not in still_iconic
+        ]
+        records = self._focus_records(windows)
+        target = None
+        if state["target"] in windows:
+            target = self._focus_records([state["target"]])[0]
+        try:
+            tiler.save_focus_state(
+                {
+                    "zone": state.get("zone"),
+                    "workspace": state.get("workspace"),
+                    "monitor": list(state.get("monitor") or []),
+                    "target": target,
+                    "windows": records,
+                },
+                path,
+            )
+        except OSError as exc:
+            self.log(f"не удалось сохранить остаток режима: {exc}")
+            return
+        self.log(
+            f"{len(remaining)} окон режима остались свёрнутыми — запись в {path}: "
+            "развернуть командой focus --off"
+        )
+
+    def ipc_focus(self, request):
+        """Режим «только эта зона»: вход/toggle/выход.
+
+        `focus <зона>` кладёт активное окно (или `window` из запроса) в зону и
+        сворачивает остальные окна **того же стола и того же монитора**; команда
+        при уже активном режиме — **toggle**: сворачивает режим и разворачивает
+        окна, которые свернул он сам. `{"off": true}` — явный выход без входа.
+
+        Разворачиваются только окна из `self.focus["minimized"]` (свёрнутое
+        вручную остаётся свёрнутым), последней — цель: `deiconify` поднимает и
+        фокусирует окно. Исключения (`window_excluded`: `[ignore]`, служебные
+        типы, диалоги) и уже свёрнутые окна не трогаются и в `minimized` не
+        попадают.
+
+        Активный стол не прочитан — отказ: сворачивать окна чужих столов
+        вслепую хуже, чем не включать режим.
+
+        Возврат:
+
+        - вход — `{"zone", "window" (hex), "monitor" ([x,y,w,h]), "minimized"
+          ([hex] — что свернули)}`;
+        - выход — `{"off": True, "restored": [hex]}`.
+
+        Режим входит в `status` полем `focus`: `null` или
+        `{"zone", "window", "minimized" (число)}`.
+
+        `zone` необязательна: без неё (форма `[focus]` в `zones.conf` без зоны)
+        цель остаётся где стоит, и сворачивается только окружение — укладки и
+        записи в трекеры тогда нет, а в `self.focus["zone"]` лежит `None`.
+        Монитор нужен и в этом случае: он задаёт область сворачивания.
+        """
+        request = request or {}
+        if request.get("off") or self.focus is not None:
+            # Явный выход и повторная команда (toggle) — одно и то же: снять режим
+            # и развернуть только то, что свернул он сам. Стол переключаем (если
+            # режим не на активном): так окна на другом столе тоже вернутся.
+            restored, remaining, state = self.leave_focus(switch=True)
+            self._focus_handoff(remaining, state)
+            return {"off": True, "restored": [hex(w) for w in restored]}
+        zone = request.get("zone")
+        if zone is not None and (
+            not isinstance(zone, str) or zone not in self.grid.zones
+        ):
+            raise ValueError(
+                f"нет зоны '{zone}'. Есть: " + ", ".join(sorted(self.grid.zones))
+            )
+        window = request.get("window")
+        if window is None:
+            window = tiler.active_window()  # нет активного окна -> SystemExit
+        elif isinstance(window, str):
+            window = int(window, 0)
+        else:
+            window = int(window)
+        meta = self.read_meta(window)
+        wm_class = getattr(meta, "wm_class", "") or ""
+        if window_excluded(
+            wm_class,
+            getattr(meta, "wm_title", "") or "",
+            getattr(meta, "window_type", ()),
+            self.grid.ignore,
+        ):
+            raise ValueError(
+                f"окно 0x{window:x} под исключением ([ignore]/служебный тип) — "
+                "режим «только эта зона» не включаю"
+            )
+        if self.workspace is None:
+            raise ValueError(
+                "активный стол не прочитан — режим «только эта зона» не включаю: "
+                "сворачивать окна чужих столов вслепую хуже, чем не включать"
+            )
+        # Монитор берётся только у цели и не угадывается: режим сворачивает окна
+        # той же рабочей области, а `_monitor_for_command` при непрочитанном
+        # положении падает на первый монитор — и режим прятал бы окна соседнего
+        # экрана. У CLI в том же случае отказ.
+        wa = self._monitor_of(window)
+        if wa is None:
+            raise ValueError(
+                f"не удалось определить монитор окна 0x{window:x} — режим «только эта "
+                "зона» не включаю: его область зависит от монитора цели"
+            )
+        if zone is not None:
+            rect = self.grid.rect(zone, wa)
+            if not self._apply(window, rect, zone):
+                raise ValueError(
+                    f"не удалось вложить окно 0x{window:x} в зону '{zone}'"
+                )
+            self.windows[window] = zone
+            self.win_monitor[window] = wa
+            # Окно вкладывается там, где сейчас пользователь: занятость считаем
+            # по активному столу (сетка зоны — по-прежнему из основного конфига).
+            self.win_workspace[window] = self.workspace
+            self.win_class[window] = wm_class
+            self._save_state()
+            self._restore_holder(self.workspace, wa, zone)
+        self.focus = {
+            "zone": zone,
+            "target": window,
+            "workspace": self.workspace,
+            "monitor": wa,
+            "minimized": set(),
+        }
+        for win in self._focus_candidates(window, wa):
+            self._focus_minimize(win)
+        return {
+            "zone": zone,
+            "window": hex(window),
+            "monitor": list(wa),
+            "minimized": [hex(w) for w in sorted(self.focus["minimized"])],
+        }
+
     def ipc_reload(self, request=None):
         """Перечитать zones.conf: сетка, правила, профили столов и reflow; кэши сбросить."""
         self.grid = tiler.Grid(self.conf_path)
@@ -1026,6 +1384,15 @@ class Daemon:
         for win in list(self.windows):
             if win not in current:
                 self.on_destroy(win)
+        # Свёрнутые режимом окна могут быть без зоны (правила не было) — их в
+        # `windows` нет, но забыть их надо: разворачивать исчезнувшее нечем.
+        for win in list(self.focus["minimized"]) if self.focus is not None else []:
+            if win not in current and win not in self.windows:
+                self.on_destroy(win)
+        # Цель могла быть и не уложена в зону (форма `focus` без зоны): тогда
+        # первый проход её не увидит, а режим без цели держать незачем.
+        if self.focus is not None and self.focus["target"] not in current:
+            self.on_destroy(self.focus["target"])
         self._prune_state(current)
         self.seen = current
 
@@ -1051,6 +1418,17 @@ class Daemon:
                 f"активный стол: {workspace_label(workspace)} "
                 f"(был {workspace_label(previous)}) — окна не двигаю"
             )
+        if self.focus is not None and workspace != self.focus["workspace"]:
+            # Режим живёт на своём столе и уход его НЕ снимает: окна того стола и
+            # так не видны, вернувшись — увидишь режим как был. Снять его при
+            # уходе нельзя: `_NET_ACTIVE_WINDOW` muffin игнорирует для окна не на
+            # активном столе (проверено дымом), и окна остались бы свёрнутыми без
+            # хозяина. Выход работает на своём столе или сам переводит на него.
+            self.log(
+                f"режим «только эта зона» живёт на столе "
+                f"{workspace_label(self.focus['workspace'])} — оставляю "
+                "его на месте"
+            )
         return workspace
 
     def on_map(self, win, override_redirect=False):
@@ -1060,7 +1438,10 @@ class Daemon:
         профилем окно встаёт в зоны профиля, а «липкое» окно — в общий набор
         `zones.conf`. Правила — из основного конфига: имя зоны глобально, но
         если в наборе стола такой зоны нет, окно не укладывается (лучше никак,
-        чем в чужую геометрию).
+        чем в чужую геометрию). Окно, попавшее в область активного режима
+        «только эта зона» (тот же стол и монитор, что у цели), укладывается по
+        правилу и сверх того сворачивается: так после выхода из режима оно
+        окажется уже в своей зоне.
         """
         if win in self.windows:
             return  # окно уже уложено (повторное появление в списке)
@@ -1079,15 +1460,25 @@ class Daemon:
             self.log(f"окно 0x{win:x} под исключением ([ignore]/служебный тип) — не трогаю")
             return
         zone = tiler.match_rules(self.grid.rules, wm_class, wm_title)
+        # Стол нужен и без правила: он решает, попадает ли окно в область
+        # режима «только эта зона» (без режима — лишнего чтения не делаем).
+        workspace = None
+        if zone is not None or self.focus is not None:
+            workspace = self._window_workspace(win)
         if zone is None:
+            # Правила нет — в режиме окно всё равно прячется (иначе оно окажется
+            # поверх цели), но укладывать его некуда: просто сворачиваем.
+            if self._focus_covers(win, workspace):
+                self._focus_minimize(win)
             return
-        workspace = self._window_workspace(win)
         grid = self._grid_for(workspace)
         if zone not in grid.all_zone_names():
             self.log(
                 f"зоны '{zone}' нет в наборе стола {workspace_label(workspace)} — "
                 f"окно 0x{win:x} не укладываю"
             )
+            if self._focus_covers(win, workspace):
+                self._focus_minimize(win)
             return
         wa = self._monitor_of(win)
         if wa is None:
@@ -1105,6 +1496,10 @@ class Daemon:
         self._save_state()
         # Зона снова занята — расширившийся на неё сосед больше не нужен.
         self._restore_holder(workspace, wa, zone)
+        # Режим «только эта зона»: окно уже в своей зоне — теперь прячем его,
+        # чтобы после выхода оно оказалось именно там, а не где пришлось.
+        if self._focus_covers(win, workspace, wa):
+            self._focus_minimize(win)
 
     def on_destroy(self, win):
         """Окно исчезло из `_NET_CLIENT_LIST` — снять с трекера и, если нужно, reflow.
@@ -1112,7 +1507,21 @@ class Daemon:
         Перестройка — только когда стол закрытого окна виден (`self.workspace`):
         окна невидимых столов не двигаются никогда, состояние такого стола
         просто чистится.
+
+        Режим «только эта зона» снимается здесь же: его цель исчезла — значит,
+        держать остальные окна свёрнутыми незачем. Ушедшее свёрнутое окно
+        убирается из `minimized` (разворачивать нечего), но при живой цели
+        режим остаётся.
         """
+        state = self.focus
+        if state is not None:
+            state["minimized"].discard(win)
+            if win == state["target"]:
+                self.log(
+                    f"цель режима «только эта зона» 0x{win:x} исчезла — выхожу из режима"
+                )
+                _, remaining, consumed = self.leave_focus()
+                self._focus_handoff(remaining, consumed)
         zone = self.windows.pop(win, None)
         if zone is None:
             return
@@ -1253,6 +1662,30 @@ def _serve_ipc(dae, ipc):
             dae.log("IPC-ошибка: " + str(response.get("error", "?")))
 
 
+def _restore_focus_on_exit(dae):
+    """Развернуть окна режима «только эта зона» при выходе демона (best-effort).
+
+    Зовётся из `finally` у `serve` — до `XCloseDisplay`, иначе посылать будет
+    уже некуда. Если X-соединения нет (ранний выход, отказ X-сервера), просто
+    снимаем состояние: так после выхода демона никто не останется со свёрнутыми
+    окнами без хозяина.
+    """
+    if getattr(dae, "focus", None) is None:
+        return
+    log = getattr(dae, "log", None)
+    if getattr(dae, "x11", None) is None:
+        dae.focus = None
+        if log is not None:
+            log("X-соединения нет — окна режима «только эта зона» не разворачиваю")
+        return
+    try:
+        _, remaining, state = dae.leave_focus()
+        dae._focus_handoff(remaining, state)
+    except (Exception, SystemExit) as exc:
+        if log is not None:
+            log(f"не удалось выйти из режима «только эта зона»: {exc}")
+
+
 def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOUT, ipc=None):
     """Цикл событий X11: PropertyNotify о `_NET_CLIENT_LIST` -> реконсиляция.
 
@@ -1321,6 +1754,9 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     except KeyboardInterrupt:
         pass
     finally:
+        # Режим «только эта зона» не должен пережить демон: иначе свёрнутые окна
+        # останутся свёрнутыми без хозяина.
+        _restore_focus_on_exit(dae)
         x11.x.XCloseDisplay(x11.dpy)
 
 
@@ -1355,6 +1791,7 @@ def main(argv=None):
         args.conf,
         state_path=placed_path(),
         session_id=read_session_id(),
+        focus_path=tiler.focus_path(),
         verbose=args.verbose,
     )
     server = None

@@ -129,3 +129,5 @@ jobs:
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-monitors.sh
       - name: Дымовой тест исключений окон
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-ignore.sh
+      - name: Дымовой тест режима «только эта зона»
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-focus.sh

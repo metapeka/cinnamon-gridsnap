@@ -44,6 +44,15 @@ DEFAULT_MOVE_KEYS = {
     "down": "<Super>Down",
 }
 
+# Режим «только эта зона»: ``[focus]``, ``key`` — сочетание, ``zone`` — зона, куда
+# кладётся окно (необязательна). Секция необязательная: нет её — режим не
+# настроен. Ключи не из ``key``/``zone`` — ошибка конфига, как и пустая ``zone``:
+# молча проигнорированная опечатка оставила бы человека без клавиши.
+#
+# В :data:`RESERVED_SECTIONS` секция не входит намеренно: редактор её не правит,
+# а переносит дословно как чужую — так она и переживает сохранение раскладки.
+FOCUS_SECTION = "focus"
+
 # Рабочие столы: ``[workspaces]``, ключ — номер стола как в интерфейсе Cinnamon
 # (с 1), значение — имя профиля из ``templates/<имя>.conf``.
 WORKSPACES_SECTION = "workspaces"
@@ -206,6 +215,45 @@ def load_move_keys(path):
             )
         keys[direction] = combo
     return keys
+
+
+def load_focus_keys(path):
+    """Секция ``[focus]``: ``{"key": сочетание, "zone": имя зоны | None}``.
+
+    ``None`` — режим не настроен: нет файла, нет секции или пустое ``key``.
+    ``zone`` необязательна: без неё сочетание только сворачивает остальные окна
+    («только это окно»), с ней — ещё и кладёт окно в зону. Неизвестный ключ в
+    секции и пустое значение ``zone`` — ошибка конфига (код 3): это опечатка, из-за
+    которой человек остался бы без клавиши и не понял почему.
+    """
+    cp = _read_conf(path, missing_ok=True)
+    if cp is None or not cp.has_section(FOCUS_SECTION):
+        return None
+    key, zone = None, None
+    for name, value in cp.items(FOCUS_SECTION):
+        # ConfigParser приводит ключи к нижнему регистру, так что ``Key`` в
+        # файле тоже сойдёт.
+        field = str(name).strip().lower()
+        if field not in ("key", "zone"):
+            zt.fail(
+                f"zone_config: в [{FOCUS_SECTION}] неизвестный ключ '{field}': "
+                "можно key, zone",
+                zt.EXIT_CONFIG,
+            )
+        text = str(value).strip()
+        if field == "key":
+            key = text or None
+            continue
+        if not text:
+            zt.fail(
+                f"zone_config: в [{FOCUS_SECTION}] пустое значение zone",
+                zt.EXIT_CONFIG,
+            )
+        zone = text
+    if not key:
+        # Секция без сочетания — это не режим: без клавиши он недоступен.
+        return None
+    return {"key": key, "zone": zone}
 
 
 def _workspace_number(value):
