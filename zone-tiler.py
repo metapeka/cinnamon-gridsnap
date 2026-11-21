@@ -1830,8 +1830,10 @@ def cmd_profile(args):
             sys.stdout.write(zc.profile_text(name, conf))
         elif action == "save":
             zones = zc.load_zones(conf)
-            rules = zc.load_extra_sections(conf, sections=["rules"]).get("rules", [])
-            path = zc.save_profile(name, zones, rules, conf)
+            extra = zc.load_extra_sections(conf, sections=["rules", "ignore"])
+            path = zc.save_profile(
+                name, zones, extra.get("rules", []), conf, ignore=extra.get("ignore")
+            )
             print(f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» сохранён: {path}")
         elif action == "rm":
             zc.remove_profile(name, conf)

@@ -39,6 +39,7 @@ PROFILE_ZONES = [
     zc.Zone("right", 0.5, 0, 0.5, 1, "<Super><Alt>2"),
 ]
 PROFILE_RULES = ["Firefox = right", "re:^VLC = left"]
+PROFILE_IGNORE = ["TelegramDesktop = диалоги Telegram", "re:^VLC.* = окна VLC"]
 MONITOR_ZONES = [zc.Zone("top", 0, 0, 1, 0.5), zc.Zone("bottom", 0, 0.5, 1, 0.5)]
 ACTIVE_SETS = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
@@ -92,17 +93,28 @@ class TestProfileCatalog(ConfMixin, unittest.TestCase):
 
     def test_read_returns_zones_bindings_and_rules(self):
         zc.save_profile("work", PROFILE_ZONES, PROFILE_RULES, self.conf)
-        zones, rules = zc.read_profile("work", self.conf)
+        zones, rules, ignore = zc.read_profile("work", self.conf)
         self.assertEqual(
             [(z.name, z.as_tuple(), z.binding) for z in zones],
             [(z.name, z.as_tuple(), z.binding) for z in PROFILE_ZONES],
         )
         self.assertEqual(rules, PROFILE_RULES)
+        self.assertEqual(ignore, [])
 
     def test_rules_case_is_preserved(self):
         zc.save_profile("work", PROFILE_ZONES, ["re:\\S+Deploy\\S* = left"], self.conf)
-        _, rules = zc.read_profile("work", self.conf)
+        _, rules, _ignore = zc.read_profile("work", self.conf)
         self.assertEqual(rules, ["re:\\S+Deploy\\S* = left"])
+
+    def test_ignore_travels_with_profile(self):
+        zc.save_profile("work", PROFILE_ZONES, PROFILE_RULES, self.conf,
+                        ignore=PROFILE_IGNORE)
+        text = zc.profile_text("work", self.conf)
+        self.assertEqual(sections_in(text), ["zones", "rules", "ignore", "keys"])
+        self.assertIn("TelegramDesktop = диалоги Telegram", text)
+        zones, rules, ignore = zc.read_profile("work", self.conf)
+        self.assertEqual(ignore, PROFILE_IGNORE)
+        self.assertEqual(rules, PROFILE_RULES)
 
     def test_list_is_sorted_and_ignores_non_conf(self):
         zc.save_profile("b", PROFILE_ZONES, conf_path=self.conf)
@@ -179,6 +191,22 @@ class TestApplyProfile(ConfMixin, unittest.TestCase):
         zc.apply_profile("plain", self.conf)
         self.assertNotIn("rules", sections_in(self.read_conf()))
 
+    def test_apply_brings_ignore_and_drops_the_old_one(self):
+        self.write_conf(ACTIVE + "[ignore]\nChrome = старые исключения\n")
+        zc.save_profile("work", PROFILE_ZONES, PROFILE_RULES, self.conf,
+                        ignore=PROFILE_IGNORE)
+        zc.apply_profile("work", self.conf)
+        text = self.read_conf()
+        self.assertIn("[ignore]", text)
+        self.assertIn("TelegramDesktop = диалоги Telegram", text)
+        self.assertNotIn("Chrome = старые исключения", text)
+
+    def test_apply_profile_without_ignore_drops_the_old_one(self):
+        self.write_conf(ACTIVE + "[ignore]\nChrome = старые исключения\n")
+        zc.save_profile("plain", PROFILE_ZONES, PROFILE_RULES, self.conf)
+        zc.apply_profile("plain", self.conf)
+        self.assertNotIn("ignore", sections_in(self.read_conf()))
+
     def test_apply_keeps_unknown_section(self):
         self.write_conf(ACTIVE + "[custom]\nключ = значение\n")
         zc.save_profile("work", PROFILE_ZONES, PROFILE_RULES, self.conf)
@@ -213,23 +241,25 @@ class TestProfileZoneSets(ConfMixin, unittest.TestCase):
     def test_read_profile_sets_returns_all_sets(self):
         zc.save_profile("multi", PROFILE_ZONES, PROFILE_RULES, self.conf,
                         monitor_sets={"HDMI-1": MONITOR_ZONES})
-        zones, rules, monitor_sets = zc.read_profile_sets("multi", self.conf)
+        zones, rules, monitor_sets, ignore = zc.read_profile_sets("multi", self.conf)
         self.assertEqual([z.name for z in zones], ["left", "right"])
         self.assertEqual(rules, PROFILE_RULES)
         self.assertEqual([z.name for z in monitor_sets["HDMI-1"]], ["top", "bottom"])
+        self.assertEqual(ignore, [])
 
-    def test_read_profile_keeps_two_value_contract(self):
-        # редактор распаковывает ``zones, rules = read_profile(...)`` — две величины
+    def test_read_profile_keeps_three_value_contract(self):
+        # редактор распаковывает ``zones, rules, ignore = read_profile(...)`` — три величины
         zc.save_profile("multi", PROFILE_ZONES, PROFILE_RULES, self.conf,
                         monitor_sets={"HDMI-1": MONITOR_ZONES})
-        zones, rules = zc.read_profile("multi", self.conf)
+        zones, rules, ignore = zc.read_profile("multi", self.conf)
         self.assertEqual([z.name for z in zones], ["left", "right"])
         self.assertEqual(rules, PROFILE_RULES)
+        self.assertEqual(ignore, [])
 
     def test_profile_may_have_only_monitor_sets(self):
         zc.save_profile("monitors", [], None, self.conf, monitor_sets={"HDMI-1": MONITOR_ZONES})
         self.assertEqual(sections_in(zc.profile_text("monitors", self.conf)), ["zones:HDMI-1"])
-        self.assertEqual(zc.read_profile("monitors", self.conf), ([], []))
+        self.assertEqual(zc.read_profile("monitors", self.conf), ([], [], []))
 
     def test_profile_without_any_zones_rejected(self):
         for monitor_sets in (None, {}, {"HDMI-1": []}):
@@ -340,10 +370,11 @@ class TestHeadless(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             listed = self.run_python(None, tiler, "profile", "list", "--conf", conf)
             self.assertEqual(listed.stdout.split(), ["copy"])
-            zones, rules, monitor_sets = zc.read_profile_sets("copy", conf)
+            zones, rules, monitor_sets, ignore = zc.read_profile_sets("copy", conf)
             self.assertEqual([z.name for z in zones], [z.name for z in before[0]])
             self.assertEqual(rules, before[1])
             self.assertEqual(monitor_sets, before[2])
+            self.assertEqual(ignore, before[3])
             self.assertEqual([z.binding for z in zones], [z.binding for z in before[0]])
 
     def test_cli_bad_name_and_missing_profile_codes(self):
