@@ -127,3 +127,5 @@ jobs:
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-hotcorners.sh
       - name: Дымовой тест двух мониторов
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-monitors.sh
+      - name: Дымовой тест исключений окон
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-ignore.sh
