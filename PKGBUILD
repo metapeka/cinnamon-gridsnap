@@ -24,6 +24,7 @@ package() {
     install -d "$pkgdir/usr/lib/gridsnap"
     install -m 0644 \
         zone-tiler.py zone-daemon.py zone-editor.py zone-picker.py \
+        zone-hotcorners.py \
         zone_config.py zone_geom.py zone_picker_nav.py zone_reflow.py zone_ipc.py \
         setup-hotkeys.py make-icon.py \
         zones.conf \
@@ -38,6 +39,7 @@ package() {
              "zone-daemon.py:gridsnap-daemon" \
              "zone-editor.py:gridsnap-editor" \
              "zone-picker.py:gridsnap-picker" \
+             "zone-hotcorners.py:gridsnap-hotcorners" \
              "gridsnap-ctl:gridsnap-ctl" \
              "setup-hotkeys.py:setup-hotkeys"; do
         c="${m#*:}"

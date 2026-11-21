@@ -40,7 +40,8 @@ $PROG — установка GridSnap в префикс (по умолчанию
 
 Раскладка установки:
   КАТАЛОГ/lib/gridsnap/   код, zones.conf, иконки, install-*.sh
-  КАТАЛОГ/bin/            gridsnap-tiler, gridsnap-daemon, gridsnap-editor, gridsnap-ctl, setup-hotkeys
+  КАТАЛОГ/bin/            gridsnap-tiler, gridsnap-daemon, gridsnap-editor, gridsnap-picker,
+                          gridsnap-hotcorners, gridsnap-ctl, setup-hotkeys
   КАТАЛОГ/share/man/man1/ man-страницы (маны ставятся всегда: это документация, а не ярлык)
   КАТАЛОГ/share/...       ярлык, иконки, документация (если не --no-launcher)
 EOF
@@ -80,7 +81,8 @@ DOC="$PREFIX/share/doc/gridsnap"
 MANDIR="$PREFIX/share/man/man1"
 
 MODULES="zone-tiler.py zone-daemon.py zone-editor.py zone_config.py zone_geom.py
-         zone_reflow.py zone-picker.py zone_picker_nav.py zone_ipc.py setup-hotkeys.py make-icon.py"
+         zone_reflow.py zone-picker.py zone_picker_nav.py zone-hotcorners.py
+         zone_ipc.py setup-hotkeys.py make-icon.py"
 
 refresh_caches() {
     command -v gtk-update-icon-cache >/dev/null 2>&1 && \
@@ -91,7 +93,8 @@ refresh_caches() {
 
 if [ "$ACTION" = "uninstall" ]; then
     rm -f "$BIN/gridsnap-tiler" "$BIN/gridsnap-daemon" \
-          "$BIN/gridsnap-editor" "$BIN/gridsnap-picker" "$BIN/gridsnap-ctl" "$BIN/setup-hotkeys"
+          "$BIN/gridsnap-editor" "$BIN/gridsnap-picker" \
+          "$BIN/gridsnap-hotcorners" "$BIN/gridsnap-ctl" "$BIN/setup-hotkeys"
     rm -f "$APPS/gridsnap.desktop"
     for size in $SIZES; do
         rm -f "$ICONS/${size}x${size}/apps/gridsnap.png"
@@ -141,6 +144,7 @@ wrapper gridsnap-tiler  zone-tiler.py
 wrapper gridsnap-daemon zone-daemon.py
 wrapper gridsnap-editor zone-editor.py
 wrapper gridsnap-picker zone-picker.py
+wrapper gridsnap-hotcorners zone-hotcorners.py
 wrapper gridsnap-ctl    gridsnap-ctl
 wrapper setup-hotkeys   setup-hotkeys.py
 
@@ -179,7 +183,7 @@ fi
 # --- итог ------------------------------------------------------------------
 echo "GridSnap установлен в $PREFIX"
 echo "  код:      $LIB"
-echo "  команды:  $BIN/gridsnap-tiler, $BIN/gridsnap-daemon, $BIN/gridsnap-editor, $BIN/gridsnap-ctl, $BIN/setup-hotkeys"
+echo "  команды:  $BIN/gridsnap-tiler, $BIN/gridsnap-daemon, $BIN/gridsnap-editor, $BIN/gridsnap-picker, $BIN/gridsnap-hotcorners, $BIN/gridsnap-ctl, $BIN/setup-hotkeys"
 echo "  справка:  man -M $PREFIX/share/man gridsnap";
 if [ "$LAUNCHER" -eq 1 ]; then
     echo "  ярлык:    $APPS/gridsnap.desktop"
