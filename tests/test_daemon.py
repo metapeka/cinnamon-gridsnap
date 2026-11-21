@@ -1194,6 +1194,20 @@ class TestPlacedState(unittest.TestCase):
         self.assertFalse(zd.frame_matches(None, (0, 0, 1, 1)))
         self.assertFalse(zd.frame_matches((0, 0, 1), (0, 0, 1)))
 
+    def test_state_from_another_session_is_dropped(self):
+        record = {
+            "frame": [0, 0, 500, 1000],
+            "wm_class": "firefox-esr",
+            "zone": "left",
+            "monitor": [0, 0, 1000, 1000],
+            "workspace": None,
+        }
+        zd.save_placed_state(self.path, {"1": record}, session="0x1400003")
+        self.assertEqual(zd.load_placed_state(self.path, "0x1400003"), {1: record})
+        self.assertEqual(zd.load_placed_state(self.path, "0x9999999"), {})
+        # без известной сессии файл читается как раньше
+        self.assertEqual(zd.load_placed_state(self.path), {1: record})
+
 
 class TestDaemonPlacedMemory(DaemonTestCase):
     """Память демона: окно, вынесенное из зоны, само туда не возвращается."""
@@ -1296,6 +1310,63 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         d = self.placed_daemon()
         d.reconcile([0x1])
         self.assertEqual(d.windows, {0x1: "left"})
+
+    def test_restart_returns_reflow_expanded_window_to_its_zone(self):
+        # Файл состояния: демон расширил окно 0x1 (зона left) на right и записал
+        # объединённую рамку. Перезапуск должен вернуть окно в left: книга
+        # покрытий `filled` в файле не живёт, и иначе новое окно в right ляжет
+        # поверх расширенного.
+        zd.save_placed_state(
+            self.state_path,
+            {
+                "1": {
+                    "frame": [0, 0, 1000, 1000],
+                    "wm_class": "firefox-esr",
+                    "zone": "left",
+                    "monitor": list(WA),
+                    "workspace": None,
+                }
+            },
+        )
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 1000, 1000)
+        d = self.placed_daemon()
+        d.reconcile([0x1])
+        self.assertEqual(self.applied, [(0x1, (0, 0, 500, 1000), "left", True)])
+        self.assertEqual(d.windows, {0x1: "left"})
+
+    def test_placement_retries_late_wm_move(self):
+        # WM применил `_NET_MOVERESIZE_WINDOW` не сразу: первое чтение — старая
+        # рамка, второе — уже целевая. В `placed` должна попасть целевая, иначе
+        # окно тут же сочли бы «вышедшим из зоны».
+        self.metas[0x1] = self.meta("firefox-esr")
+        reads = iter([(300, 300, 200, 200), (0, 0, 500, 1000)])
+        d = zd.Daemon(
+            self.conf(self.TEXT),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            workarea=lambda: WA,
+            read_rect=lambda win: next(reads, (0, 0, 500, 1000)),
+        )
+        d.on_map(0x1)
+        self.assertEqual(d.placed[0x1], (0, 0, 500, 1000))
+
+    def test_moved_window_on_invisible_desktop_stays_tracked(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = (0, 0, 500, 1000)
+        self.workspaces = {0x1: 2}
+        self.current = 1
+        d = self.placed_daemon()
+        d.reconcile([0x1])
+        self.assertEqual(d.windows, {0x1: "left"})
+        self.frames[0x1] = (600, 600, 300, 300)
+        d.reconcile([0x1])
+        self.assertEqual(d.windows, {0x1: "left"})  # невидимый стол не трогаем
+        self.current = 2
+        d.on_workspace_change()
+        d.reconcile([0x1])
+        self.assertEqual(d.windows, {})  # на своём столе переезд виден
+        self.assertIn(0x1, d.detached)
 
     def test_no_state_path_writes_nothing(self):
         self.metas[0x1] = self.meta("firefox-esr")
