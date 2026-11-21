@@ -111,7 +111,7 @@ IGNORED_WINDOW_TYPES = tiler.IGNORED_WINDOW_TYPES
 IGNORED_TYPE_TAILS = tiler.IGNORED_TYPE_TAILS
 CLIENT_LIST_ATOM = tiler.CLIENT_LIST_ATOM
 window_types = tiler.window_types
-is_ignored_type = tiler.is_ignored_type
+window_excluded = tiler.window_excluded
 read_client_list = tiler.read_client_list
 read_window_center = tiler.read_window_center
 monitor_for_point = tiler.monitor_for_point
@@ -568,6 +568,17 @@ class Daemon:
             window = int(window, 0)
         else:
             window = int(window)
+        meta = self.read_meta(window)
+        wm_class = getattr(meta, "wm_class", "") or ""
+        if window_excluded(
+            wm_class,
+            getattr(meta, "wm_title", "") or "",
+            getattr(meta, "window_type", ()),
+            self.grid.ignore,
+        ):
+            raise ValueError(
+                f"окно 0x{window:x} под исключением ([ignore]/служебный тип) — не двигаю"
+            )
         wa = self._monitor_for_command(request, window)
         if wa is None:
             raise ValueError(f"не удалось определить монитор окна 0x{window:x}")
@@ -666,13 +677,15 @@ class Daemon:
             return  # меню/подсказки WM — не самостоятельные окна
         meta = self.read_meta(win)
         wm_class = getattr(meta, "wm_class", "") or ""
+        wm_title = getattr(meta, "wm_title", "") or ""
         if not wm_class:
             return  # без WM_CLASS правило не проверить
-        if is_ignored_type(getattr(meta, "window_type", ())):
+        if window_excluded(
+            wm_class, wm_title, getattr(meta, "window_type", ()), self.grid.ignore
+        ):
+            self.log(f"окно 0x{win:x} под исключением ([ignore]/служебный тип) — не трогаю")
             return
-        zone = tiler.match_rules(
-            self.grid.rules, wm_class, getattr(meta, "wm_title", "") or ""
-        )
+        zone = tiler.match_rules(self.grid.rules, wm_class, wm_title)
         if zone is None:
             return
         workspace = self._window_workspace(win)

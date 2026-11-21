@@ -428,6 +428,14 @@ class Picker:
             print("zone-picker: нет активного окна", file=sys.stderr)
             self.exit_code = EXIT_FAIL
             return
+        if zt.window_is_excluded(win, self.grid.ignore):
+            print(
+                f"zone-picker: окно 0x{win:x} под исключением "
+                "([ignore]/служебный тип) — не двигаю",
+                file=sys.stderr,
+            )
+            self.exit_code = EXIT_FAIL
+            return
         before = None
         try:
             before = zt.snapshot_window(win, zone=name)

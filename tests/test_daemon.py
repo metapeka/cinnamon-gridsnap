@@ -1105,6 +1105,48 @@ class TestWorkspaces(DaemonTestCase):
         )
 
 
+class TestDaemonIgnore(DaemonTestCase):
+    """`[ignore]` в демоне: автоукладка по правилам и явный apply по сокету."""
+
+    IGNORE_LEFT = (
+        "[grid]\ncols = 1.0\nrows = 1.0\n"
+        "[zones]\nleft = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\n"
+        "[rules]\nfirefox* = left\nchromium* = right\n"
+        "[ignore]\nfirefox-esr = диалоги firefox\n"
+    )
+
+    def test_on_map_skips_ignored_selector(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = self.daemon(self.IGNORE_LEFT)
+        d.on_map(0x1)
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {})
+
+    def test_on_map_places_window_outside_ignore(self):
+        self.metas[0x2] = self.meta("chromium")
+        d = self.daemon(self.IGNORE_LEFT)
+        d.on_map(0x2)
+        self.assertEqual(self.applied, [(0x2, (500, 0, 500, 1000), "right", True)])
+        self.assertEqual(d.windows, {0x2: "right"})
+
+    def test_ipc_apply_refuses_ignored_window(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        d = self.multi_daemon(self.IGNORE_LEFT)
+        with self.assertRaises(ValueError) as caught:
+            d.ipc_apply({"zone": "left", "window": 0x1})
+        self.assertIn("исключением", str(caught.exception))
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {})
+
+    def test_ipc_apply_places_window_outside_ignore(self):
+        self.metas[0x1] = self.meta("chromium")
+        self.centers[0x1] = (10, 10)
+        d = self.multi_daemon(self.IGNORE_LEFT)
+        result = d.ipc_apply({"zone": "right", "window": 0x1})
+        self.assertEqual(result["zone"], "right")
+        self.assertEqual(d.windows, {0x1: "right"})
+
+
 class TestFractionsToPixels(unittest.TestCase):
     def test_divides_workarea(self):
         self.assertEqual(

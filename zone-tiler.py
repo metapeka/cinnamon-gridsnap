@@ -324,6 +324,17 @@ def read_window_meta(win):
     return WindowMeta(wm_class, wm_title, window_types(win))
 
 
+def window_is_excluded(win, ignore_selectors=()):
+    """Под исключением ли окно `win` (`[ignore]`/служебный тип). Читает X.
+
+    Одна проверка для явных команд (`apply`, `move`, `undo`) и пикера: факт для
+    вызывающего, сообщение печатает он сам. Это та же `window_excluded`, что и у
+    автоукладки, поэтому фильтр не может разойтись между точками вызова.
+    """
+    meta = read_window_meta(win)
+    return window_excluded(meta.wm_class, meta.wm_title, meta.window_type, ignore_selectors)
+
+
 def read_client_list():
     """Клиентские окна из `_NET_CLIENT_LIST` (EWMH) через `xprop -root`.
 
@@ -1382,6 +1393,14 @@ def cmd_apply(grid, args):
         print(f"{args.zone}: x={x} y={y} {w}x{h} (монитор {index}: {output})")
         return
     window = args.window or active_window()
+    if window_is_excluded(window, grid.ignore):
+        if not args.quiet:
+            print(
+                f"zone-tiler: окно 0x{window:x} под исключением "
+                "([ignore]/служебный тип) — не двигаю",
+                file=sys.stderr,
+            )
+        return
     before = None
     try:
         before = snapshot_window(window, zone=args.zone)
@@ -1465,6 +1484,14 @@ def cmd_move(grid, args):
         )
     outputs = monitor_outputs()
     window = args.window or active_window()
+    if window_is_excluded(window, grid.ignore):
+        if not args.quiet:
+            print(
+                f"zone-tiler: окно 0x{window:x} под исключением "
+                "([ignore]/служебный тип) — не двигаю",
+                file=sys.stderr,
+            )
+        return EXIT_OK
     extents = frame_extents(window)
     try:
         frame = read_frame(window, extents)
@@ -1660,13 +1687,16 @@ def cmd_undo(grid, args):
 
     try:
         for win, frame, wm_class in targets:
-            current_class, _ = window_class_title(win)
+            current_class, current_title = window_class_title(win)
             if wm_class and current_class and current_class != wm_class:
                 # id мог переиспользоваться другим приложением после выхода старого
                 warn(f"окно 0x{win:x}: класс не совпал ({current_class} ≠ {wm_class}) — пропускаю")
                 continue
             if wm_class and not current_class:
                 warn(f"окно 0x{win:x}: уже не существует — пропускаю")
+                continue
+            if window_excluded(current_class, current_title, window_types(win), grid.ignore):
+                warn(f"окно 0x{win:x}: под исключением ([ignore]/служебный тип) — пропускаю")
                 continue
             try:
                 apply_zone(win, tuple(frame), x11=x11, quiet=args.quiet, verify=args.verify)

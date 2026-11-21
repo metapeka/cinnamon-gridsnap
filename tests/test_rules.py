@@ -255,5 +255,31 @@ class TestGridIgnore(ConfMixin, unittest.TestCase):
         self.assertTrue(zt.window_excluded("firefox-esr", "", set(), grid.ignore))
 
 
+class TestWindowIsExcluded(unittest.TestCase):
+    """`window_is_excluded` — та же чистая проверка, но с чтением X."""
+
+    def _out(self, text):
+        return mock.patch.object(zt.subprocess, "check_output", return_value=text)
+
+    def test_selector_matches_read_window(self):
+        out = (
+            'WM_CLASS(STRING) = "telegram", "TelegramDesktop"\n'
+            '_NET_WM_NAME(UTF8_STRING) = "Telegram"\n'
+            "_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_NORMAL\n"
+        )
+        with self._out(out):
+            self.assertTrue(zt.window_is_excluded(0x1, ["telegram*"]))
+            self.assertFalse(zt.window_is_excluded(0x1, ["chrome*"]))
+
+    def test_service_type_is_excluded(self):
+        out = (
+            'WM_CLASS(STRING) = "x", "Chrome"\n'
+            '_NET_WM_NAME(UTF8_STRING) = "T"\n'
+            "_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_DIALOG\n"
+        )
+        with self._out(out):
+            self.assertTrue(zt.window_is_excluded(0x1, []))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
