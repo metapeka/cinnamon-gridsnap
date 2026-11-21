@@ -263,7 +263,15 @@ fi
 # --- 3. toggle ---------------------------------------------------------
 say ""
 say "3. Повторный focus main — выход из режима"
+BEFORE_B=$(frame_of "$WB")
 python3 "$TILER" focus main --window "$WA" --conf "$CONF" --quiet >/dev/null 2>&1
+# Свёрнутое окно должно сохранять геометрию: иначе память демона об укладках
+# считала бы его вышедшим из зоны и запускала reflow на каждом входе в режим.
+if [ "$(frame_of "$WB")" = "$BEFORE_B" ]; then
+    ok "свёрнутое окно сохранило рамку ($BEFORE_B)"
+else
+    bad "рамка свёрнутого окна уехала: $BEFORE_B -> $(frame_of "$WB")"
+fi
 python3 "$TILER" focus main --window "$WA" --conf "$CONF" --quiet >"$LOGDIR/focus-3.log" 2>&1
 RC=$?
 if [ "$RC" -eq 0 ] && both_normal "$WB" "$WC" >"$LOGDIR/focus-3.state" 2>&1 \
@@ -271,6 +279,43 @@ if [ "$RC" -eq 0 ] && both_normal "$WB" "$WC" >"$LOGDIR/focus-3.state" 2>&1 \
     ok "toggle вышел из режима и развернул окна ($(tail -1 "$LOGDIR/focus-3.state"))"
 else
     bad "toggle не сработал: код $RC, $(tail -1 "$LOGDIR/focus-3.state" 2>/dev/null), $(summary "$LOGDIR/focus-3.log")"
+fi
+
+# --- 3.1 смена рабочего стола ------------------------------------------
+say ""
+say "3.1 Режим переживает смену стола, а выход возвращает окна"
+# Активацию окна не на активном столе muffin игнорирует (проверено разведкой),
+# поэтому режим на своём столе НЕ снимается, а выход сам переводит на нужный стол.
+HAS_DESKTOPS=0
+NDESK=$(xprop -root _NET_NUMBER_OF_DESKTOPS 2>/dev/null | sed -n 's/.*= *//p')
+case "$NDESK" in ''|*[!0-9]*) NDESK=0 ;; esac
+if [ "$NDESK" -ge 2 ]; then
+    HAS_DESKTOPS=1
+fi
+if [ "$HAS_DESKTOPS" -eq 1 ]; then
+    python3 "$TILER" focus main --window "$WA" --conf "$CONF" --quiet >/dev/null 2>&1
+    xdotool set_desktop 1
+    sleep 1.5
+    DESK=$(xprop -root _NET_CURRENT_DESKTOP 2>/dev/null | sed -n 's/.*= *//p')
+    if both_iconic "$WB" "$WC" >/dev/null 2>&1; then
+        ok "на другом столе ($DESK) свёрнутые окна остались свёрнутыми, режим жив"
+    else
+        bad "уход на стол $DESK развернул окна сам (или снял режим)"
+    fi
+    python3 "$TILER" focus --off --conf "$CONF" --quiet >"$LOGDIR/focus-31.log" 2>&1
+    RC=$?
+    DESK=$(xprop -root _NET_CURRENT_DESKTOP 2>/dev/null | sed -n 's/.*= *//p')
+    if [ "$RC" -eq 0 ] && both_normal "$WB" "$WC" >"$LOGDIR/focus-31.state" 2>&1 \
+            && [ "$DESK" = "0" ]; then
+        ok "focus --off с другого стола вернул окна и перешёл на стол режима"
+    else
+        bad "focus --off с другого стола: код $RC, стол $DESK, $(tail -1 "$LOGDIR/focus-31.state" 2>/dev/null) ($(summary "$LOGDIR/focus-31.log"))"
+    fi
+    # Возвращаем активный стол для следующих секций, даже если проверка упала.
+    xdotool set_desktop 0
+    sleep 1
+else
+    ok "смена стола пропущена: в сессии меньше двух рабочих столов"
 fi
 
 # --- 4. демон: IPC focus и новые окна ----------------------------------
