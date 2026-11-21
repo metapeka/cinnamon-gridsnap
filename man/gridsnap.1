@@ -9,7 +9,7 @@ gridsnap, gridsnap\-tiler, gridsnap\-daemon, gridsnap\-editor, gridsnap\-picker,
 .SH SYNOPSIS
 .B gridsnap\-tiler
 [\fB\-\-monitor\fP \fIN\fP] [\fB\-\-conf\fP \fIПУТЬ\fP]
-{\fBlist\fP | \fBapply\fP \fIЗОНА\fP | \fBmove\fP \fIНАПРАВЛЕНИЕ\fP | \fBkeys\fP | \fBarrange\fP | \fBstack\fP \fIЗОНА\fP | \fBundo\fP | \fBprofile\fP}
+{\fBlist\fP | \fBapply\fP \fIЗОНА\fP | \fBmove\fP \fIНАПРАВЛЕНИЕ\fP | \fBkeys\fP | \fBarrange\fP | \fBstack\fP \fIЗОНА\fP | \fBtabs\-next\fP | \fBundo\fP | \fBprofile\fP}
 [\fB\-\-dry\-run\fP] [\fB\-\-verify\fP] [\fB\-\-quiet\fP] ...
 .br
 .B gridsnap\-daemon
@@ -106,19 +106,31 @@ muffin с компенсацией рамки окна, поэтому рамк�
 .TP
 .B order
 Все подвижные окна в порядке \fI_NET_CLIENT_LIST\fP (снизу вверх) получают зоны в порядке
-секции \fB[zones]\fP; если окон больше, чем зон, лишним достаётся последняя зона и они лягут
-стопкой.
+секции \fB[zones]\fP; если окон больше, чем зон, лишним достаётся последняя зона и они встанут
+там вкладками.
 .RE
 .IP
 Каждое окно ставится на том мониторе, где оно находится. Несколько окон, попавших в одну зону
-одного монитора, ложатся каскадом: первое — ровно по зоне, каждое следующее сдвинуто на
-\fB\-\-offset\fP px (по умолчанию 20) вниз-вправо, окно не уменьшается. Прежние рамки пишутся
+одного монитора, получают общую рамку вкладки: зона минус полоса вкладок высотой
+\fB[tabs] height\fP (по умолчанию 22 px). Первое окно списка — нижняя вкладка, последнее —
+верхняя; одно окно в зоне ставится ровно по зоне, без полосы. Полосу с подписями рисует
+\fIzone\-tabstrip.py\fP (его запускает демон), клик по вкладке и \fBtabs\-next\fP
+переключают окна зоны. Прежние рамки пишутся
 в историю. \fB\-\-dry\-run\fP печатает \fIокно \-> зона: x=… y=… ШxВ\fP и ничего не двигает.
 Если подходящих окон нет, команда завершается успешно.
 .TP
 .B stack \fIЗОНА\fP
 Частный случай \fBarrange\fP: собирает все подвижные клиентские окна в одну зону монитора
-(\fB\-\-monitor\fP, по умолчанию 0) тем же каскадом со сдвигом \fB\-\-offset\fP.
+(\fB\-\-monitor\fP, по умолчанию 0) вкладками — на общую рамку вкладки, как \fBarrange\fP.
+Одно окно ставится ровно по зоне.
+.TP
+.B tabs\-next
+Поднимает следующую вкладку зоны активного окна. Команда ничего не раскладывает сама, а шлёт
+демону \fBgridsnap\-daemon\fP запрос через его IPC-сокет: хозяин вкладок — демон, он один
+знает, какие окна стоят на общей рамке. Порядок — снизу вверх; с верхней вкладки
+переключение уходит на нижнюю. Окно вне зон и одиночное окно — тихий no-op (код 0), а
+не запущенный демон — сообщение в stderr и код 1. Обычно висит на сочетании из
+секции \fB[tabs]\fP.
 .TP
 .B undo
 Возвращает окна на прежние рамки из истории: без флагов — последнюю операцию,
@@ -239,7 +251,8 @@ reflow).
 \fBpython3 <каталог кода>/zone\-tiler.py apply <зона> \-\-quiet\fP (с \fB\-\-conf\fP,
 если он задан). Необязательная секция \fB[focus]\fP даёт одно сочетание
 «zone-tiler: focus» для режима «только эта зона»; оно читается из \fIzones.conf\fP самим скриптом
-(через \fBzone_config.load_focus_keys\fP). Сочетания, поставленные прошлыми запусками
+(через \fBzone_config.load_focus_keys\fP). Необязательная секция \fB[tabs]\fP даёт сочетание
+«zone-tiler: tabs-next» для «следующего окна зоны» (\fBzone_config.load_tabs_config\fP). Сочетания, поставленные прошлыми запусками
 (по префиксу имени), сначала снимаются, чтобы не осталось мусора.
 \fB\-\-list\fP только показывает план, \fB\-\-remove\fP удаляет сочетания GridSnap и ничего
 не ставит, \fB\-\-conf\fP \fIПУТЬ\fP указывает конфиг.
@@ -267,10 +280,6 @@ reflow).
 .TP
 .BI \-\-by " auto|rules|order"
 Способ выбора окон для \fBarrange\fP (по умолчанию \fIauto\fP), см. выше.
-.TP
-.BI \-\-offset " N"
-Сдвиг окна в стопке и каскаде, px (по умолчанию 20; 0 — без сдвига). Для \fBarrange\fP и
-\fBstack\fP.
 .TP
 .B \-\-all
 \fBundo\fP: откатить всю историю, а не последнюю операцию.
@@ -338,6 +347,14 @@ ConfigParser):
 сворачивает окна, не двигая цель. Неизвестный ключ в секции и пустое значение \fBzone\fP —
 ошибка конфига (код 3). Секцию переносят \fBsetup\-hotkeys\fP (имя «zone-tiler: focus») и
 редактор; в профили раскладок она не входит.
+.SS "[tabs]"
+Секция необязательна. \fBkey\fP — сочетание «следующее окно зоны» (команда \fBtabs\-next\fP) в
+синтаксисе Cinnamon; \fBheight\fP — высота полосы вкладок в пикселях, целое больше нуля
+(по умолчанию 22). Без \fBkey\fP сочетание не регистрируется, \fBheight\fP читается и без него.
+Неизвестный ключ в секции и мусор в \fBheight\fP (не число, ноль, отрицательное) — ошибка
+конфига (код 3): полосы нулевой высоты не видно, и вкладки молча стали бы невидимыми.
+Секцию переносят \fBsetup\-hotkeys\fP (имя «zone-tiler: tabs-next») и редактор — дословно, как
+чужую; в профили раскладок она не входит.
 .SS "[daemon]"
 Секция необязательна. \fBreflow = off | neighbors\fP (по умолчанию \fIoff\fP; регистр и пробелы не важны,
 неизвестное значение трактуется как \fIoff\fP). Режим \fIneighbors\fP описан в разделе
@@ -348,7 +365,8 @@ gridsnap\-tiler list
 gridsnap\-tiler apply main \-\-dry\-run
 gridsnap\-tiler apply bottom \-\-monitor 1 \-\-verify
 gridsnap\-tiler arrange \-\-by order
-gridsnap\-tiler stack main \-\-offset 0
+gridsnap\-tiler stack main
+gridsnap\-tiler tabs\-next
 gridsnap\-tiler undo \-\-all
 gridsnap\-tiler focus main
 gridsnap\-tiler focus \-\-off
@@ -380,6 +398,10 @@ gridsnap\-editor \-\-conf ~/.config/gridsnap/zones.conf
 (\fBgridsnap\-tiler focus\fP): она регистрируется под именем «zone-tiler: focus», поэтому
 \fBsetup\-hotkeys \-\-remove\fP снимает её вместе с клавишами зон.
 .PP
+Необязательная секция \fB[tabs]\fP даёт клавишу «следующее окно зоны»
+(\fBgridsnap\-tiler tabs\-next\fP) под именем «zone-tiler: tabs-next». Клавиша переключает
+вкладки в зоне активного окна; без запущенного демона переключать нечего.
+.PP
 Смена профиля одной клавишей — обычное пользовательское сочетание Cinnamon, вызывающее
 \fBgridsnap\-tiler profile use <имя>\fP: своих клавиш для профилей проект не заводит.
 Сочетание для \fBgridsnap\-picker\fP (например, \fISuper+Z\fP) пользователь заводит сам —
@@ -404,7 +426,7 @@ UNIX-сокет демона (права 0600, каталог 0700). Без \fI$
 .TP
 .I /usr/lib/gridsnap
 Код пакета: \fIzone\-tiler.py\fP, \fIzone\-daemon.py\fP, \fIzone\-editor.py\fP,
-\fIzone\-picker.py\fP, \fIgridsnap\-ctl\fP, \fIsetup\-hotkeys.py\fP и вспомогательные модули,
+\fIzone\-picker.py\fP, \fIzone\-tabstrip.py\fP, \fIgridsnap\-ctl\fP, \fIsetup\-hotkeys.py\fP и вспомогательные модули,
 а также поставляемый \fIzones.conf\fP.
 .TP
 .I /usr/bin/gridsnap\-tiler

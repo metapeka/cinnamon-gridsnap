@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -342,6 +343,78 @@ class TestCli(ConfMixin, unittest.TestCase):
         r = self.run_cli("keys", "--conf", path)
         self.assertEqual(r.returncode, 0)
         self.assertIn("main\t<Super><Alt>1", r.stdout)
+
+
+class TestTabsArrangement(ConfMixin, unittest.TestCase):
+    """`arrange`/`stack` кладут окна зоны на общую рамку вкладки, а не каскадом.
+
+    Без X и GTK: список окон, метаданные, монитор и рабочая область
+    подменены, `--dry-run` печатает рамки и ничего не двигает.
+    """
+
+    CONF = BASE_GRID + "[zones]\nmain = 0, 0, 1, 1\n[tabs]\nheight = 30\n"
+
+    def setUp(self):
+        self.path = self.conf(self.CONF)
+        self.monitor = ("monitor-0", (0, 0, 1000, 1000))
+        for name, value in (
+            ("monitor_outputs", lambda: [self.monitor]),
+            ("current_workspace", lambda: None),
+            ("read_client_list", lambda: [0x1, 0x2]),
+            (
+                "read_window_meta",
+                lambda win: zt.WindowMeta("Firefox", f"окно {win}", frozenset()),
+            ),
+            ("window_monitor", lambda win, areas: areas[0]),
+        ):
+            patcher = mock.patch.object(zt, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def run_cli(self, *argv):
+        """(код, stdout, stderr) — `main` в процессе, всегда с `--dry-run`."""
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = zt.main([*argv, "--dry-run", "--conf", self.path])
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 1
+        return code, out.getvalue(), err.getvalue()
+
+    def test_arrange_puts_windows_of_one_zone_on_one_tab_frame(self):
+        # `order`: двум окнам при одной зоне обоим достаётся `main`.
+        code, out, _err = self.run_cli("arrange", "--by", "order")
+        self.assertEqual(code, 0)
+        self.assertEqual(out.count("x=0 y=30 1000x970"), 2, out)
+
+    def test_arrange_uses_strip_height_from_tabs_section(self):
+        # 30 px из `[tabs] height`, а не умолчание 22: окно сдвинуто на высоту полосы.
+        _code, out, _err = self.run_cli("arrange", "--by", "order")
+        self.assertNotIn("y=22", out)
+        self.assertIn("y=30", out)
+
+    def test_arrange_single_window_in_zone_sits_exactly_on_zone(self):
+        with mock.patch.object(zt, "read_client_list", lambda: [0x1]):
+            code, out, _err = self.run_cli("arrange", "--by", "order")
+        self.assertEqual(code, 0)
+        self.assertIn("x=0 y=0 1000x1000", out)
+
+    def test_stack_collects_windows_as_tabs_on_one_frame(self):
+        code, out, _err = self.run_cli("stack", "main")
+        self.assertEqual(code, 0)
+        lines = out.splitlines()
+        self.assertEqual(len(lines), 2, out)
+        self.assertIn("вкладка 1 из 2", lines[0])
+        self.assertIn("вкладка 2 из 2", lines[1])
+        for line in lines:
+            self.assertIn("x=0 y=30 1000x970", line)
+
+    def test_stack_single_window_sits_exactly_on_zone(self):
+        with mock.patch.object(zt, "read_client_list", lambda: [0x1]):
+            code, out, _err = self.run_cli("stack", "main")
+        self.assertEqual(code, 0)
+        self.assertIn("x=0 y=0 1000x1000", out)
 
 
 if __name__ == "__main__":

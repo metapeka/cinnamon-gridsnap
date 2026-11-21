@@ -23,12 +23,24 @@ reflow не переходят через стол, окна невидимых 
 активацией цели последней, снятие режима по исчезновению цели и смене стола,
 сворачивание новых окон того же стола/монитора и поле `focus` в `status`.
 
+Вкладки в зоне: рамка вкладки у второго окна и возврат на всю зону у последнего,
+переключение `tabs-next` кольцом и его пустые случаи, `tabs-switch` с чужим
+окном, `focus` с вкладками в зоне-цели (и с окном, которое правило положило
+туда уже во время режима), занятость зоны для reflow, пока в ней осталась хоть
+одна вкладка, снимок для полосы в подменённый процесс (в том числе на выходе из
+режима) и память укладок, которая считает рамку вкладки «окно в зоне».
+Нормализация стопок возвращает оставшейся одной вкладке всю зону — и после
+утаскивания соседа руками, и после перезапуска демона; сдвиг держателя вкладкой
+снимает запись `filled` о покрытой зоне. Отказ запуска полосы (нет GTK — скрипт
+падает на импорте) даёт `failed`, а смерть уже работавшей полосы — перезапуск.
+
 Запуск:
     python3 tests/test_daemon.py
 """
 
 import ctypes
 import importlib.util
+import json
 import os
 import shutil
 import struct
@@ -608,8 +620,10 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_map(0x3)
         self.applied.clear()
         d.on_destroy(0x1)
-        # left всё ещё занята окном 0x2 -> reflow возвращает {}
-        self.assertEqual(self.applied, [])
+        # left всё ещё занята окном 0x2 -> reflow возвращает {} и соседа не
+        # двигает; переставляется только сама стопка: оставшаяся одна вкладка
+        # снова занимает зону целиком (полоса без стопки не нужна).
+        self.assertEqual(self.applied, [(0x2, (0, 0, 500, 1000), "left", True)])
         self.assertEqual(d.windows, {0x2: "left", 0x3: "right"})
 
     # -- возврат расширенной зоны, когда новое окно встаёт в освобождённую
@@ -1603,6 +1617,684 @@ class TestFocusMode(DaemonTestCase):
         )
         d.ipc_focus({"off": True})
         self.assertIsNone(d.ipc_status()["focus"])
+
+
+class FakeStrip:
+    """Подмена `TabStripProcess`: копит снимки вкладок вместо запуска GTK."""
+
+    def __init__(self, accept=True):
+        self.payloads = []
+        self.stopped = 0
+        self.accept = accept
+
+    def running(self):
+        return bool(self.payloads)
+
+    def feed(self, line):
+        if not self.accept:
+            return False
+        self.payloads.append(line)
+        return True
+
+    def stop(self):
+        self.stopped += 1
+        return True
+
+
+class TestZoneTabs(DaemonTestCase):
+    """Вкладки в зоне: общая рамка, переключение и снимок для полосы.
+
+    Демон без X: `apply` не только запоминается в `self.applied`, но и меняет
+    `self.frames` — так рамка окна после укладки видна следующему чтению, как
+    у настоящего WM. `self.active` — подмена `_NET_ACTIVE_WINDOW`.
+    """
+
+    # Зона на всю рабочую область: рамка вкладки — зона минус полоса.
+    ZONE = (
+        "[grid]\ncols = 1.0\nrows = 1.0\n"
+        "[zones]\nmain = 0, 0, 1, 1\n"
+        "[rules]\nfirefox* = main\nchromium* = main\n"
+    )
+    TAB = (0, zd.zone_tabs.STRIP_HEIGHT, 1000, 1000 - zd.zone_tabs.STRIP_HEIGHT)
+
+    def setUp(self):
+        super().setUp()
+        self.frames = {}
+        self.active = None
+        self.strip = FakeStrip()
+        self.current = 0
+        # Свёрнутые окна и их разворот — как в тестах режима: без X настоящая
+        # `window_iconic` всегда говорит «видимо».
+        patcher = mock.patch.object(
+            zd.tiler, "window_iconic", lambda win: win in self.iconic
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    # -- обвязка
+
+    def apply(self, win, rect, label="", quiet=False):
+        super().apply(win, rect, label, quiet)
+        self.frames[win] = tuple(rect)
+
+    def read_rect(self, win):
+        return self.frames.get(win)
+
+    def tabs_daemon(self, text=None, reflow=None, use_strip=True, state_path=None):
+        """Демон с подменёнными рамками, активным окном и полосой."""
+        text = text or self.ZONE
+        if reflow is not None:
+            text = text + f"[daemon]\nreflow = {reflow}\n"
+        return zd.Daemon(
+            self.conf(text),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            workarea=lambda: WA,
+            current_workspace=lambda: self.current,
+            window_workspace=lambda win: self.workspaces.get(win),
+            iconify=self.iconify,
+            deiconify=self.deiconify,
+            read_clients=lambda: self.clients,
+            read_rect=self.read_rect,
+            active_window=lambda: self.active,
+            state_path=state_path,
+            strip=self.strip if use_strip else None,
+        )
+
+    def two_tabs(self, text=None, reflow=None):
+        """Два окна в зоне `main` — уже вкладками, как после второго окна."""
+        self.metas[0x1] = self.meta("firefox-esr", "Почта")
+        self.metas[0x2] = self.meta("chromium", "Терминал")
+        self.workspaces = {0x1: 0, 0x2: 0}
+        self.clients = [0x1, 0x2]
+        d = self.tabs_daemon(text, reflow=reflow)
+        d.reconcile([0x1, 0x2])
+        self.applied.clear()
+        return d
+
+    # -- укладка
+
+    def test_first_window_takes_the_whole_zone_and_no_strip(self):
+        self.metas[0x1] = self.meta("firefox-esr", "Почта")
+        self.clients = [0x1]
+        d = self.tabs_daemon()
+        d.reconcile([0x1])
+        self.assertEqual(self.applied, [(0x1, (0, 0, 1000, 1000), "main", True)])
+        self.assertEqual(self.strip.payloads, [])
+        self.assertEqual(d.tabs_in_zone("main", WA, 0), [])
+
+    def test_second_window_moves_the_first_one_down(self):
+        self.metas[0x1] = self.meta("firefox-esr", "Почта")
+        self.metas[0x2] = self.meta("chromium", "Терминал")
+        self.workspaces = {0x1: 0, 0x2: 0}
+        self.clients = [0x1]
+        d = self.tabs_daemon()
+        d.reconcile([0x1])
+        self.applied.clear()
+        self.clients = [0x1, 0x2]
+        d.reconcile([0x1, 0x2])
+        # Новое окно — на рамку вкладки, и уже стоявшее переставляется туда же:
+        # полоса появилась, окно стало ниже на её высоту.
+        self.assertEqual(
+            self.applied,
+            [(0x2, self.TAB, "main", True), (0x1, self.TAB, "main", True)],
+        )
+        self.assertEqual(self.frames[0x1], self.TAB)
+        self.assertEqual(self.frames[0x2], self.TAB)
+        self.assertEqual(d.tabs_in_zone("main", WA, 0), [0x1, 0x2])
+
+    def test_last_tab_alone_returns_the_whole_zone(self):
+        d = self.two_tabs()
+        self.clients = [0x2]
+        d.reconcile([0x2])
+        self.assertEqual(self.applied, [(0x2, (0, 0, 1000, 1000), "main", True)])
+        self.assertEqual(self.frames[0x2], (0, 0, 1000, 1000))
+
+    def test_tabs_height_comes_from_conf(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.workspaces = {0x1: 0, 0x2: 0}
+        self.clients = [0x1, 0x2]
+        text = self.ZONE + "[tabs]\nheight = 30\n"
+        d = self.tabs_daemon(text)
+        self.assertEqual(d.tabs_height, 30)
+        d.reconcile([0x1, 0x2])
+        self.assertEqual(self.frames[0x1], (0, 30, 1000, 970))
+        self.assertEqual(json.loads(self.strip.payloads[-1])["strips"][0]["rect"],
+                         [0, 0, 1000, 30])
+
+    def test_zone_is_occupied_while_a_tab_remains(self):
+        # reflow=neighbors: пока в left есть хоть одна вкладка, right не
+        # расширяется; ушла последняя — расширяется.
+        text = TWO_ZONES
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("firefox-esr")
+        self.metas[0x3] = self.meta("chromium")
+        self.workspaces = {0x1: 0, 0x2: 0, 0x3: 0}
+        self.clients = [0x1, 0x2, 0x3]
+        d = self.tabs_daemon(text, reflow="neighbors")
+        d.reconcile([0x1, 0x2, 0x3])
+        self.assertEqual(d.windows, {0x1: "left", 0x2: "left", 0x3: "right"})
+        self.applied.clear()
+        self.clients = [0x2, 0x3]
+        d.reconcile([0x2, 0x3])
+        # left занята окном 0x2: right остаётся в своей зоне, а оставшаяся
+        # вкладка возвращается на всю зону.
+        self.assertEqual(self.applied, [(0x2, (0, 0, 500, 1000), "left", True)])
+        self.applied.clear()
+        self.clients = [0x3]
+        d.reconcile([0x3])
+        # Последняя вкладка ушла: зона свободна и right расширяется на неё.
+        self.assertEqual(
+            self.applied, [(0x3, (0, 0, 1000, 1000), "right", True)]
+        )
+
+    def test_window_dragged_out_of_the_stack_returns_the_whole_zone(self):
+        # Пользователь утащил одну из двух вкладок: `_refresh_detached` сняло её с
+        # трекера, стопка стала одиночной — оставшемуся окну возвращается вся
+        # зона, а не рамка вкладки с пустой полосой сверху.
+        d = self.two_tabs()
+        self.frames[0x2] = (600, 600, 300, 300)  # утащили руками
+        self.clients = [0x1, 0x2]
+        d.reconcile([0x1, 0x2])
+        self.assertIn(0x2, d.detached)
+        self.assertEqual(self.applied, [(0x1, (0, 0, 1000, 1000), "main", True)])
+        self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
+        self.assertEqual(d.ipc_status()["windows"], [
+            {
+                "window": "0x1",
+                "zone": "main",
+                "monitor": list(WA),
+                "workspace": 0,
+            }
+        ])
+
+    def test_reflow_expanded_window_is_not_normalized_back(self):
+        # Расширенный на соседнюю зону держатель стоит не на рамке зоны, но и
+        # не на рамке вкладки: нормализация стопок его не трогает.
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.workspaces = {0x1: 0, 0x2: 0}
+        self.clients = [0x1, 0x2]
+        d = self.tabs_daemon(TWO_ZONES, reflow="neighbors")
+        d.reconcile([0x1, 0x2])
+        self.clients = [0x1]
+        d.reconcile([0x1])
+        self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
+        self.applied.clear()
+        d.reconcile([0x1])  # повторная реконсиляция ничего не двигает
+        self.assertEqual(self.applied, [])
+        self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
+
+    def test_ipc_apply_puts_a_second_window_on_the_tab_frame(self):
+        # Правило «полоса только от двух окон» — одно и то же в автоукладке и
+        # в IPC `apply`: второе окно в занятую зону ставит обоих на общую рамку.
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("libreoffice")  # правила нет — только IPC
+        self.workspaces = {0x1: 0, 0x2: 0}
+        self.clients = [0x1, 0x2]
+        d = self.tabs_daemon()
+        d.on_map(0x1)
+        self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
+        d.ipc_apply({"zone": "main", "window": 0x2})
+        self.assertEqual(d.ipc_status()["windows"][0]["zone"], "main")
+        self.assertEqual(self.frames[0x1], self.TAB)
+        self.assertEqual(self.frames[0x2], self.TAB)
+
+    def test_moved_window_leaves_collapsed_zone_behind(self):
+        # 0x2 уехало из стопки в другую зону: оставшаяся одна вкладка снова
+        # занимает свою зону целиком.
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("firefox-esr")
+        self.workspaces = {0x1: 0, 0x2: 0}
+        self.clients = [0x1, 0x2]
+        d = self.tabs_daemon(TWO_ZONES)
+        d.on_map(0x1)
+        d.on_map(0x2)
+        self.applied.clear()
+        d.ipc_apply({"zone": "right", "window": 0x2})
+        self.assertIn((0x1, (0, 0, 500, 1000), "left", True), self.applied)
+        self.assertEqual(d.windows, {0x1: "left", 0x2: "right"})
+
+    def test_reflow_does_not_pull_a_tab_out_of_the_stack(self):
+        # right освободилась, но в left стопка: вынуть из неё одно окно значит
+        # разложить вкладки, поэтому reflow такую зону не расширяет.
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("firefox-esr")
+        self.metas[0x3] = self.meta("chromium")
+        self.workspaces = {0x1: 0, 0x2: 0, 0x3: 0}
+        self.clients = [0x1, 0x2, 0x3]
+        d = self.tabs_daemon(TWO_ZONES, reflow="neighbors")
+        d.reconcile([0x1, 0x2, 0x3])
+        self.applied.clear()
+        self.clients = [0x1, 0x2]
+        d.reconcile([0x1, 0x2])
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.filled, {})
+        self.assertEqual(self.frames[0x1], (0, 22, 500, 978))
+
+    def test_expanded_holder_moved_by_a_tab_releases_its_coverage(self):
+        # Держатель покрытия сам стал вкладкой: `_align_stack` сдвинул его на
+        # общую рамку, значит покрытая зона больше не за ним — запись `filled`
+        # снимается, и `status` не врёт апплету, будто зона покрыта.
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.metas[0x3] = self.meta("firefox-esr")
+        self.metas[0x4] = self.meta("chromium")
+        self.workspaces = {win: 0 for win in (0x1, 0x2, 0x3, 0x4)}
+        d = self.tabs_daemon(TWO_ZONES, reflow="neighbors")
+        self.clients = [0x1, 0x2]
+        d.reconcile([0x1, 0x2])
+        self.clients = [0x1]  # right закрылась: left расширяется на неё
+        d.reconcile([0x1])
+        self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
+        self.assertEqual(d.filled, {(0, WA, "right"): 0x1})
+        self.applied.clear()
+        self.clients = [0x1, 0x3]  # второе окно в left: стопка из двух
+        d.reconcile([0x1, 0x3])
+        self.assertEqual(self.frames[0x1], (0, 22, 500, 978))
+        # Окно сдвинули вкладкой — покрытие right больше не его.
+        self.assertEqual(d.filled, {})
+        self.assertEqual(d.ipc_status()["filled"], [])
+        self.applied.clear()
+        self.clients = [0x1, 0x3, 0x4]  # новое окно в right
+        d.reconcile([0x1, 0x3, 0x4])
+        # 0x1 уже на общей рамке стопки: возвращать его некуда, а 0x4 встаёт в
+        # right по своей зоне.
+        self.assertEqual(self.applied, [(0x4, (500, 0, 500, 1000), "right", True)])
+        self.assertEqual(self.frames[0x1], (0, 22, 500, 978))
+        self.assertEqual(d.filled, {})
+
+    def test_collapsed_tab_releases_coverage_of_the_remaining_window(self):
+        # Осталась одна вкладка — `_collapse_stack` вернул ей всю зону: сдвинутое
+        # окно перестало быть держателем покрытия.
+        d = self.two_tabs()
+        d.filled[(0, WA, "right")] = 0x1
+        self.assertEqual(len(d.ipc_status()["filled"]), 1)
+        self.clients = [0x1]
+        d.reconcile([0x1])
+        self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
+        self.assertEqual(d.filled, {})
+        self.assertEqual(d.ipc_status()["filled"], [])
+
+    def test_window_moved_to_another_zone_releases_its_coverage(self):
+        # `_settle_in_zone` переставил держателя в другую зону — записи о
+        # покрытых им зонах снимаются там же, где окно двигают. Покрытие тут
+        # не совпадает с зоной назначения: иначе его снял бы `_restore_holder`
+        # и тест не отличал бы одно от другого.
+        three = (
+            "[grid]\ncols = 1.0\nrows = 1.0\n"
+            "[zones]\n"
+            "left = 0, 0, 0.5, 0.5\n"
+            "right = 0.5, 0, 0.5, 0.5\n"
+            "bottom = 0, 0.5, 1, 0.5\n"
+            "[rules]\n"
+            "firefox* = left\n"
+            "chromium* = right\n"
+        )
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.workspaces = {0x1: 0}
+        self.clients = [0x1]
+        d = self.tabs_daemon(three)
+        d.on_map(0x1)
+        d.filled[(0, WA, "bottom")] = 0x1  # окно расширялось на bottom
+        d.ipc_apply({"zone": "right", "window": 0x1})
+        self.assertEqual(d.windows, {0x1: "right"})
+        self.assertEqual(d.filled, {})
+        self.assertEqual(d.ipc_status()["filled"], [])
+
+    # -- полоса
+
+    def test_snapshot_goes_to_the_strip_process(self):
+        self.two_tabs()
+        self.assertEqual(len(self.strip.payloads), 1)
+        data = json.loads(self.strip.payloads[0])
+        self.assertEqual(len(data["strips"]), 1)
+        strip = data["strips"][0]
+        self.assertEqual(strip["zone"], "main")
+        self.assertEqual(strip["rect"], [0, 0, 1000, zd.zone_tabs.STRIP_HEIGHT])
+        self.assertEqual(
+            strip["tabs"],
+            [
+                {"window": 0x1, "title": "Почта", "active": False},
+                {"window": 0x2, "title": "Терминал", "active": True},
+            ],
+        )
+
+    def test_active_tab_is_the_active_window(self):
+        d = self.two_tabs()
+        self.active = 0x1
+        d.sync_strips()  # снимок активной вкладки — по активному окну
+        tabs = json.loads(self.strip.payloads[-1])["strips"][0]["tabs"]
+        self.assertEqual([tab["active"] for tab in tabs], [True, False])
+
+    def test_same_snapshot_is_not_written_twice(self):
+        d = self.two_tabs()
+        self.assertEqual(len(self.strip.payloads), 1)
+        d.sync_strips()
+        d.sync_strips()
+        self.assertEqual(len(self.strip.payloads), 1)
+
+    def test_strips_are_only_for_the_current_workspace(self):
+        d = self.two_tabs()
+        self.current = 1
+        d.on_workspace_change()
+        self.assertEqual(json.loads(self.strip.payloads[-1]), {"strips": []})
+
+    def test_dead_strip_does_not_break_the_daemon(self):
+        self.strip = FakeStrip(accept=False)
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.workspaces = {0x1: 0, 0x2: 0}
+        self.clients = [0x1, 0x2]
+        d = self.tabs_daemon()
+        d.reconcile([0x1, 0x2])  # полоса снимок не приняла
+        self.assertEqual(d.windows, {0x1: "main", 0x2: "main"})
+        self.assertIsNone(d._strips_last)  # снимок отдадим заново
+
+    def test_no_strip_means_no_work(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.clients = [0x1]
+        d = self.tabs_daemon(use_strip=False)  # полосы нет вовсе
+        self.assertIsNone(d.strip)
+        self.assertFalse(d.sync_strips())
+
+    # -- IPC: tabs-next / tabs-switch
+
+    def test_tabs_next_raises_the_next_tab_of_the_ring(self):
+        d = self.two_tabs()
+        self.active = 0x1
+        reply = d.ipc_tabs_next()
+        self.assertEqual(
+            reply,
+            {"switched": True, "zone": "main", "window": "0x2", "previous": "0x1"},
+        )
+        self.assertEqual(self.deiconified, [0x2])
+        # с верхней вкладки кольцо уводит на нижнюю
+        self.active = 0x2
+        self.assertEqual(d.ipc_tabs_next()["window"], "0x1")
+        self.assertEqual(self.deiconified, [0x2, 0x1])
+
+    def test_tabs_next_without_active_window_is_a_honest_noop(self):
+        d = self.two_tabs()
+        reply = d.ipc_tabs_next()
+        self.assertFalse(reply["switched"])
+        self.assertIn("переключать нечего", reply["reason"])
+        self.assertEqual(self.deiconified, [])
+
+    def test_tabs_next_outside_zones_is_a_honest_noop(self):
+        d = self.two_tabs()
+        self.active = 0x9  # окно без зоны
+        reply = d.ipc_tabs_next()
+        self.assertFalse(reply["switched"])
+        self.assertIsNone(reply["zone"])
+        self.assertEqual(self.deiconified, [])
+
+    def test_tabs_next_with_a_single_tab_is_a_honest_noop(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.clients = [0x1]
+        d = self.tabs_daemon()
+        d.reconcile([0x1])
+        self.active = 0x1
+        reply = d.ipc_tabs_next()
+        self.assertFalse(reply["switched"])
+        self.assertEqual(reply["zone"], "main")
+        self.assertEqual(self.deiconified, [])
+
+    def test_tabs_switch_raises_the_clicked_tab(self):
+        d = self.two_tabs()
+        reply = d.ipc_tabs_switch({"cmd": "tabs-switch", "zone": "main", "window": "0x1"})
+        self.assertEqual(reply, {"zone": "main", "window": "0x1"})
+        self.assertEqual(self.deiconified, [0x1])
+
+    def test_tabs_switch_refuses_a_window_of_another_zone(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.clients = [0x1, 0x2]
+        d = self.tabs_daemon(TWO_ZONES)
+        d.reconcile([0x1, 0x2])
+        with self.assertRaises(ValueError) as caught:
+            d.ipc_tabs_switch({"zone": "left", "window": 0x2})
+        self.assertIn("не вкладка", str(caught.exception))
+        self.assertEqual(self.deiconified, [])
+
+    def test_tabs_switch_refuses_unknown_window(self):
+        d = self.two_tabs()
+        with self.assertRaises(ValueError):
+            d.ipc_tabs_switch({"zone": "main", "window": 0x77})
+        self.assertEqual(self.deiconified, [])
+
+    def test_dispatcher_knows_tab_commands(self):
+        d = self.two_tabs()
+        dispatcher = d.build_dispatcher()
+        self.active = 0x1
+        reply = dispatcher.dispatch('{"cmd": "tabs-next"}')
+        self.assertTrue(reply["ok"])
+        self.assertEqual(reply["window"], "0x2")
+        reply = dispatcher.dispatch('{"cmd": "tabs-switch", "zone": "main", "window": 1}')
+        self.assertTrue(reply["ok"])
+
+    # -- focus × вкладки
+
+    def test_focus_keeps_the_tabs_of_the_target_zone(self):
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("firefox-esr")
+        self.metas[0x3] = self.meta("chromium")
+        self.clients = [0x1, 0x2, 0x3]
+        self.workspaces = {0x1: 0, 0x2: 0, 0x3: 0}
+        self.centers = {0x1: (100, 100), 0x2: (100, 100), 0x3: (700, 100)}
+        d = zd.Daemon(
+            self.conf(TWO_ZONES),
+            apply=self.apply,
+            read_meta=self.read_meta,
+            monitors=lambda: [WA],
+            window_center=lambda win: self.centers[win],
+            current_workspace=lambda: self.current,
+            window_workspace=lambda win: self.workspaces.get(win),
+            iconify=self.iconify,
+            deiconify=self.deiconify,
+            read_clients=lambda: self.clients,
+            read_rect=self.read_rect,
+            active_window=lambda: self.active,
+            strip=None,
+        )
+        d.reconcile([0x1, 0x2, 0x3])
+        self.assertEqual(d.windows, {0x1: "left", 0x2: "left", 0x3: "right"})
+        reply = d.ipc_focus({"zone": "left", "window": 0x1})
+        # вкладка 0x2 — часть зоны режима, её не сворачиваем
+        self.assertEqual(reply["minimized"], ["0x3"])
+        self.assertEqual(self.iconified, [0x3])
+
+    def test_new_window_in_the_target_zone_is_not_minimized_by_focus(self):
+        # Режим называется «только эта зона», а не «только это окно»: окно,
+        # которое правило положило в ту же зону уже во время режима, становится
+        # вкладкой и остаётся видимым. Свернуть его — спрятать окно той самой
+        # зоны, которую пользователь оставил.
+        self.metas[0x1] = self.meta("firefox-esr", "Почта")
+        self.metas[0x2] = self.meta("firefox-esr", "Терминал")
+        self.metas[0x3] = self.meta("chromium", "Чужое")
+        self.workspaces = {win: 0 for win in (0x1, 0x2, 0x3)}
+        self.clients = [0x1, 0x2, 0x3]
+        d = self.tabs_daemon(TWO_ZONES)
+        d.reconcile([0x1, 0x2, 0x3])
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        self.assertEqual(self.iconified, [0x3])
+        self.iconified.clear()
+        self.applied.clear()
+        # Новое окно по правилу — в ту самую зону, где идёт режим.
+        self.metas[0x4] = self.meta("firefox-esr", "Ещё")
+        self.workspaces[0x4] = 0
+        self.clients = [0x1, 0x2, 0x3, 0x4]
+        d.on_map(0x4)
+        self.assertEqual(self.iconified, [])  # window_iconic/iconify не звались
+        self.assertNotIn(0x4, d.focus["minimized"])
+        self.assertEqual(d.windows[0x4], "left")
+        self.assertEqual(self.frames[0x4], (0, 22, 500, 978))  # третья вкладка
+        self.assertEqual(d.tabs_in_zone("left", WA, 0), [0x1, 0x2, 0x4])
+
+    def test_exit_from_focus_rebuilds_the_strip_snapshot(self):
+        # Выход из режима разворачивает окна и активирует цель последней:
+        # активная вкладка меняется, значит снимок полосы надо пересобрать.
+        delay = mock.patch.object(zd.tiler, "FOCUS_VERIFY_DELAY", 0)
+        delay.start()
+        self.addCleanup(delay.stop)
+        self.metas[0x1] = self.meta("firefox-esr", "Почта")
+        self.metas[0x2] = self.meta("firefox-esr", "Терминал")
+        self.metas[0x3] = self.meta("chromium", "Чужое")
+        self.workspaces = {win: 0 for win in (0x1, 0x2, 0x3)}
+        self.clients = [0x1, 0x2, 0x3]
+        d = self.tabs_daemon(TWO_ZONES)
+        d.reconcile([0x1, 0x2, 0x3])
+        self.active = 0x2
+        d.ipc_focus({"zone": "left", "window": 0x1})
+        self.assertEqual(self.iconified, [0x3])
+        entry = json.loads(self.strip.payloads[-1])["strips"][0]["tabs"]
+        self.assertEqual([tab["active"] for tab in entry], [False, True])
+
+        def deiconify_and_activate(win, x11=None):
+            self.deiconify(win, x11=x11)
+            self.active = win  # WM поднимает и фокусирует развёрнутое окно
+
+        d.deiconify = deiconify_and_activate
+        self.active = None
+        d.ipc_focus({"off": True})
+        tabs = json.loads(self.strip.payloads[-1])["strips"][0]["tabs"]
+        self.assertEqual([tab["active"] for tab in tabs], [True, False])
+
+    # -- память укладок: рамка вкладки — это «окно в зоне»
+
+    def test_restart_keeps_a_tab_window_in_its_zone(self):
+        directory = tempfile.mkdtemp(prefix="gridsnap-tabs-")
+        self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
+        state_path = os.path.join(directory, "placed.json")
+        zd.save_placed_state(
+            state_path,
+            {
+                "1": {
+                    "frame": list(self.TAB),
+                    "wm_class": "firefox-esr",
+                    "zone": "main",
+                    "monitor": list(WA),
+                    "workspace": None,
+                },
+                "2": {
+                    "frame": list(self.TAB),
+                    "wm_class": "chromium",
+                    "zone": "main",
+                    "monitor": list(WA),
+                    "workspace": None,
+                },
+            },
+        )
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.metas[0x2] = self.meta("chromium")
+        self.frames[0x1] = self.TAB
+        self.frames[0x2] = self.TAB
+        self.clients = [0x1, 0x2]
+        d = self.tabs_daemon(state_path=state_path)
+        d.reconcile([0x1, 0x2])
+        # Окно-вкладка считается стоящим в зоне: демон его не переставляет.
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {0x1: "main", 0x2: "main"})
+        self.assertNotIn(0x1, d.detached)
+        self.assertNotIn(0x2, d.detached)
+
+    def test_restart_with_a_single_leftover_tab_returns_the_whole_zone(self):
+        # Вторая вкладка исчезла, пока демон не работал: запомненная рамка —
+        # рамка вкладки, но она осталась одна, значит полосы нет и зона — вся
+        # её. Без нормализации окно осталось бы на 22 px ниже с пустой полосой.
+        directory = tempfile.mkdtemp(prefix="gridsnap-tabs-")
+        self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
+        state_path = os.path.join(directory, "placed.json")
+        zd.save_placed_state(
+            state_path,
+            {
+                "1": {
+                    "frame": list(self.TAB),
+                    "wm_class": "firefox-esr",
+                    "zone": "main",
+                    "monitor": list(WA),
+                    "workspace": None,
+                }
+            },
+        )
+        self.metas[0x1] = self.meta("firefox-esr")
+        self.frames[0x1] = self.TAB
+        self.clients = [0x1]
+        d = self.tabs_daemon(state_path=state_path)
+        d.reconcile([0x1])
+        self.assertEqual(self.applied, [(0x1, (0, 0, 1000, 1000), "main", True)])
+        self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
+        self.assertEqual(d.windows, {0x1: "main"})
+
+
+class TestTabStripProcess(unittest.TestCase):
+    """Процесс полосы: команда запуска, отказ без GTK и перезапуск умершей."""
+
+    def script(self, body):
+        """Временный скрипт полосы: тело — на python."""
+        directory = tempfile.mkdtemp(prefix="gridsnap-strip-")
+        self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
+        path = os.path.join(directory, "zone-tabstrip.py")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(body)
+        return path
+
+    def test_command_is_python_script_and_conf(self):
+        strip = zd.TabStripProcess("/tmp/zones.conf")
+        self.assertEqual(
+            strip.command(),
+            [sys.executable, zd.TABSTRIP, "--conf", "/tmp/zones.conf"],
+        )
+
+    def test_missing_script_never_starts_and_is_not_retried(self):
+        strip = zd.TabStripProcess(
+            "/tmp/zones.conf", script="/нет-такого/zone-tabstrip.py"
+        )
+        self.assertFalse(strip.start())
+        self.assertTrue(strip.failed)
+        self.assertFalse(strip.running())
+        self.assertFalse(strip.feed('{"strips": []}\n'))
+
+    def test_script_dying_on_import_is_failed_and_not_retried(self):
+        # «Нет GTK»: файл на месте и python стартует, а скрипт падает на импорте
+        # с кодом 1. Это отказ запуска, а не смерть работавшей полосы — такого
+        # ребёнка нельзя переспавнивать на каждом изменении картины.
+        path = self.script("import sys\nsys.exit(1)\n")
+        strip = zd.TabStripProcess("/tmp/zones.conf", script=path)
+        self.assertFalse(strip.start())
+        self.assertTrue(strip.failed)
+        self.assertIsNone(strip.proc)  # мёртвого ребёнка за собой не держим
+        self.assertFalse(strip.running())
+        self.assertFalse(strip.feed('{"strips": []}\n'))
+
+    def test_dead_working_strip_is_restarted(self):
+        # Полоса, которая уже работала и умерла, перезапускается как раньше.
+        path = self.script("import sys\nsys.stdin.readline()\nsys.exit(0)\n")
+        strip = zd.TabStripProcess("/tmp/zones.conf", script=path)
+        self.addCleanup(strip.stop)
+        self.assertTrue(strip.start())
+        self.assertFalse(strip.failed)
+        first = strip.proc.pid
+        self.assertTrue(strip.feed('{"strips": []}\n'))
+        # Полоса прочитала снимок и завершилась сама — это смерть работавшей.
+        strip.proc.wait(timeout=5)
+        self.assertFalse(strip.running())
+        self.assertTrue(strip.feed('{"strips": []}\n'))  # перезапущена
+        self.assertFalse(strip.failed)
+        self.assertNotEqual(strip.proc.pid, first)
+
+    def test_empty_snapshot_without_process_is_not_a_failure(self):
+        # Полоса ещё не запускалась и рисовать нечего: процесс не поднимаем.
+        strip = zd.TabStripProcess("/tmp/zones.conf")
+        self.assertIsNone(strip.proc)
+        self.assertFalse(strip.failed)
+        self.assertFalse(strip.running())
+
+    def test_stop_is_idempotent(self):
+        strip = zd.TabStripProcess("/tmp/zones.conf")
+        self.assertFalse(strip.stop())
+        self.assertFalse(strip.stop())
 
 
 class TestPlacedState(unittest.TestCase):
