@@ -290,7 +290,8 @@ ConfigParser):
 Секция необязательна. Окна-исключения: \fIселектор = заметка\fP. Селекторы те же, что у \fB[rules]\fP
 (glob по \fIWM_CLASS\fP или \fIre:<regex>\fP по строке \fIкласс|заголовок\fP); правая часть — заметка для
 человека и журнала демона. Исключённое окно не двигают ни демон, ни \fBarrange\fP/\fBstack\fP, ни
-\fBapply\fP/\fBmove\fP/\fBundo\fP, ни пикер; переставить его можно, только убрав правило.
+\fBapply\fP/\fBmove\fP/\fBundo\fP, ни пикер, ни watcher перетаскивания \fBzone\-hotcorners\fP; переставить
+его можно, только убрав правило.
 .SS "[keys]"
 Привязки клавиш: \fIимя зоны = сочетание\fP Cinnamon, например \fI<Super><Alt>1\fP.
 .SS "[daemon]"
