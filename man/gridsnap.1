@@ -120,6 +120,11 @@ muffin с компенсацией рамки окна, поэтому рамк�
 переключают окна зоны. Прежние рамки пишутся
 в историю. \fB\-\-dry\-run\fP печатает \fIокно \-> зона: x=… y=… ШxВ\fP и ничего не двигает.
 Если подходящих окон нет, команда завершается успешно.
+.PP
+При живом демоне раскладку применяет он: команда считает, какие окна куда встают, и пишет
+историю \fBundo\fP, а демон переставляет окна, обновляет свой трекер и шлёт подписчикам
+\fIwindow\-moved\fP. С \fB\-\-dry\-run\fP и \fB\-\-verify\fP делегирования нет — эти
+режимы остаются локальными.
 .TP
 .B stack \fIЗОНА\fP
 Частный случай \fBarrange\fP: собирает все подвижные клиентские окна в одну зону монитора
@@ -331,6 +336,18 @@ reflow).
 .TP
 .B quit
 Попросить демон завершиться после текущего события.
+.TP
+.B watch
+Подписаться на события демона и печатать их: по одной JSON-строке на событие в stdout, пока
+соединение не закроют (\fBCtrl\-C\fP — код 0). Подписка — на все группы (\fIwindow\fP,
+\fIfocus\fP), ключа выбора групп нет; одна строка о подписке идёт в stderr (\fB\-\-quiet\fP
+её убирает). Нет демона или команду отклонили — код 1; зона, окно или монитор в аргументах —
+код 2. События и их поля: \fIwindow\-appeared\fP (\fIwindow\fP, \fIzone\fP, \fIworkspace\fP,
+\fImonitor\fP), \fIwindow\-closed\fP (\fIwindow\fP, \fIzone\fP), \fIwindow\-moved\fP
+(\fIwindow\fP, \fIzone\fP, \fIprevious\fP, \fIworkspace\fP, \fImonitor\fP), \fIfocus\-on\fP
+(\fIzone\fP, \fIwindow\fP, \fIminimized\fP), \fIfocus\-off\fP (\fIzone\fP, \fIrestored\fP,
+\fItotal\fP). \fIwindow\fP — hex-строка, \fIzone\fP — имя или \fInull\fP, \fIworkspace\fP —
+номер стола EWMH, \fImonitor\fP — \fI[x, y, w, h]\fP.
 .PP
 \fB\-\-socket\fP \fIПУТЬ\fP задаёт путь сокета, \fB\-\-raw\fP печатает ответ одной строкой,
 \fB\-\-quiet\fP ничего не печатает при успехе.
