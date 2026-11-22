@@ -84,19 +84,39 @@ class InstallWriteTest(unittest.TestCase):
     def setUp(self):
         self.mod = load_module()
         self.written = []
+        self.resets = []
 
     def run_main(self, argv):
-        """Прогнать `main()` с подменёнными gsettings, списком id и планом."""
+        """Прогнать `main()` с подменёнными gsettings, списком id и планом.
+
+        Хранилище подменено маленькой моделью: `custom-list` и сброс ключа `name`
+        меняют её так же, как это делает настоящий Cinnamon (после первого наша
+        запись перестаёт быть нашей).
+        """
+        state = {"ids": ["custom0", "custom1"], "owned": {"custom0"}}
+
         def fake_gs(*args, get=False):
             self.written.append(list(args))
+            if list(args[:2]) == [self.mod.LIST_SCHEMA, "custom-list"]:
+                state["ids"] = [
+                    part.strip().strip("'")
+                    for part in str(args[2]).strip("[]").split(",")
+                    if part.strip()
+                ]
             return ""
 
-        ok = mock.Mock(returncode=0, stdout="", stderr="")
+        def fake_run(cmd, *args, **kwargs):
+            self.resets.append(list(cmd))
+            if list(cmd[:2]) == ["gsettings", "reset"] and cmd[3] == "name":
+                state["owned"].discard(cmd[2].rstrip("/").rsplit("/", 1)[-1])
+            return mock.Mock(returncode=0, stdout="", stderr="")
+
         with mock.patch.object(self.mod, "gs", fake_gs), \
-                mock.patch.object(self.mod, "custom_ids", lambda: ["custom0", "custom1"]), \
+                mock.patch.object(self.mod, "custom_ids", lambda: list(state["ids"])), \
                 mock.patch.object(
                     self.mod, "cb_name",
-                    lambda cid: f"{self.mod.NAME_PREFIX}main" if cid == "custom0" else "",
+                    lambda cid: f"{self.mod.NAME_PREFIX}main"
+                    if cid in state["owned"] else "",
                 ), \
                 mock.patch.object(
                     self.mod, "planned",
@@ -105,10 +125,11 @@ class InstallWriteTest(unittest.TestCase):
                         ("top-right", "<Super><Alt>2", "cmd2"),
                     ],
                 ), \
-                mock.patch.object(self.mod.subprocess, "run", lambda *a, **k: ok), \
+                mock.patch.object(self.mod.subprocess, "run", fake_run), \
                 mock.patch("sys.stdout", new_callable=io.StringIO), \
+                mock.patch("sys.stderr", new_callable=io.StringIO), \
                 mock.patch.object(sys, "argv", ["setup-hotkeys.py", *argv]):
-            self.mod.main()
+            return self.mod.main()
 
     def custom_list_writes(self):
         return [
@@ -128,11 +149,53 @@ class InstallWriteTest(unittest.TestCase):
         self.assertIn("custom2", lists[1])
 
     def test_remove_leaves_the_list_without_our_ids(self):
-        self.run_main(["--remove"])
+        self.assertEqual(self.run_main(["--remove"]), 0)
         lists = self.custom_list_writes()
         self.assertTrue(lists)
         for value in lists:
             self.assertNotIn("custom0", value)
+
+    def test_remove_writes_the_list_before_clearing_the_entries(self):
+        # Порядок нарочный: список без наших id идёт первым — Cinnamon перестаёт
+        # держать записи в памяти, и его перезапись списка их уже не вернёт.
+        self.run_main(["--remove"])
+        first_list = self.written[0]
+        self.assertEqual(list(first_list[:2]), [self.mod.LIST_SCHEMA, "custom-list"])
+        self.assertNotIn("custom0", first_list[2])
+        self.assertTrue(self.resets, "записи должны сбрасываться")
+
+    def test_remove_resets_every_key_separately(self):
+        # `reset-recursively` для перемещаемой схемы на живом Cinnamon не сбрасывает
+        # зарегистрированную запись (замер) — поэтому ключи сбрасываются по одному.
+        self.run_main(["--remove"])
+        self.assertFalse(
+            [cmd for cmd in self.resets if "reset-recursively" in cmd], self.resets
+        )
+        self.assertEqual(
+            sorted(cmd[3] for cmd in self.resets), ["binding", "command", "name"]
+        )
+        self.assertTrue(all("custom0" in cmd[2] for cmd in self.resets))
+
+    def test_remove_reports_leftovers_instead_of_pretending(self):
+        # Хранилище не поддаётся: наши id возвращаются в список сколько угодно раз.
+        # Тогда команда обязана сказать об этом и вернуть код 1.
+        mod = self.mod
+        err = io.StringIO()
+        with mock.patch.object(mod, "custom_ids", lambda: ["custom0"]), \
+                mock.patch.object(
+                    mod, "cb_name", lambda cid: f"{mod.NAME_PREFIX}test"
+                ), \
+                mock.patch.object(mod, "gs", lambda *a, **k: ""), \
+                mock.patch.object(
+                    mod.subprocess, "run",
+                    lambda *a, **k: mock.Mock(returncode=0, stdout="", stderr=""),
+                ), \
+                mock.patch("sys.stdout", new_callable=io.StringIO), \
+                mock.patch("sys.stderr", err), \
+                mock.patch.object(sys, "argv", ["setup-hotkeys.py", "--remove"]):
+            code = mod.main()
+        self.assertEqual(code, mod.EXIT_FAIL)
+        self.assertIn("custom0", err.getvalue())
 
     def test_entry_keys_are_written_before_the_list(self):
         # Записи заполняются до того, как список позовёт Cinnamon их читать: иначе
@@ -228,16 +291,20 @@ class PlannedActionsTest(unittest.TestCase):
             "custom1": "Чужое сочетание",
         }
         calls = []
+        ok = mock.Mock(returncode=0, stdout="", stderr="")
         with mock.patch.object(self.mod, "cb_name", lambda cid: names[cid]), \
                 mock.patch.object(
                     self.mod.subprocess, "run",
-                    lambda *args, **kwargs: calls.append(args[0]),
+                    lambda *args, **kwargs: calls.append(args[0]) or ok,
                 ):
             kept = self.mod.drop_owned(["custom0", "custom1"])
         self.assertEqual(kept, ["custom1"])
-        self.assertEqual(len(calls), 1)
-        self.assertIn("reset-recursively", calls[0])
-        self.assertTrue(any("custom0" in part for part in calls[0]))
+        # Ключи нашей записи сброшены по одному, рекурсивного сброса нет вовсе.
+        self.assertEqual(
+            sorted(call[3] for call in calls), ["binding", "command", "name"]
+        )
+        self.assertTrue(all("custom0" in call[2] for call in calls))
+        self.assertFalse([call for call in calls if "reset-recursively" in call])
 
 
 if __name__ == "__main__":
