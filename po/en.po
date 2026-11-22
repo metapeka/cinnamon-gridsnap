@@ -1082,6 +1082,10 @@ msgid "не удалось сопоставить выходы мониторо�
 msgstr "failed to match monitor outputs: {exc}"
 
 #: zone-daemon.py
+msgid "масштаб экрана изменился — перечитываю рабочие области"
+msgstr "screen scale changed — re-reading work areas"
+
+#: zone-daemon.py
 #, python-brace-format
 msgid "не удалось получить рабочую область: {exc}"
 msgstr "failed to get the work area: {exc}"
@@ -2563,6 +2567,10 @@ msgid ""
 msgstr ""
 "zone-tabstrip: GTK 3 for python3 is required (python3-gi and gir1.2-gtk-3.0) "
 "- without it the tab bar cannot be drawn: {}"
+
+#: zone-tabstrip.py
+msgid "не удалось загрузить zone-tiler.py"
+msgstr "zone-tiler.py could not be loaded"
 
 #: zone-tabstrip.py
 msgid "демон не отвечает: {}"

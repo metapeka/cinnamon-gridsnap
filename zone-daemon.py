@@ -608,6 +608,7 @@ class Daemon:
         read_meta=None,
         workarea=None,
         monitors=None,
+        monitor_scales=None,
         window_center=None,
         current_workspace=None,
         window_workspace=None,
@@ -630,6 +631,11 @@ class Daemon:
         self.read_meta = read_meta or read_window_meta
         self.workarea = workarea
         self.monitors = monitors if monitors is not None else tiler.monitors
+        # Масштабы мониторов: по ним видно, что масштаб сменили на лету, и кэш
+        # рабочих областей устарел.
+        self.monitor_scales = (
+            monitor_scales if monitor_scales is not None else tiler.monitor_scales
+        )
         # [(имя выхода, рабочая область)] — имя адресует профиль в `[monitors]`.
         self.monitor_outputs = (
             monitor_outputs if monitor_outputs is not None else tiler.monitor_outputs
@@ -702,6 +708,8 @@ class Daemon:
         self.focus = None
         self._wa_cache = None
         self._mons_cache = None
+        # Отпечаток масштабов, с которым посчитан `_mons_cache`.
+        self._mons_scale = None
         # [(имя выхода, рабочая область)] из `xrandr --listmonitors`: имя выхода
         # адресует профиль экрана в `[monitors]`. Кэш на время жизни конфига.
         self._outputs_cache = None
@@ -927,6 +935,51 @@ class Daemon:
                 return None
         return self._wa_cache
 
+    def _monitor_scale_now(self):
+        """Отпечаток масштабов мониторов; `None` — их не спросить.
+
+        Читается дёшево (GDK, `Gdk.Monitor.get_scale_factor()`) и без
+        подпроцессов, в отличие от самих рабочих областей, и потому годится в
+        проверку на каждом обращении к кэшу: масштаб меняется в настройках
+        экрана, и ждать `reload` пользователю не за чем. Сбой чтения масштаба —
+        не ошибка: тогда отпечатка нет и кэш живёт, как жил.
+        """
+        try:
+            scales = (
+                self.monitor_scales()
+                if callable(self.monitor_scales)
+                else self.monitor_scales
+            )
+        except (Exception, SystemExit):
+            return None
+        if scales is None:
+            return None
+        try:
+            return tuple(int(v) for v in scales)
+        except (TypeError, ValueError):
+            return None
+
+    def _drop_stale_caches(self):
+        """Забыть рабочие области, если масштаб мониторов сменился на лету.
+
+        Рабочая область GDK меняется вместе с масштабом (`GDK_SCALE=2` — вдвое
+        меньше), а окно двигается в физических пикселях X: без сброса демон до
+        `reload` клал бы окна по старым пикселям. Резерв `workarea` тут не
+        исключение — у него тот же одиночный кэш `_wa_cache`.
+        """
+        scale_now = self._monitor_scale_now()
+        if scale_now is None:
+            return
+        if self._mons_scale is None:
+            self._mons_scale = scale_now  # кэшей ещё нет — запоминаем отпечаток
+            return
+        if scale_now == self._mons_scale:
+            return
+        self.log(_("масштаб экрана изменился — перечитываю рабочие области"))
+        self._wa_cache = None
+        self._mons_cache = None
+        self._mons_scale = scale_now
+
     def _monitors(self):
         """Список рабочих областей мониторов, закэшированный.
 
@@ -934,7 +987,10 @@ class Daemon:
         X-сервера — это не подкласс `Exception`. Ошибку демон переживает:
         логирует и возвращает `None`, а вызывающий пропускает применение.
         Неудачу не кэсим, успех — кэсим. `KeyboardInterrupt` не перехватывается.
+
+        Масштаб, сменившийся на лету, сбрасывает кэш (см. `_drop_stale_caches`).
         """
+        self._drop_stale_caches()
         if self._mons_cache is None:
             try:
                 mons = cast(
@@ -956,6 +1012,7 @@ class Daemon:
         не ответил) даёт `None`: лучше не трогать окно, чем угадать монитор 0.
         """
         if self.workarea is not None:
+            self._drop_stale_caches()
             return self._forced_workarea()
         monitors = self._monitors()
         if not monitors:
@@ -2381,6 +2438,7 @@ class Daemon:
         self._grids = {}
         self._wa_cache = None
         self._mons_cache = None
+        self._mons_scale = None
         self._outputs_cache = None
         self._monitor_map_cache = None
         self._workspace_map_cache = None

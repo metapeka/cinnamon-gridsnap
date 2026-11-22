@@ -27,6 +27,13 @@ HUD не берёт фокус, не захватывает клавиатуру
 
 Чистая логика навигации — в ``zone_picker_nav`` (без GTK и X), применение окна —
 через ``zone-tiler.apply_zone``/``Grid.rect``. GTK и cairo живут только здесь.
+
+Два пространства пикселей (см. ``zone_units``): арифметика зон, ``monitors()``,
+точка ``--at`` и строки stdin у ``--follow`` — **физические** пиксели X, а всё,
+что задаёт GTK-окно (``move``/``set_default_size``) и отдаёт указатель GDK, —
+**логические**. Перевод в одну сторону делает только ``zone_units``; здесь он
+вызывается в трёх местах: рамка окна оверлея/HUD, первое выделение под курсором
+и монитор под курсором.
 """
 
 import argparse
@@ -47,6 +54,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402  # typ
 
 import zone_config as zc  # noqa: E402
 import zone_picker_nav as nav  # noqa: E402
+import zone_units as zu  # noqa: E402  (перевод логических пикселей GTK в физические X)
 from zone_i18n import _  # noqa: E402  (там же: строки интерфейса и их перевод)
 
 zt = zc.zt  # zone-tiler.py, загруженный zone_config (парсер конфига и раскладка)
@@ -297,8 +305,39 @@ def pointer_point():
         return None
 
 
-def pick_monitor(monitors, win_id, args):
-    """Индекс монитора: явный ``--monitor``, иначе монитор окна, иначе под курсором."""
+def logical_areas(monitors, scales):
+    """Рабочие области мониторов в логических пикселях GTK, в том же порядке.
+
+    ``monitors()`` теперь физический, а GTK-окошки живут в логических пикселях,
+    поэтому окну оверлея и HUD нужна эта же область, переведённая
+    (:func:`zone_units.logical_rect`). Список масштабов короче списка областей —
+    обычное дело без GDK: ``zone_units.scale_at`` даёт 1, и область не меняется.
+    """
+    return [zu.logical_rect(wa, zu.scale_at(scales, i)) for i, wa in enumerate(monitors)]
+
+
+def pointer_physical(point, monitors, scales):
+    """Логическая точка GDK → физическая точка X или ``None``.
+
+    Указатель GDK приходит в логических пикселях (``pointer_point``), а мониторы,
+    ``--at`` и строки stdin — в физических. Монитор ищется по логическим областям,
+    а не по одному общему коэффициенту: у мониторов бывает свой масштаб, и общее
+    число соврало бы на соседнем экране.
+    """
+    if point is None:
+        return None
+    areas = logical_areas(monitors, scales)
+    index = areas.index(zt.monitor_for_point(areas, point))
+    return zu.physical_point(point, zu.scale_at(scales, index))
+
+
+def pick_monitor(monitors, scales, win_id, args):
+    """Индекс монитора: явный ``--monitor``, иначе монитор окна, иначе под курсором.
+
+    Курсор GDK отдаёт в логических пикселях, а ``monitors`` — физические, поэтому
+    монитор под курсором ищется по логическим областям (:func:`logical_areas`).
+    Монитор окна — наоборот, по физической рамке окна (``window_monitor``).
+    """
     if args.monitor is not None:
         return args.monitor
     if win_id is not None:
@@ -307,7 +346,8 @@ def pick_monitor(monitors, win_id, args):
             return monitors.index(wa)
     point = pointer_point()
     if point is not None:
-        return monitors.index(zt.monitor_for_point(monitors, point))
+        areas = logical_areas(monitors, scales)
+        return areas.index(zt.monitor_for_point(areas, point))
     return 0
 
 
@@ -324,12 +364,15 @@ def select_by_name(zones, name):
 
 
 class Picker:
-    def __init__(self, zones, grid, wa, output, mon_index, args, win_id, caption=""):
+    def __init__(
+        self, zones, grid, wa, output, mon_index, args, win_id, caption="", scale=1
+    ):
         self.zones = zones
         self.grid = grid
         self.wa = wa
         self.output = output  # имя выхода: у монитора может быть свой набор зон
         self.mon_index = mon_index
+        self.scale = zu.scale_value(scale)  # масштаб монитора: wa физическая
         self.args = args
         self.win_id = win_id
         self.caption = caption
@@ -354,8 +397,11 @@ class Picker:
         self.win.set_focus_on_map(True)
         self.win.set_app_paintable(True)
         self.win.set_type_hint(Gdk.WindowTypeHint.DOCK)
-        self.win.move(wa[0], wa[1])
-        self.win.set_default_size(width, height)
+        # Окно GTK — в логических пикселях: `move`/`set_default_size` физическую
+        # рамку на масштабе 2 удвоили бы, и оверлей уехал бы на соседний экран.
+        win_x, win_y, win_w, win_h = zu.logical_rect(wa, self.scale)
+        self.win.move(win_x, win_y)
+        self.win.set_default_size(win_w, win_h)
         self.win.add_events(
             Gdk.EventMask.KEY_PRESS_MASK
             | Gdk.EventMask.POINTER_MOTION_MASK
@@ -373,12 +419,19 @@ class Picker:
     # ---- состояние
 
     def _initial_selection(self, width, height):
+        """Зона под курсором; ``width``/``height`` — физические размеры области.
+
+        Курсор GDK логический, а ``width``/``height`` и ``wa`` физические: без
+        перевода (0,1) вместо середины экрана получалось бы на масштабе 2 вдвое
+        ближе к левому верхнему углу, и первое выделение уезжало бы от курсора.
+        """
         if self.args.select:
             return select_by_name(self.zones, self.args.select)
         point = pointer_point()
         if point is not None:
-            fx = (point[0] - self.wa[0]) / float(max(1, width))
-            fy = (point[1] - self.wa[1]) / float(max(1, height))
+            px, py = zu.physical_point(point, self.scale)
+            fx = (px - self.wa[0]) / float(max(1, width))
+            fy = (py - self.wa[1]) / float(max(1, height))
             under = nav.zone_at(self.zones, fx, fy)
             if under is not None:
                 return under
@@ -549,15 +602,17 @@ class Hud:
     полупрозрачный, чтобы сетка не закрывала перетаскиваемое окно.
     """
 
-    def __init__(self, zones, wa, caption=""):
+    def __init__(self, zones, wa, caption="", scale=1):
         self.zones = zones
-        self.wa = wa  # рабочая область монитора: (x, y, w, h) в экранных пикселях
+        # Рабочая область монитора — физические пиксели X: в них приходят и
+        # точки от watcher'а (`set_point`), и снимок `--shot`.
+        self.wa = wa
+        self.scale = zu.scale_value(scale)  # масштаб монитора: окно — логическое
         self.caption = caption
         self.selected = None
         self._buf = ""
         self.input_mode = _("нет")
 
-        width, height = wa[2], wa[3]
         self.win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
         title = _("Gridsnap — сетка")
         if caption:
@@ -573,8 +628,11 @@ class Hud:
         self.win.set_focus_on_map(False)
         self.win.set_app_paintable(True)
         self.win.set_type_hint(Gdk.WindowTypeHint.DOCK)
-        self.win.move(wa[0], wa[1])
-        self.win.set_default_size(width, height)
+        # Окно GTK — в логических пикселях, `wa` — физическая: физический размер
+        # в `set_default_size` дал бы окно вдвое больше монитора.
+        win_x, win_y, win_w, win_h = zu.logical_rect(wa, self.scale)
+        self.win.move(win_x, win_y)
+        self.win.set_default_size(win_w, win_h)
         # Без RGBA-визуала полупрозрачный фон не скомпонуется и станет чёрным.
         screen = self.win.get_screen()
         visual = screen.get_rgba_visual() if screen is not None else None
@@ -847,6 +905,8 @@ def main(argv=None):
     monitors = [wa for _unused, wa in outputs]
     if not monitors:
         fail(_("zone-picker: не удалось получить рабочие области мониторов"))
+    # Масштабы — в том же порядке, что области (пустой список без GDK = масштаб 1).
+    scales = zt.monitor_scales()
     win_id = args.window
     if win_id is None and not args.shot and not args.hud:
         win_id = active_window_quiet()
@@ -855,11 +915,13 @@ def main(argv=None):
         # точку задаёт клиент, и именно на его мониторе надо подсвечивать.
         mon_index = monitors.index(zt.monitor_for_point(monitors, args.at))
     else:
-        mon_index = pick_monitor(monitors, win_id, args)
+        mon_index = pick_monitor(monitors, scales, win_id, args)
     if not 0 <= mon_index < len(monitors):
         fail(_("zone-picker: монитора {} нет").format(mon_index))
     wa = monitors[mon_index]
     output = outputs[mon_index][0]
+    # Масштаб выбранного монитора: один на окно оверлея и окно HUD.
+    scale = zu.scale_at(scales, mon_index)
     # Сетка экрана — тем же резолвером, что у раскладчика: иначе оверлей показал
     # бы зоны профиля стола, а демон положил бы окно в зоны профиля экрана.
     grid, screen_profile, desk_profile = screen_grid(conf, output, workspace)
@@ -909,7 +971,7 @@ def main(argv=None):
         return EXIT_OK
 
     if args.hud:
-        hud = Hud(zones, wa, hud_heading)
+        hud = Hud(zones, wa, hud_heading, scale)
         # Диагностика: единственное доказательство, что окно прозрачно для ввода.
         print(
             _("zone-picker: HUD не берёт ввод ({})").format(hud.input_mode),
@@ -928,7 +990,7 @@ def main(argv=None):
     if args.dry_run:
         print(_("zone-picker: сетка {}").format(describe_grid(zones, caption)))
 
-    picker = Picker(zones, grid, wa, output, mon_index, args, win_id, caption)
+    picker = Picker(zones, grid, wa, output, mon_index, args, win_id, caption, scale)
     Gtk.main()
     return picker.exit_code
 

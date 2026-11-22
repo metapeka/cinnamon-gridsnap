@@ -1038,6 +1038,10 @@ msgid "не удалось сопоставить выходы мониторо�
 msgstr "无法匹配显示器的输出：{exc}"
 
 #: zone-daemon.py
+msgid "масштаб экрана изменился — перечитываю рабочие области"
+msgstr "屏幕缩放已更改——重新读取工作区"
+
+#: zone-daemon.py
 #, python-brace-format
 msgid "не удалось получить рабочую область: {exc}"
 msgstr "无法取得工作区：{exc}"
@@ -2472,6 +2476,10 @@ msgid ""
 msgstr ""
 "zone-tabstrip: 需要 python3 的 GTK 3（python3-gi 和 gir1.2-gtk-3.0）— 没有它"
 "画不出标签栏：{}"
+
+#: zone-tabstrip.py
+msgid "не удалось загрузить zone-tiler.py"
+msgstr "无法加载 zone-tiler.py"
 
 #: zone-tabstrip.py
 msgid "демон не отвечает: {}"

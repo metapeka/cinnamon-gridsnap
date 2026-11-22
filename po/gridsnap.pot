@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: gridsnap 0.1.0\n"
+"Project-Id-Version: gridsnap 0.2.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 09:09+0300\n"
+"POT-Creation-Date: 2026-11-22 18:46+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -852,6 +852,10 @@ msgstr ""
 #: zone-daemon.py
 #, python-brace-format
 msgid "не удалось получить рабочую область: {exc}"
+msgstr ""
+
+#: zone-daemon.py
+msgid "масштаб экрана изменился — перечитываю рабочие области"
 msgstr ""
 
 #: zone-daemon.py
@@ -2168,6 +2172,10 @@ msgstr ""
 #: zone_actions.py
 #, python-brace-format
 msgid "зоны '{zone}' нет в сетке — зеркалить нечего"
+msgstr ""
+
+#: zone-tabstrip.py
+msgid "не удалось загрузить zone-tiler.py"
 msgstr ""
 
 #: zone-tabstrip.py

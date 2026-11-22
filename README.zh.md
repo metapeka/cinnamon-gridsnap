@@ -152,7 +152,7 @@ cinnamon-settings keyboard   # 系统设置 → 键盘 → 快捷键 →「平�
 * `zone-picker.py` —— 按 `Super+Z` **可视化选择区域**（覆盖层、方向键、`Enter`）。
 
 依赖：`python3`、`python3-gi`（GTK 3）、`libX11`、`xprop` —— Debian 里已经装好。
-重绘图标、以及给区域选择覆盖层拍快照，需要 `python3-cairo`。
+重绘图标、以及给区域选择覆盖层拍快照，需要 `python3-cairo` 和 `python3-gi-cairo`（在 Debian 上，PyGObject 的 cairo 集成是单独的包）。
 
 <!-- section: zones-run -->
 ### 3.1. 启动编辑器
@@ -706,20 +706,27 @@ cinnamon-settings applets        # 在小程序列表里启用 GridSnap
 * 面积为零的区域不会保存：最小尺寸是屏幕的 5 %；
 * 不支持 Wayland，但 Cinnamon 跑在 X11 上；
 * 手动改过 `zones.conf` 之后请重新运行 `setup-hotkeys.py`，否则新的区域名
-  不会和按键关联起来。
+  不会和按键关联起来；
+* 在 HiDPI 缩放（`GDK_SCALE` 大于 1）下，区域仍是比例，但计算的是 X 看到的**物理**工作区，
+  所以网格和屏幕上看到的一致：编辑器、选择器和排列器给出的框相同。已在 `Xvfb` 上用
+  `GDK_SCALE=2` 验证（`tests/smoke-dpi.sh`），但没有在真实的 HiDPI 显示器和 Cinnamon 的分数
+  缩放下验证（那种情况会拉伸输出，X 和 GTK 本来就在同一批像素里）。
 
 <!-- section: checks -->
 ## 12. 跑过的检查
 
 * 不需要 X 的单元测试（解析器、规则、reflow、守护进程、IPC `zone_ipc`、配置层和方案
   与屏幕的绑定、arrange/undo、标签页核心 `zone_tabs`、标签条导航 `zone_tabstrip_nav`、
-  编辑器几何 `zone_geom`、区域选择导航 `zone_picker_nav`、动作核心 `zone_actions` 以及
-  `[action:<名字>]` 的解析和执行动作）：
+  编辑器几何 `zone_geom`、区域选择导航 `zone_picker_nav`、单位换算 `zone_units`、动作核心
+  `zone_actions` 以及 `[action:<名字>]` 的解析和执行动作）：
   `python3 -m unittest discover -s tests -v`；
 * 在自己 Xvfb 上的冒烟测试：`sh tests/smoke.sh`（窗口像素级落进区域）；
 * arrange+undo 冒烟测试：`sh tests/smoke-arrange.sh`（三个窗口被布局并还原）；
 * 区域选择冒烟测试：`sh tests/smoke-picker.sh`（`Right` + `Enter` 把窗口
   像素级放进 `top-right`，`Esc` 取消）；
+* HiDPI 缩放冒烟测试：`sh tests/smoke-dpi.sh` 用自己的 Xvfb 配上 `GDK_SCALE=2`，检查排列器、
+  选择器覆盖层、HUD 和覆盖层窗口都按**物理**工作区（`_NET_WORKAREA`）计算，而不是按 GTK
+  报告的逻辑工作区；
 * 窗口例外冒烟测试：`sh tests/smoke-ignore.sh`（被排除的窗口，`apply`、
   `arrange`、守护进程和选择器都不动，而被移出区域的窗口即使守护进程重启也不回来）；
 * 「只留这个区域」模式冒烟测试：`sh tests/smoke-focus.sh`（没有守护进程时 `focus main` 把窗口

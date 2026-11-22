@@ -132,6 +132,7 @@ import time
 from typing import NoReturn
 
 from zone_i18n import _  # строки интерфейса; без каталога — исходный текст
+import zone_units  # перевод логических пикселей GTK в физические X — в одном месте
 
 VERSION = "0.2.0"
 
@@ -1005,7 +1006,13 @@ def require_zone(grid, zone, workspace=None, profile=None, output=None):
     )
 
 
-def monitors():
+def gdk_monitors():
+    """``[(логическая рабочая область, масштаб)]`` из GDK; ``[]`` — GDK недоступен.
+
+    Один разбор на `monitors()` и `monitor_scales()`, чтобы порядок и состав
+    мониторов у них не разошлись. Область здесь ещё логическая: GTK считает в
+    логических пикселях, а в физические её переводит `monitors()`.
+    """
     try:
         import gi
 
@@ -1015,13 +1022,27 @@ def monitors():
         dpy = Gdk.Display.get_default()
         out = []
         for i in range(dpy.get_n_monitors() if dpy else 0):
-            a = dpy.get_monitor(i).get_workarea()
-            out.append((a.x, a.y, a.width, a.height))
-        if out:
-            return out
+            mon = dpy.get_monitor(i)
+            a = mon.get_workarea()
+            out.append(((a.x, a.y, a.width, a.height), mon.get_scale_factor()))
+        return out
     except Exception:
-        pass
-    # резерв: EWMH _NET_WORKAREA (первый рабочий стол)
+        # Ни GDK, ни дисплея: раскладчик умеет и на одном `_NET_WORKAREA`.
+        return []
+
+
+def monitors():
+    """Рабочие области мониторов в **физических** пикселях X.
+
+    GDK отдаёт их в логических: при `GDK_SCALE=2` монитор 1920x1080 виден как
+    960x540, а окно двигается в физических координатах X. Без перевода зона
+    встала бы вдвое меньше и вдвое ближе к левому верхнему углу — доля 0.8358
+    дала бы 802 вместо 1605.
+    """
+    out = [zone_units.physical_rect(area, scale) for area, scale in gdk_monitors()]
+    if out:
+        return out
+    # резерв: EWMH `_NET_WORKAREA` (первый рабочий стол) — уже физические пиксели
     try:
         txt = subprocess.check_output(
             ["xprop", "-root", "_NET_WORKAREA"], text=True, stderr=subprocess.DEVNULL
@@ -1034,13 +1055,33 @@ def monitors():
     fail(_("zone-tiler: не удалось определить рабочую область экрана"), EXIT_FAIL)
 
 
+def monitor_scales():
+    """Масштабы мониторов в том же порядке, что `monitors()`/`monitor_outputs()`.
+
+    Нужны тем, кто живёт в логических пикселях GTK — окну оверлея пикера, окну
+    HUD и полосе вкладок: физическую рамку они переводят в неё этим числом. Без
+    GDK список пуст, и `zone_units.scale_at` даёт тем же потребителям 1 — ровно
+    как в резерве `_NET_WORKAREA`, где масштаба тоже не спросить.
+
+    Читается без подпроцессов: этим отпечатком демон сверяет на лету, не
+    сменился ли масштаб экрана.
+    """
+    return [scale for _area, scale in gdk_monitors()]
+
+
+def scale_at_point(point):
+    """Масштаб монитора, в чью физическую рабочую область попала точка."""
+    return zone_units.scale_for_point(monitors(), monitor_scales(), point)
+
+
 def monitor_outputs():
     """[(имя выхода, (x, y, w, h))] — по одному на монитор.
 
     Имя (`eDP-1`, `HDMI-1`) стабильно между перезагрузками и переподключениями
     кабеля, поэтому именно оно адресует набор зон (`[zones:<выход>]`) и `--monitor`.
-    Геометрия — прежняя GDK `get_workarea()` (в ней уже вычтена панель), а не
-    геометрия xrandr: xrandr даёт полный экран выхода, без панелей.
+    Геометрия — прежняя GDK `get_workarea()` (в ней уже вычтена панель), но в
+    физических пикселях X (`monitors()`), а не геометрия xrandr: xrandr даёт
+    полный экран выхода, без панелей.
     """
     return stitch_monitor_names(xrandr_monitors(), monitors())
 

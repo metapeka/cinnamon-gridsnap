@@ -20,6 +20,16 @@
 ``zone_tabs.tabs_switch_command``, как у ``gridsnap-ctl``: отдельного канала у
 полосы нет.
 
+Два пространства координат: рамка ``rect`` в снимке — **физические** пиксели X
+(это координаты окна зоны), а окно GTK живёт в **логических**. Перевод — один,
+в :func:`window_rect` через ``zone_units.logical_rect``, с масштабом монитора
+под центром самой полосы: при ``GDK_SCALE=2`` без него полоса уехала бы вдвое
+дальше зоны и выросла бы вдвое. Тот же масштаб переводит и локальные координаты:
+cairo в окне рисует в логических пикселях (:func:`local_rect`), а событие клика
+приходит в них же, тогда как рамки вкладок в снимке — физические (:func:`local_point`).
+Без этого при масштабе 2 вкладки рисовались бы вдвое шире полосы, и в окне
+оставалась бы одна, растянутая на всю ширину.
+
 Пустой снимок (``{"strips": []}``) убирает все окна полос, EOF в stdin —
 завершение процесса: демон закрыл поток, значит полос больше некому показывать.
 
@@ -31,6 +41,7 @@
 """
 
 import argparse
+import importlib.util
 import os
 import signal
 import socket
@@ -41,6 +52,7 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 import zone_tabstrip_nav as nav  # noqa: E402  (ищем рядом с собой, как устанавливается)
+import zone_units  # noqa: E402  (единственный перевод логических px в физические)
 from zone_i18n import _  # noqa: E402  (там же: строки интерфейса и их перевод)
 
 VERSION = "0.2.0"
@@ -78,6 +90,111 @@ def tabs_module():
     import zone_tabs  # noqa: PLC0415 — ленивый импорт, рядом с полосой
 
     return zone_tabs
+
+
+# Раскладчик (`zone-tiler.py`) нужен полосе только за масштабом монитора: рамки,
+# подписи и порядок вкладок приходят в снимке. Загружается один раз и лениво: без
+# X и GDK он ответить не может, а повторять его загрузку на каждый снимок — это
+# заново читать xrandr и GDK на каждой перерисовке полосы.
+_ZT = None
+_ZT_LOADED = False
+
+
+def tiler_module():
+    """Раскладчик рядом с полосой — или ``None``, если он не загрузился.
+
+    Соседний hyphen-модуль берётся по своему пути, а не по ``sys.path``: полоса
+    ставится и рядом с исходниками, и в ``/usr/lib/gridsnap``. Сбой загрузки — не
+    падение полосы: без раскладчика масштаба не спросить, и полоса ведёт себя как
+    до волны DPI (масштаб 1).
+    """
+    global _ZT, _ZT_LOADED
+    if not _ZT_LOADED:
+        _ZT_LOADED = True
+        try:
+            spec = importlib.util.spec_from_file_location(
+                "gridsnap_tabstrip_tiler", os.path.join(HERE, "zone-tiler.py")
+            )
+            if spec is None or spec.loader is None:
+                raise ImportError(_("не удалось загрузить zone-tiler.py"))
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = mod
+            spec.loader.exec_module(mod)
+            _ZT = mod
+        except Exception:  # нет модуля, нет его зависимостей — масштаб будет 1
+            _ZT = None
+    return _ZT
+
+
+def strip_scale(point):
+    """Масштаб монитора под **физической** точкой; 1 — спросить не у кого.
+
+    Масштаб берётся у раскладчика (`zone-tiler.scale_at_point`): рабочие области
+    мониторов и масштабы GDK живут там, и своего разбора мониторов полоса не
+    держит. Если X или GDK нет, раскладчик может не ответить вовсе — вплоть до
+    ``SystemExit`` из `monitors` (`fail`), — поэтому здесь ловится и он: сбой
+    чтения масштаба не должен ронять полосу.
+    """
+    zt = tiler_module()
+    if zt is None:
+        return 1
+    try:
+        return zone_units.scale_value(zt.scale_at_point(point))
+    except (Exception, SystemExit):
+        return 1
+
+
+def strip_center(rect):
+    """Центр физической рамки полосы — под ним берётся масштаб монитора."""
+    x, y, w, h = (int(round(float(v))) for v in rect)
+    return (x + w // 2, y + h // 2)
+
+
+def window_rect(rect, scale_of=strip_scale):
+    """Физическая рамка полосы из снимка → рамка окна GTK, в логических px.
+
+    Демон присылает рамку полосы в **физических** пикселях X (это координаты
+    окна зоны), а GTK считает в **логических**: при ``GDK_SCALE=2`` монитор
+    1920x1080 виден как 960x540. Без перевода полоса уехала бы вдвое дальше зоны
+    и выросла бы вдвое — `set_size_request(1920, 22)` заказал бы окно 3840x44.
+
+    Масштаб спрашивается под центром самой полосы (`scale_of`), а не под первым
+    монитором: полоса может стоять на экране с другим масштабом. Размеры после
+    перевода — целые и не меньше 1 px: окно нулевого размера не покажет ни
+    подписи, ни рамки вкладки. Точка и размеры считаются в физических px, поэтому
+    центр берётся до перевода.
+    """
+    x, y, w, h = (int(round(float(v))) for v in rect)
+    try:
+        scale = zone_units.scale_value(scale_of(strip_center(rect)))
+    except Exception:  # масштаб не спросили — как раньше, на масштабе 1
+        scale = 1
+    lx, ly, lw, lh = zone_units.logical_rect((x, y, w, h), scale)
+    return int(lx), int(ly), max(1, int(lw)), max(1, int(lh))
+
+
+def local_rect(rect, origin, scale):
+    """Рамка вкладки из снимка (физические px) → локальные логические px окна.
+
+    Окно GTK живёт в логических пикселях, и cairo в нём тоже логический: при
+    масштабе 2 физическое смещение внутри полосы — это вдвое большее число
+    логических пикселей, поэтому смещения и размеры делятся на масштаб. Начало
+    координат — левый верхний угол полосы (`origin`, физическая рамка из снимка).
+    """
+    x, y, w, h = rect
+    s = zone_units.scale_value(scale)
+    return (x - origin[0]) / s, (y - origin[1]) / s, w / s, h / s
+
+
+def local_point(point, origin, scale):
+    """Точка клика из логических px окна → физические px снимка.
+
+    Обратна :func:`local_rect`: `nav.tab_under` и рамки вкладок считают в
+    физических пикселях экрана, а событие GTK приходит в логических координатах
+    окна полосы.
+    """
+    s = zone_units.scale_value(scale)
+    return origin[0] + point[0] * s, origin[1] + point[1] * s
 
 
 def load_gtk():
@@ -151,6 +268,7 @@ class Strip:
         self.record = None
         self.rows = []
         self.rect = None
+        self.scale = 1
         self.win = Gtk.Window(type=Gtk.WindowType.POPUP)
         self.win.set_title(_("Gridsnap: вкладки зоны {}").format(zone))
         self.win.set_decorated(False)
@@ -178,7 +296,12 @@ class Strip:
         self.record = record
         self.rows = nav.layout(record)
         self.rect = rect
-        x, y, w, h = (int(round(v)) for v in rect)
+        # `self.rect` и рамки вкладок — в физических пикселях X, как в снимке;
+        # окно же GTK живёт в логических, поэтому и место окна, и локальные
+        # координаты рисования с кликом переводятся одним и тем же масштабом.
+        # Читается он раз на снимок: `scale_at_point` — это GDK и xrandr.
+        self.scale = zone_units.scale_value(strip_scale(strip_center(rect)))
+        x, y, w, h = window_rect(rect, lambda _point: self.scale)
         # Размер — через `set_size_request`, а не `resize`/`set_default_size`:
         # окно POPUP рождается 200x200 и после `show_all` resize игнорирует
         # (проверено под Xvfb: `xwininfo` показывает 200 px в высоту). Полоса
@@ -194,7 +317,7 @@ class Strip:
         """Убрать окно полосы (зона пропала, снимок стал пустым, EOF). Идемпотентно."""
         win, self.win = self.win, None
         self.shown = False
-        self.record, self.rows, self.rect = None, [], None
+        self.record, self.rows, self.rect, self.scale = None, [], None, 1
         if win is not None:
             win.destroy()
 
@@ -208,9 +331,10 @@ class Strip:
         """Клик по вкладке → команда демону «показать это окно в этой зоне»."""
         if self.win is None or self.rect is None or event.button != 1:
             return False
-        # Событие приходит в координатах окна полосы, а рамки вкладок — в
-        # экранных: переводим, чтобы попадание считалось одним кодом с тестами.
-        point = (self.rect[0] + event.x, self.rect[1] + event.y)
+        # Событие приходит в логических координатах окна полосы, а рамки вкладок
+        # и `nav.tab_under` — в физических экранных: переводим масштабом полосы,
+        # чтобы попадание считалось одним кодом с тестами.
+        point = local_point((event.x, event.y), self.rect, self.scale)
         window = nav.tab_under(self.record, point)
         if window is None:
             return False
@@ -238,24 +362,27 @@ class Strip:
         cr.rectangle(0, 0, alloc.width, alloc.height)
         cr.fill()
         cr.set_operator(cairo.OPERATOR_OVER)
-        ox, oy = self.rect[0], self.rect[1]
         for row in self.rows:
-            x, y, w, h = row["rect"]
+            x, y, w, h = self.local_rect(row)
             cr.set_source_rgb(*(TAB_ACTIVE_BG if row["active"] else TAB_BG))
-            cr.rectangle(x - ox, y - oy, w, h)
+            cr.rectangle(x, y, w, h)
             cr.fill()
             if row["active"]:
                 # Активная вкладка — не только цветом: сверху акцентная полоска.
                 cr.set_source_rgb(*ACCENT)
-                cr.rectangle(x - ox, y - oy, w, min(ACCENT_H, h))
+                cr.rectangle(x, y, w, min(ACCENT_H / self.scale, h))
                 cr.fill()
-            self.draw_label(cr, row, ox, oy)
+            self.draw_label(cr, row)
         return False
 
-    def draw_label(self, cr, row, ox, oy):
+    def local_rect(self, row):
+        """Рамка вкладки в локальных логических px окна (для cairo)."""
+        return local_rect(row["rect"], self.rect, self.scale)
+
+    def draw_label(self, cr, row):
         """Подпись вкладки внутри её рамки: обрезается по ширине, по центру по высоте."""
-        x, y, w, h = row["rect"]
-        pad = nav.TAB_PADDING
+        x, y, w, h = self.local_rect(row)
+        pad = nav.TAB_PADDING / self.scale
         inner = max(1, int(w) - 2 * pad)
         layout = PangoCairo.create_layout(cr)
         layout.set_text(row["label"], -1)
@@ -267,9 +394,9 @@ class Strip:
         _lw, lh = layout.get_pixel_size()
         cr.set_source_rgb(*(TAB_ACTIVE_FG if row["active"] else TAB_FG))
         cr.save()
-        cr.rectangle(x - ox + pad, y - oy, inner, h)
+        cr.rectangle(x + pad, y, inner, h)
         cr.clip()
-        cr.move_to(x - ox + pad, y - oy + max(0.0, (h - lh) / 2.0))
+        cr.move_to(x + pad, y + max(0.0, (h - lh) / 2.0))
         PangoCairo.show_layout(cr, layout)
         cr.restore()
 

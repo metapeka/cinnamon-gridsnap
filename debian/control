@@ -19,7 +19,8 @@ Depends: ${misc:Depends},
          gir1.2-gtk-3.0,
          libx11-6,
          x11-utils
-Suggests: python3-cairo
+Suggests: python3-cairo,
+          python3-gi-cairo
 Description: window tiling into zones for Cinnamon/X11
  GridSnap is a visual editor for workspace zones and a window tiler for
  Cinnamon on X11. The active window is snapped into a zone with a hotkey;

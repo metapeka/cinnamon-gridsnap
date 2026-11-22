@@ -2873,6 +2873,70 @@ class TestFractionsToPixels(unittest.TestCase):
         self.assertGreaterEqual(h, 1)
 
 
+class TestMonitorScaleCache(unittest.TestCase):
+    """Смена масштаба экрана на лету сбрасывает кэш рабочих областей.
+
+    Рабочие области GDK меняются вместе с масштабом (`GDK_SCALE=2` — вдвое
+    меньше), поэтому демон сверяет отпечаток масштабов: иначе до `reload` он
+    клал бы окна по старым пикселям.
+    """
+
+    def setUp(self):
+        fd, self.conf = tempfile.mkstemp(suffix=".conf")
+        os.close(fd)
+        with open(self.conf, "w", encoding="utf-8") as fh:
+            fh.write(ONE_RULE)
+        self.addCleanup(os.unlink, self.conf)
+        # Мониторы и масштабы читаются из этого состояния, как из X-сессии.
+        self.areas = [(0, 0, 960, 540)]
+        self.scales = [2]
+        self.calls = 0
+
+    def read_monitors(self):
+        self.calls += 1
+        return list(self.areas)
+
+    def daemon(self, workarea=None):
+        return zd.Daemon(
+            self.conf,
+            workarea=workarea,
+            monitors=self.read_monitors,
+            monitor_scales=lambda: list(self.scales),
+        )
+
+    def test_unchanged_scale_uses_cache(self):
+        dae = self.daemon()
+        self.assertEqual(dae._monitors(), [(0, 0, 960, 540)])
+        self.assertEqual(dae._monitors(), [(0, 0, 960, 540)])
+        self.assertEqual(self.calls, 1)
+
+    def test_new_scale_re_reads_monitors(self):
+        dae = self.daemon()
+        self.assertEqual(dae._monitors(), [(0, 0, 960, 540)])
+        # Пользователь поставил масштаб 1: области стали вдвое шире.
+        self.scales = [1]
+        self.areas = [(0, 0, 1920, 1080)]
+        self.assertEqual(dae._monitors(), [(0, 0, 1920, 1080)])
+        self.assertEqual(self.calls, 2)
+
+    def test_new_scale_drops_forced_workarea(self):
+        dae = self.daemon(workarea=lambda: self.areas[0])
+        self.assertEqual(dae._monitor_of(0x1), (0, 0, 960, 540))
+        self.areas = [(0, 0, 1920, 1080)]
+        self.scales = [1]
+        self.assertEqual(dae._monitor_of(0x1), (0, 0, 1920, 1080))
+
+    def test_unreadable_scale_keeps_cache(self):
+        dae = zd.Daemon(
+            self.conf,
+            monitors=self.read_monitors,
+            monitor_scales=lambda: (_ for _ in ()).throw(RuntimeError("нет GDK")),
+        )
+        self.assertEqual(dae._monitors(), [(0, 0, 960, 540)])
+        self.assertEqual(dae._monitors(), [(0, 0, 960, 540)])
+        self.assertEqual(self.calls, 1)
+
+
 class TestMonitorForPoint(unittest.TestCase):
     def test_point_inside_first(self):
         self.assertEqual(zd.monitor_for_point([WA, WA1], (250, 500)), WA)
