@@ -22,6 +22,7 @@ X-сервера, как ``zone_tabs``/``zone_reflow``/``zone_picker_nav``. Вс
 трогает окна (свернуть, поднять, запустить процесс), живёт в ``zone-tiler.py``.
 """
 
+import math
 import re
 import shlex
 from dataclasses import dataclass
@@ -145,7 +146,7 @@ def is_builtin(run):
     Имя при этом не проверяется: за него отвечает :func:`builtin_name`, чтобы у
     «это встроенное» и «такого встроенного нет» были разные сообщения.
     """
-    raise NotImplementedError("контракт: реализует воркер A")
+    return str(run or "").strip().lower().startswith(BUILTIN_PREFIX)
 
 
 def builtin_name(run):
@@ -155,7 +156,16 @@ def builtin_name(run):
     Неизвестное имя (``builtin:что-то``) — :class:`ActionError` со списком
     известных: опечатка не должна молча оставить человека без действия.
     """
-    raise NotImplementedError("контракт: реализует воркер A")
+    text = str(run or "").strip()
+    if not is_builtin(text):
+        return None
+    name = text[len(BUILTIN_PREFIX):].strip().lower()
+    if name not in BUILTINS:
+        raise ActionError(
+            f"неизвестное встроенное действие 'builtin:{name}': можно "
+            + ", ".join(f"builtin:{builtin}" for builtin in BUILTINS)
+        )
+    return name
 
 
 def expand_command(command, context, splitter=shlex.split):
@@ -166,7 +176,32 @@ def expand_command(command, context, splitter=shlex.split):
     аргументе. Пустая команда и неизвестная подстановка ``{что-то}`` —
     :class:`ActionError`; отсутствующие значения дают пустую строку.
     """
-    raise NotImplementedError("контракт: реализует воркер A")
+    text = str(command or "").strip()
+    if not text:
+        raise ActionError("у действия пустая команда в run")
+    try:
+        tokens = splitter(text)
+    except ValueError as exc:
+        raise ActionError(f"не разобрать команду действия: {exc}") from None
+    if not tokens:
+        raise ActionError("у действия пустая команда в run")
+    values = context.values()
+    return [_expand_token(token, values) for token in tokens]
+
+
+def _expand_token(token, values):
+    """Подставить ``{имя}`` в один аргумент; неизвестное имя — `ActionError`."""
+
+    def replace(match):
+        name = match.group(1)
+        if name not in values:
+            raise ActionError(
+                f"в команде действия неизвестная подстановка '{{{name}}}': можно "
+                + ", ".join("{" + known + "}" for known in PLACEHOLDERS)
+            )
+        return values[name]
+
+    return _PLACEHOLDER_RE.sub(replace, token)
 
 
 def mirror_fractions(rect, axis=DEFAULT_MIRROR_AXIS):
@@ -177,7 +212,21 @@ def mirror_fractions(rect, axis=DEFAULT_MIRROR_AXIS):
     :class:`ActionError`. Рамка нужна, чтобы найти зону-партнёра по геометрии
     (:func:`find_mirror`), а не по имени: имена зон человек придумывает сам.
     """
-    raise NotImplementedError("контракт: реализует воркер A")
+    axis = _mirror_axis(axis)
+    x, y, w, h = (float(v) for v in rect)
+    if axis == "vertical":
+        return (x, 1.0 - y - h, w, h)
+    return (1.0 - x - w, y, w, h)
+
+
+def _mirror_axis(axis):
+    """Ось зеркала из конфига: `horizontal`/`vertical`, иначе `ActionError`."""
+    name = str(axis or DEFAULT_MIRROR_AXIS).strip().lower()
+    if name not in MIRROR_AXES:
+        raise ActionError(
+            f"неизвестная ось зеркала '{name}': можно " + ", ".join(MIRROR_AXES)
+        )
+    return name
 
 
 def find_mirror(zones, subject, axis=DEFAULT_MIRROR_AXIS):
@@ -187,12 +236,47 @@ def find_mirror(zones, subject, axis=DEFAULT_MIRROR_AXIS):
     в порядке сетки. Зеркальная рамка считается :func:`mirror_fractions`, а
     зоной-партнёром становится та, у которой с ней **наибольшая площадь
     пересечения**; ничьи решаются по близости центров, затем по порядку зон.
-    Сама `subject` кандидатом не является (у зоны во весь экран зеркало — она
-    же, и обмен был бы пустым). Нет пересечения ни с одной зоной — ``None``:
-    «в этой сетке зеркальной зоны нет» — это честный отказ, а не догадка.
+    Сама `subject` кандидатом не является: зеркало зоны во весь экран — она же,
+    и обмен с собой ничего не делает. Нет пересечения ни с одной зоной — ``None``:
+    «в этой сетке зеркальной зоны нет» — честный отказ, а не догадка.
     Неизвестное имя `subject` — :class:`ActionError`.
     """
-    raise NotImplementedError("контракт: реализует воркер A")
+    if subject not in zones:
+        raise ActionError(f"зоны '{subject}' нет в сетке — зеркалить нечего")
+    target = mirror_fractions(zones[subject], axis)
+    tx, ty = _center(target)
+    best = None
+    for order, (name, rect) in enumerate(zones.items()):
+        if name == subject:
+            continue
+        area = _intersection_area(rect, target)
+        if area <= 0:
+            continue
+        cx, cy = _center(rect)
+        # Меньше — лучше: сначала площадь (с минусом), затем расстояние, затем
+        # порядок сетки: два равных кандидата должны разрешаться одинаково
+        # в каждом запуске, а не как ляжет словарь.
+        rank = (-area, math.hypot(cx - tx, cy - ty), order)
+        if best is None or rank < best[0]:
+            best = (rank, name)
+    return None if best is None else best[1]
+
+
+def _center(rect):
+    """Центр рамки в долях: ``(x + w/2, y + h/2)``."""
+    x, y, w, h = (float(v) for v in rect)
+    return (x + w / 2.0, y + h / 2.0)
+
+
+def _intersection_area(left, right):
+    """Площадь пересечения двух рамок в долях; не пересекаются — ноль."""
+    lx, ly, lw, lh = (float(v) for v in left)
+    rx, ry, rw, rh = (float(v) for v in right)
+    width = min(lx + lw, rx + rw) - max(lx, rx)
+    height = min(ly + lh, ry + rh) - max(ly, ry)
+    if width <= 0 or height <= 0:
+        return 0.0
+    return width * height
 
 
 def zone_windows(frames, zone_rect, tab_rect, tolerance=zone_tabs.FRAME_TOLERANCE):
@@ -205,7 +289,25 @@ def zone_windows(frames, zone_rect, tab_rect, tolerance=zone_tabs.FRAME_TOLERANC
     и та же величина, что у `zone_tabs.FRAME_TOLERANCE`). Рамка не прочитана
     (``None``) — окно пропускается.
     """
-    raise NotImplementedError("контракт: реализует воркер A")
+    found = []
+    for win, frame in frames.items():
+        if frame is None:
+            continue
+        if _same_rect(frame, zone_rect, tolerance) or _same_rect(frame, tab_rect, tolerance):
+            found.append(win)
+    return found
+
+
+def _same_rect(left, right, tolerance):
+    """Совпали ли две рамки с точностью ``tolerance`` по каждой стороне.
+
+    Копия правила `zone_tabs._same_rect` (оно приватное): здесь оно нужно и для
+    «окно в зоне», и для «зона окна», а тянуть приватную функцию из соседнего
+    модуля хуже, чем продублировать две строки.
+    """
+    if left is None or right is None:
+        return False
+    return all(abs(float(a) - float(b)) <= tolerance for a, b in zip(left, right))
 
 
 def zone_of_frame(frame, zones_px, height=None, tolerance=zone_tabs.FRAME_TOLERANCE):
@@ -216,4 +318,11 @@ def zone_of_frame(frame, zones_px, height=None, tolerance=zone_tabs.FRAME_TOLERA
     принять за «в зоне» и окно на общей рамке вкладки. Первое совпадение по
     порядку сетки — зоны не перекрываются, и двух ответов быть не должно.
     """
-    raise NotImplementedError("контракт: реализует воркер A")
+    if frame is None:
+        return None
+    strip = zone_tabs.STRIP_HEIGHT if height is None else int(height)
+    for name, rect in zones_px.items():
+        tab = zone_tabs.stack_rect(tuple(float(v) for v in rect), 2, strip)
+        if _same_rect(frame, rect, tolerance) or _same_rect(frame, tab, tolerance):
+            return name
+    return None
