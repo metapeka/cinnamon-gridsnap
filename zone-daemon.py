@@ -76,6 +76,7 @@ import time
 from typing import cast
 
 from zone_i18n import _
+import window_backend  # оконный слой: xprop/xwininfo/libX11 — в одном месте
 
 VERSION = "0.2.0"
 
@@ -388,22 +389,13 @@ def placed_path():
 
 
 def read_session_id():
-    """Идентификатор X-сессии: окно `_NET_SUPPORTING_WM_CHECK`.
+    """Идентификатор X-сессии (`_NET_SUPPORTING_WM_CHECK`) или None — см. `window_backend`.
 
     Память об укладках не должна переезжать в новую X-сессию: там XID раздаются
     заново, и старая запись может «попасть» на чужое окно того же класса.
     Не читается — `None`, тогда проверка выключена.
     """
-    try:
-        out = subprocess.check_output(
-            ["xprop", "-root", "_NET_SUPPORTING_WM_CHECK"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        return None
-    found = re.search(r"window id # (0x[0-9a-fA-F]+)", out)
-    return found.group(1) if found else None
+    return window_backend.read_session_id()
 
 
 def frame_matches(actual, placed, tolerance=PLACED_TOLERANCE):

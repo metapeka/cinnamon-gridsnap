@@ -118,8 +118,6 @@ import argparse
 import collections
 import configparser
 import contextlib
-import ctypes
-import ctypes.util
 import fnmatch
 import json
 import os
@@ -132,6 +130,7 @@ import time
 from typing import NoReturn
 
 from zone_i18n import _  # строки интерфейса; без каталога — исходный текст
+import window_backend  # оконный слой: xprop/xwininfo/xrandr и libX11 — в одном месте
 import zone_units  # перевод логических пикселей GTK в физические X — в одном месте
 
 VERSION = "0.2.0"
@@ -178,62 +177,9 @@ CONF = default_conf()
 # ------------------------------------------------------------ правила окон
 
 
-def _xprop_props(text):
-    """Разобрать вывод xprop в {имя_свойства: [строки значения]}.
-
-    Строки продолжения (значение перенесено на следующую строку) приклеиваются
-    к текущему свойству, чтобы один и тот же разбор годился и для однострочной
-    формы `WM_CLASS(STRING) = "a", "b"`, и для многострочной.
-    """
-    props = {}
-    current = None
-    for raw in text.splitlines():
-        m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\([^)]*\)\s*=\s*(.*)$", raw)
-        if m:
-            current = m.group(1)
-            props.setdefault(current, []).append(m.group(2))
-        elif current is not None and raw.strip():
-            props[current].append(raw.strip())
-    return props
-
-
-def _strings(value):
-    """Строки из значения xprop: в кавычках — как есть, иначе — по запятой."""
-    quoted = re.findall(r'"((?:[^"\\]|\\.)*)"', value)
-    if quoted:
-        return [re.sub(r"\\(.)", r"\1", s) for s in quoted]
-    return [s.strip() for s in value.split(",") if s.strip()]
-
-
 def window_class_title(win):
-    """WM_CLASS (class, вторая строка) и заголовок окна через xprop.
-
-    Заголовок берётся из _NET_WM_NAME, при его отсутствии — из WM_NAME. Любая
-    ошибка (нет xprop, окна, доступа) даёт ("", "") — вызывающий просто не найдёт
-    совпадений. Чистый разбор вывода вынесен в _xprop_props/_strings.
-    """
-    try:
-        out = subprocess.check_output(
-            ["xprop", "-id", hex(win), "WM_CLASS", "_NET_WM_NAME", "WM_NAME"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-        props = _xprop_props(out)
-        wm_class = ""
-        classes = _strings(" ".join(props.get("WM_CLASS", [])))
-        if len(classes) >= 2:
-            wm_class = classes[1]  # instance, class -> берём class
-        elif classes:
-            wm_class = classes[0]
-        wm_title = ""
-        for prop in ("_NET_WM_NAME", "WM_NAME"):
-            names = _strings(" ".join(props.get(prop, [])))
-            if names and names[0]:
-                wm_title = names[0]
-                break
-        return (wm_class, wm_title)
-    except Exception:
-        return ("", "")
+    """WM_CLASS (класс, вторая строка) и заголовок окна — см. `window_backend`."""
+    return window_backend.window_class_title(win)
 
 
 def selector_matches(selector, wm_class, wm_title):
@@ -314,16 +260,8 @@ def is_ignored_type(window_type):
 
 
 def window_types(win):
-    """Набор `_NET_WM_WINDOW_TYPE` окна через xprop (пустой при ошибке)."""
-    try:
-        out = subprocess.check_output(
-            ["xprop", "-id", hex(win), "_NET_WM_WINDOW_TYPE"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        return frozenset()
-    return frozenset(re.findall(r"_NET_WM_WINDOW_TYPE_[A-Z_]+", out))
+    """Набор `_NET_WM_WINDOW_TYPE` окна (пустой при ошибке) — см. `window_backend`."""
+    return window_backend.window_types(win)
 
 
 def window_excluded(wm_class, wm_title, window_type, ignore_selectors=()):
@@ -372,27 +310,8 @@ def window_is_excluded(win, ignore_selectors=()):
 
 
 def read_client_list():
-    """Клиентские окна из `_NET_CLIENT_LIST` (EWMH) через `xprop -root`.
-
-    Возвращает список id в порядке свойства (снизу вверх) или `None`, если
-    список недоступен: нет xprop/дисплея, отсутствует само свойство (xprop
-    печатает `no such atom on any window.`) или в выводе нет маркера
-    `window id #`. Пустой список — валидное состояние «клиентов нет», его
-    нельзя путать с ошибкой. Функцию можно подменить в тестах.
-    """
-    try:
-        out = subprocess.check_output(
-            ["xprop", "-root", CLIENT_LIST_ATOM],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        return None
-    # `_NET_CLIENT_LIST(WINDOW): window id # 0x400003, 0x600005`
-    if "window id #" not in out:
-        return None
-    _unused, _unused2, value = out.partition("#")
-    return [int(h, 16) for h in re.findall(r"0x[0-9a-fA-F]+", value)]
+    """Клиентские окна `_NET_CLIENT_LIST` или None — см. `window_backend`."""
+    return window_backend.read_client_list()
 
 
 # ---------------------------------------------------------------- конфиг сетки
@@ -657,30 +576,8 @@ class Grid:
 
 
 def read_window_center(win):
-    """Центр окна (px, py) по абсолютной геометрии `xwininfo`; None при ошибке.
-
-    Нужен только чтобы выбрать монитор окна, поэтому берётся клиентская
-    геометрия целиком: рамка WM сдвигает её на считаные пиксели и на выбор
-    монитора не влияет.
-    """
-    try:
-        out = subprocess.check_output(
-            ["xwininfo", "-id", hex(win)], text=True, stderr=subprocess.DEVNULL
-        )
-    except Exception:
-        return None
-
-    def num(label):
-        found = re.search(rf"{label}:\s+(-?\d+)", out)
-        return int(found.group(1)) if found else None
-
-    x = num("Absolute upper-left X")
-    y = num("Absolute upper-left Y")
-    w = num("Width")
-    h = num("Height")
-    if x is None or y is None or w is None or h is None:
-        return None
-    return (x + w // 2, y + h // 2)
+    """Центр окна (px, py) по xwininfo; None при ошибке — см. `window_backend`."""
+    return window_backend.read_window_center(win)
 
 
 def output_at_point(outputs, point):
@@ -723,21 +620,8 @@ def window_output(outputs, window, warn=True):
 
 
 def monitor_for_point(monitors, point):
-    """Рабочая область монитора, содержащего точку; иначе ближайшая по центру.
-
-    Точка может не попасть ни в одну область (окно под панелью, в щели между
-    мониторами) — тогда берётся область с ближайшим центром, а не монитор 0.
-    `monitors` — непустой список прямоугольников (x, y, w, h).
-    """
-    px, py = point
-    for wa in monitors:
-        x, y, w, h = wa
-        if x <= px < x + w and y <= py < y + h:
-            return wa
-    return min(
-        monitors,
-        key=lambda wa: (wa[0] + wa[2] / 2 - px) ** 2 + (wa[1] + wa[3] / 2 - py) ** 2,
-    )
+    """Рабочая область монитора точки (иначе ближайшая) — см. `window_backend`."""
+    return window_backend.monitor_for_point(monitors, point)
 
 
 def window_monitor(win, mons):
@@ -749,39 +633,17 @@ def window_monitor(win, mons):
 
 
 def window_workspace(win):
-    """Номер виртуального рабочего стола окна (`_NET_WM_DESKTOP`) или None."""
-    try:
-        out = subprocess.check_output(
-            ["xprop", "-id", hex(win), "_NET_WM_DESKTOP"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        return None
-    found = re.search(r"=\s*(-?\d+)", out)
-    return int(found.group(1)) if found else None
+    """Номер стола окна (`_NET_WM_DESKTOP`) или None — см. `window_backend`."""
+    return window_backend.window_workspace(win)
 
 
 def current_workspace():
-    """Номер активного рабочего стола (`_NET_CURRENT_DESKTOP`) или None.
+    """Номер активного стола (`_NET_CURRENT_DESKTOP`) или None — см. `window_backend`.
 
-    Ноль — первый стол: так его нумерует EWMH. В ``[workspaces]`` ключи на
-    единицу больше (как в интерфейсе Cinnamon), перевод — в
-    :func:`grid_for_workspace`.
+    Перевод нумерации EWMH (с нуля) в ключи ``[workspaces]`` (с единицы) —
+    по-прежнему в :func:`grid_for_workspace`.
     """
-    try:
-        out = subprocess.check_output(
-            ["xprop", "-root", "_NET_CURRENT_DESKTOP"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        return None
-    found = re.search(r"=\s*(-?\d+)", out)
-    if not found:
-        return None
-    number = int(found.group(1))
-    return number if number >= 0 else None
+    return window_backend.current_workspace()
 
 
 def window_workspace_for_zones(win):
@@ -1007,171 +869,64 @@ def require_zone(grid, zone, workspace=None, profile=None, output=None):
 
 
 def gdk_monitors():
-    """``[(логическая рабочая область, масштаб)]`` из GDK; ``[]`` — GDK недоступен.
-
-    Один разбор на `monitors()` и `monitor_scales()`, чтобы порядок и состав
-    мониторов у них не разошлись. Область здесь ещё логическая: GTK считает в
-    логических пикселях, а в физические её переводит `monitors()`.
-    """
-    try:
-        import gi
-
-        gi.require_version("Gdk", "3.0")
-        from gi.repository import Gdk  # type: ignore
-
-        dpy = Gdk.Display.get_default()
-        out = []
-        for i in range(dpy.get_n_monitors() if dpy else 0):
-            mon = dpy.get_monitor(i)
-            a = mon.get_workarea()
-            out.append(((a.x, a.y, a.width, a.height), mon.get_scale_factor()))
-        return out
-    except Exception:
-        # Ни GDK, ни дисплея: раскладчик умеет и на одном `_NET_WORKAREA`.
-        return []
+    """``[(логическая рабочая область, масштаб)]`` из GDK — см. `window_backend`."""
+    return window_backend.gdk_monitors()
 
 
 def monitors():
     """Рабочие области мониторов в **физических** пикселях X.
 
-    GDK отдаёт их в логических: при `GDK_SCALE=2` монитор 1920x1080 виден как
-    960x540, а окно двигается в физических координатах X. Без перевода зона
-    встала бы вдвое меньше и вдвое ближе к левому верхнему углу — доля 0.8358
-    дала бы 802 вместо 1605.
+    См. `window_backend.monitors`: он отвечает `WindowBackendError`, а сообщение
+    и код возврата остаются здесь — те же, что до переноса оконного слоя.
     """
-    out = [zone_units.physical_rect(area, scale) for area, scale in gdk_monitors()]
-    if out:
-        return out
-    # резерв: EWMH `_NET_WORKAREA` (первый рабочий стол) — уже физические пиксели
     try:
-        txt = subprocess.check_output(
-            ["xprop", "-root", "_NET_WORKAREA"], text=True, stderr=subprocess.DEVNULL
-        )
-        nums = [int(v) for v in re.findall(r"-?\d+", txt.split("=", 1)[1])][:4]
-        if len(nums) == 4 and nums[2] > 0:
-            return [tuple(nums)]
-    except Exception:
-        pass
-    fail(_("zone-tiler: не удалось определить рабочую область экрана"), EXIT_FAIL)
+        return window_backend.monitors()
+    except window_backend.WindowBackendError:
+        fail(_("zone-tiler: не удалось определить рабочую область экрана"), EXIT_FAIL)
 
 
 def monitor_scales():
-    """Масштабы мониторов в том же порядке, что `monitors()`/`monitor_outputs()`.
-
-    Нужны тем, кто живёт в логических пикселях GTK — окну оверлея пикера, окну
-    HUD и полосе вкладок: физическую рамку они переводят в неё этим числом. Без
-    GDK список пуст, и `zone_units.scale_at` даёт тем же потребителям 1 — ровно
-    как в резерве `_NET_WORKAREA`, где масштаба тоже не спросить.
-
-    Читается без подпроцессов: этим отпечатком демон сверяет на лету, не
-    сменился ли масштаб экрана.
-    """
-    return [scale for _area, scale in gdk_monitors()]
+    """Масштабы мониторов в том же порядке, что `monitors()` — см. `window_backend`."""
+    return window_backend.monitor_scales()
 
 
 def scale_at_point(point):
     """Масштаб монитора, в чью физическую рабочую область попала точка."""
-    return zone_units.scale_for_point(monitors(), monitor_scales(), point)
+    return window_backend.scale_at_point(point)
 
 
 def monitor_outputs():
     """[(имя выхода, (x, y, w, h))] — по одному на монитор.
 
-    Имя (`eDP-1`, `HDMI-1`) стабильно между перезагрузками и переподключениями
-    кабеля, поэтому именно оно адресует набор зон (`[zones:<выход>]`) и `--monitor`.
-    Геометрия — прежняя GDK `get_workarea()` (в ней уже вычтена панель), но в
-    физических пикселях X (`monitors()`), а не геометрия xrandr: xrandr даёт
-    полный экран выхода, без панелей.
+    См. `window_backend.monitor_outputs`: тела сшивки живут в оконном слое, а
+    собираются здесь затем, чтобы подмены `monitors`/`xrandr_monitors` в тестах
+    и остальном коде продолжали действовать.
     """
-    return stitch_monitor_names(xrandr_monitors(), monitors())
-
-
-# Строка `xrandr --listmonitors`: ` 0: +*eDP-1 1920/344x1080/194+0+0  eDP-1`.
-# Флаги `+*` относятся к состоянию монитора (`+` — авто, `*` — основной) и
-# частью имени не являются.
-_XRANDR_MONITOR_RE = re.compile(
-    r"^\s*\d+:\s+[+*]*(?P<fallback>\S+)\s+"
-    r"(?P<w>\d+)/\d+x(?P<h>\d+)/\d+\+(?P<x>-?\d+)\+(?P<y>-?\d+)"
-    r"(?:\s+(?P<name>\S+))?\s*$"
-)
+    return window_backend.stitch_monitor_names(xrandr_monitors(), monitors())
 
 
 def parse_xrandr_monitors(text):
-    """[(имя, (x, y, w, h))] из вывода `xrandr --listmonitors`, в его порядке.
-
-    Имя — последнее поле строки (` 0: +*eDP-1 1920/344x1080/194+0+0  eDP-1`).
-    Если имени в строке нет (старый xrandr), берётся поле после `N:` без флагов
-    `+*`. Строки без геометрии (заголовок `Monitors:`, мусор) пропускаются.
-    Чистая функция — под тесты.
-    """
-    out = []
-    for raw in text.splitlines():
-        m = _XRANDR_MONITOR_RE.match(raw)
-        if not m:
-            continue
-        name = (m.group("name") or m.group("fallback") or "").lstrip("+*")
-        if not name:
-            continue
-        rect = (
-            int(m.group("x")),
-            int(m.group("y")),
-            int(m.group("w")),
-            int(m.group("h")),
-        )
-        out.append((name, rect))
-    return out
+    """[(имя, (x, y, w, h))] из вывода `xrandr --listmonitors` — см. `window_backend`."""
+    return window_backend.parse_xrandr_monitors(text)
 
 
 def xrandr_monitors():
-    """Мониторы из `xrandr --listmonitors`; [] если утилиты нет или она упала."""
-    try:
-        text = subprocess.check_output(
-            ["xrandr", "--listmonitors"], text=True, stderr=subprocess.DEVNULL
-        )
-    except Exception:
-        return []
-    return parse_xrandr_monitors(text)
+    """Мониторы из `xrandr --listmonitors`; [] если утилиты нет — см. `window_backend`."""
+    return window_backend.xrandr_monitors()
 
 
 def overlap_area(a, b):
     """Площадь пересечения прямоугольников a и b (0, если не пересекаются)."""
-    ax, ay, aw, ah = a
-    bx, by, bw, bh = b
-    w = min(ax + aw, bx + bw) - max(ax, bx)
-    h = min(ay + ah, by + bh) - max(ay, by)
-    return w * h if w > 0 and h > 0 else 0
+    return window_backend.overlap_area(a, b)
 
 
 def stitch_monitor_names(outputs, areas):
     """Сшить имена выходов с рабочими областями: [(имя, область)].
 
-    Совпало количество — имена по порядку: у GDK и xrandr один и тот же порядок
-    мониторов. Иначе — по максимальному пересечению площадей (GDK может отдать
-    одну область на несколько выходов или наоборот), а области без пересечения
-    получают имя `monitor-<i>`. Без имён (нет xrandr) — только `monitor-<i>`, то
-    есть прежнее поведение. Чистая функция — под тесты.
+    См. `window_backend.stitch_monitor_names`: совпало количество — по порядку,
+    иначе — по максимальному пересечению, без имён — `monitor-<i>`.
     """
-    if not outputs:
-        return [(f"monitor-{i}", wa) for i, wa in enumerate(areas)]
-    if len(outputs) == len(areas):
-        return [(outputs[i][0], areas[i]) for i in range(len(areas))]
-    stitched = []
-    used = set()
-    for i, wa in enumerate(areas):
-        best = None
-        best_area = 0
-        for j, (_unused, rect) in enumerate(outputs):
-            if j in used:
-                continue
-            area = overlap_area(wa, rect)
-            if area > best_area:
-                best, best_area = j, area
-        if best is None:
-            stitched.append((f"monitor-{i}", wa))
-        else:
-            used.add(best)
-            stitched.append((outputs[best][0], wa))
-    return stitched
+    return window_backend.stitch_monitor_names(outputs, areas)
 
 
 def resolve_monitor(spec, outputs=None):
@@ -1229,19 +984,8 @@ def target_output(args, outputs=None):
 
 
 def frame_extents(win):
-    """Толщина рамки/титлбара оконного менеджера: (left, right, top, bottom)."""
-    try:
-        txt = subprocess.check_output(
-            ["xprop", "-id", hex(win), "_NET_FRAME_EXTENTS"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-        nums = [int(v) for v in re.findall(r"-?\d+", txt.split("=", 1)[1])][:4]
-        if len(nums) == 4 and all(0 <= n < 200 for n in nums):
-            return tuple(nums)
-    except Exception:
-        pass
-    return (0, 0, 0, 0)
+    """Толщина рамки/титлбара оконного менеджера — см. `window_backend`."""
+    return window_backend.frame_extents(win)
 
 
 def client_size(rect, extents):
@@ -1258,20 +1002,17 @@ def client_size(rect, extents):
 def read_active_window():
     """Активное окно и текст ошибки: ``(окно | None, причина | None)``.
 
-    Разбор один на всех: `active_window` падает с кодом 1, когда окна нет (это
+    Чтение — в `window_backend` (он отдаёт код причины), а текст для человека
+    остаётся здесь: `active_window` падает с кодом 1, когда окна нет (это
     правильно для команд, которым окно нужно), а `active_window_quiet` отдаёт
     ``None`` без сообщений в stderr — тому, для кого отсутствие окна не ошибка.
     """
-    try:
-        txt = subprocess.check_output(
-            ["xprop", "-root", "_NET_ACTIVE_WINDOW"], text=True, stderr=subprocess.DEVNULL
-        )
-    except Exception:
+    window, reason = window_backend.read_active_window()
+    if window is not None:
+        return window, None
+    if reason == window_backend.ACTIVE_WINDOW_NO_XPROP:
         return None, _("zone-tiler: xprop не найден (пакет x11-utils)")
-    m = re.search(r"(0x[0-9a-fA-F]+)", txt)
-    if not m or int(m.group(1), 16) == 0:
-        return None, _("zone-tiler: нет активного окна")
-    return int(m.group(1), 16), None
+    return None, _("zone-tiler: нет активного окна")
 
 
 def active_window():
@@ -1295,138 +1036,32 @@ def active_window_quiet():
 # ----------------------------------------------------------------------- X11
 
 
-class XClientMessageEvent(ctypes.Structure):
-    _fields_ = [
-        ("type", ctypes.c_int),
-        ("serial", ctypes.c_ulong),
-        ("send_event", ctypes.c_int),
-        ("display", ctypes.c_void_p),
-        ("window", ctypes.c_ulong),
-        ("message_type", ctypes.c_ulong),
-        ("format", ctypes.c_int),
-        ("data", ctypes.c_long * 5),
-        ("pad", ctypes.c_long * 15),  # чтобы структура была не меньше sizeof(XEvent)
-    ]
+# Соединение с X-сервером и EWMH-команды целиком живут в оконном слое. Имя
+# оставлено здесь ради вызывающих и тестов: `apply_zone` открывает соединение
+# через `X11()`, а тесты подменяют `zone-tiler.X11` поддельным соединением.
+X11 = window_backend.X11
+
+# Значения EWMH/ICCCM, которые видны снаружи класса (их сверяют тесты).
+SOURCE_PAGER = window_backend.SOURCE_PAGER
+ICONIC_STATE = window_backend.ICONIC_STATE
 
 
-CLIENT_MESSAGE = 33
-SUBSTRUCTURE_MASK = (1 << 19) | (1 << 20)  # Notify | Redirect
-X_FLAGS = 1 | 2 | 4 | 8  # X, Y, Width, Height
-GRAVITY_NORTH_WEST = 1
-SOURCE_PAGER = 2
-# `WM_CHANGE_STATE` со значением IconicState (ICCCM) — просьба WM свернуть окно.
-ICONIC_STATE = 3
+def _x11_failed():
+    """Сообщить, что X-соединения нет, и выйти с кодом 1.
 
-
-class X11:
-    def __init__(self):
-        name = ctypes.util.find_library("X11") or "libX11.so.6"
-        self.x = ctypes.CDLL(name)
-        self.x.XOpenDisplay.restype = ctypes.c_void_p
-        self.x.XOpenDisplay.argtypes = [ctypes.c_char_p]
-        dpy_name = (os.environ.get("DISPLAY") or "").encode() or None
-        self.dpy = self.x.XOpenDisplay(dpy_name)
-        if not self.dpy:
-            fail(_("zone-tiler: не удалось подключиться к X-серверу (DISPLAY)"), EXIT_FAIL)
-        self.x.XDefaultRootWindow.restype = ctypes.c_ulong
-        self.x.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
-        self.root = self.x.XDefaultRootWindow(self.dpy)
-        self.x.XInternAtom.restype = ctypes.c_ulong
-        self.x.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
-        self.x.XSendEvent.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_ulong,
-            ctypes.c_int,
-            ctypes.c_long,
-            ctypes.POINTER(XClientMessageEvent),
-        ]
-        self.x.XFlush.argtypes = [ctypes.c_void_p]
-        self.x.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
-        self.x.XCloseDisplay.argtypes = [ctypes.c_void_p]
-        self.x.XCloseDisplay.restype = ctypes.c_int
-
-    def close(self):
-        """Закрыть X-соединение (парно `XOpenDisplay`). Идемпотентно."""
-        if getattr(self, "dpy", None):
-            self.x.XCloseDisplay(self.dpy)
-            self.dpy = None
-
-    def atom(self, name):
-        return self.x.XInternAtom(self.dpy, name.encode(), 0)
-
-    def send(self, win, msg_type, values):
-        ev = XClientMessageEvent()
-        ev.type = CLIENT_MESSAGE
-        ev.send_event = 1
-        ev.display = self.dpy
-        ev.window = win
-        ev.message_type = self.atom(msg_type)
-        ev.format = 32
-        for i, v in enumerate(values):
-            ev.data[i] = v
-        self.x.XSendEvent(self.dpy, self.root, 0, SUBSTRUCTURE_MASK, ctypes.byref(ev))
-        self.x.XSync(self.dpy, 0)
-
-    def set_state(self, win, action, first, second=None):
-        """action: 0 = снять, 1 = добавить, 2 = переключить.
-
-        `second` — второе свойство состояния (например
-        `_NET_WM_STATE_MAXIMIZED_HORZ`); пустое — без него.
-        """
-        self.send(
-            win,
-            "_NET_WM_STATE",
-            [action, self.atom(first), self.atom(second) if second else 0, SOURCE_PAGER, 0],
-        )
-
-    def move_resize(self, win, x, y, w, h):
-        flags = (SOURCE_PAGER << 12) | (X_FLAGS << 8) | GRAVITY_NORTH_WEST
-        self.send(win, "_NET_MOVERESIZE_WINDOW", [flags, x, y, w, h])
-
-    def iconify(self, win):
-        """Свернуть окно: `WM_CHANGE_STATE` со значением `IconicState`."""
-        self.send(win, "WM_CHANGE_STATE", [ICONIC_STATE, 0, 0, 0, 0])
-
-    def activate(self, win):
-        """Развернуть и поднять окно: `_NET_ACTIVE_WINDOW` от имени pager'а.
-
-        `data.l[0] = 2` (source indication, pager) и нулевой timestamp: muffin
-        принимает активацию от pager'а, а устаревший ненулевой timestamp может
-        отклонить (focus-stealing prevention) — и окно осталось бы свёрнутым.
-
-        Важно: для окна **не на активном рабочем столе** muffin это сообщение
-        игнорирует (проверено дымом) — сначала нужен `set_current_desktop`.
-        """
-        self.send(win, "_NET_ACTIVE_WINDOW", [SOURCE_PAGER, 0, 0, 0, 0])
-
-    def set_current_desktop(self, desktop):
-        """Переключить активный рабочий стол: `_NET_CURRENT_DESKTOP` в root.
-
-        `ev.window` — сам root, как это делают wmctrl/xdotool: muffin принимает
-        такой запрос с нулевым timestamp (проверено дымом).
-        """
-        self.send(self.root, "_NET_CURRENT_DESKTOP", [desktop, 0, 0, 0, 0])
+    Раньше это делал сам `X11.__init__` через `fail`; теперь соединение открывает
+    оконный слой и отвечает `WindowBackendError`, а текст и код возврата остались
+    здесь — на границе CLI (см. `main`).
+    """
+    fail(_("zone-tiler: не удалось подключиться к X-серверу (DISPLAY)"), EXIT_FAIL)
 
 
 # --------------------------------------------- сворачивание (режим «только эта зона»)
 
 
 def window_iconic(win):
-    """Свёрнуто ли окно сейчас — `WM_STATE: Iconic` или `_NET_WM_STATE_HIDDEN`.
-
-    muffin при `WM_CHANGE_STATE` ставит оба признака (проверено дымом на
-    Cinnamon/muffin), поэтому читается настоящий EWMH/ICCCM-признак, а не
-    догадка по геометрии. Не прочитать свойство — окно считается видимым.
-    """
-    try:
-        txt = subprocess.check_output(
-            ["xprop", "-id", hex(win), "WM_STATE", "_NET_WM_STATE"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        return False
-    return "Iconic" in txt or "_NET_WM_STATE_HIDDEN" in txt
+    """Свёрнуто ли окно сейчас (`Iconic`/`_NET_WM_STATE_HIDDEN`) — см. `window_backend`."""
+    return window_backend.window_iconic(win)
 
 
 def iconify(window, x11=None, quiet=True):
@@ -1938,28 +1573,17 @@ def cmd_list(grid, args, profile=None):
 
 
 def read_frame(window, extents):
-    """Фактическая рамка окна (x, y, w, h) по xwininfo с учётом рамки WM."""
-    out = subprocess.check_output(
-        ["xwininfo", "-id", hex(window)], text=True, stderr=subprocess.DEVNULL
-    )
+    """Фактическая рамка окна (x, y, w, h) по xwininfo с учётом рамки WM.
 
-    def num(label):
-        found = re.search(rf"{label}:\s+(-?\d+)", out)
-        if found is None:
-            raise ValueError(_("xwininfo: нет поля '{label}'").format(label=label))
-        return int(found.group(1))
-
-    geom = {
-        k: num(k)
-        for k in ("Absolute upper-left X", "Absolute upper-left Y", "Width", "Height")
-    }
-    left, right, top, bottom = extents
-    return (
-        geom["Absolute upper-left X"] - left,
-        geom["Absolute upper-left Y"] - top,
-        geom["Width"] + left + right,
-        geom["Height"] + top + bottom,
-    )
+    Чтение — в `window_backend.read_frame`; он сообщает только имя поля, которого
+    не оказалось в выводе, а текст `ValueError` для человека собирается здесь.
+    """
+    try:
+        return window_backend.read_frame(window, extents)
+    except window_backend.WindowBackendError as exc:
+        raise ValueError(
+            _("xwininfo: нет поля '{label}'").format(label=str(exc))
+        ) from None
 
 
 def apply_zone(window, rect, label="", x11=None, verify=False, quiet=False):
@@ -4082,6 +3706,19 @@ def cmd_profile(args):
 
 
 def main(argv=None):
+    """Точка входа CLI: отказ X-сервера остаётся сообщением и кодом 1.
+
+    Раньше об этом заботился сам `X11.__init__` через `fail`; теперь соединение
+    открывает оконный слой и отвечает `WindowBackendError`, поэтому перевод в
+    прежний текст и код возврата — здесь, на границе CLI.
+    """
+    try:
+        return _main(argv)
+    except window_backend.WindowBackendError:
+        _x11_failed()
+
+
+def _main(argv=None):
     ap = argparse.ArgumentParser(
         description=_("Раскладка окон по зонам сетки (Cinnamon/X11)"),
         # Без сокращений: иначе удалённый `--offset` совпадает с `--off` и
