@@ -27,7 +27,7 @@ jobs:
             zone_geom.py zone-picker.py zone_picker_nav.py zone_i18n.py \
             zone_actions.py zone_tabs.py zone-tabstrip.py zone_tabstrip_nav.py \
             zone-daemon.py zone_ipc.py gridsnap-ctl setup-hotkeys.py \
-            make-icon.py tests
+            make-icon.py tools tests
       - name: Юнит-тесты
         run: python3 -m unittest discover -s tests -v
 
@@ -43,7 +43,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gettext po4a python3-gi gir1.2-gtk-3.0
+            gettext po4a python3-gi gir1.2-gtk-3.0 locales
+          # Локали нужны проверкам man-страниц: под zh_CN.UTF-8 groff считает
+          # иероглиф двумя колонками, под C — одной, и ширина страницы выходит
+          # разной; без сгенерированной локали языковые проверки пропускаются.
+          sudo localedef -i zh_CN -f UTF-8 zh_CN.UTF-8
+          sudo localedef -i ru_RU -f UTF-8 ru_RU.UTF-8
       # check-i18n собирает .mo (msgfmt --check), сверяет шаблоны с кодом и
       # проверяет, что каталога `ru` нет: русский — это msgid как есть.
       - name: Каталоги gettext

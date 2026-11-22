@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""man-страницы: полнота каталогов po4a, сверка с реальным CLI и сборка.
+"""man-страницы: полнота каталогов po4a, сверка с CLI и то, что видит пользователь.
 
 Man-страницы — не gettext-домен, а локализованные страницы: po4a делает `.po` из
 roff, собранные страницы ставятся в `/usr/share/man/<язык>/man1/`. Этот тест
@@ -9,17 +9,23 @@ roff, собранные страницы ставятся в `/usr/share/man/<�
 * каждый `msgid` шаблона `po/man/gridsnap.1.pot` переведён в `en.po` и
   `zh_CN.po`, лишних записей нет и `fuzzy` нет — читается своим
   `zone_i18n.parse_po`, поэтому ни `gettext`, ни `po4a` тесту не нужны;
-* **страница не отстала от кода**: каждый длинный ключ `--…` из страницы
-  принимается `--help` какой-нибудь команды, и наоборот — каждый ключ из
-  `--help` описан в странице; все секции `zones.conf`, которые знает
-  `zone_config`, имеют свой `.SS`; команды и подкоманды из раздела ПРИМЕРЫ —
-  настоящие (слово обязано встречаться в `--help`);
-* **собранные страницы** (если `make man` уже прогнан) не потеряли ни одного
-  структурного макроса, а русская страница байт-в-байт равна источнику.
+* **страница не отстала от кода**: множества длинных ключей `--…` в
+  `man/gridsnap.1` и в `--help` семи команд совпадают; все секции `zones.conf`,
+  которые знает `zone_config`, имеют свой `.SS`; команды и подкоманды из раздела
+  ПРИМЕРЫ настоящие;
+* **собранные страницы** (если `make man` уже прогнан) ведут себя как у
+  пользователя: кладутся во временный `MANPATH`, и `man gridsnap` под нужной
+  локалью показывает нужный язык, укладывается в колонку и не оставляет строк,
+  которые troff не смог разорвать.
 
-Команды, которым нужен `python3-gi` (редактор, пикер, горячие края), в
-юнит-job'е CI пропускаются — там GTK нет; полный прогон делает `make
-check-man-i18n` и job «Каталоги переводов».
+Про `man путь/zh_CN/man1/gridsnap.1`: так проверять нельзя — man-db ведёт себя
+иначе, когда ему дают файл из каталога локали, и замер врёт (на этом уже ловили
+ложную тревогу). Поэтому временный `MANPATH` и локаль, как в жизни.
+
+Локаль `zh_CN.UTF-8` нужна, чтобы страница легла в колонку: без неё groff
+считает иероглиф одной колонкой вместо двух. Если локали в системе нет, языковые
+проверки пропускаются (`make check-man-i18n` в CI ставит их заранее);
+ширина и «cannot break line» проверяются всё равно.
 
 Запуск:
     python3 tests/test_man_i18n.py
@@ -31,6 +37,8 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import unicodedata
 import unittest
 
 try:
@@ -54,6 +62,8 @@ LANGUAGES = ("en", "zh_CN")
 # Язык страницы в man1/ — английский (`MAN_DEFAULT` в Makefile); `ru` собирается
 # копией источника, поэтому в каталогах po4a его нет.
 BUILT_LANGS = ("en", "ru", "zh_CN")
+# Язык → локаль, под которой man-db обязан выбрать именно его страницу.
+LOCALES = {"en": "C", "ru": "ru_RU.UTF-8", "zh_CN": "zh_CN.UTF-8"}
 ALIASES = (
     "gridsnap-tiler.1",
     "gridsnap-daemon.1",
@@ -82,6 +92,15 @@ SECTION_RE = re.compile(r'^\.SS "?\[([^\]]+)\]"?', re.M)
 # `\fBx\fP`, поэтому шрифтовые макросы в сверке не участвуют.
 STRUCT_RE = re.compile(r"^\.(SH|SS|TP|PP|IP|RS|RE|nf|fi|TH|EX|EE)\b")
 BUILD_NOTICE_RE = re.compile(r'^\.\\"')
+# Ширина страницы: man-db верстает в 80 колонок, текст — 78 минус отступ.
+MAX_WIDTH = 90
+# Единственное предупреждение, которое может остаться у CJK-страницы: troff не
+# может растянуть строку без пробелов, поэтому она остаётся неполной. Пользователь
+# этого не видит (обычный `man` предупреждений не печатает), а вот неразрывная
+# строка — видит: она уезжает за ширину терминала.
+TOLERATED_WARNING = "cannot adjust line"
+CYRILLIC_RE = re.compile(r"[\u0400-\u04ff]")
+CJK_RE = re.compile(r"[\u2e80-\u9fff\u3040-\u30ff\uff00-\uffef]")
 
 
 def read(path):
@@ -95,7 +114,7 @@ def po_entries(path):
 
 
 def source_body():
-    """Исходная страница без комментариев `\\.\\"` (в них есть `--warnings`)."""
+    """Исходная страница без комментариев `.\\"` (в них есть `--warnings`)."""
     return "\n".join(
         line for line in read(SOURCE).splitlines()
         if not line.startswith('.\\"')
@@ -163,6 +182,21 @@ def example_lines():
         for line in lines[start + 1:end]
         if line.strip()
     ]
+
+
+def display_width(line):
+    """Ширина строки в колонках: иероглиф занимает две."""
+    return sum(
+        2 if unicodedata.east_asian_width(char) in "WF" else 1 for char in line
+    )
+
+
+def locale_available(name):
+    """Есть ли локаль в системе (`locale -a` знает её под своим написанием)."""
+    proc = subprocess.run(["locale", "-a"], stdout=subprocess.PIPE, text=True)
+    normalize = lambda text: text.lower().replace("-", "").replace("_", "").replace(".", "")
+    wanted = normalize(name)
+    return any(normalize(line) == wanted for line in proc.stdout.splitlines())
 
 
 class ManCatalogsTest(unittest.TestCase):
@@ -269,18 +303,47 @@ class ManMatchesCliTest(unittest.TestCase):
 
 
 class BuiltPagesTest(unittest.TestCase):
-    """Собранные `make man` страницы: скелет, языки, псевдонимы.
+    """Собранные `make man` страницы так, как их видит пользователь.
 
     Без `make man` (юнит-job CI, где нет po4a) тесты пропускаются: полноту
     каталогов они всё равно проверяют выше, а сборку гоняет `make check-man-i18n`.
     """
 
+    manpath = None
+
     @classmethod
     def setUpClass(cls):
         cls.built = os.path.isdir(BUILD)
+        if cls.built:
+            cls.manpath = tempfile.mkdtemp(prefix="gridsnap-man-")
+            for lang in BUILT_LANGS:
+                sub = "" if lang == "en" else os.path.join(lang, "")
+                target = os.path.join(cls.manpath, sub, "man1")
+                os.makedirs(target, exist_ok=True)
+                for name in os.listdir(os.path.join(BUILD, lang, "man1")):
+                    shutil.copy(
+                        os.path.join(BUILD, lang, "man1", name),
+                        os.path.join(target, name),
+                    )
 
-    def page(self, lang):
-        return os.path.join(BUILD, lang, "man1", "gridsnap.1")
+    @classmethod
+    def tearDownClass(cls):
+        if cls.manpath:
+            shutil.rmtree(cls.manpath, ignore_errors=True)
+
+    def page(self, lang, name="gridsnap.1"):
+        return os.path.join(BUILD, lang, "man1", name)
+
+    def render_man(self, locale, *args):
+        env = dict(os.environ)
+        env["LC_ALL"] = locale
+        env["MANPATH"] = self.manpath
+        for key in ("LANG", "LANGUAGE", "LC_MESSAGES"):
+            env.pop(key, None)
+        return subprocess.run(
+            ["man", *args], env=env, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, timeout=60,
+        )
 
     def test_all_languages_and_aliases_exist(self):
         if not self.built:
@@ -288,7 +351,7 @@ class BuiltPagesTest(unittest.TestCase):
         for lang in BUILT_LANGS:
             self.assertTrue(os.path.exists(self.page(lang)), lang)
             for alias in ALIASES:
-                path = os.path.join(BUILD, lang, "man1", alias)
+                path = self.page(lang, alias)
                 self.assertTrue(os.path.exists(path), path)
                 self.assertEqual(read(path).strip(), ".so man1/gridsnap.1", path)
 
@@ -308,16 +371,48 @@ class BuiltPagesTest(unittest.TestCase):
             self.assertEqual(ru.read(), src.read(),
                              "русская страница должна быть копией man/gridsnap.1")
 
-    def test_built_pages_render_without_warnings(self):
+    def test_locale_chooses_the_page(self):
         if not self.built or shutil.which("man") is None:
             self.skipTest("нет man/build или man-db")
-        for lang in BUILT_LANGS:
-            proc = subprocess.run(
-                ["man", "--warnings", "-E", "UTF-8", "-l", self.page(lang)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
-            )
-            self.assertEqual(proc.returncode, 0, f"{lang}: {proc.stderr}")
-            self.assertEqual(proc.stderr.strip(), "", f"{lang}: {proc.stderr}")
+        expected = {
+            "C": lambda text: not CYRILLIC_RE.search(text) and not CJK_RE.search(text),
+            "ru_RU.UTF-8": lambda text: bool(CYRILLIC_RE.search(text)),
+            "zh_CN.UTF-8": lambda text: bool(CJK_RE.search(text)),
+        }
+        for locale, ok in expected.items():
+            if locale != "C" and not locale_available(locale):
+                continue  # локаль не сгенерирована — проверять нечего
+            proc = self.render_man(locale, "gridsnap")
+            self.assertEqual(proc.returncode, 0, f"{locale}: {proc.stderr}")
+            self.assertTrue(ok(proc.stdout), f"{locale}: man gridsnap показал не ту страницу")
+
+    def test_pages_fit_the_column(self):
+        if not self.built or shutil.which("man") is None:
+            self.skipTest("нет man/build или man-db")
+        for locale in LOCALES.values():
+            if locale != "C" and not locale_available(locale):
+                continue
+            proc = self.render_man(locale, "gridsnap")
+            self.assertEqual(proc.returncode, 0, f"{locale}: {proc.stderr}")
+            width = max((display_width(line) for line in proc.stdout.splitlines()),
+                        default=0)
+            self.assertLessEqual(
+                width, MAX_WIDTH,
+                f"{locale}: строка шириной {width} колонок — troff не разорвал её")
+
+    def test_no_unbreakable_lines(self):
+        if not self.built or shutil.which("man") is None:
+            self.skipTest("нет man/build или man-db")
+        for locale in LOCALES.values():
+            if locale != "C" and not locale_available(locale):
+                continue
+            proc = self.render_man(locale, "--warnings", "-E", "UTF-8", "gridsnap")
+            self.assertEqual(proc.returncode, 0, f"{locale}: {proc.stderr}")
+            bad = [
+                line for line in proc.stderr.splitlines()
+                if "warning" in line and "cannot break line" in line
+            ]
+            self.assertEqual(bad, [], f"{locale}: неразрывные строки: {bad[:3]}")
 
 
 if __name__ == "__main__":
