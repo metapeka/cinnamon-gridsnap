@@ -3,9 +3,11 @@
 """Юнит-тесты выбора сетки рабочего стола в пикере — без X-сервера.
 
 Проверяют чистые помощники `zone-picker.py`, которыми пикер выбирает сетку
-своего стола и набор зон монитора: `zones_from_grid` (имена, доли и привязки
-из одной сетки — по ним же двигается окно), `workspace_caption` (подпись стола
-в оверлее) и `describe_grid` (строка про сетку для `--dry-run`/`--shot`).
+своего стола, экрана и набор зон монитора: `zones_from_grid` (имена, доли и
+привязки из одной сетки — по ним же двигается окно), `screen_grid` (сетка
+экрана тем же резолвером, что у раскладчика: `[monitors]` → `[workspaces]` →
+`zones.conf`, и откат без профиля на диске), `workspace_caption`/`screen_caption`
+(подпись в оверлее) и `describe_grid` (строка про сетку для `--dry-run`/`--shot`).
 Плюс разбор `--workspace`: он переиспользует `zone-tiler.workspace_spec`, и
 тест сторожит именно это, а не копию регулярки.
 
@@ -64,6 +66,14 @@ PROFILE = (
 )
 # Набор зоны монитора: только часть зон, геометрия — своя.
 MONITOR_SECTION = "[zones:HDMI-1]\nleft = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\n"
+# Профиль экрана: имена, которых нет ни в общем наборе, ни в профиле стола.
+SCREEN = (
+    "[grid]\ncols = 1.0\nrows = 1.0\n"
+    "[zones]\ncode = 0, 0, 0.5, 1\nbrowser = 0.5, 0, 0.5, 1\n"
+    "[keys]\ncode = <Super><Alt>9\n"
+)
+# Привязка экрана к профилю SCREEN.
+BIND = "[monitors]\nHDMI-1 = studio\n"
 
 
 @unittest.skipUnless(HAS_GUI, "нет python3-gi/gir1.2-gtk-3.0/python3-cairo: zone-picker.py не загрузить")
@@ -136,6 +146,101 @@ class PickerWorkspaceCase(unittest.TestCase):
         self.assertEqual([z.name for z in prof], ["video", "chat"])
         self.assertEqual([z.name for z in base], ["main", "top-right", "bottom"])
 
+    # ---- сетка экрана: [monitors] -> [workspaces] -> zones.conf
+
+    def test_screen_binding_gives_screen_profile_zones(self):
+        """Экран в [monitors] -> зоны профиля экрана, даже если у стола свой."""
+        self.write(self.conf, BASE + BIND + "[workspaces]\n2 = cinema\n")
+        self.write("cinema.conf", PROFILE)
+        path = self.write("studio.conf", SCREEN)
+        self.assertTrue(os.path.exists(path))
+        grid, screen, desk = self.picker.screen_grid(self.conf, "HDMI-1", 1)
+        self.assertEqual(screen, "studio")
+        self.assertEqual(desk, "cinema")  # стол всё равно известен — для отката
+        zones = self.picker.zones_from_grid(grid, "HDMI-1")
+        self.assertEqual([z.name for z in zones], ["code", "browser"])
+        self.assertEqual(zones[0].binding, "<Super><Alt>9")
+        # геометрия — из того же профиля, что и имена
+        self.assertEqual(grid.rect("browser", (0, 0, 1000, 500), "HDMI-1"), (500, 0, 500, 500))
+
+    def test_screen_binding_is_case_insensitive(self):
+        """Имя выхода в другом регистре тоже находит привязку (как resolve_profile)."""
+        self.write(self.conf, BASE + BIND)
+        self.write("studio.conf", SCREEN)
+        grid, screen, _desk = self.picker.screen_grid(self.conf, "hdmi-1", 0)
+        self.assertEqual(screen, "studio")
+        self.assertEqual([z.name for z in self.picker.zones_from_grid(grid, "hdmi-1")],
+                         ["code", "browser"])
+
+    def test_screen_without_binding_keeps_workspace_grid(self):
+        """Привязки нет — всё как раньше: сетка стола, экран ничего не меняет."""
+        self.write(self.conf, BASE + "[workspaces]\n2 = cinema\n")
+        self.write("cinema.conf", PROFILE)
+        grid, screen, desk = self.picker.screen_grid(self.conf, "HDMI-1", 1)
+        self.assertIsNone(screen)
+        self.assertEqual(desk, "cinema")
+        self.assertEqual([z.name for z in self.picker.zones_from_grid(grid, "HDMI-1")],
+                         ["video", "chat"])
+
+    def test_screen_without_binding_and_desktop_uses_common_set(self):
+        """Ни привязки экрана, ни профиля стола — общий [zones]."""
+        self.write(self.conf, BASE)
+        grid, screen, desk = self.picker.screen_grid(self.conf, "HDMI-1", 0)
+        self.assertIsNone(screen)
+        self.assertIsNone(desk)
+        self.assertEqual([z.name for z in self.picker.zones_from_grid(grid)],
+                         ["main", "top-right", "bottom"])
+
+    def test_missing_screen_profile_falls_back_to_workspace_with_message(self):
+        """Профиля экрана нет на диске — откат на стол и предупреждение в stderr."""
+        self.write(self.conf, BASE + "[monitors]\nHDMI-1 = ghost\n[workspaces]\n2 = cinema\n")
+        self.write("cinema.conf", PROFILE)  # profiles/ghost.conf не создаём
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            grid, screen, desk = self.picker.screen_grid(self.conf, "HDMI-1", 1)
+        self.assertIsNone(screen)
+        self.assertEqual(desk, "cinema")
+        self.assertEqual([z.name for z in self.picker.zones_from_grid(grid, "HDMI-1")],
+                         ["video", "chat"])
+        warning = err.getvalue()
+        self.assertIn("ghost", warning)
+        self.assertIn("нет на диске", warning)
+        self.assertIn("HDMI-1", warning)
+
+    def test_missing_screen_profile_falls_back_to_common_set(self):
+        """Того же нет и у стола — общий [zones], но оверлей всё равно рисует сетку."""
+        self.write(self.conf, BASE + "[monitors]\nHDMI-1 = ghost\n")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            grid, screen, desk = self.picker.screen_grid(self.conf, "HDMI-1", 0)
+        self.assertIsNone(screen)
+        self.assertIsNone(desk)
+        self.assertEqual([z.name for z in self.picker.zones_from_grid(grid)],
+                         ["main", "top-right", "bottom"])
+        self.assertIn("нет на диске", err.getvalue())
+
+    def test_workspace_conf_ignores_monitor_bindings(self):
+        """`--workspace conf` — сам zones.conf: ни [monitors], ни [workspaces]."""
+        self.write(self.conf, BASE + BIND + "[workspaces]\n2 = cinema\n")
+        self.write("cinema.conf", PROFILE)
+        self.write("studio.conf", SCREEN)
+        grid, screen, desk = self.picker.screen_grid(
+            self.conf, "HDMI-1", self.zt.WORKSPACE_CONF
+        )
+        self.assertIsNone(screen)
+        self.assertIsNone(desk)
+        self.assertEqual([z.name for z in self.picker.zones_from_grid(grid)],
+                         ["main", "top-right", "bottom"])
+
+    def test_screen_binding_wins_over_monitor_zone_set(self):
+        """`[zones:<выход>]` сужает набор уже выбранного профиля экрана."""
+        self.write(self.conf, BASE + "[monitors]\nHDMI-1 = studio\n")
+        self.write("studio.conf", SCREEN + MONITOR_SECTION)
+        grid, screen, _desk = self.picker.screen_grid(self.conf, "HDMI-1", 0)
+        self.assertEqual(screen, "studio")
+        self.assertEqual([z.name for z in self.picker.zones_from_grid(grid, "HDMI-1")],
+                         ["left", "right"])
+
     # ---- подпись и строка про сетку
 
     def test_workspace_caption(self):
@@ -146,6 +251,16 @@ class PickerWorkspaceCase(unittest.TestCase):
         # стол неизвестен (нет _NET_CURRENT_DESKTOP) — подписывать нечего
         self.assertEqual(caption(None, None), "")
         self.assertEqual(caption(self.zt.WORKSPACE_CURRENT, None), "")
+
+    def test_screen_caption(self):
+        """Подпись называет экран, если сетку дал его профиль, иначе — стол."""
+        caption = self.picker.screen_caption
+        self.assertEqual(caption(1, "cinema", "HDMI-1", "studio"),
+                         "экран HDMI-1 · профиль «studio»")
+        self.assertEqual(caption(1, "cinema", "HDMI-1", None), "стол 2 · профиль «cinema»")
+        self.assertEqual(caption(0, None, "HDMI-1", None), "стол 1 · общий набор")
+        self.assertEqual(caption(self.zt.WORKSPACE_CONF, None, "HDMI-1", None),
+                         "zones.conf, без профилей столов")
 
     def test_describe_grid(self):
         path = self.write(self.conf, BASE)
