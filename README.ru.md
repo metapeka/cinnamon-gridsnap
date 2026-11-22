@@ -77,8 +77,8 @@ make aur          # рецепт AUR в dist/PKGBUILD
 ```
 
 Оба пути ставят одно и то же: код в `/usr/lib/gridsnap`, команды `gridsnap-tiler`, `gridsnap-daemon`,
-`gridsnap-editor`, `gridsnap-picker`, `gridsnap-ctl`, `setup-hotkeys` — в `/usr/bin`, ярлык и иконки —
-в `/usr/share`. Установка `make deb`:
+`gridsnap-editor`, `gridsnap-picker`, `gridsnap-hotcorners`, `gridsnap-ctl`, `setup-hotkeys` — в
+`/usr/bin`, ярлык и иконки — в `/usr/share`. Установка `make deb`:
 
 ```bash
 sudo apt install ./dist/gridsnap_<версия>_all.deb
@@ -115,7 +115,7 @@ man-страницы входят в пакет: английская — в `/u
 три каталога `install.sh` создаёт в `ПРЕФИКС/share/man` — в том числе при `--no-launcher`: это
 документация, а не часть ярлыка. `man gridsnap` — команды пакета, `zones.conf`, файлы и коды
 возврата; `man gridsnap-tiler` — та же страница (как и `man gridsnap-daemon`, `man gridsnap-editor`,
-`man gridsnap-picker`, `man gridsnap-ctl`, `man setup-hotkeys`).
+`man gridsnap-picker`, `man gridsnap-hotcorners`, `man gridsnap-ctl`, `man setup-hotkeys`).
 
 <!-- section: cinnamon-native -->
 ## 1. Что есть в Cinnamon из коробки
