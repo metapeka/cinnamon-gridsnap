@@ -173,9 +173,12 @@ def describe_grid(zones, caption):
     Нужна ``--dry-run`` и ``--shot``: по ней видно, какая сетка нарисована, не
     разглядывая оверлей (это и проверяет ``tests/smoke-picker-workspace.sh``).
     """
-    head = _("{} · ").format(caption) if caption else ""
-    return _("{}зон {}: {}").format(
-        head, len(zones), ", ".join(z.name for z in zones)
+    if caption:
+        return _("{caption} · зон {count}: {names}").format(
+            caption=caption, count=len(zones), names=", ".join(z.name for z in zones)
+        )
+    return _("зон {count}: {names}").format(
+        count=len(zones), names=", ".join(z.name for z in zones)
     )
 
 

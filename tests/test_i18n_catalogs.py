@@ -77,9 +77,12 @@ class TestPotMatchesCode(unittest.TestCase):
     """Шаблон собран из кода: он и есть список того, что надо перевести."""
 
     def test_main_pot_has_entries_and_utf8(self):
-        table = read_po(os.path.join(ROOT, "po", "gridsnap.pot"))
-        self.assertTrue(entries_only(table), "po/gridsnap.pot пуст — make pot не собрал строки")
-        self.assertIn(" charset=UTF-8", table.get("", ""))
+        path = os.path.join(ROOT, "po", "gridsnap.pot")
+        with open(path, encoding="utf-8") as handle:
+            raw = handle.read()
+        self.assertTrue(entries_only(read_po(path)),
+                        "po/gridsnap.pot пуст — make pot не собрал строки")
+        self.assertIn("charset=UTF-8", raw, "в шапке пустой или неверный charset")
 
     def test_applet_pot_has_entries(self):
         table = read_po(os.path.join(ROOT, "po", i18n.APPLET_DOMAIN,
@@ -87,10 +90,10 @@ class TestPotMatchesCode(unittest.TestCase):
         self.assertTrue(entries_only(table), "шаблон апплета пуст")
 
 
-class CatalogCase(unittest.TestCase):
-    """Сверка одного домена: шаблон против каталогов языков."""
+class CatalogChecks:
+    """Сверка одного домена: шаблон против каталогов языков (миксин)."""
 
-    domain = i18n.DOMAIN
+    domain = None
 
     @property
     def base(self):
@@ -125,11 +128,11 @@ class CatalogCase(unittest.TestCase):
         self.assertNotEqual(en, zh, "en и zh_CN совпали — перевод не сделан")
 
 
-class TestMainCatalog(CatalogCase):
+class TestMainCatalog(CatalogChecks, unittest.TestCase):
     domain = i18n.DOMAIN
 
 
-class TestAppletCatalog(CatalogCase):
+class TestAppletCatalog(CatalogChecks, unittest.TestCase):
     domain = i18n.APPLET_DOMAIN
 
 

@@ -132,11 +132,15 @@ def _dangling_rules_status(dangling):
     """Текст статуса: почему не сохраняем и какие правила мешают."""
     shown = ", ".join(f"{sel} → {zone}" for sel, zone in dangling[:DANGLING_SHOWN])
     rest = len(dangling) - DANGLING_SHOWN
-    tail = _(" и ещё {}").format(rest) if rest > 0 else ""
+    if rest > 0:
+        return _(
+            "не сохраняю: правила из [rules] ссылаются на отсутствующие зоны — "
+            "{shown} и ещё {rest}. Верните зоны или поправьте [rules] в zones.conf."
+        ).format(shown=shown, rest=rest)
     return _(
         "не сохраняю: правила из [rules] ссылаются на отсутствующие зоны — "
-        "{}{}. Верните зоны или поправьте [rules] в zones.conf."
-    ).format(shown, tail)
+        "{shown}. Верните зоны или поправьте [rules] в zones.conf."
+    ).format(shown=shown)
 
 
 # -------------------------------------------------------------- рисование
@@ -1334,8 +1338,11 @@ class Editor(Gtk.Window):
             cmd += ["--monitor", monitor]
         r = subprocess.run(cmd, text=True, capture_output=True)
         out = (r.stdout or r.stderr).strip().replace("\n", " | ")
-        where = _(" на {}").format(monitor) if monitor else ""
-        self.set_status(_("проверка «{}»{}: {}").format(zone, where, out))
+        if monitor:
+            self.set_status(_("проверка «{zone}» на {monitor}: {out}").format(
+                zone=zone, monitor=monitor, out=out))
+        else:
+            self.set_status(_("проверка «{zone}»: {out}").format(zone=zone, out=out))
 
     def on_test(self):
         if self.selected is None:
