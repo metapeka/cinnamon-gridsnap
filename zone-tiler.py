@@ -131,6 +131,8 @@ import tempfile
 import time
 from typing import NoReturn
 
+from zone_i18n import _  # строки интерфейса; без каталога — исходный текст
+
 VERSION = "0.1.0"
 
 # Коды возврата CLI: 0 — успех, 1 — ошибка выполнения, 2 — ошибка аргументов,
@@ -388,7 +390,7 @@ def read_client_list():
     # `_NET_CLIENT_LIST(WINDOW): window id # 0x400003, 0x600005`
     if "window id #" not in out:
         return None
-    _, _, value = out.partition("#")
+    _unused, _unused2, value = out.partition("#")
     return [int(h, 16) for h in re.findall(r"0x[0-9a-fA-F]+", value)]
 
 
@@ -403,7 +405,7 @@ class Grid:
             delimiters=("=",),  # ключ `re:<regex>` содержит ':', разделитель только '='
         )
         if not cp.read(path, encoding="utf-8"):
-            fail(f"zone-tiler: не найден конфиг {path}", EXIT_CONFIG)
+            fail(_("zone-tiler: не найден конфиг {path}").format(path=path), EXIT_CONFIG)
         # Путь нужен там, где секции читает не сам Grid: `keys --move` берёт
         # `[move]` через `zone_config.load_move_keys`, а `[move]` в профилях
         # столов не живёт (она общая на файл).
@@ -424,21 +426,29 @@ class Grid:
                 continue
             output = section.split(":", 1)[1].strip()
             if not output:
-                fail(f"zone-tiler: пустое имя монитора в секции [{section}]", EXIT_CONFIG)
+                fail(
+                    _("zone-tiler: пустое имя монитора в секции [{section}]").format(section=section),
+                    EXIT_CONFIG,
+                )
             zones = {}
             for name, spec in cp.items(section):
                 zones[name.strip()] = self._parse_zone(name, spec)
             if not zones:
-                fail(f"zone-tiler: в секции [{section}] нет ни одной зоны", EXIT_CONFIG)
+                fail(
+                    _("zone-tiler: в секции [{section}] нет ни одной зоны").format(section=section),
+                    EXIT_CONFIG,
+                )
             self.monitor_zones[output] = zones
         if not self.zones:
             if self.monitor_zones:
                 fail(
-                    "zone-tiler: есть только секции [zones:<выход>], а обязательной [zones] нет; "
-                    "[zones] задаёт набор зон по умолчанию",
+                    _(
+                        "zone-tiler: есть только секции [zones:<выход>], а обязательной [zones] нет; "
+                        "[zones] задаёт набор зон по умолчанию"
+                    ),
                     EXIT_CONFIG,
                 )
-            fail("zone-tiler: в zones.conf нет ни одной зоны в секции [zones]", EXIT_CONFIG)
+            fail(_("zone-tiler: в zones.conf нет ни одной зоны в секции [zones]"), EXIT_CONFIG)
         # `[rules]` читается отдельным парсером: ConfigParser по умолчанию
         # приводит ключи к нижнему регистру (optionxform=str.lower), из-за чего
         # селектор `re:\S+Deploy\S*` превратился бы в `re:\s+deploy\s*` —
@@ -460,7 +470,9 @@ class Grid:
                 selector, zone = selector.strip(), zone.strip()
                 if zone not in known:
                     fail(
-                        f"zone-tiler: правило '{selector}' ссылается на неизвестную зону '{zone}'",
+                        _("zone-tiler: правило '{selector}' ссылается на неизвестную зону '{zone}'").format(
+                            selector=selector, zone=zone
+                        ),
                         EXIT_CONFIG,
                     )
                 self.rules.append((selector, zone))
@@ -518,22 +530,30 @@ class Grid:
         if spec is None:
             spec = self.zones.get(zone)
         if spec is None:
-            where = (
-                f"ни в наборе монитора '{monitor_name}', ни в [zones]"
-                if monitor_name
-                else "в [zones] и ни в одном наборе мониторов"
+            if monitor_name:
+                fail(
+                    _(
+                        "zone-tiler: зоны '{zone}' нет ни в наборе монитора '{monitor}', "
+                        "ни в [zones]"
+                    ).format(zone=zone, monitor=monitor_name),
+                    EXIT_CONFIG,
+                )
+            fail(
+                _("zone-tiler: зоны '{zone}' нет в [zones] и ни в одном наборе мониторов").format(
+                    zone=zone
+                ),
+                EXIT_CONFIG,
             )
-            fail(f"zone-tiler: зоны '{zone}' нет {where}", EXIT_CONFIG)
         return spec
 
     @staticmethod
     def _numlist(value):
         nums = [float(x) for x in re.split(r"[,;\s]+", value.strip()) if x]
         if not nums or abs(nums[-1] - 1.0) > 1e-6:
-            fail("zone-tiler: последняя линия в cols/rows должна быть 1.0", EXIT_CONFIG)
+            fail(_("zone-tiler: последняя линия в cols/rows должна быть 1.0"), EXIT_CONFIG)
         lines = [0.0] + nums
         if any(b <= a for a, b in zip(lines, lines[1:])):
-            fail("zone-tiler: линии в cols/rows должны возрастать", EXIT_CONFIG)
+            fail(_("zone-tiler: линии в cols/rows должны возрастать"), EXIT_CONFIG)
         return lines
 
     def _parse_zone(self, name, spec):
@@ -545,14 +565,18 @@ class Grid:
                 r0, r1 = (int(v) for v in rows_part.split(":"))
             except Exception:
                 fail(
-                    f"zone-tiler: зона '{name}' должна быть 'c0:c1, r0:r1' или 'x,y,w,h'",
+                    _("zone-tiler: зона '{name}' должна быть 'c0:c1, r0:r1' или 'x,y,w,h'").format(
+                        name=name
+                    ),
                     EXIT_CONFIG,
                 )
             ncols, nrows = len(self.cols) - 1, len(self.rows) - 1
             if not (0 <= c0 < c1 <= ncols and 0 <= r0 < r1 <= nrows):
                 fail(
-                    f"zone-tiler: зона '{name}' выходит за сетку "
-                    f"({ncols} колонок, {nrows} строк)",
+                    _(
+                        "zone-tiler: зона '{name}' выходит за сетку "
+                        "({ncols} колонок, {nrows} строк)"
+                    ).format(name=name, ncols=ncols, nrows=nrows),
                     EXIT_CONFIG,
                 )
             return ("grid", c0, c1, r0, r1)
@@ -562,7 +586,9 @@ class Grid:
             x, y, w, h = (float(v) for v in nums)
         except Exception:
             fail(
-                f"zone-tiler: зона '{name}' должна быть 'c0:c1, r0:r1' или 'x,y,w,h'",
+                _("zone-tiler: зона '{name}' должна быть 'c0:c1, r0:r1' или 'x,y,w,h'").format(
+                    name=name
+                ),
                 EXIT_CONFIG,
             )
         if not (
@@ -573,7 +599,12 @@ class Grid:
             and x + w <= 1.0001
             and y + h <= 1.0001
         ):
-            fail(f"zone-tiler: зона '{name}' выходит за пределы экрана (доли 0..1)", EXIT_CONFIG)
+            fail(
+                _("zone-tiler: зона '{name}' выходит за пределы экрана (доли 0..1)").format(
+                    name=name
+                ),
+                EXIT_CONFIG,
+            )
         return ("rect", x, y, w, h)
 
     def fractions(self, zone, monitor_name=None):
@@ -581,7 +612,7 @@ class Grid:
         spec = self.zone_spec(zone, monitor_name)
         if spec[0] == "rect":
             return spec[1:]
-        _, c0, c1, r0, r1 = spec
+        _unused, c0, c1, r0, r1 = spec
         return (
             self.cols[c0],
             self.rows[r0],
@@ -597,9 +628,9 @@ class Grid:
         """
         spec = self.zone_spec(zone, monitor_name)
         if spec[0] == "rect":
-            _, fx, fy, fw, fh = spec
+            _unused, fx, fy, fw, fh = spec
             return self._px(wa, fx, fy, fx + fw, fy + fh)
-        _, c0, c1, r0, r1 = spec
+        _unused, c0, c1, r0, r1 = spec
         return self._px(wa, self.cols[c0], self.rows[r0], self.cols[c1], self.rows[r1])
 
     @staticmethod
@@ -648,7 +679,7 @@ def output_at_point(outputs, point):
     центру рамки окна (`monitor_for_point`), а не по номеру 0 — иначе окно уезжает
     на первый экран, а зона ищется в чужом профиле.
     """
-    areas = [area for _, area in outputs]
+    areas = [area for _unused, area in outputs]
     wa = monitor_for_point(areas, point)
     index = areas.index(wa)
     return index, outputs[index][0], wa
@@ -668,8 +699,10 @@ def window_output(outputs, window, warn=True):
     except Exception as exc:
         if warn:
             print(
-                f"zone-tiler: не удалось прочитать рамку окна 0x{window:x}: {exc} — "
-                "беру первый экран",
+                _(
+                    "zone-tiler: не удалось прочитать рамку окна 0x{window:x}: {error} — "
+                    "беру первый экран"
+                ).format(window=window, error=exc),
                 file=sys.stderr,
             )
         return 0, outputs[0][0], outputs[0][1]
@@ -804,8 +837,10 @@ def workspace_spec(text):
     if re.fullmatch(r"\d+", value):
         return int(value)
     raise argparse.ArgumentTypeError(
-        f"неверный рабочий стол '{text}': нужен номер стола (0, 1, …), "
-        f"{WORKSPACE_CURRENT} или {WORKSPACE_CONF}"
+        _(
+            "неверный рабочий стол '{text}': нужен номер стола (0, 1, …), "
+            "{current} или {conf}"
+        ).format(text=text, current=WORKSPACE_CURRENT, conf=WORKSPACE_CONF)
     )
 
 
@@ -889,12 +924,22 @@ def grid_for_output(conf_path, output, fallback=None, workspace=None, quiet=Fals
         path = None
     if path is None or not os.path.exists(path):
         if not quiet:
-            where = f"экран {output}" if output else "экран окна"
-            print(
-                f"zone-tiler: профиля «{zc.sanitize_profile_name(profile)}» нет на диске: "
-                f"{where} раскладывается без него: беру набор стола или общий",
-                file=sys.stderr,
-            )
+            if output:
+                print(
+                    _(
+                        "zone-tiler: профиля «{profile}» нет на диске: экран {output} "
+                        "раскладывается без него: беру набор стола или общий"
+                    ).format(profile=zc.sanitize_profile_name(profile), output=output),
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    _(
+                        "zone-tiler: профиля «{profile}» нет на диске: экран окна "
+                        "раскладывается без него: беру набор стола или общий"
+                    ).format(profile=zc.sanitize_profile_name(profile)),
+                    file=sys.stderr,
+                )
         return base, None
     return Grid(path), profile
 
@@ -918,16 +963,34 @@ def require_zone(grid, zone, workspace=None, profile=None, output=None):
     known = grid.all_zone_names()
     if zone in known:
         return
+    have = ", ".join(sorted(known))
     if output and profile:
-        where = f" в сетке экрана {output} (профиль «{profile}»)"
-    elif profile and workspace is not None:
-        where = f" в сетке стола {workspace + 1} (профиль «{profile}»)"
-    elif profile:
-        where = f" в сетке профиля «{profile}»"
-    else:
-        where = " в [zones]"
+        fail(
+            _(
+                "zone-tiler: нет зоны '{zone}' в сетке экрана {output} (профиль «{profile}»). "
+                "Есть: {known}"
+            ).format(zone=zone, output=output, profile=profile, known=have),
+            EXIT_CONFIG,
+        )
+    if profile and workspace is not None:
+        fail(
+            _(
+                "zone-tiler: нет зоны '{zone}' в сетке стола {workspace} (профиль «{profile}»). "
+                "Есть: {known}"
+            ).format(zone=zone, workspace=workspace + 1, profile=profile, known=have),
+            EXIT_CONFIG,
+        )
+    if profile:
+        fail(
+            _(
+                "zone-tiler: нет зоны '{zone}' в сетке профиля «{profile}». Есть: {known}"
+            ).format(zone=zone, profile=profile, known=have),
+            EXIT_CONFIG,
+        )
     fail(
-        f"zone-tiler: нет зоны '{zone}'{where}. Есть: " + ", ".join(sorted(known)),
+        _("zone-tiler: нет зоны '{zone}' в [zones]. Есть: {known}").format(
+            zone=zone, known=have
+        ),
         EXIT_CONFIG,
     )
 
@@ -958,7 +1021,7 @@ def monitors():
             return [tuple(nums)]
     except Exception:
         pass
-    fail("zone-tiler: не удалось определить рабочую область экрана", EXIT_FAIL)
+    fail(_("zone-tiler: не удалось определить рабочую область экрана"), EXIT_FAIL)
 
 
 def monitor_outputs():
@@ -1046,7 +1109,7 @@ def stitch_monitor_names(outputs, areas):
     for i, wa in enumerate(areas):
         best = None
         best_area = 0
-        for j, (_, rect) in enumerate(outputs):
+        for j, (_unused, rect) in enumerate(outputs):
             if j in used:
                 continue
             area = overlap_area(wa, rect)
@@ -1069,15 +1132,17 @@ def resolve_monitor(spec, outputs=None):
     """
     outputs = monitor_outputs() if outputs is None else outputs
     text = "" if spec is None else str(spec).strip()
-    for index, (name, _) in enumerate(outputs):
+    for index, (name, _unused) in enumerate(outputs):
         if name == text:
             return index, name
     number = int(text) if re.fullmatch(r"[+-]?\d+", text) else None
     if number is not None and 0 <= number < len(outputs):
         return number, outputs[number][0]
-    available = ", ".join(f"{i} — {name}" for i, (name, _) in enumerate(outputs))
+    available = ", ".join(f"{i} — {name}" for i, (name, _unused) in enumerate(outputs))
     fail(
-        f"zone-tiler: монитора '{text}' нет. Доступны: {available or 'нет'}",
+        _("zone-tiler: монитора '{monitor}' нет. Доступны: {available}").format(
+            monitor=text, available=available or _("нет")
+        ),
         EXIT_USAGE,
     )
 
@@ -1151,10 +1216,10 @@ def read_active_window():
             ["xprop", "-root", "_NET_ACTIVE_WINDOW"], text=True, stderr=subprocess.DEVNULL
         )
     except Exception:
-        return None, "zone-tiler: xprop не найден (пакет x11-utils)"
+        return None, _("zone-tiler: xprop не найден (пакет x11-utils)")
     m = re.search(r"(0x[0-9a-fA-F]+)", txt)
     if not m or int(m.group(1), 16) == 0:
-        return None, "zone-tiler: нет активного окна"
+        return None, _("zone-tiler: нет активного окна")
     return int(m.group(1), 16), None
 
 
@@ -1211,7 +1276,7 @@ class X11:
         dpy_name = (os.environ.get("DISPLAY") or "").encode() or None
         self.dpy = self.x.XOpenDisplay(dpy_name)
         if not self.dpy:
-            fail("zone-tiler: не удалось подключиться к X-серверу (DISPLAY)", EXIT_FAIL)
+            fail(_("zone-tiler: не удалось подключиться к X-серверу (DISPLAY)"), EXIT_FAIL)
         self.x.XDefaultRootWindow.restype = ctypes.c_ulong
         self.x.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
         self.root = self.x.XDefaultRootWindow(self.dpy)
@@ -1327,7 +1392,7 @@ def iconify(window, x11=None, quiet=True):
     try:
         x11.iconify(window)
         if not quiet:
-            print(f"окно 0x{window:x} -> свёрнуто")
+            print(_("окно 0x{window:x} -> свёрнуто").format(window=window))
     finally:
         if own:
             x11.close()
@@ -1430,7 +1495,7 @@ def switch_workspace(desktop, x11=None, read_current=None):
         if reader() == desktop:
             return True
         x11.set_current_desktop(desktop)
-        for _ in range(FOCUS_VERIFY_TRIES):
+        for _unused in range(FOCUS_VERIFY_TRIES):
             time.sleep(FOCUS_VERIFY_DELAY)
             if reader() == desktop:
                 return True
@@ -1462,7 +1527,7 @@ def deiconify_all(windows, x11=None, deiconify_fn=None):
     try:
         for win in pending:
             send(win, x11=x11)
-        for _ in range(FOCUS_VERIFY_TRIES):
+        for _unused in range(FOCUS_VERIFY_TRIES):
             time.sleep(FOCUS_VERIFY_DELAY)
             pending = [win for win in pending if window_iconic(win)]
             if not pending:
@@ -1757,7 +1822,10 @@ def remember(kind, records, quiet=False):
         History().record(operation)
     except OSError as exc:
         if not quiet:
-            print(f"zone-tiler: не удалось сохранить историю: {exc}", file=sys.stderr)
+            print(
+                _("zone-tiler: не удалось сохранить историю: {error}").format(error=exc),
+                file=sys.stderr,
+            )
 
 
 def snapshot_window(win, zone=None):
@@ -1768,7 +1836,7 @@ def snapshot_window(win, zone=None):
     """
     extents = frame_extents(win)
     frame = read_frame(win, extents)
-    wm_class, _ = window_class_title(win)
+    wm_class, _title = window_class_title(win)
     return {
         "id": win,
         "frame": list(frame),
@@ -1786,16 +1854,31 @@ def cmd_list(grid, args, profile=None):
 
     `profile` — имя профиля стола, которым показана сетка (`None` — общий
     `zones.conf`); оно дописывается в первую строку, чтобы было видно, почему
-    набор зон именно такой. Начало первой строки неизменно: его разбирает
-    апплет Cinnamon (регулярка `рабочая область монитора N: ...`).
+    набор зон именно такой. В первой строке — индекс монитора, его рабочая
+    область `x,y WxH` и, при необходимости, пометки выхода и профиля; апплет
+    Cinnamon разбирает в ней именно числа (`N: x,y WxH`), а слова переводимы.
     """
     outputs = monitor_outputs()
     index, output = resolve_monitor(monitor_arg(args), outputs)
     wa = outputs[index][1]
-    note = "" if output == f"monitor-{index}" else f"  (выход {output})"
-    if profile:
-        note += f"  (профиль «{profile}»)"
-    print(f"рабочая область монитора {index}: {wa[0]},{wa[1]} {wa[2]}x{wa[3]}{note}")
+    area = {"index": index, "x": wa[0], "y": wa[1], "w": wa[2], "h": wa[3]}
+    named = output != f"monitor-{index}"
+    if not named and profile:
+        line = _(
+            "рабочая область монитора {index}: {x},{y} {w}x{h}  (профиль «{profile}»)"
+        ).format(profile=profile, **area)
+    elif not named:
+        line = _("рабочая область монитора {index}: {x},{y} {w}x{h}").format(**area)
+    elif profile:
+        line = _(
+            "рабочая область монитора {index}: {x},{y} {w}x{h}  (выход {output})  "
+            "(профиль «{profile}»)"
+        ).format(output=output, profile=profile, **area)
+    else:
+        line = _("рабочая область монитора {index}: {x},{y} {w}x{h}  (выход {output})").format(
+            output=output, **area
+        )
+    print(line)
     zones = grid.zones_for(output)
     width = max(len(z) for z in zones)
     for name in sorted(zones):
@@ -1812,7 +1895,7 @@ def read_frame(window, extents):
     def num(label):
         found = re.search(rf"{label}:\s+(-?\d+)", out)
         if found is None:
-            raise ValueError(f"xwininfo: нет поля '{label}'")
+            raise ValueError(_("xwininfo: нет поля '{label}'").format(label=label))
         return int(found.group(1))
 
     geom = {
@@ -1850,16 +1933,36 @@ def apply_zone(window, rect, label="", x11=None, verify=False, quiet=False):
         x11.move_resize(window, *client_size(rect, extents))
         time.sleep(0.05)
         if not quiet:
-            where = f"зона '{label}'" if label else "зона"
-            print(f"окно 0x{window:x} -> {where}: x={x} y={y} {w}x{h}")
+            if label:
+                print(
+                    _("окно 0x{window:x} -> зона '{zone}': x={x} y={y} {w}x{h}").format(
+                        window=window, zone=label, x=x, y=y, w=w, h=h
+                    )
+                )
+            else:
+                print(
+                    _("окно 0x{window:x} -> зона: x={x} y={y} {w}x{h}").format(
+                        window=window, x=x, y=y, w=w, h=h
+                    )
+                )
         if verify:
             try:
                 actual = read_frame(window, extents)
             except Exception:
                 return None
             if not quiet:
-                mark = "— совпало с зоной" if actual == (x, y, w, h) else "— не совпало!"
-                print(f"рамка по факту: x={actual[0]} y={actual[1]} {actual[2]}x{actual[3]} {mark}")
+                if actual == (x, y, w, h):
+                    print(
+                        _("рамка по факту: x={x} y={y} {w}x{h} — совпало с зоной").format(
+                            x=actual[0], y=actual[1], w=actual[2], h=actual[3]
+                        )
+                    )
+                else:
+                    print(
+                        _("рамка по факту: x={x} y={y} {w}x{h} — не совпало!").format(
+                            x=actual[0], y=actual[1], w=actual[2], h=actual[3]
+                        )
+                    )
             return actual
         return None
     finally:
@@ -1887,15 +1990,21 @@ def cmd_apply(grid, args):
     rect = grid.rect(args.zone, wa, monitor_name=output)
     if args.dry_run:
         x, y, w, h = rect
-        print(f"{args.zone}: x={x} y={y} {w}x{h} (монитор {index}: {output})")
+        print(
+            _("{zone}: x={x} y={y} {w}x{h} (монитор {index}: {output})").format(
+                zone=args.zone, x=x, y=y, w=w, h=h, index=index, output=output
+            )
+        )
         return
     if window is None:
-        fail("zone-tiler: нет активного окна", EXIT_FAIL)
+        fail(_("zone-tiler: нет активного окна"), EXIT_FAIL)
     if window_is_excluded(window, grid.ignore):
         if not args.quiet:
             print(
-                f"zone-tiler: окно 0x{window:x} под исключением "
-                "([ignore]/служебный тип) — не двигаю",
+                _(
+                    "zone-tiler: окно 0x{window:x} под исключением "
+                    "([ignore]/служебный тип) — не двигаю"
+                ).format(window=window),
                 file=sys.stderr,
             )
         return
@@ -1940,12 +2049,14 @@ def daemon_request(request, timeout=DAEMON_TIMEOUT):
         return zone_ipc.read_response(conn)
     except TimeoutError:
         fail(
-            f"zone-tiler: демон не ответил за {timeout:g} с — режим не переключаю "
-            "(работающего демона нельзя обойти снаружи)",
+            _(
+                "zone-tiler: демон не ответил за {timeout:g} с — режим не переключаю "
+                "(работающего демона нельзя обойти снаружи)"
+            ).format(timeout=timeout),
             EXIT_FAIL,
         )
     except zone_ipc.ProtocolError as exc:
-        fail(f"zone-tiler: демон ответил непонятно: {exc}", EXIT_FAIL)
+        fail(_("zone-tiler: демон ответил непонятно: {error}").format(error=exc), EXIT_FAIL)
     finally:
         conn.close()
 
@@ -1965,20 +2076,22 @@ def cmd_tabs_next(args):
     response = daemon_request(request)
     if response is None:
         fail(
-            "zone-tiler: демон не запущен — вкладки в зоне переключает он "
-            "(запустите gridsnap-daemon)",
+            _(
+                "zone-tiler: демон не запущен — вкладки в зоне переключает он "
+                "(запустите gridsnap-daemon)"
+            ),
             EXIT_FAIL,
         )
     if not response.get("ok", True):
-        reason = response.get("error") or "причина не названа"
-        fail(f"zone-tiler: демон отказал: {reason}", EXIT_FAIL)
+        reason = response.get("error") or _("причина не названа")
+        fail(_("zone-tiler: демон отказал: {reason}").format(reason=reason), EXIT_FAIL)
     if args.quiet:
         return
     window = response.get("window")
     if window is None:
-        print("zone-tiler: переключать нечего — в зоне активного окна одно окно")
+        print(_("zone-tiler: переключать нечего — в зоне активного окна одно окно"))
         return
-    print(f"zone-tiler: следующее окно зоны — {window}")
+    print(_("zone-tiler: следующее окно зоны — {window}").format(window=window))
 
 
 def cmd_action(grid, args):
@@ -2020,14 +2133,21 @@ def cmd_action(grid, args):
     name = (args.zone or "").strip()
     if not name:
         fail(
-            "zone-tiler: action — укажите имя действия, например: "
-            "zone-tiler.py action mirror",
+            _(
+                "zone-tiler: action — укажите имя действия, например: "
+                "zone-tiler.py action mirror"
+            ),
             EXIT_CONFIG,
         )
     actions = load_actions(args.conf)
     if name not in actions:
-        known = ", ".join(actions) or "ни одного"
-        fail(f"zone-tiler: нет действия '{name}'. Есть: {known}", EXIT_CONFIG)
+        known = ", ".join(actions) or _("ни одного")
+        fail(
+            _("zone-tiler: нет действия '{name}'. Есть: {known}").format(
+                name=name, known=known
+            ),
+            EXIT_CONFIG,
+        )
     record = actions[name]
     run = (record.get("run") or "").strip()
     try:
@@ -2195,15 +2315,26 @@ def _action_context(grid, args, window, zone, output, wa):
 
 def _action_plan_line(name, run, ctx):
     """Первая строка `--dry-run`: что действие получило (окно, зона, рамка, экран)."""
-    window = "окна нет" if ctx.window is None else f"окно 0x{ctx.window:x}"
-    where = "вне зон" if not ctx.zone else f"зона '{ctx.zone}'"
+    window = _("окна нет") if ctx.window is None else _("окно 0x{window:x}").format(
+        window=ctx.window
+    )
+    where = _("вне зон") if not ctx.zone else _("зона '{zone}'").format(zone=ctx.zone)
     if ctx.rect:
         where += ": x={} y={} {}x{}".format(*ctx.rect)
-    screen = ctx.monitor or "экран не определён"
-    desk = "неизвестен" if ctx.workspace is None else str(ctx.workspace + 1)
+    screen = ctx.monitor or _("экран не определён")
+    desk = _("неизвестен") if ctx.workspace is None else str(ctx.workspace + 1)
     print(
-        f"действие '{name}' ({run or '?'}): {window} -> {where} "
-        f"(монитор {screen}, стол {desk})"
+        _(
+            "действие '{name}' ({run}): {window} -> {where} "
+            "(монитор {screen}, стол {desk})"
+        ).format(
+            name=name,
+            run=run or "?",
+            window=window,
+            where=where,
+            screen=screen,
+            desk=desk,
+        )
     )
 
 
@@ -2228,7 +2359,7 @@ def _action_dry_run_noop(args, name, record, ctx, message):
         _action_noop(args, message)
         return
     _action_plan_line(name, record.get("run"), ctx)
-    print(f"план: {message} — ничего не делаю")
+    print(_("план: {message} — ничего не делаю").format(message=message))
 
 
 def _spawn(argv, ctx):
@@ -2246,7 +2377,7 @@ def _spawn(argv, ctx):
             start_new_session=True,
         )
     except OSError as exc:
-        fail(f"zone-tiler: не удалось запустить действие: {exc}", EXIT_FAIL)
+        fail(_("zone-tiler: не удалось запустить действие: {error}").format(error=exc), EXIT_FAIL)
 
 
 def _action_command(args, name, run, ctx, za):
@@ -2262,11 +2393,15 @@ def _action_command(args, name, run, ctx, za):
         fail(f"zone-tiler: {exc}", EXIT_CONFIG)
     if args.dry_run:
         _action_plan_line(name, run, ctx)
-        print(f"план: argv = {argv}")
+        print(_("план: argv = {argv}").format(argv=argv))
         return
     _spawn(argv, ctx)
     if not args.quiet:
-        print(f"zone-tiler: действие '{name}' запущено: {argv[0]}")
+        print(
+            _("zone-tiler: действие '{name}' запущено: {command}").format(
+                name=name, command=argv[0]
+            )
+        )
 
 
 def _action_minimize_others(grid, args, name, record, ctx, wa):
@@ -2280,12 +2415,23 @@ def _action_minimize_others(grid, args, name, record, ctx, wa):
     zone = record.get("zone")
     window = ctx.window if ctx.window is not None else args.window
     if args.dry_run:
-        where = f"зону '{zone}'" if zone else "на месте"
         _action_plan_line(name, record.get("run"), ctx)
-        print(
-            f"план: окно {window if window is None else hex(window)} -> {where}, "
-            "остальные окна стола и монитора — свёрнуты (повторное нажатие вернёт)"
-        )
+        # `None` печатается как раньше: шаблон и подстановка без перевода.
+        shown = window if window is None else hex(window)
+        if zone:
+            print(
+                _(
+                    "план: окно {window} -> зону '{zone}', "
+                    "остальные окна стола и монитора — свёрнуты (повторное нажатие вернёт)"
+                ).format(window=shown, zone=zone)
+            )
+        else:
+            print(
+                _(
+                    "план: окно {window} -> на месте, "
+                    "остальные окна стола и монитора — свёрнуты (повторное нажатие вернёт)"
+                ).format(window=shown)
+            )
         return
     cmd_focus(
         grid,
@@ -2304,7 +2450,7 @@ def _action_show_window(grid, args, name, record, ctx, wa):
     развернуть, поднять, сфокусировать. Зоны нет или она пуста — no-op (код 0).
     """
     if not ctx.zone:
-        _action_dry_run_noop(args, name, record, ctx, "окно вне зон — показывать нечего")
+        _action_dry_run_noop(args, name, record, ctx, _("окно вне зон — показывать нечего"))
         return
     base = grid.rect(ctx.zone, wa, monitor_name=ctx.monitor)
     height = tabs_height(grid)
@@ -2312,18 +2458,26 @@ def _action_show_window(grid, args, name, record, ctx, wa):
     stack = _action_windows_in_zone(base, frames, height)
     if not stack:
         _action_dry_run_noop(
-            args, name, record, ctx, f"зона '{ctx.zone}' пуста — показывать нечего"
+            args,
+            name,
+            record,
+            ctx,
+            _("зона '{zone}' пуста — показывать нечего").format(zone=ctx.zone),
         )
         return
     target = zone_tabs_module().next_tab(stack, active_window_quiet()) or stack[0]
     if args.dry_run:
         ring = ", ".join(f"0x{win:x}" for win in stack)
         _action_plan_line(name, record.get("run"), ctx)
-        print(f"план: поднять окно 0x{target:x} зоны '{ctx.zone}' (вкладки: {ring})")
+        print(
+            _("план: поднять окно 0x{window:x} зоны '{zone}' (вкладки: {ring})").format(
+                window=target, zone=ctx.zone, ring=ring
+            )
+        )
         return
     deiconify(target)
     if not args.quiet:
-        print(f"zone-tiler: окно зоны '{ctx.zone}' — 0x{target:x}")
+        print(_("zone-tiler: окно зоны '{zone}' — 0x{window:x}").format(zone=ctx.zone, window=target))
 
 
 def _action_mirror(grid, args, name, record, ctx, wa):
@@ -2340,7 +2494,7 @@ def _action_mirror(grid, args, name, record, ctx, wa):
     za = actions_module()
     zone = ctx.zone
     if not zone:
-        fail("zone-tiler: окно вне зон — зеркалить нечего", EXIT_FAIL)
+        fail(_("zone-tiler: окно вне зон — зеркалить нечего"), EXIT_FAIL)
     axis = record.get("axis") or za.DEFAULT_MIRROR_AXIS
     fractions = {
         name_: grid.fractions(name_, monitor_name=ctx.monitor)
@@ -2351,7 +2505,10 @@ def _action_mirror(grid, args, name, record, ctx, wa):
     except za.ActionError as exc:
         fail(f"zone-tiler: {exc}", EXIT_CONFIG)
     if partner is None:
-        fail(f"zone-tiler: в этой сетке нет зеркальной зоны для '{zone}'", EXIT_FAIL)
+        fail(
+            _("zone-tiler: в этой сетке нет зеркальной зоны для '{zone}'").format(zone=zone),
+            EXIT_FAIL,
+        )
 
     height = tabs_height(grid)
     client_ids = read_client_list() or []
@@ -2366,8 +2523,13 @@ def _action_mirror(grid, args, name, record, ctx, wa):
     other = there[-1] if there else None
     if window is None and other is None:
         _action_dry_run_noop(
-            args, name, record, ctx,
-            f"зоны '{zone}' и '{partner}' пусты — обменивать нечего",
+            args,
+            name,
+            record,
+            ctx,
+            _("зоны '{zone}' и '{partner}' пусты — обменивать нечего").format(
+                zone=zone, partner=partner
+            ),
         )
         return
     final_here = [win for win in here if win != window]
@@ -2382,10 +2544,26 @@ def _action_mirror(grid, args, name, record, ctx, wa):
     if args.dry_run:
         _action_plan_line(name, record.get("run"), ctx)
         print(
-            f"план: обмен зон '{zone}' и '{partner}' ({axis}): "
-            f"{_action_hex(window)} -> '{partner}', {_action_hex(other)} -> '{zone}'; "
-            f"рамки x={here_frame[0]} y={here_frame[1]} {here_frame[2]}x{here_frame[3]} "
-            f"и x={there_frame[0]} y={there_frame[1]} {there_frame[2]}x{there_frame[3]}"
+            _(
+                "план: обмен зон '{zone}' и '{partner}' ({axis}): "
+                "{here} -> '{partner}', {there} -> '{zone}'; "
+                "рамки x={hx} y={hy} {hw}x{hh} "
+                "и x={tx} y={ty} {tw}x{th}"
+            ).format(
+                zone=zone,
+                partner=partner,
+                axis=axis,
+                here=_action_hex(window),
+                there=_action_hex(other),
+                hx=here_frame[0],
+                hy=here_frame[1],
+                hw=here_frame[2],
+                hh=here_frame[3],
+                tx=there_frame[0],
+                ty=there_frame[1],
+                tw=there_frame[2],
+                th=there_frame[3],
+            )
         )
         return
 
@@ -2410,14 +2588,18 @@ def _action_mirror(grid, args, name, record, ctx, wa):
     remember("mirror", records, quiet=args.quiet)
     if not args.quiet:
         print(
-            f"zone-tiler: окна зон '{zone}' и '{partner}' обменяны "
-            f"(окон в зонах: {len(final_here)} и {len(final_there)})"
+            _(
+                "zone-tiler: окна зон '{zone}' и '{partner}' обменяны "
+                "(окон в зонах: {here} и {there})"
+            ).format(zone=zone, partner=partner, here=len(final_here), there=len(final_there))
         )
 
 
 def _action_hex(window):
     """Окно для печати: `0x…` или «пустая зона» — в плане `--dry-run`."""
-    return "пустая зона" if window is None else f"окно 0x{window:x}"
+    if window is None:
+        return _("пустая зона")
+    return _("окно 0x{window:x}").format(window=window)
 
 
 def _action_terminal(grid, args, name, record, ctx, wa):
@@ -2433,8 +2615,10 @@ def _action_terminal(grid, args, name, record, ctx, wa):
     za = actions_module()
     if not ctx.zone:
         fail(
-            f"zone-tiler: у действия '{name}' нет зоны — задайте zone в "
-            f"[action:{name}]",
+            _(
+                "zone-tiler: у действия '{name}' нет зоны — задайте zone в "
+                "[action:{name}]"
+            ).format(name=name),
             EXIT_FAIL,
         )
     base = grid.rect(ctx.zone, wa, monitor_name=ctx.monitor)
@@ -2450,8 +2634,18 @@ def _action_terminal(grid, args, name, record, ctx, wa):
     if args.dry_run:
         _action_plan_line(name, record.get("run"), ctx)
         print(
-            f"план: запустить {argv} и положить его окно в зону '{ctx.zone}': "
-            f"x={rect[0]} y={rect[1]} {rect[2]}x{rect[3]} (окон в зоне: {count} + 1)"
+            _(
+                "план: запустить {argv} и положить его окно в зону '{zone}': "
+                "x={x} y={y} {w}x{h} (окон в зоне: {count} + 1)"
+            ).format(
+                argv=argv,
+                zone=ctx.zone,
+                x=rect[0],
+                y=rect[1],
+                w=rect[2],
+                h=rect[3],
+                count=count,
+            )
         )
         return
 
@@ -2460,15 +2654,23 @@ def _action_terminal(grid, args, name, record, ctx, wa):
     window = _wait_new_window(before, grid)
     if window is None:
         fail(
-            f"zone-tiler: терминал в зоне '{ctx.zone}' не появился за "
-            f"{ACTION_WAIT_TRIES * ACTION_WAIT_DELAY:g} с — окно не найдено",
+            _(
+                "zone-tiler: терминал в зоне '{zone}' не появился за "
+                "{seconds:g} с — окно не найдено"
+            ).format(
+                zone=ctx.zone, seconds=ACTION_WAIT_TRIES * ACTION_WAIT_DELAY
+            ),
             EXIT_FAIL,
         )
     # Последнее слово за действием: окно могло уже попасть под `[rules]` демона и
     # встать по правилу; рамка зоны действия важнее, поэтому ставится ещё раз.
     apply_zone(window, rect, label=ctx.zone, quiet=args.quiet)
     if not args.quiet:
-        print(f"zone-tiler: терминал в зоне '{ctx.zone}': окно 0x{window:x}")
+        print(
+            _("zone-tiler: терминал в зоне '{zone}': окно 0x{window:x}").format(
+                zone=ctx.zone, window=window
+            )
+        )
 
 
 def _wait_new_window(before, grid, tries=ACTION_WAIT_TRIES, delay=ACTION_WAIT_DELAY):
@@ -2534,8 +2736,10 @@ def cmd_focus(grid, args):
         _focus_keep(state, remaining)
     if remaining and not args.quiet:
         print(
-            f"zone-tiler: {len(remaining)} окон развернуть не удалось — "
-            "запись режима сохранена, повторите focus --off",
+            _(
+                "zone-tiler: {count} окон развернуть не удалось — "
+                "запись режима сохранена, повторите focus --off"
+            ).format(count=len(remaining)),
             file=sys.stderr,
         )
 
@@ -2545,12 +2749,18 @@ def cmd_focus(grid, args):
         if response is not None:
             if not response.get("ok"):
                 fail(
-                    f"zone-tiler: {response.get('error', 'демон отклонил focus')}",
+                    _("zone-tiler: {error}").format(
+                        error=response.get("error", _("демон отклонил focus"))
+                    ),
                     EXIT_FAIL,
                 )
             restored += _focus_ids(response.get("restored"))
         if not args.quiet:
-            print(f"режим «только эта зона» выключен: развёрнуто окон — {len(restored)}")
+            print(
+                _("режим «только эта зона» выключен: развёрнуто окон — {count}").format(
+                    count=len(restored)
+                )
+            )
         return
 
     # Живой демон — единственный хозяин режима: он видит `_NET_CLIENT_LIST`
@@ -2559,7 +2769,9 @@ def cmd_focus(grid, args):
     if response is not None:
         if not response.get("ok"):
             fail(
-                f"zone-tiler: {response.get('error', 'демон отклонил focus')}",
+                _("zone-tiler: {error}").format(
+                    error=response.get("error", _("демон отклонил focus"))
+                ),
                 EXIT_FAIL,
             )
         _print_focus_response(response, quiet=args.quiet)
@@ -2590,21 +2802,35 @@ def _focus_dry_run(grid, args, state):
         mode = (response or {}).get("focus") if response and response.get("ok") else None
         if mode:
             print(
-                f"режим «только эта зона»: держит демон (зона "
-                f"'{mode.get('zone') or 'без зоны'}', цель {mode.get('window')}, "
-                f"свёрнуто {mode.get('minimized')}) — выключился бы"
+                _(
+                    "режим «только эта зона»: держит демон (зона '{zone}', цель {window}, "
+                    "свёрнуто {count}) — выключился бы"
+                ).format(
+                    zone=mode.get("zone") or _("без зоны"),
+                    window=mode.get("window"),
+                    count=mode.get("minimized"),
+                )
             )
             return
     if args.off or state:
         windows = state.get("windows") or []
-        print(f"режим «только эта зона»: выключился бы, развернулось бы окон — {len(windows)}")
+        print(
+            _("режим «только эта зона»: выключился бы, развернулось бы окон — {count}").format(
+                count=len(windows)
+            )
+        )
         return
     window = args.window or active_window()
     if args.zone:
         require_zone(grid, args.zone)
     wa = window_monitor(window, monitors())
     if wa is None:
-        fail(f"zone-tiler: не удалось определить монитор окна 0x{window:x}", EXIT_FAIL)
+        fail(
+            _("zone-tiler: не удалось определить монитор окна 0x{window:x}").format(
+                window=window
+            ),
+            EXIT_FAIL,
+        )
     candidates = focus_candidates(
         focus_entries(read_client_list() or [], monitors()), window,
         current_workspace(), wa,
@@ -2614,13 +2840,22 @@ def _focus_dry_run(grid, args, state):
         for win in candidates
         if not window_is_excluded(win, grid.ignore) and not window_iconic(win)
     ]
-    where = "остаётся на месте" if not args.zone else "зона '{}'".format(args.zone)
     if args.zone:
         x, y, w, h = grid.rect(args.zone, wa)
-        where += f" x={x} y={y} {w}x{h}"
+        print(
+            _(
+                "режим «только эта зона»: окно 0x{window:x} -> зона '{zone}' "
+                "x={x} y={y} {w}x{h}, свернулось бы окон — {count}"
+            ).format(
+                window=window, zone=args.zone, x=x, y=y, w=w, h=h, count=len(todo)
+            )
+        )
+        return
     print(
-        f"режим «только эта зона»: окно 0x{window:x} -> {where}, "
-        f"свернулось бы окон — {len(todo)}"
+        _(
+            "режим «только эта зона»: окно 0x{window:x} -> остаётся на месте, "
+            "свернулось бы окон — {count}"
+        ).format(window=window, count=len(todo))
     )
 
 
@@ -2632,18 +2867,25 @@ def _focus_enter(grid, args):
     if window_is_excluded(window, grid.ignore):
         if not args.quiet:
             print(
-                f"zone-tiler: окно 0x{window:x} под исключением "
-                "([ignore]/служебный тип) — режим не включаю",
+                _(
+                    "zone-tiler: окно 0x{window:x} под исключением "
+                    "([ignore]/служебный тип) — режим не включаю"
+                ).format(window=window),
                 file=sys.stderr,
             )
         return
     workspace = current_workspace()
     if workspace is None:
-        fail("zone-tiler: не удалось определить активный рабочий стол", EXIT_FAIL)
+        fail(_("zone-tiler: не удалось определить активный рабочий стол"), EXIT_FAIL)
     monitors_ = monitors()
     wa = window_monitor(window, monitors_)
     if wa is None:
-        fail(f"zone-tiler: не удалось определить монитор окна 0x{window:x}", EXIT_FAIL)
+        fail(
+            _("zone-tiler: не удалось определить монитор окна 0x{window:x}").format(
+                window=window
+            ),
+            EXIT_FAIL,
+        )
     # Зона проверяется на этой рабочей области — до того, как что-то двинулось.
     rect = grid.rect(args.zone, wa) if args.zone else None
     entries = focus_entries(read_client_list() or [], monitors_)
@@ -2684,18 +2926,29 @@ def _focus_enter(grid, args):
             iconify(win, x11=x11, quiet=True)
             minimized.append(win)
     except OSError as exc:
-        fail(f"zone-tiler: не удалось записать состояние режима: {exc}", EXIT_FAIL)
+        fail(
+            _("zone-tiler: не удалось записать состояние режима: {error}").format(error=exc),
+            EXIT_FAIL,
+        )
     finally:
         x11.close()
     if before is not None:
         remember("apply", [before], quiet=args.quiet)
 
     if not args.quiet:
-        where = f" -> зона '{args.zone}'" if args.zone else ""
-        print(
-            f"режим «только эта зона»: окно 0x{window:x}{where}, "
-            f"свёрнуто окон — {len(minimized)}"
-        )
+        if args.zone:
+            print(
+                _(
+                    "режим «только эта зона»: окно 0x{window:x} -> зона '{zone}', "
+                    "свёрнуто окон — {count}"
+                ).format(window=window, zone=args.zone, count=len(minimized))
+            )
+        else:
+            print(
+                _(
+                    "режим «только эта зона»: окно 0x{window:x}, свёрнуто окон — {count}"
+                ).format(window=window, count=len(minimized))
+            )
 
 
 def _focus_restore(state, x11=None):
@@ -2778,7 +3031,10 @@ def _focus_keep(state, remaining):
             }
         )
     except OSError as exc:
-        print(f"zone-tiler: не удалось переписать запись режима: {exc}", file=sys.stderr)
+        print(
+            _("zone-tiler: не удалось переписать запись режима: {error}").format(error=exc),
+            file=sys.stderr,
+        )
 
 
 def _focus_window_id(record):
@@ -2806,12 +3062,18 @@ def _print_focus_response(response, quiet=False):
         return
     if response.get("off"):
         count = len(response.get("restored") or [])
-        print(f"режим «только эта зона» выключен: развёрнуто окон — {count}")
+        print(
+            _("режим «только эта зона» выключен: развёрнуто окон — {count}").format(
+                count=count
+            )
+        )
         return
     count = len(response.get("minimized") or [])
     print(
-        f"режим «только эта зона»: окно {response.get('window')} -> зона "
-        f"'{response.get('zone')}', свёрнуто окон — {count}"
+        _(
+            "режим «только эта зона»: окно {window} -> зона '{zone}', "
+            "свёрнуто окон — {count}"
+        ).format(window=response.get("window"), zone=response.get("zone"), count=count)
     )
 
 
@@ -2819,9 +3081,9 @@ def monitor_arg(args):
     """`--monitor` из аргументов: не задан — 0.
 
     Так осталось только у `list`: он показывает рабочую область и зоны первого
-    экрана, пока `--monitor` не скажет иначе (первую строку разбирает апплет, и
-    менять её начало нельзя). `apply`/`stack`/`move` без `--monitor` работают на
-    экране окна.
+    экрана, пока `--monitor` не скажет иначе (первую строку разбирает апплет по
+    числам `N: x,y WxH`, поэтому опираться на её слова нельзя).
+    `apply`/`stack`/`move` без `--monitor` работают на экране окна.
     """
     return "0" if args.monitor is None else args.monitor
 
@@ -2889,7 +3151,9 @@ def cmd_move(grid, args):
     direction = (args.zone or "").strip().lower()
     if direction not in nav.DIRECTIONS:
         fail(
-            "zone-tiler: move — укажите направление: " + " | ".join(nav.DIRECTIONS),
+            _("zone-tiler: move — укажите направление: {directions}").format(
+                directions=" | ".join(nav.DIRECTIONS)
+            ),
             EXIT_USAGE,
         )
     outputs = monitor_outputs()
@@ -2898,7 +3162,12 @@ def cmd_move(grid, args):
     try:
         frame = read_frame(window, extents)
     except Exception as exc:
-        fail(f"zone-tiler: не удалось прочитать рамку окна 0x{window:x}: {exc}", EXIT_FAIL)
+        fail(
+            _("zone-tiler: не удалось прочитать рамку окна 0x{window:x}: {error}").format(
+                window=window, error=exc
+            ),
+            EXIT_FAIL,
+        )
     if args.monitor is None:
         # Монитор окна — по центру его рамки (в рабочей области уже вычтена панель).
         index, output, wa = output_at_point(
@@ -2918,8 +3187,10 @@ def cmd_move(grid, args):
     if window_is_excluded(window, grid.ignore):
         if not args.quiet:
             print(
-                f"zone-tiler: окно 0x{window:x} под исключением "
-                "([ignore]/служебный тип) — не двигаю",
+                _(
+                    "zone-tiler: окно 0x{window:x} под исключением "
+                    "([ignore]/служебный тип) — не двигаю"
+                ).format(window=window),
                 file=sys.stderr,
             )
         return EXIT_OK
@@ -2930,12 +3201,18 @@ def cmd_move(grid, args):
     fy = (frame[1] + frame[3] / 2.0 - wy) / wh
     here, there = move_zone_index(zones, direction, fx, fy)
     if here is None:
-        fail(f"zone-tiler: у монитора {index} ({output}) нет ни одной зоны", EXIT_CONFIG)
+        fail(
+            _("zone-tiler: у монитора {index} ({output}) нет ни одной зоны").format(
+                index=index, output=output
+            ),
+            EXIT_CONFIG,
+        )
     if there == here:
         if not args.quiet:
             print(
-                f"zone-tiler: у зоны '{names[here]}' соседа {direction} нет — "
-                "окно не двигаю",
+                _("zone-tiler: у зоны '{zone}' соседа {direction} нет — окно не двигаю").format(
+                    zone=names[here], direction=direction
+                ),
                 file=sys.stderr,
             )
         return EXIT_OK
@@ -2944,8 +3221,20 @@ def cmd_move(grid, args):
     if args.dry_run:
         x, y, w, h = rect
         print(
-            f"окно 0x{window:x}: зона '{names[here]}' -> '{zone}': "
-            f"x={x} y={y} {w}x{h} (монитор {index}: {output})"
+            _(
+                "окно 0x{window:x}: зона '{here}' -> '{zone}': "
+                "x={x} y={y} {w}x{h} (монитор {index}: {output})"
+            ).format(
+                window=window,
+                here=names[here],
+                zone=zone,
+                x=x,
+                y=y,
+                w=w,
+                h=h,
+                index=index,
+                output=output,
+            )
         )
         return EXIT_OK
     before = None
@@ -2966,7 +3255,7 @@ def group_windows_by_monitor(client_ids, outputs):
     без центра/монитора в результат не попадают. Нужна, чтобы применять зоны
     своего монитора (`[zones:<выход>]`) в пределах группы.
     """
-    areas = [wa for _, wa in outputs]
+    areas = [wa for _output, wa in outputs]
     groups = collections.OrderedDict()
     for win in client_ids:
         wa = window_monitor(win, areas)
@@ -2990,7 +3279,10 @@ def cmd_arrange(grid, args):
     """
     client_ids = read_client_list()
     if client_ids is None:
-        fail("zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)", EXIT_FAIL)
+        fail(
+            _("zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)"),
+            EXIT_FAIL,
+        )
     metas = {win: read_window_meta(win) for win in client_ids}
     outputs = monitor_outputs()
     groups = group_windows_by_monitor(client_ids, outputs)
@@ -3007,11 +3299,14 @@ def cmd_arrange(grid, args):
             assignments.append((win, zone, output, wa, screen_grid))
     if not groups:
         if not args.quiet:
-            print("zone-tiler: не удалось определить монитор ни для одного окна", file=sys.stderr)
+            print(
+                _("zone-tiler: не удалось определить монитор ни для одного окна"),
+                file=sys.stderr,
+            )
         return
     if not assignments:
         if not args.quiet:
-            print("zone-tiler: нет окон, подходящих под раскладку")
+            print(_("zone-tiler: нет окон, подходящих под раскладку"))
         return
     x11 = None if args.dry_run else X11()
     totals = collections.Counter((wa, zone) for _win, zone, _output, wa, _grid in assignments)
@@ -3023,7 +3318,11 @@ def cmd_arrange(grid, args):
             rect = in_zone_rect(base, totals[(wa, zone)], height)
             if args.dry_run:
                 x, y, w, h = rect
-                print(f"окно 0x{win:x} -> зона '{zone}': x={x} y={y} {w}x{h}")
+                print(
+                    _("окно 0x{window:x} -> зона '{zone}': x={x} y={y} {w}x{h}").format(
+                        window=win, zone=zone, x=x, y=y, w=w, h=h
+                    )
+                )
                 continue
             try:
                 before = snapshot_window(win, zone=zone)
@@ -3033,7 +3332,12 @@ def cmd_arrange(grid, args):
                 apply_zone(win, rect, label=zone, x11=x11, quiet=args.quiet, verify=args.verify)
             except Exception as exc:
                 if not args.quiet:
-                    print(f"окно 0x{win:x}: не удалось переставить ({exc})", file=sys.stderr)
+                    print(
+                        _("окно 0x{window:x}: не удалось переставить ({error})").format(
+                            window=win, error=exc
+                        ),
+                        file=sys.stderr,
+                    )
                 continue
             if before is not None:
                 records.append(before)
@@ -3053,12 +3357,15 @@ def cmd_stack(grid, args):
     """
     client_ids = read_client_list()
     if client_ids is None:
-        fail("zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)", EXIT_FAIL)
+        fail(
+            _("zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)"),
+            EXIT_FAIL,
+        )
     metas = {win: read_window_meta(win) for win in client_ids}
     windows = movable_windows(client_ids, metas, grid.ignore)
     if not windows:
         if not args.quiet:
-            print("zone-tiler: нет окон для вкладок")
+            print(_("zone-tiler: нет окон для вкладок"))
         return
     outputs = monitor_outputs()
     if args.monitor is None:
@@ -3077,8 +3384,19 @@ def cmd_stack(grid, args):
             if args.dry_run:
                 x, y, w, h = rect
                 print(
-                    f"окно 0x{win:x} -> зона '{args.zone}' "
-                    f"(вкладка {index + 1} из {len(windows)}): x={x} y={y} {w}x{h}"
+                    _(
+                        "окно 0x{window:x} -> зона '{zone}' "
+                        "(вкладка {tab} из {total}): x={x} y={y} {w}x{h}"
+                    ).format(
+                        window=win,
+                        zone=args.zone,
+                        tab=index + 1,
+                        total=len(windows),
+                        x=x,
+                        y=y,
+                        w=w,
+                        h=h,
+                    )
                 )
                 continue
             try:
@@ -3089,7 +3407,12 @@ def cmd_stack(grid, args):
                 apply_zone(win, rect, label=args.zone, x11=x11, quiet=args.quiet, verify=args.verify)
             except Exception as exc:
                 if not args.quiet:
-                    print(f"окно 0x{win:x}: не удалось положить во вкладки ({exc})", file=sys.stderr)
+                    print(
+                        _("окно 0x{window:x}: не удалось положить во вкладки ({error})").format(
+                            window=win, error=exc
+                        ),
+                        file=sys.stderr,
+                    )
                 continue
             if before is not None:
                 records.append(before)
@@ -3106,7 +3429,7 @@ def cmd_undo(grid, args):
     operations = history.load()
     if not operations:
         if not args.quiet:
-            print("zone-tiler: история раскладок пуста")
+            print(_("zone-tiler: история раскладок пуста"))
         return
     targets = undo_targets(operations, all_=args.all)
     x11 = X11() if targets else None
@@ -3124,19 +3447,35 @@ def cmd_undo(grid, args):
             current_class, current_title = window_class_title(win)
             if wm_class and current_class and current_class != wm_class:
                 # id мог переиспользоваться другим приложением после выхода старого
-                warn(f"окно 0x{win:x}: класс не совпал ({current_class} ≠ {wm_class}) — пропускаю")
+                warn(
+                    _(
+                        "окно 0x{window:x}: класс не совпал ({actual} ≠ {expected}) — "
+                        "пропускаю"
+                    ).format(window=win, actual=current_class, expected=wm_class)
+                )
                 continue
             if wm_class and not current_class:
-                warn(f"окно 0x{win:x}: уже не существует — пропускаю")
+                warn(
+                    _("окно 0x{window:x}: уже не существует — пропускаю").format(window=win)
+                )
                 continue
             if window_excluded(current_class, current_title, window_types(win), grid.ignore):
-                warn(f"окно 0x{win:x}: под исключением ([ignore]/служебный тип) — пропускаю")
+                warn(
+                    _(
+                        "окно 0x{window:x}: под исключением ([ignore]/служебный тип) — "
+                        "пропускаю"
+                    ).format(window=win)
+                )
                 continue
             try:
                 apply_zone(win, tuple(frame), x11=x11, quiet=args.quiet, verify=args.verify)
                 restored += 1
             except (Exception, SystemExit) as exc:
-                warn(f"окно 0x{win:x}: не удалось вернуть ({exc})")
+                warn(
+                    _("окно 0x{window:x}: не удалось вернуть ({error})").format(
+                        window=win, error=exc
+                    )
+                )
     finally:
         if x11 is not None:
             x11.close()
@@ -3144,10 +3483,19 @@ def cmd_undo(grid, args):
         history.save([] if args.all else operations[:-1])
     except OSError as exc:
         if not args.quiet:
-            print(f"zone-tiler: не удалось обновить историю: {exc}", file=sys.stderr)
+            print(
+                _("zone-tiler: не удалось обновить историю: {error}").format(error=exc),
+                file=sys.stderr,
+            )
     if not args.quiet:
-        tail = f", пропущено: {skipped}" if skipped else ""
-        print(f"zone-tiler: возвращено окон: {restored}{tail}")
+        if skipped:
+            print(
+                _("zone-tiler: возвращено окон: {restored}, пропущено: {skipped}").format(
+                    restored=restored, skipped=skipped
+                )
+            )
+        else:
+            print(_("zone-tiler: возвращено окон: {restored}").format(restored=restored))
 
 
 def cmd_keys(grid, move=False, conf=None):
@@ -3176,8 +3524,10 @@ def cmd_keys(grid, move=False, conf=None):
         zone, binding = zone.strip(), binding.strip()
         if zone not in known:
             print(
-                f"zone-tiler: в [keys] зона '{zone}' отсутствует в [zones] "
-                f"и в [zones:<выход>]",
+                _(
+                    "zone-tiler: в [keys] зона '{zone}' отсутствует в [zones] "
+                    "и в [zones:<выход>]"
+                ).format(zone=zone),
                 file=sys.stderr,
             )
             continue
@@ -3198,30 +3548,43 @@ def _run_hotkeys(conf, quiet=False):
             [sys.executable, script, "--conf", conf], text=True, capture_output=True, timeout=60
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        print(f"zone-tiler: сочетания не обновлены: {exc}", file=sys.stderr)
+        print(
+            _("zone-tiler: сочетания не обновлены: {error}").format(error=exc),
+            file=sys.stderr,
+        )
         return
     if r.returncode:
         tail = (r.stderr or r.stdout).strip()
-        print(f"zone-tiler: сочетания не обновлены ({tail})", file=sys.stderr)
+        print(
+            _("zone-tiler: сочетания не обновлены ({details})").format(details=tail),
+            file=sys.stderr,
+        )
         return
     if not quiet:
         first = (r.stdout or r.stderr).strip().splitlines()
-        print(f"zone-tiler: {first[0] if first else 'сочетания обновлены'}")
+        line = first[0] if first else _("сочетания обновлены")
+        print(_("zone-tiler: {message}").format(message=line))
 
 
 def _profile_export(zc, args, name, conf):
     """``profile export``: JSON-профиля в stdout или в файл."""
     target = (args.target or "").strip()
     if target and args.json:
-        fail("zone-tiler: profile export — или --json, или файл, не оба сразу", EXIT_USAGE)
+        fail(
+            _("zone-tiler: profile export — или --json, или файл, не оба сразу"),
+            EXIT_USAGE,
+        )
     data = zc.profile_to_dict(name, conf)
     if not target:
         sys.stdout.write(zc.dumps_profile(data))
         return
     path = zc.write_profile_json(data, target)
     print(
-        f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» выгружен: "
-        f"{path} ({zc.profile_zone_total(data)} зон)"
+        _("zone-tiler: профиль «{profile}» выгружен: {path} ({zones} зон)").format(
+            profile=zc.sanitize_profile_name(name),
+            path=path,
+            zones=zc.profile_zone_total(data),
+        )
     )
 
 
@@ -3231,8 +3594,11 @@ def _profile_import(zc, args, path, conf):
     written = zc.profile_from_dict(data, (args.as_name or "").strip() or None, conf)
     name = os.path.basename(written)[: -len(zc.PROFILE_EXT)]
     print(
-        f"zone-tiler: профиль «{name}» импортирован: {written} "
-        f"({zc.profile_zone_total(data)} зон)"
+        _("zone-tiler: профиль «{profile}» импортирован: {path} ({zones} зон)").format(
+            profile=name,
+            path=written,
+            zones=zc.profile_zone_total(data),
+        )
     )
 
 
@@ -3378,9 +3744,19 @@ def merge_monitor_profiles(screens):
                 elif owner[2] != binding and zone.name not in key_reported:
                     key_reported.add(zone.name)
                     overrides.append(
-                        f"клавиша зоны «{zone.name}»: «{owner[2]}» (профиль «{owner[1]}», "
-                        f"экран {owner[0]}) вместо «{binding}» (профиль «{profile}», "
-                        f"экран {output}) — оставлена первая"
+                        _(
+                            "клавиша зоны «{zone}»: «{first_key}» (профиль «{first_profile}», "
+                            "экран {first_output}) вместо «{key}» (профиль «{profile}», "
+                            "экран {output}) — оставлена первая"
+                        ).format(
+                            zone=zone.name,
+                            first_key=owner[2],
+                            first_profile=owner[1],
+                            first_output=owner[0],
+                            key=binding,
+                            profile=profile,
+                            output=output,
+                        )
                     )
         for selector, target in section_pairs(rules):
             raw_rules.append((selector, target, output, profile))
@@ -3402,9 +3778,19 @@ def merge_monitor_profiles(screens):
             merged_rules.append((selector, target))
         elif owner[0] != target:
             overrides.append(
-                f"правило для «{selector}»: зона «{owner[0]}» (профиль «{owner[2]}», "
-                f"экран {owner[1]}) вместо «{target}» (профиль «{profile}», "
-                f"экран {output}) — оставлено первое"
+                _(
+                    "правило для «{selector}»: зона «{first_zone}» (профиль "
+                    "«{first_profile}», экран {first_output}) вместо «{zone}» (профиль "
+                    "«{profile}», экран {output}) — оставлено первое"
+                ).format(
+                    selector=selector,
+                    first_zone=owner[0],
+                    first_profile=owner[2],
+                    first_output=owner[1],
+                    zone=target,
+                    profile=profile,
+                    output=output,
+                )
             )
 
     merged_ignore = []
@@ -3416,9 +3802,19 @@ def merge_monitor_profiles(screens):
             merged_ignore.append((selector, note))
         elif owner[0] != note:
             overrides.append(
-                f"исключение «{selector}»: заметка «{owner[0]}» (профиль «{owner[2]}», "
-                f"экран {owner[1]}) вместо «{note}» (профиль «{profile}», "
-                f"экран {output}) — оставлена первая"
+                _(
+                    "исключение «{selector}»: заметка «{first_note}» (профиль "
+                    "«{first_profile}», экран {first_output}) вместо «{note}» (профиль "
+                    "«{profile}», экран {output}) — оставлена первая"
+                ).format(
+                    selector=selector,
+                    first_note=owner[0],
+                    first_profile=owner[2],
+                    first_output=owner[1],
+                    note=note,
+                    profile=profile,
+                    output=output,
+                )
             )
 
     # `[keys]` пишется по первому появлению имени зоны: проставляем победившую
@@ -3450,18 +3846,22 @@ def _profile_use_monitors(zc, args, conf):
     """
     if (args.name or "").strip():
         fail(
-            "zone-tiler: profile use-monitors не берёт имени профиля: экраны и "
-            "профили задаёт секция [monitors]",
+            _(
+                "zone-tiler: profile use-monitors не берёт имени профиля: экраны и "
+                "профили задаёт секция [monitors]"
+            ),
             EXIT_USAGE,
         )
     if not os.path.exists(conf):
         # Пустой [monitors] читается и из несуществующего файла, но писать снимок
         # некуда: опечатка в --conf не должна выглядеть как «нечего менять».
-        fail(f"zone-tiler: не найден конфиг {conf}", EXIT_CONFIG)
+        fail(_("zone-tiler: не найден конфиг {path}").format(path=conf), EXIT_CONFIG)
     monitor_map = monitor_screen_map(conf)
     if not monitor_map:
         if not args.quiet:
-            print("zone-tiler: в [monitors] нет ни одного экрана — активный конфиг не меняю")
+            print(
+                _("zone-tiler: в [monitors] нет ни одного экрана — активный конфиг не меняю")
+            )
         return
     screens = []
     for output, name in monitor_map:
@@ -3472,15 +3872,20 @@ def _profile_use_monitors(zc, args, conf):
             path = None
         if path is None or not os.path.exists(path):
             print(
-                f"zone-tiler: профиля «{safe}» нет на диске: экран {output} пропущен, "
-                "строка [monitors] остаётся и заработает, когда профиль вернут",
+                _(
+                    "zone-tiler: профиля «{profile}» нет на диске: экран {output} "
+                    "пропущен, строка [monitors] остаётся и заработает, когда профиль вернут"
+                ).format(profile=safe, output=output),
                 file=sys.stderr,
             )
             continue
         zones, rules, sets, ignore = zc.read_profile_sets(name, conf)
         if not zones and not sets:
             print(
-                f"zone-tiler: в профиле «{safe}» нет ни одной зоны: экран {output} пропущен",
+                _(
+                    "zone-tiler: в профиле «{profile}» нет ни одной зоны: экран {output} "
+                    "пропущен"
+                ).format(profile=safe, output=output),
                 file=sys.stderr,
             )
             continue
@@ -3488,18 +3893,22 @@ def _profile_use_monitors(zc, args, conf):
     if not screens:
         if not args.quiet:
             print(
-                "zone-tiler: ни один экран из [monitors] не нашёл своего профиля — "
-                "активный конфиг не меняю"
+                _(
+                    "zone-tiler: ни один экран из [monitors] не нашёл своего профиля — "
+                    "активный конфиг не меняю"
+                )
             )
         return
     plan = merge_monitor_profiles(screens)
     if not args.quiet:
         for message in plan["overrides"]:
-            print(f"zone-tiler: переопределено: {message}")
+            print(_("zone-tiler: переопределено: {message}").format(message=message))
     for selector, zone in plan["dropped_rules"]:
         print(
-            f"zone-tiler: правило «{selector} = {zone}» пропущено: зоны '{zone}' нет "
-            "в итоговом наборе — иначе конфиг стал бы невалидным",
+            _(
+                "zone-tiler: правило «{selector} = {zone}» пропущено: зоны '{zone}' нет "
+                "в итоговом наборе — иначе конфиг стал бы невалидным"
+            ).format(selector=selector, zone=zone),
             file=sys.stderr,
         )
     host = zc.load_extra_sections(conf)
@@ -3521,12 +3930,23 @@ def _profile_use_monitors(zc, args, conf):
     if not args.quiet:
         for output, name in plan["screens"]:
             print(
-                f"zone-tiler: экран {output} — профиль «{zc.sanitize_profile_name(name)}»: "
-                f"{len(plan['monitor_sets'][output])} зон"
+                _(
+                    "zone-tiler: экран {output} — профиль «{profile}»: {zones} зон"
+                ).format(
+                    output=output,
+                    profile=zc.sanitize_profile_name(name),
+                    zones=len(plan["monitor_sets"][output]),
+                )
             )
         print(
-            f"zone-tiler: активный конфиг обновлён: экранов {len(plan['screens'])}, "
-            f"правил {len(plan['rules'])}, исключений {len(plan['ignore'])}"
+            _(
+                "zone-tiler: активный конфиг обновлён: экранов {screens}, "
+                "правил {rules}, исключений {ignore}"
+            ).format(
+                screens=len(plan["screens"]),
+                rules=len(plan["rules"]),
+                ignore=len(plan["ignore"]),
+            )
         )
     if not args.no_hotkeys:
         _run_hotkeys(conf, quiet=args.quiet)
@@ -3539,9 +3959,11 @@ def cmd_profile(args):
     action = (args.zone or "").strip()
     if action not in PROFILE_ACTIONS:
         fail(
-            "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | "
-            "use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | "
-            "import <файл> [--name <имя>]",
+            _(
+                "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | "
+                "use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | "
+                "import <файл> [--name <имя>]"
+            ),
             EXIT_USAGE,
         )
     conf = args.conf
@@ -3560,8 +3982,11 @@ def cmd_profile(args):
 
     name = (args.name or "").strip()
     if not name:
-        what = "файл JSON-профиля" if action == "import" else "имя профиля"
-        fail(f"zone-tiler: profile {action} — укажите {what}", EXIT_USAGE)
+        what = _("файл JSON-профиля") if action == "import" else _("имя профиля")
+        fail(
+            _("zone-tiler: profile {action} — укажите {what}").format(action=action, what=what),
+            EXIT_USAGE,
+        )
 
     try:
         if action == "show":
@@ -3572,17 +3997,29 @@ def cmd_profile(args):
             path = zc.save_profile(
                 name, zones, extra.get("rules", []), conf, ignore=extra.get("ignore")
             )
-            print(f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» сохранён: {path}")
+            print(
+                _("zone-tiler: профиль «{profile}» сохранён: {path}").format(
+                    profile=zc.sanitize_profile_name(name), path=path
+                )
+            )
         elif action == "rm":
             zc.remove_profile(name, conf)
-            print(f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» удалён")
+            print(
+                _("zone-tiler: профиль «{profile}» удалён").format(
+                    profile=zc.sanitize_profile_name(name)
+                )
+            )
         elif action == "export":
             _profile_export(zc, args, name, conf)
         elif action == "import":
             _profile_import(zc, args, name, conf)
         else:  # use
             zones = zc.apply_profile(name, conf)
-            print(f"zone-tiler: профиль «{zc.sanitize_profile_name(name)}» применён: {len(zones)} зон")
+            print(
+                _("zone-tiler: профиль «{profile}» применён: {zones} зон").format(
+                    profile=zc.sanitize_profile_name(name), zones=len(zones)
+                )
+            )
             if not args.no_hotkeys:
                 _run_hotkeys(conf, quiet=args.quiet)
     except zc.ProfileJsonError as exc:
@@ -3595,11 +4032,11 @@ def cmd_profile(args):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description="Раскладка окон по зонам сетки (Cinnamon/X11)",
+        description=_("Раскладка окон по зонам сетки (Cinnamon/X11)"),
         # Без сокращений: иначе удалённый `--offset` совпадает с `--off` и
         # вместо «неизвестный флаг» человек получает ошибку про команду '20'.
         allow_abbrev=False,
-        epilog=(
+        epilog=_(
             "Примеры: zone-tiler.py arrange --by order; zone-tiler.py stack main; "
             "zone-tiler.py tabs-next; zone-tiler.py undo --all; "
             "zone-tiler.py action mirror; "
@@ -3621,7 +4058,7 @@ def main(argv=None):
             "undo",
             "profile",
         ],
-        help=(
+        help=_(
             "list/apply/keys — как раньше; move — перебросить окно в соседнюю зону; "
             "focus — режим «только эта зона» (окно в зону, остальные свёрнуты; "
             "повторно — выход); action — выполнить действие из [action:<имя>] "
@@ -3635,18 +4072,20 @@ def main(argv=None):
     ap.add_argument(
         "zone",
         nargs="?",
-        help="имя зоны для apply/stack, направление для move или действие profile",
+        help=_("имя зоны для apply/stack, направление для move или действие profile"),
     )
-    ap.add_argument("name", nargs="?", help="имя профиля или файл JSON для profile import")
+    ap.add_argument(
+        "name", nargs="?", help=_("имя профиля или файл JSON для profile import")
+    )
     ap.add_argument(
         "target",
         nargs="?",
-        help="profile export: файл для JSON (без него и без --json — stdout)",
+        help=_("profile export: файл для JSON (без него и без --json — stdout)"),
     )
     ap.add_argument(
         "--monitor",
         default=None,
-        help=(
+        help=_(
             "монитор для list/apply/stack/move: имя выхода (HDMI-1) или номер "
             "(без флага — экран окна у apply/stack/move, первый у list)"
         ),
@@ -3656,52 +4095,69 @@ def main(argv=None):
         metavar="N|current",
         default=None,
         type=workspace_spec,
-        help=(
+        help=_(
             "рабочий стол для list/apply/move/arrange/stack: номер (EWMH, с нуля), "
             "current (сетка активного стола — по умолчанию) или conf "
             "(всегда сетка zones.conf, без профилей столов)"
         ),
     )
-    ap.add_argument("--window", type=lambda s: int(s, 0), help="id окна (по умолчанию активное)")
+    ap.add_argument(
+        "--window", type=lambda s: int(s, 0), help=_("id окна (по умолчанию активное)")
+    )
     ap.add_argument(
         "--by",
         choices=["auto", "rules", "order"],
         default="auto",
-        help="arrange: выбор окон — правила и остаток (auto), только правила, или по порядку",
+        help=_(
+            "arrange: выбор окон — правила и остаток (auto), только правила, или по порядку"
+        ),
     )
-    ap.add_argument("--all", action="store_true", help="undo: откатить всю историю, а не последнюю операцию")
+    ap.add_argument(
+        "--all",
+        action="store_true",
+        help=_("undo: откатить всю историю, а не последнюю операцию"),
+    )
     ap.add_argument(
         "--no-hotkeys",
         action="store_true",
-        help="profile use/use-monitors: не регистрировать сочетания клавиш после активации",
+        help=_(
+            "profile use/use-monitors: не регистрировать сочетания клавиш после активации"
+        ),
     )
     ap.add_argument(
         "--json",
         action="store_true",
-        help="profile export: печатать JSON в stdout, а не писать файл",
+        help=_("profile export: печатать JSON в stdout, а не писать файл"),
     )
     ap.add_argument(
         "--name",
         dest="as_name",
-        metavar="ИМЯ",
-        help="profile import: имя профиля (по умолчанию — из JSON)",
+        metavar=_("ИМЯ"),
+        help=_("profile import: имя профиля (по умолчанию — из JSON)"),
     )
     ap.add_argument(
         "--dry-run",
         action="store_true",
-        help="только посчитать рамку (у profile use-monitors — показать конфиг), ничего не меняя",
+        help=_(
+            "только посчитать рамку (у profile use-monitors — показать конфиг), "
+            "ничего не меняя"
+        ),
     )
     ap.add_argument(
         "--off",
         action="store_true",
-        help="focus: явно выйти из режима «только эта зона» (развернуть свёрнутое режимом)",
+        help=_(
+            "focus: явно выйти из режима «только эта зона» (развернуть свёрнутое режимом)"
+        ),
     )
     ap.add_argument(
         "--move",
         action="store_true",
-        help="keys: сочетания перемещения в соседнюю зону из секции [move]",
+        help=_("keys: сочетания перемещения в соседнюю зону из секции [move]"),
     )
-    ap.add_argument("--verify", action="store_true", help="перечитать реальную геометрию")
+    ap.add_argument(
+        "--verify", action="store_true", help=_("перечитать реальную геометрию")
+    )
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--conf", default=CONF)
     ap.add_argument("--version", action="version", version=f"zone-tiler {VERSION}")
@@ -3711,8 +4167,10 @@ def main(argv=None):
     for value in sys.argv[1:] if argv is None else argv:
         if value == "--offset" or value.startswith("--offset="):
             ap.error(
-                "--offset удалён: окна одной зоны больше не сдвигаются каскадом, "
-                "а стоят вкладками на общей рамке (переключение — tabs-next)"
+                _(
+                    "--offset удалён: окна одной зоны больше не сдвигаются каскадом, "
+                    "а стоят вкладками на общей рамке (переключение — tabs-next)"
+                )
             )
     args = ap.parse_args(argv)
 
@@ -3768,7 +4226,9 @@ def main(argv=None):
         cmd_action(grid, args)
         return EXIT_OK
     if not args.zone:
-        fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)
+        fail(
+            _("zone-tiler: укажите зону, например: zone-tiler.py apply left"), EXIT_USAGE
+        )
     # Зона ищется в наборе показанной сетки (экран + стол + общий [zones]); нет её
     # там — это ошибка конфига: конфиг и профиль разошлись.
     require_zone(grid, args.zone, workspace=workspace, profile=profile, output=output)
