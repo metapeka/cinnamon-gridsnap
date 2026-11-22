@@ -1082,6 +1082,10 @@ msgid "не удалось сопоставить выходы мониторо�
 msgstr "failed to match monitor outputs: {exc}"
 
 #: zone-daemon.py
+msgid "масштаб экрана изменился — перечитываю рабочие области"
+msgstr "screen scale changed — re-reading work areas"
+
+#: zone-daemon.py
 #, python-brace-format
 msgid "не удалось получить рабочую область: {exc}"
 msgstr "failed to get the work area: {exc}"
