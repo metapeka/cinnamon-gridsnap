@@ -5,7 +5,9 @@ Maintainer: metapeka <188594035+metapeka@users.noreply.github.com>
 Homepage: https://github.com/metapeka/cinnamon-gridsnap
 Vcs-Git: https://github.com/metapeka/cinnamon-gridsnap.git
 Vcs-Browser: https://github.com/metapeka/cinnamon-gridsnap
-Build-Depends: debhelper-compat (= 13), dh-exec, gettext
+# po4a — сборочная зависимость: им `make man` собирает man-страницы en и zh_CN
+# (русская — копия источника, псевдонимы — копии). gettext — каталоги переводов.
+Build-Depends: debhelper-compat (= 13), dh-exec, gettext, po4a
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 
