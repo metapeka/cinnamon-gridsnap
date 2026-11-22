@@ -730,12 +730,13 @@ key = <Super><Alt>g   ; «следующее окно зоны активног�
 ```bash
 python3 zone-tiler.py profile gallery                  # что есть в галерее
 python3 zone-tiler.py profile from-gallery work        # профиль «work» из раскладки
-python3 zone-tiler.py profile from-gallery work mine   # под своим именем
+python3 zone-tiler.py profile from-gallery work --name mine   # под своим именем
 python3 zone-tiler.py profile use mine                 # и включить его
 ```
 
-Существующий профиль молча не перезаписывается: `from-gallery` откажется, пока не передан
-`--force`. Свои раскладки можно положить рядом с теми, что идут в поставке, — в
+Командная строка существующий профиль не перезаписывает: `from-gallery` откажется, если имя
+занято, — выберите другое или удалите профиль (`profile rm`), перезапись спрашивает только редактор.
+Свои раскладки можно положить рядом с теми, что идут в поставке, — в
 `<префикс>/share/gridsnap/gallery/` (или указать каталог переменной `GRIDSNAP_GALLERY`); файл —
 обычный `.conf` с дополнительной секцией `[gallery]`: `title`, `description` и необязательный
 `order` для порядка в меню.

@@ -713,11 +713,12 @@ Firefox、Thunderbird 和终端会自动落到各自的区域）、「观影」�
 ```bash
 python3 zone-tiler.py profile gallery                  # 模板库里有什么
 python3 zone-tiler.py profile from-gallery work        # 由布局生成方案「work」
-python3 zone-tiler.py profile from-gallery work mine   # 用自己的名字
+python3 zone-tiler.py profile from-gallery work --name mine   # 用自己的名字
 python3 zone-tiler.py profile use mine                 # 然后切换到它
 ```
 
-已有方案不会被静默覆盖：没有传 `--force` 时 `from-gallery` 会拒绝。自己的布局可以和安装包里的
+命令行不会覆盖已有方案：名字被占用时 `from-gallery` 会拒绝 —— 换个名字，或先删除旧方案
+（`profile rm`）；只有编辑器会先询问是否覆盖。自己的布局可以和安装包里的
 放在一起（`<前缀>/share/gridsnap/gallery/`，或用 `GRIDSNAP_GALLERY` 变量指定目录）；文件就是
 普通的 `.conf`，只是多一个 `[gallery]` 段：`title`、`description`，以及可选的 `order`
 （菜单里的顺序）。

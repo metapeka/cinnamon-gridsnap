@@ -766,11 +766,13 @@ never changed. The same from the command line:
 ```bash
 python3 zone-tiler.py profile gallery                  # what is in the gallery
 python3 zone-tiler.py profile from-gallery work        # profile “work” from the layout
-python3 zone-tiler.py profile from-gallery work mine   # under your own name
+python3 zone-tiler.py profile from-gallery work --name mine   # under your own name
 python3 zone-tiler.py profile use mine                 # and switch to it
 ```
 
-An existing profile is not overwritten silently: `from-gallery` refuses until you pass `--force`.
+An existing profile is never overwritten from the command line: `from-gallery` refuses when the
+name is taken — pick another name or remove the profile (`profile rm`); only the editor asks before
+overwriting.
 Your own layouts can be put next to the shipped ones in `<prefix>/share/gridsnap/gallery/` (or
 pointed at with the `GRIDSNAP_GALLERY` variable); files are ordinary `.conf` with an extra `[gallery]`
 section — `title`, `description` and an optional `order` for the menu.
