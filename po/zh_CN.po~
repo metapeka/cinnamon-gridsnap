@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 20:52+0300\n"
+"POT-Creation-Date: 2026-11-22 20:54+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -659,35 +659,35 @@ msgstr "zone-tiler: 活动配置已更新：显示器 {screens}、规则 {rules}
 #: zone-tiler.py
 msgid "zone-tiler: галерея раскладок пуста"
 msgstr "zone-tiler：布局库为空"
- "zone-tiler: 布局历史是空的"
+ "zone-tiler：布局库为空zone-tiler: 布局历史是空的"
 
 #: zone-tiler.py
 #, python-brace-format
 msgid "{id}\t{title}\tзон: {count}\t{description}"
 msgstr "{id}	{title}	区域：{count}	{description}"
- ""
+ "{id}\t{title}\t区域：{count}\t{description}"
 
 #: zone-tiler.py
 msgid "zone-tiler: profile from-gallery — укажите id раскладки (см. profile gallery)"
 msgstr "zone-tiler: profile from-gallery — 请给出布局 id（见 profile gallery）"
- ""
+ "zone-tiler: profile from-gallery — 请给出布局 id（见 profile gallery）"
 
 #: zone-tiler.py
 #, python-brace-format
 msgid "профиль «{name}» создан из готовой раскладки «{id}»: {path}"
 msgstr "已从内置布局「{id}」创建方案「{name}」：{path}"
- "方案「{}」已存在。要用布局「{}」覆盖它吗？"
+ "已从内置布局「{id}」创建方案「{name}」：{path}方案「{}」已存在。要用布局「{}」覆盖它吗？"
 
 #: zone-tiler.py
 #, python-brace-format
 msgid "применить: zone-tiler.py profile use {name}"
 msgstr "应用：zone-tiler.py profile use {name}"
- ""
+ "应用：zone-tiler.py profile use {name}"
 
 #: zone-tiler.py
-msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>] [--force]"
-msgstr "zone-tiler: profile — 请给出动作：list | show <名称> | save <名称> | use <名称> | use-monitors | rm <名称> | export <名称> [文件 | --json] | import <文件> [--name <名称>] | gallery | from-gallery <id> [--name <名称>] [--force]"
- "zone-tiler: profile — 请指定操作：list | show <名称> | save <名称> | use <名称> | use-monitors | rm <名称> | export <名称> [文件 | --json] | import <文件> [--name <名称>]"
+msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>]"
+msgstr "zone-tiler: profile — 请给出动作：list | show <名称> | save <名称> | use <名称> | use-monitors | rm <名称> | export <名称> [文件 | --json] | import <文件> [--name <名称>] | gallery | from-gallery <id> [--name <名称>]"
+ "zone-tiler: profile — 请给出动作：list | show <名称> | save <名称> | use <名称> | use-monitors | rm <名称> | export <名称> [文件 | --json] | import <文件> [--name <名称>] | gallery | from-gallery <id> [--name <名称>] [--force]zone-tiler: profile — 请指定操作：list | show <名称> | save <名称> | use <名称> | use-monitors | rm <名称> | export <名称> [文件 | --json] | import <文件> [--name <名称>]"
 
 #: zone-tiler.py
 msgid "файл JSON-профиля"
@@ -776,12 +776,7 @@ msgstr "名称"
 #: zone-tiler.py
 msgid "profile import/from-gallery: имя профиля (import — по умолчанию из JSON)"
 msgstr "profile import/from-gallery：方案名称（import 默认取自 JSON）"
- "profile import：方案名（默认 — 取自 JSON）"
-
-#: zone-tiler.py
-msgid "profile from-gallery: перезаписать существующий профиль"
-msgstr "profile from-gallery：覆盖已存在的方案"
- ""
+ "profile import/from-gallery：方案名称（import 默认取自 JSON）profile import：方案名（默认 — 取自 JSON）"
 
 #: zone-tiler.py
 msgid "только посчитать рамку (у profile use-monitors — показать конфиг), ничего не меняя"
@@ -2603,3 +2598,6 @@ msgstr "gridsnap-ctl: {error}"
 #: gridsnap-ctl
 msgid "команда отклонена"
 msgstr "命令被拒绝"
+
+#~ msgid "profile from-gallery: перезаписать существующий профиль"
+#~ msgstr "profile from-gallery：覆盖已存在的方案"

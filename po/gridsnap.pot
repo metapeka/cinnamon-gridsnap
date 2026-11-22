@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.2.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 20:54+0300\n"
+"POT-Creation-Date: 2026-11-22 21:26+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2232,6 +2232,21 @@ msgstr ""
 
 #: zone_ipc.py
 msgid "в команде нет непустого строкового поля 'cmd'"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "неизвестный вид события '{kind}'"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "поле 'events' должно быть непустым списком групп: {known}"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "неизвестная группа событий '{item}': можно {known}"
 msgstr ""
 
 #: zone_ipc.py

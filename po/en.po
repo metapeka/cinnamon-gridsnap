@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 20:54+0300\n"
+"POT-Creation-Date: 2026-11-22 21:26+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -658,36 +658,30 @@ msgstr "zone-tiler: active config updated: monitors {screens}, rules {rules}, ex
 
 #: zone-tiler.py
 msgid "zone-tiler: галерея раскладок пуста"
-msgstr "zone-tiler: the layout gallery is empty"
- "zone-tiler: the layout gallery is emptyzone-tiler: layout history is empty"
+msgstr "zone-tiler: the layout gallery is emptyzone-tiler: the layout gallery is emptyzone-tiler: layout history is empty"
 
 #: zone-tiler.py
 #, python-brace-format
 msgid "{id}\t{title}\tзон: {count}\t{description}"
-msgstr "{id}	{title}	zones: {count}	{description}"
- "{id}\t{title}\tzones: {count}\t{description}"
+msgstr "{id}\t{title}\tzones: {count}\t{description}{id}\t{title}\tzones: {count}\t{description}"
 
 #: zone-tiler.py
 msgid "zone-tiler: profile from-gallery — укажите id раскладки (см. profile gallery)"
-msgstr "zone-tiler: profile from-gallery - name the layout id (see profile gallery)"
- "zone-tiler: profile from-gallery - name the layout id (see profile gallery)"
+msgstr "zone-tiler: profile from-gallery - name the layout id (see profile gallery)zone-tiler: profile from-gallery - name the layout id (see profile gallery)"
 
 #: zone-tiler.py
 #, python-brace-format
 msgid "профиль «{name}» создан из готовой раскладки «{id}»: {path}"
-msgstr "profile '{name}' created from the gallery layout '{id}': {path}"
- "profile '{name}' created from the gallery layout '{id}': {path}Profile \"{}\" already exists. Overwrite it with the layout \"{}\"?"
+msgstr "profile '{name}' created from the gallery layout '{id}': {path}profile '{name}' created from the gallery layout '{id}': {path}Profile \"{}\" already exists. Overwrite it with the layout \"{}\"?"
 
 #: zone-tiler.py
 #, python-brace-format
 msgid "применить: zone-tiler.py profile use {name}"
-msgstr "apply it with: zone-tiler.py profile use {name}"
- "apply it with: zone-tiler.py profile use {name}"
+msgstr "apply it with: zone-tiler.py profile use {name}apply it with: zone-tiler.py profile use {name}"
 
 #: zone-tiler.py
 msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>]"
-msgstr "zone-tiler: profile - name an action: list | show <name> | save <name> | use <name> | use-monitors | rm <name> | export <name> [file | --json] | import <file> [--name <name>] | gallery | from-gallery <id> [--name <name>]"
- "zone-tiler: profile - name an action: list | show <name> | save <name> | use <name> | use-monitors | rm <name> | export <name> [file | --json] | import <file> [--name <name>] | gallery | from-gallery <id> [--name <name>] [--force]zone-tiler: profile - specify an action: list | show <name> | save <name> | use <name> | use-monitors | rm <name> | export <name> [file | --json] | import <file> [--name <name>]"
+msgstr "zone-tiler: profile - name an action: list | show <name> | save <name> | use <name> | use-monitors | rm <name> | export <name> [file | --json] | import <file> [--name <name>] | gallery | from-gallery <id> [--name <name>]zone-tiler: profile - name an action: list | show <name> | save <name> | use <name> | use-monitors | rm <name> | export <name> [file | --json] | import <file> [--name <name>] | gallery | from-gallery <id> [--name <name>] [--force]zone-tiler: profile - specify an action: list | show <name> | save <name> | use <name> | use-monitors | rm <name> | export <name> [file | --json] | import <file> [--name <name>]"
 
 #: zone-tiler.py
 msgid "файл JSON-профиля"
@@ -775,8 +769,7 @@ msgstr "NAME"
 
 #: zone-tiler.py
 msgid "profile import/from-gallery: имя профиля (import — по умолчанию из JSON)"
-msgstr "profile import/from-gallery: profile name (import defaults to the JSON one)"
- "profile import/from-gallery: profile name (import defaults to the JSON one)profile import: profile name (from the JSON by default)"
+msgstr "profile import/from-gallery: profile name (import defaults to the JSON one)profile import/from-gallery: profile name (import defaults to the JSON one)profile import: profile name (from the JSON by default)"
 
 #: zone-tiler.py
 msgid "только посчитать рамку (у profile use-monitors — показать конфиг), ничего не меняя"
@@ -2238,6 +2231,24 @@ msgstr "the command must be a JSON object"
 #: zone_ipc.py
 msgid "в команде нет непустого строкового поля 'cmd'"
 msgstr "the command has no non-empty string field 'cmd'"
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "неизвестный вид события '{kind}'"
+msgstr "unknown event kind '{kind}'"
+ "unknown command: {name}"
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "поле 'events' должно быть непустым списком групп: {known}"
+msgstr "'events' must be a non-empty list of groups: {known}"
+ "in JSON profile rules must be a list of strings"
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "неизвестная группа событий '{item}': можно {known}"
+msgstr "unknown event group '{item}': available {known}"
+ "unknown mirror axis '{axis}': available {axes}"
 
 #: zone_ipc.py
 msgid "строка длиннее предела протокола"

@@ -71,6 +71,125 @@ def parse_command(raw):
     return request
 
 
+# ------------------------------------------------------------------- события
+#
+# Подписка — единственная команда, после которой соединение становится
+# **только на чтение**: демон шлёт в него события и больше команд не разбирает
+# (отписка = закрыть соединение). Формат строк — тот же JSON-протокол, поля взяты
+# из `status` (`window` — hex-строка, `zone` — имя или None, `workspace` — номер
+# стола EWMH, `monitor` — [x, y, w, h]).
+
+# Владелец выбрал: рассказывать про окна и про режим «только эта зона» (замер — в
+# `docs/HANDOFF-2026-11-22-gallery-wayland.md`). Подписка идёт **группами**, а не
+# отдельными видами: клиенту обычно нужно «всё про окна» или «всё про режим».
+EVENT_GROUPS = {
+    "window": ("window-appeared", "window-closed", "window-moved"),
+    "focus": ("focus-on", "focus-off"),
+}
+ALL_EVENT_GROUPS = tuple(EVENT_GROUPS)
+SUBSCRIBE_CMD = "subscribe"
+
+
+def event_group(kind):
+    """Группа события (`'window'`/`'focus'`); неизвестный вид — `ProtocolError`."""
+    for group, kinds in EVENT_GROUPS.items():
+        if kind in kinds:
+            return group
+    raise ProtocolError(_("неизвестный вид события '{kind}'").format(kind=kind))
+
+
+def parse_subscription(request):
+    """Группы событий из запроса подписки. Райзит `ProtocolError`.
+
+    Без поля `events` подписываемся на всё, что демон умеет (список групп — в
+    `EVENT_GROUPS`): клиенту, которому нужны все события, незачем их перечислять.
+    Пустой список — ошибка, а не «подписка на всё»: иначе опечатка в запросе
+    молча давала бы поток, которого клиент не ждал. Порядок групп — как просил
+    клиент, без повторов.
+    """
+    raw = request.get("events")
+    if raw is None:
+        return ALL_EVENT_GROUPS
+    if not isinstance(raw, list) or not raw:
+        raise ProtocolError(
+            _("поле 'events' должно быть непустым списком групп: {known}").format(
+                known=", ".join(ALL_EVENT_GROUPS)
+            )
+        )
+    groups = []
+    for item in raw:
+        if not isinstance(item, str) or item not in EVENT_GROUPS:
+            raise ProtocolError(
+                _("неизвестная группа событий '{item}': можно {known}").format(
+                    item=item, known=", ".join(ALL_EVENT_GROUPS)
+                )
+            )
+        if item not in groups:
+            groups.append(item)
+    return tuple(groups)
+
+
+def subscribe_answer(groups):
+    """Ответ на подписку: какие группы приняты (строка протокола, `bytes`)."""
+    return encode_message({"ok": True, "subscribed": list(groups)})
+
+
+def wants_event(groups, kind):
+    """Входит ли событие `kind` в подписанные группы."""
+    return event_group(kind) in groups
+
+
+def event_line(kind, **fields):
+    """Строка события для подписчика (`bytes`); вид события проверяется.
+
+    Поля кладутся рядом с `event`, порядок не важен, лишние поля не проверяются —
+    форму каждого события задают сборщики ниже, а тест их и стережёт.
+    """
+    event_group(kind)
+    payload = {"event": kind}
+    payload.update(fields)
+    return encode_message(payload)
+
+
+def event_window_appeared(window, zone=None, workspace=None, monitor=None):
+    """Окно появилось: `zone` — куда встало (None — никуда, напр. под `[ignore]`)."""
+    return event_line(
+        "window-appeared", window=hex(window), zone=zone, workspace=workspace, monitor=monitor
+    )
+
+
+def event_window_closed(window, zone=None):
+    """Окно ушло; `zone` — где оно стояло в последний раз (None — не знаем)."""
+    return event_line("window-closed", window=hex(window), zone=zone)
+
+
+def event_window_moved(window, zone, previous=None, workspace=None, monitor=None):
+    """Окно сменило зону, не появляясь и не закрываясь (команда, arrange, reflow)."""
+    return event_line(
+        "window-moved",
+        window=hex(window),
+        zone=zone,
+        previous=previous,
+        workspace=workspace,
+        monitor=monitor,
+    )
+
+
+def event_focus_on(zone, window=None, minimized=0):
+    """Включился режим «только эта зона»: окно `zone`, свернуто `minimized` чужих."""
+    return event_line(
+        "focus-on",
+        zone=zone,
+        window=hex(window) if window is not None else None,
+        minimized=minimized,
+    )
+
+
+def event_focus_off(zone=None, restored=0, total=0):
+    """Режим выключился: развёрнуто `restored` из `total` свёрнутых им окон."""
+    return event_line("focus-off", zone=zone, restored=restored, total=total)
+
+
 class LineReader:
     """Копит байты потока и выдаёт завершённые строки (по '\\n').
 
