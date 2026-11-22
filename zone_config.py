@@ -997,7 +997,17 @@ def _read_conf(path, missing_ok=False):
         inline_comment_prefixes=("#", ";"),
         delimiters=("=",),
     )
-    if not cp.read(path, encoding="utf-8"):
+    try:
+        read = cp.read(path, encoding="utf-8")
+    except configparser.Error as exc:
+        # Повтор секции или ключа в ней: `ConfigParser` падает трассировкой, а
+        # человеку нужен код 3 и имя файла — как у любой другой опечатки.
+        zt.fail(
+            _("zone_config: не разобрать конфиг {path}: {error}").format(
+                path=path, error=exc),
+            zt.EXIT_CONFIG,
+        )
+    if not read:
         if missing_ok:
             return None
         zt.fail(
@@ -1134,10 +1144,14 @@ def load_extra_sections(path, sections=None):
     присутствующих в файле, — порядок и содержимое строк сохраняются дословно
     (включая регистр ключей и комментарии). ``sections`` ограничивает набор
     имён (в нижнем регистре); по умолчанию берутся все, кроме
-    :data:`RESERVED_SECTIONS`. Несуществующий файл даёт пустой словарь.
+    :data:`RESERVED_SECTIONS`. Две секции, чьи имена совпадают без учёта
+    регистра (``[action:Main]`` и ``[action:main]``) или повторяют друг друга,
+    — код 3: склеить их в один блок значит записать нечитаемый файл.
+    Несуществующий файл даёт пустой словарь.
     """
     wanted = None if sections is None else {s.lower() for s in sections}
     result = {}
+    headers = {}
     if not path or not os.path.exists(path):
         return result
     current = None
@@ -1146,7 +1160,8 @@ def load_extra_sections(path, sections=None):
             line = raw.rstrip("\n").rstrip("\r")
             match = _SECTION_RE.match(line)
             if match:
-                current = match.group(1).strip().lower()
+                raw_name = match.group(1).strip()
+                current = raw_name.lower()
                 # Наборы мониторов (`[zones:*]`) ведёт сам редактор: как «чужие»
                 # их не переносим, иначе имя выхода потеряет регистр и задвоится.
                 is_zone_set = _monitor_of(current) is not None
@@ -1155,7 +1170,31 @@ def load_extra_sections(path, sections=None):
                     and current not in RESERVED_SECTIONS
                     and (wanted is None or current in wanted)
                 ):
-                    result.setdefault(current, [])
+                    # Две секции с одним именем в нижнем регистре — это либо
+                    # повтор дословно, либо `[action:Main]` и `[action:main]`.
+                    # Склеить их в один блок нельзя: ConfigParser считает их
+                    # разными, и записанная склейка (`DuplicateOptionError`)
+                    # перестаёт читаться. Поэтому — код 3, а не порча файла.
+                    if current in headers:
+                        first = headers[current]
+                        if first == raw_name:
+                            zt.fail(
+                                _(
+                                    "zone_config: секция [{name}] задана дважды: "
+                                    "оставьте одну"
+                                ).format(name=raw_name),
+                                zt.EXIT_CONFIG,
+                            )
+                        zt.fail(
+                            _(
+                                "zone_config: секции [{first}] и [{second}] "
+                                "отличаются только регистром: склеенная секция "
+                                "перестанет читаться — оставьте одну"
+                            ).format(first=first, second=raw_name),
+                            zt.EXIT_CONFIG,
+                        )
+                    headers[current] = raw_name
+                    result[current] = []
                 else:
                     current = None
                 continue

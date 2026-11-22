@@ -375,6 +375,50 @@ class ActionsSurviveSavingTest(unittest.TestCase):
         )
         self.assertEqual(zc.load_actions(self.path), self.actions)
 
+    def test_case_differing_sections_refuse_to_save(self):
+        # `[action:Main]` и `[action:main]` ConfigParser считает разными
+        # секциями. Склеить их в один блок нельзя: записанная склейка не
+        # читается (`DuplicateOptionError`). Редактор отказывает кодом 3,
+        # файл остаётся дословно тем же.
+        original = (
+            BASE
+            + "[action:Main]\nrun = builtin:mirror\n\n"
+            + "[action:main]\nrun = builtin:terminal\n"
+        )
+        self.write(original)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
+            zc.save_zones(
+                self.path,
+                zc.load_zones(self.path),
+                zc.load_extra_sections(self.path),
+            )
+        self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
+        self.assertIn("только регистром", err.getvalue())
+        self.assertEqual(self.read(), original)
+
+    def test_duplicate_section_is_config_error(self):
+        # Дословный повтор `[action:x]`: ConfigParser падает
+        # `DuplicateSectionError`. Загрузчик превращает его в код 3 с именем
+        # файла, а не в трассировку.
+        self.write(BASE + "[action:x]\nrun = builtin:mirror\n\n[action:x]\nrun = builtin:terminal\n")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
+            zc.load_zones(self.path)
+        self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
+        self.assertIn("не разобрать конфиг", err.getvalue())
+        self.assertIn("action:x", err.getvalue())
+
+    def test_duplicate_section_in_extra_sections_is_config_error(self):
+        # Тот же повтор, но через чтение чужих секций (путь сохранения):
+        # сообщение называет секцию, а не молча склеивает тела.
+        self.write(BASE + "[action:x]\nrun = builtin:mirror\n\n[action:x]\nrun = builtin:terminal\n")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
+            zc.load_extra_sections(self.path)
+        self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
+        self.assertIn("задана дважды", err.getvalue())
+
     def test_profile_use_keeps_actions(self):
         # `profile use` — та же запись конфига: профиль меняет зоны и правила, а
         # чужие секции активного конфига остаются. Клавиши не трогаем

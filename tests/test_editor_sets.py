@@ -23,6 +23,8 @@
 """
 
 import configparser
+import contextlib
+import io
 import os
 import shutil
 import sys
@@ -203,8 +205,11 @@ class TestKeysWithoutDuplicates(ConfCase):
             + "[zones]\nmain = 0, 0, 1, 1\n"
             + "[keys]\nmain = <Super><Alt>1\nmain = <Super><Alt>9\n"
         )
-        with self.assertRaises(configparser.Error):
-            zc.load_zones(self.conf)          # руками испорченный файл не читается
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(
+            SystemExit
+        ) as caught:
+            zc.load_zones(self.conf)  # руками испорченный файл — код 3, не трассировка
+        self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
         zc.save_zone_sets(
             self.conf,
             [zone("main", (0, 0, 1, 1), "<Super><Alt>1")],
