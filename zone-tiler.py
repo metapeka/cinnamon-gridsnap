@@ -646,6 +646,29 @@ def current_workspace():
     return window_backend.current_workspace()
 
 
+def current_workspace_or_first():
+    """Активный стол, а без `_NET_CURRENT_DESKTOP` — 0 (если X вообще отвечает).
+
+    Нужен там, где стол должен быть числом (режим `focus`, демон): в Wayland-сессии
+    Cinnamon свойства нет до первого переключения стола, и отказ здесь ломал `focus`
+    целиком (замер: ``docs/RESEARCH-wayland-recon.md``). ``None`` остаётся только
+    на «X не отвечает» — тогда, как и прежде, идёт общий `zones.conf`.
+
+    Сначала спрашивается `current_workspace()`, а не внутреннее чтение: это точка
+    подмены в тестах и у демона (``current_workspace=lambda: …``), и обходить её
+    нельзя.
+    """
+    desk = current_workspace()
+    if desk is not None:
+        return desk
+    return 0 if window_backend.x_alive() else None
+
+
+def window_on_other_desktop(win):
+    """Окно на другом столе — не то же самое, что свёрнуто; см. `window_backend`."""
+    return window_backend.window_on_other_desktop(win)
+
+
 def window_workspace_for_zones(win):
     """Стол окна для выбора сетки: ``None`` у «липких» и неопознанных.
 
@@ -720,11 +743,13 @@ def workspace_spec(text):
 def resolve_workspace(spec):
     """Номер стола для запроса сетки: ``current``/``None`` — активный стол.
 
-    ``None`` у `current_workspace()` (нет xprop, нет `_NET_CURRENT_DESKTOP`)
-    означает «стол неизвестен» — вызывающий получает общий `zones.conf`.
+    Стол ищется через `current_workspace_or_first`: в Wayland-сессии Cinnamon
+    свойства `_NET_CURRENT_DESKTOP` нет до первого переключения стола, и раньше
+    здесь получался отказ всей команды. ``None`` теперь только на «X не
+    отвечает» — тогда, как и прежде, идёт общий `zones.conf`.
     """
     if spec is None or spec == WORKSPACE_CURRENT:
-        return current_workspace()
+        return current_workspace_or_first()
     if spec == WORKSPACE_CONF:
         return WORKSPACE_CONF
     return int(spec)

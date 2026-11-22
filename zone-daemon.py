@@ -633,7 +633,7 @@ class Daemon:
             monitor_outputs if monitor_outputs is not None else tiler.monitor_outputs
         )
         self.window_center = window_center or read_window_center
-        self.read_current_workspace = current_workspace or tiler.current_workspace
+        self.read_current_workspace = current_workspace or tiler.current_workspace_or_first
         self.read_window_workspace = window_workspace or tiler.window_workspace_for_zones
         # Рамку окна читает память об укладках (сравнение «окно на месте/ушло»).
         self.read_rect = read_rect or window_rect
@@ -721,11 +721,13 @@ class Daemon:
     # -- рабочие столы
 
     def _read_current_workspace(self):
-        """Активный стол из `_NET_CURRENT_DESKTOP`; `None` — не определить.
+        """Активный стол; `None` — только если X не отвечает.
 
-        `tiler.current_workspace()` при отказе `xprop` возвращает `None` сам,
-        но подменённый читатель может и бросить: стол — не повод падать, при
-        неизвестном столе reflow просто не двигает окна.
+        Читается `tiler.current_workspace_or_first`: в Wayland-сессии Cinnamon
+        `_NET_CURRENT_DESKTOP` не опубликован до первого переключения стола
+        (замер: ``docs/RESEARCH-wayland-recon.md``), и без запаса демон считал бы
+        стол неизвестным и не делал reflow. Подменённый читатель может и бросить:
+        стол — не повод падать, при неизвестном столе reflow просто не двигает окна.
         """
         try:
             return self.read_current_workspace()

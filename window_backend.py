@@ -173,12 +173,15 @@ def window_workspace(win):
     return int(found.group(1)) if found else None
 
 
-def current_workspace():
-    """Номер активного рабочего стола (`_NET_CURRENT_DESKTOP`) или None.
+def _current_workspace_raw():
+    """``(номер стола | None, отвечает ли X)`` — одна команда `xprop`.
 
-    Ноль — первый стол: так его нумерует EWMH. В ``[workspaces]`` ключи на
-    единицу больше (как в интерфейсе Cinnamon), перевод — у вызывающего
-    (`zone-tiler.grid_for_workspace`).
+    Разделение нужно, чтобы отличить «X не отвечает» (нет `xprop`, нет дисплея —
+    команда падает) от «X жив, а свойства нет». Второе — это Wayland-сессия
+    Cinnamon до первого переключения стола: `xprop` печатает «no such atom on any
+    window» и выходит с нулём (проверено на машине), то есть команда успешна.
+    Без этого различия либо Wayland получает отказ вместо стола, либо «нет X»
+    молча становится первым столом — а это разные вещи.
     """
     try:
         out = subprocess.check_output(
@@ -187,12 +190,81 @@ def current_workspace():
             stderr=subprocess.DEVNULL,
         )
     except Exception:
-        return None
+        return None, False
     found = re.search(r"=\s*(-?\d+)", out)
     if not found:
-        return None
+        return None, True
     number = int(found.group(1))
-    return number if number >= 0 else None
+    return (number if number >= 0 else None), True
+
+
+def current_workspace():
+    """Номер активного рабочего стола (`_NET_CURRENT_DESKTOP`) или None.
+
+    Ноль — первый стол: так его нумерует EWMH. В ``[workspaces]`` ключи на
+    единицу больше (как в интерфейсе Cinnamon), перевод — у вызывающего
+    (`zone-tiler.grid_for_workspace`).
+    """
+    return _current_workspace_raw()[0]
+
+
+def x_alive():
+    """Отвечает ли X-сервер: читается `_NET_SUPPORTED` (у живого WM он есть).
+
+    Нужно там, где надо отличить «X не отвечает» (нет `xprop`, нет дисплея) от
+    «X жив, а нужного свойства нет» — второе бывает в Wayland-сессии Cinnamon
+    (замер: ``docs/RESEARCH-wayland-recon.md``). Спрашивается только в редком
+    случае (свойства стола нет и подмены нет): в обычной сессии — ни одного
+    лишнего подпроцесса.
+    """
+    try:
+        out = subprocess.check_output(
+            ["xprop", "-root", "_NET_SUPPORTED"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return False
+    return "_NET_SUPPORTED" in out and "no such atom" not in out
+
+
+def current_workspace_or_first():
+    """Номер активного стола; если свойства нет, а X жив — 0 (первый стол).
+
+    В Wayland-сессии Cinnamon (замер: ``docs/RESEARCH-wayland-recon.md``) свойства
+    `_NET_CURRENT_DESKTOP` нет до первого настоящего переключения стола, хотя стол
+    есть и окна на нём лежат: без этого запаса `focus` отказывал («не удалось
+    определить активный рабочий стол»), а `wmctrl -d` не работал вообще.
+
+    `None` остаётся ровно для случая «X не отвечает»: тогда стол по-прежнему
+    неизвестен, и звать его нулевым нельзя — на X11 свойство не пропадает, так что
+    там разбор ничего не меняет.
+    """
+    desk = current_workspace()
+    if desk is not None:
+        return desk
+    return 0 if x_alive() else None
+
+
+def window_on_other_desktop(win):
+    """Окно лежит на другом столе — это не то же самое, что «свёрнуто».
+
+    Замер (``docs/RESEARCH-wayland-recon.md``): в Wayland-сессии Cinnamon окно,
+    уехавшее на другой стол, получает `WM_STATE=Iconic`, хотя пользователь его не
+    сворачивал, и одним `_NET_ACTIVE_WINDOW` его не вернуть — сначала надо
+    переключить стол. ``window_iconic`` в этой ситуации отвечает «свёрнуто», а
+    вот этот вопрос — «просто на другом столе».
+
+    ``None`` — стол окна или активный стол не прочитать, либо окно «липкое»
+    (``_NET_WM_DESKTOP = 0xFFFFFFFF``: оно на всех столах).
+    """
+    desk = window_workspace(win)
+    if desk is None or desk >= 0xFFFFFFF0:
+        return None
+    current = current_workspace()
+    if current is None:
+        return None
+    return desk != current
 
 
 def window_iconic(win):
@@ -330,13 +402,32 @@ def read_session_id():
 # ------------------------------------------------------------- мониторы
 
 
+def prefer_x11_gdk():
+    """Заставить GDK идти через X11 (Xwayland) — до первого его инициализирования.
+
+    В Wayland-сессии GDK по умолчанию выбирает wayland-бэкенд: тогда рабочие
+    области и масштаб приезжают из Wayland (где нет X11-струтов), а окна мы
+    двигаем в координатах Xwayland — программа начинает мерить мир двумя линейками.
+    Замер и разбор — `docs/RESEARCH-wayland-recon.md`.
+
+    Вызывать **до** первого обращения к GDK/GTK: у GTK-программ (пикер, HUD,
+    полоса вкладок) — до `import gi`/`Gtk.init()`. В X11-сессии вызов ничего не
+    меняет, `GDK_BACKEND` снаружи не перебивается (`setdefault`).
+    """
+    os.environ.setdefault("GDK_BACKEND", "x11")
+
+
 def gdk_monitors():
     """``[(логическая рабочая область, масштаб)]`` из GDK; ``[]`` — GDK недоступен.
 
     Один разбор на `monitors()` и `monitor_scales()`, чтобы порядок и состав
     мониторов у них не разошлись. Область здесь ещё логическая: GTK считает в
     логических пикселях, а в физические её переводит `monitors()`.
+
+    Перед обращением к GDK включается X11-бэкенд (`prefer_x11_gdk`): иначе в
+    Wayland-сессии области придут из другого мира, чем координаты окон.
     """
+    prefer_x11_gdk()
     try:
         import gi
 

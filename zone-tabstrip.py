@@ -53,7 +53,13 @@ if HERE not in sys.path:
 
 import zone_tabstrip_nav as nav  # noqa: E402  (ищем рядом с собой, как устанавливается)
 import zone_units  # noqa: E402  (единственный перевод логических px в физические)
+import window_backend  # noqa: E402  (оконный слой: X11-бэкенд GDK и масштаб)
 from zone_i18n import _  # noqa: E402  (там же: строки интерфейса и их перевод)
+
+# Полоса ставит себя по координатам X, поэтому GDK обязан быть на X11-бэкенде —
+# иначе в Wayland-сессии `move()` ничего не делает (замер: docs/RESEARCH-wayland-recon.md).
+# Вызов до первого `load_gtk()`: после инициализации GDK бэкенд не переключить.
+window_backend.prefer_x11_gdk()
 
 VERSION = "0.2.0"
 

@@ -43,6 +43,14 @@ import signal
 import sys
 
 import cairo
+
+# X11-бэкенд GDK включается до первого обращения к GDK (см. `window_backend`):
+# в Wayland-сессии оверлей и HUD обязаны жить в координатах Xwayland, иначе
+# `move()` превращается в ничто, а размер окна считает другая линейка.
+import window_backend
+
+window_backend.prefer_x11_gdk()
+
 import gi
 
 gi.require_version("Gtk", "3.0")
