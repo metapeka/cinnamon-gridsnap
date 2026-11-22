@@ -32,6 +32,9 @@ install-daemon.sh => /usr/lib/gridsnap/install-daemon.sh
 gridsnap-ctl => /usr/lib/gridsnap/gridsnap-ctl
 # Каталог иконок рядом с кодом: install-launcher.sh берёт их по $DIR/icons.
 icons usr/lib/gridsnap
+# Готовые раскладки (зоны + клавиши + правила): zone_config ищет их в
+# /usr/share/gridsnap/gallery — там же, куда их ставит make deb и PKGBUILD.
+gallery usr/share/gridsnap
 
 # --- ярлык ---
 contrib/gridsnap.desktop => /usr/share/applications/gridsnap.desktop

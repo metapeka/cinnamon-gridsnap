@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.2.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 18:46+0300\n"
+"POT-Creation-Date: 2026-11-22 20:54+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -659,7 +659,30 @@ msgid "zone-tiler: активный конфиг обновлён: экрано�
 msgstr ""
 
 #: zone-tiler.py
-msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>]"
+msgid "zone-tiler: галерея раскладок пуста"
+msgstr ""
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "{id}\t{title}\tзон: {count}\t{description}"
+msgstr ""
+
+#: zone-tiler.py
+msgid "zone-tiler: profile from-gallery — укажите id раскладки (см. profile gallery)"
+msgstr ""
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "профиль «{name}» создан из готовой раскладки «{id}»: {path}"
+msgstr ""
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "применить: zone-tiler.py profile use {name}"
+msgstr ""
+
+#: zone-tiler.py
+msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>]"
 msgstr ""
 
 #: zone-tiler.py
@@ -747,7 +770,7 @@ msgid "ИМЯ"
 msgstr ""
 
 #: zone-tiler.py
-msgid "profile import: имя профиля (по умолчанию — из JSON)"
+msgid "profile import/from-gallery: имя профиля (import — по умолчанию из JSON)"
 msgstr ""
 
 #: zone-tiler.py
@@ -1341,6 +1364,14 @@ msgid "Профили"
 msgstr ""
 
 #: zone-editor.py
+msgid "Из галереи…"
+msgstr ""
+
+#: zone-editor.py
+msgid "Готовые раскладки: зоны, клавиши и правила для приложений"
+msgstr ""
+
+#: zone-editor.py
 msgid "Экран"
 msgstr ""
 
@@ -1401,7 +1432,67 @@ msgid "Удалить профиль…"
 msgstr ""
 
 #: zone-editor.py
+msgid "галерея не прочитана: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "в галерее нет ни одной раскладки"
+msgstr ""
+
+#: zone-editor.py
+msgid "Галерея раскладок"
+msgstr ""
+
+#: zone-editor.py
 msgid "Отмена"
+msgstr ""
+
+#: zone-editor.py
+msgid "Добавить в профили"
+msgstr ""
+
+#: zone-editor.py
+msgid "Готовая раскладка — зоны, клавиши и правила для приложений. Выбор создаёт из неё профиль: дальше его правят как свой."
+msgstr ""
+
+#: zone-editor.py
+msgid "{} — зон: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "раскладка не выбрана"
+msgstr ""
+
+#: zone-editor.py
+msgid "Добавить раскладку в профили"
+msgstr ""
+
+#: zone-editor.py
+msgid "Имя профиля для раскладки «{}»"
+msgstr ""
+
+#: zone-editor.py
+msgid "пустое имя профиля"
+msgstr ""
+
+#: zone-editor.py
+msgid "Профиль «{}» уже есть. Перезаписать его раскладкой «{}»?"
+msgstr ""
+
+#: zone-editor.py
+msgid "раскладка не добавлена: профиль «{}» уже есть"
+msgstr ""
+
+#: zone-editor.py
+msgid "раскладка не добавлена: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "раскладка «{}» → профиль «{}»: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "Загрузить раскладку «{}» в холст?"
 msgstr ""
 
 #: zone-editor.py
@@ -1430,10 +1521,6 @@ msgstr ""
 
 #: zone-editor.py
 msgid "Имя профиля"
-msgstr ""
-
-#: zone-editor.py
-msgid "пустое имя профиля"
 msgstr ""
 
 #: zone-editor.py
@@ -1767,6 +1854,44 @@ msgstr ""
 #: zone_config.py
 #, python-brace-format
 msgid "не удалось записать профиль «{name}»: {error}"
+msgstr ""
+
+#: zone_config.py
+#, python-brace-format
+msgid "нет раскладки «{id}» в галерее"
+msgstr ""
+
+#: zone_config.py
+#, python-brace-format
+msgid "не разобрать раскладку галереи {path}: {error}"
+msgstr ""
+
+#: zone_config.py
+#, python-brace-format
+msgid "не прочитать раскладку галереи {path}: {error}"
+msgstr ""
+
+#: zone_config.py
+#, python-brace-format
+msgid "не прочитать раскладку галереи {path}"
+msgstr ""
+
+#: zone_config.py
+msgid "в раскладке «{id}» order в [gallery] должен быть числом, а не {value!r}"
+msgstr ""
+
+#: zone_config.py
+#, python-brace-format
+msgid "в раскладке «{id}» нет секции [zones]"
+msgstr ""
+
+#: zone_config.py
+msgid "плохое имя профиля для раскладки «{id}»: {name!r}"
+msgstr ""
+
+#: zone_config.py
+#, python-brace-format
+msgid "профиль «{name}» уже есть: выберите другое имя или перезапишите его"
 msgstr ""
 
 #: zone_config.py

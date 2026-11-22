@@ -681,6 +681,30 @@ key = <Super><Alt>g   ; 「活动窗口所在区域的下一个窗口」
 命令会从选中的方案重写你 `zones.conf` 里的 `[zones]`/`[rules]`/`[ignore]`/`[keys]`。如果
 希望切换后区域的新按键立刻生效，就保留 `setup-hotkeys.py` 的调用
 （默认就有），或者在编辑器里点「快捷键」。
+
+### 9.3. 现成布局：模板库
+
+不必从零画网格：安装包里带有 `gallery/*.conf` 现成布局 —— 区域 **加上** `[keys]` **加上**
+应用的 `[rules]`，也就是一整套场景，而不只是几何。既有经典布局（「两列」「主区 + 堆叠」
+「2×2 网格」「三列」），也有场景：「工作」（左侧邮件和聊天、中间编辑器、下方终端，
+Firefox、Thunderbird 和终端会自动落到各自的区域）、「观影」（播放器铺满整个工作区）、
+「直播」（场景、聊天、预览）和「开发」（终端、编辑器、文档）。
+
+在编辑器里点「方案」旁边的「从模板库…」：选一个布局，它会被 **复制** 到你的方案
+（`templates/<名字>.conf`），之后就像自己的方案一样编辑；模板库本身不会被改动。命令行同样可以：
+
+```bash
+python3 zone-tiler.py profile gallery                  # 模板库里有什么
+python3 zone-tiler.py profile from-gallery work        # 由布局生成方案「work」
+python3 zone-tiler.py profile from-gallery work mine   # 用自己的名字
+python3 zone-tiler.py profile use mine                 # 然后切换到它
+```
+
+已有方案不会被静默覆盖：没有传 `--force` 时 `from-gallery` 会拒绝。自己的布局可以和安装包里的
+放在一起（`<前缀>/share/gridsnap/gallery/`，或用 `GRIDSNAP_GALLERY` 变量指定目录）；文件就是
+普通的 `.conf`，只是多一个 `[gallery]` 段：`title`、`description`，以及可选的 `order`
+（菜单里的顺序）。
+
 <!-- section: applet -->
 ## 10. Cinnamon 面板小程序：从面板使用 GridSnap
 

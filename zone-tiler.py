@@ -646,6 +646,29 @@ def current_workspace():
     return window_backend.current_workspace()
 
 
+def current_workspace_or_first():
+    """Активный стол, а без `_NET_CURRENT_DESKTOP` — 0 (если X вообще отвечает).
+
+    Нужен там, где стол должен быть числом (режим `focus`, демон): в Wayland-сессии
+    Cinnamon свойства нет до первого переключения стола, и отказ здесь ломал `focus`
+    целиком (замер: ``docs/RESEARCH-wayland-recon.md``). ``None`` остаётся только
+    на «X не отвечает» — тогда, как и прежде, идёт общий `zones.conf`.
+
+    Сначала спрашивается `current_workspace()`, а не внутреннее чтение: это точка
+    подмены в тестах и у демона (``current_workspace=lambda: …``), и обходить её
+    нельзя.
+    """
+    desk = current_workspace()
+    if desk is not None:
+        return desk
+    return 0 if window_backend.x_alive() else None
+
+
+def window_on_other_desktop(win):
+    """Окно на другом столе — не то же самое, что свёрнуто; см. `window_backend`."""
+    return window_backend.window_on_other_desktop(win)
+
+
 def window_workspace_for_zones(win):
     """Стол окна для выбора сетки: ``None`` у «липких» и неопознанных.
 
@@ -720,11 +743,13 @@ def workspace_spec(text):
 def resolve_workspace(spec):
     """Номер стола для запроса сетки: ``current``/``None`` — активный стол.
 
-    ``None`` у `current_workspace()` (нет xprop, нет `_NET_CURRENT_DESKTOP`)
-    означает «стол неизвестен» — вызывающий получает общий `zones.conf`.
+    Стол ищется через `current_workspace_or_first`: в Wayland-сессии Cinnamon
+    свойства `_NET_CURRENT_DESKTOP` нет до первого переключения стола, и раньше
+    здесь получался отказ всей команды. ``None`` теперь только на «X не
+    отвечает» — тогда, как и прежде, идёт общий `zones.conf`.
     """
     if spec is None or spec == WORKSPACE_CURRENT:
-        return current_workspace()
+        return current_workspace_or_first()
     if spec == WORKSPACE_CONF:
         return WORKSPACE_CONF
     return int(spec)
@@ -3212,7 +3237,18 @@ def cmd_keys(grid, move=False, conf=None):
 
 # ---------------------------------------------------------------- профили
 
-PROFILE_ACTIONS = ("list", "show", "save", "use", "use-monitors", "rm", "export", "import")
+PROFILE_ACTIONS = (
+    "list",
+    "show",
+    "save",
+    "use",
+    "use-monitors",
+    "rm",
+    "export",
+    "import",
+    "gallery",
+    "from-gallery",
+)
 
 
 def _run_hotkeys(conf, quiet=False):
@@ -3627,6 +3663,62 @@ def _profile_use_monitors(zc, args, conf):
         _run_hotkeys(conf, quiet=args.quiet)
 
 
+def _profile_gallery(zc, args):
+    """`profile gallery` — список готовых раскладок из поставки.
+
+    Печатается по строке на раскладку (id, название, сколько зон, описание) либо
+    JSON при `--json` — как у остальных команд `profile`: id нужен скриптам, название
+    и описание — человеку.
+    """
+    layouts = zc.gallery_layouts()
+    if not layouts:
+        fail(_("zone-tiler: галерея раскладок пуста"), EXIT_FAIL)
+    if args.json:
+        print(json.dumps(layouts, ensure_ascii=False, indent=2))
+        return
+    for item in layouts:
+        print(
+            _("{id}\t{title}\tзон: {count}\t{description}").format(
+                id=item["id"],
+                title=item["title"],
+                count=len(item["zones"]),
+                description=item["description"],
+            )
+        )
+
+
+def _profile_from_gallery(zc, args, conf):
+    """`profile from-gallery <id> [--name <имя>]` — скопировать раскладку в свой профиль.
+
+    Копия, а не ссылка: дальше человек правит её как обычный профиль (и может
+    экспортировать/перенести). Существующий профиль не перезаписывается (даже с тем
+    же именем) — это чужой файл, и тихая потеря раскладки была бы неприятным
+    сюрпризом: выбери другое имя или убери старый (`profile rm <имя>`).
+    """
+    gid = (args.name or "").strip()
+    if not gid:
+        fail(
+            _("zone-tiler: profile from-gallery — укажите id раскладки (см. profile gallery)"),
+            EXIT_USAGE,
+        )
+    try:
+        path = zc.install_gallery_layout(
+            gid,
+            name=(args.as_name or None),
+            force=False,
+            conf_path=conf,
+        )
+    except zc.GalleryError as exc:
+        fail(_("zone-tiler: {error}").format(error=exc), EXIT_CONFIG)
+    name = os.path.splitext(os.path.basename(path))[0]
+    print(
+        _("профиль «{name}» создан из готовой раскладки «{id}»: {path}").format(
+            name=name, id=gid, path=path
+        )
+    )
+    print(_("применить: zone-tiler.py profile use {name}").format(name=name))
+
+
 def cmd_profile(args):
     """Профили раскладок: list/show/save/use/rm/export/import (zone_config лениво)."""
     import zone_config as zc
@@ -3637,7 +3729,7 @@ def cmd_profile(args):
             _(
                 "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | "
                 "use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | "
-                "import <файл> [--name <имя>]"
+                "import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>]"
             ),
             EXIT_USAGE,
         )
@@ -3645,6 +3737,12 @@ def cmd_profile(args):
     if action == "list":
         for name in zc.list_profiles(conf):
             print(name)
+        return
+    if action == "gallery":
+        _profile_gallery(zc, args)
+        return
+    if action == "from-gallery":
+        _profile_from_gallery(zc, args, conf)
         return
     if action == "use-monitors":
         try:
@@ -3821,7 +3919,7 @@ def _main(argv=None):
         "--name",
         dest="as_name",
         metavar=_("ИМЯ"),
-        help=_("profile import: имя профиля (по умолчанию — из JSON)"),
+        help=_("profile import/from-gallery: имя профиля (import — по умолчанию из JSON)"),
     )
     ap.add_argument(
         "--dry-run",

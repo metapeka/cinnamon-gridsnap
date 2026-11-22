@@ -11,6 +11,8 @@ zone-editor.py — визуальный редактор сетки зон дл�
   * набор зон на каждый монитор: свой (`[zones:<выход>]`) или общий `[zones]`;
   * сохранение в zones.conf и регистрация горячих клавиш Cinnamon;
   * привязка профиля к экрану (`[monitors]`) и к столу (`[workspaces]`);
+  * галерея готовых раскладок («Работа», «Кинозал», «Стрим», …): выбор
+    создаёт профиль из каталога `gallery/`, а не рисует сетку с нуля;
   * кнопка «Проверить на активном окне» — сразу вкладывает активное окно в зону.
 
 Запуск: zone-editor.py [--conf ПУТЬ] [--shot ФАЙЛ.png]
@@ -34,12 +36,15 @@ from gi.repository import Gdk, Gtk, Pango, PangoCairo  # noqa: E402  # type: ign
 
 import zone_geom as geom  # noqa: E402
 from zone_config import (  # noqa: E402
+    GalleryError,
     MONITORS_SECTION,
     MONITOR_OFFLINE_NOTE,
     MONITOR_SHARED,
     WORKSPACE_SHARED,
     WORKSPACES_SECTION,
     Zone,
+    gallery_layouts,
+    install_gallery_layout,
     list_profiles,
     load_extra_sections,
     load_monitor_map,
@@ -530,6 +535,17 @@ class Editor(Gtk.Window):
         pitem = Gtk.ToolItem()
         pitem.add(self.prof_btn)
         bar.insert(pitem, -1)
+        # «Рядом с профилями»: галерея — тот же выбор готовой раскладки, но из
+        # поставки, а не из сохранённых. Отдельная кнопка, а не пункт меню:
+        # человеку без своих профилей меню «Профили» ещё не о чем говорить.
+        gal_btn = Gtk.Button(label=_("Из галереи…"))
+        gal_btn.set_tooltip_text(
+            _("Готовые раскладки: зоны, клавиши и правила для приложений")
+        )
+        gal_btn.connect("clicked", lambda _b: self.gallery_dialog())
+        gal_item = Gtk.ToolItem()
+        gal_item.add(gal_btn)
+        bar.insert(gal_item, -1)
         root.pack_start(bar, False, False, 0)
 
         body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -956,6 +972,137 @@ class Editor(Gtk.Window):
             rm_btn.connect("clicked", lambda _w: self.remove_profile_dialog())
             self.prof_box.pack_start(rm_btn, False, False, 0)
         self.prof_box.show_all()
+
+    # ---- галерея готовых раскладок
+
+    def gallery_dialog(self):
+        """Диалог «Галерея раскладок»: готовый сценарий → профиль → холст.
+
+        Список строится по `zone_config.gallery_layouts()` — название,
+        описание и сколько зон. Выбор **копирует** раскладку в профиль
+        (`install_gallery_layout`), а не правит каталог: после этого её правят
+        как свою, а галерея остаётся галереей.
+        """
+        try:
+            layouts = gallery_layouts()
+        except (GalleryError, OSError) as exc:
+            self.set_status(_("галерея не прочитана: {}").format(exc))
+            return
+        if not layouts:
+            self.set_status(_("в галерее нет ни одной раскладки"))
+            return
+        dlg = Gtk.Dialog(title=_("Галерея раскладок"), transient_for=self, modal=True)
+        dlg.add_button(_("Отмена"), Gtk.ResponseType.CANCEL)
+        dlg.add_button(_("Добавить в профили"), Gtk.ResponseType.OK)
+        dlg.set_default_response(Gtk.ResponseType.OK)
+        box = dlg.get_content_area()
+        box.set_border_width(10)
+        box.add(
+            Gtk.Label(
+                label=_(
+                    "Готовая раскладка — зоны, клавиши и правила для приложений. "
+                    "Выбор создаёт из неё профиль: дальше его правят как свой."
+                ),
+                xalign=0,
+            )
+        )
+        listbox = Gtk.ListBox()
+        listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        for item in layouts:
+            row = Gtk.ListBoxRow()
+            holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            holder.set_border_width(6)
+            head = Gtk.Label(
+                label=_("{} — зон: {}").format(item["title"], len(item["zones"])),
+                xalign=0,
+            )
+            # Название жирным (Pango напрямую, без разметки): в списке из
+            # восьми строк иначе не видно, где строка кончается и начинается.
+            weight = Pango.AttrList()
+            weight.insert(Pango.attr_weight_new(Pango.Weight.BOLD))
+            head.set_attributes(weight)
+            holder.pack_start(head, False, False, 0)
+            desc = Gtk.Label(label=item["description"], xalign=0)
+            desc.set_line_wrap(True)
+            desc.get_style_context().add_class("dim-label")
+            holder.pack_start(desc, False, False, 0)
+            row.add(holder)
+            listbox.add(row)
+        listbox.select_row(listbox.get_row_at_index(0))
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_size_request(560, 420)
+        scroller.add(listbox)
+        box.add(scroller)
+        dlg.show_all()
+        resp = dlg.run()
+        chosen = listbox.get_selected_row()
+        # Индекс снимаем до destroy: у отвязанной строки он может стать -1.
+        index = chosen.get_index() if chosen is not None else None
+        dlg.destroy()
+        if resp != Gtk.ResponseType.OK:
+            return
+        if index is None or index < 0:
+            self.set_status(_("раскладка не выбрана"))
+            return
+        self.install_gallery_dialog(layouts[index])
+
+    def install_gallery_dialog(self, item):
+        """Создать профиль из раскладки галереи и предложить загрузить его."""
+        gid = item["id"]
+        name = self._ask_text(
+            _("Добавить раскладку в профили"),
+            _("Имя профиля для раскладки «{}»").format(item["title"]),
+            gid,
+        )
+        if not name:
+            return
+        safe = sanitize_profile_name(name)
+        if not safe:
+            self.set_status(_("пустое имя профиля"))
+            return
+        # Профиль уже есть — спрашиваем, а не перезаписываем молча: имя могло
+        # быть занято своей раскладкой, и выбор из галереи не должен её стереть.
+        force = os.path.exists(profile_path(safe, self.conf_path))
+        if force and not self._ask_yes_no(
+            _("Профиль «{}» уже есть. Перезаписать его раскладкой «{}»?").format(
+                safe, item["title"]
+            )
+        ):
+            self.set_status(
+                _("раскладка не добавлена: профиль «{}» уже есть").format(safe)
+            )
+            return
+        try:
+            path = install_gallery_layout(
+                gid, name=safe, conf_path=self.conf_path, force=force
+            )
+        except (GalleryError, OSError) as exc:
+            self.set_status(_("раскладка не добавлена: {}").format(exc))
+            return
+        self.set_status(
+            _("раскладка «{}» → профиль «{}»: {}").format(item["title"], safe, path)
+        )
+        if self._ask_yes_no(_("Загрузить раскладку «{}» в холст?").format(item["title"])):
+            self.load_profile(safe)
+
+    def _ask_yes_no(self, question):
+        """Спросить «да/нет» модальным диалогом; ``True`` — нажато «Да».
+
+        Подписи кнопок — из самого GTK (`YES_NO`): они уже переведены на язык
+        системы, и это те же слова, что у остальных диалогов.
+        """
+        dlg = Gtk.MessageDialog(
+            transient_for=self,
+            modal=True,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.YES_NO,
+        )
+        dlg.set_property("text", question)
+        dlg.set_default_response(Gtk.ResponseType.YES)
+        resp = dlg.run()
+        dlg.destroy()
+        return resp == Gtk.ResponseType.YES
 
     def _ask_text(self, title, label, initial=""):
         dlg = Gtk.Dialog(title=title, transient_for=self, modal=True)

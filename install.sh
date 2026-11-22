@@ -46,6 +46,8 @@ $PROG — установка GridSnap в префикс (по умолчанию
 
 Раскладка установки:
   КАТАЛОГ/lib/gridsnap/   код, zones.conf, иконки, install-*.sh
+  КАТАЛОГ/share/gridsnap/gallery/
+                          готовые раскладки (*.conf: зоны + клавиши + правила)
   КАТАЛОГ/bin/            gridsnap-tiler, gridsnap-daemon, gridsnap-editor, gridsnap-picker,
                           gridsnap-hotcorners, gridsnap-ctl, setup-hotkeys
   КАТАЛОГ/share/man/man1/ man-страницы: английская — язык по умолчанию
@@ -93,6 +95,7 @@ LIB="$PREFIX/lib/gridsnap"
 BIN="$PREFIX/bin"
 APPS="$PREFIX/share/applications"
 ICONS="$PREFIX/share/icons/hicolor"
+GALLERY="$PREFIX/share/gridsnap/gallery"
 DOC="$PREFIX/share/doc/gridsnap"
 MANDIR="$PREFIX/share/man/man1"
 
@@ -157,6 +160,8 @@ if [ "$ACTION" = "uninstall" ]; then
     done
     rmdir "$LOCALEDIR" 2>/dev/null || true
     rm -rf "$LIB" "$DOC"
+    rm -rf "$GALLERY"
+    rmdir "$PREFIX/share/gridsnap" 2>/dev/null || true
     refresh_caches
     echo "GridSnap удалён из $PREFIX"
     exit 0
@@ -169,6 +174,12 @@ for mod in $MODULES; do
 done
 install -m 0644 "$SRC/zones.conf" "$LIB/zones.conf"
 install -m 0755 "$SRC/gridsnap-ctl" "$LIB/gridsnap-ctl"
+# Готовые раскладки: zone_config ищет их в <префикс>/share/gridsnap/gallery, а в
+# чекауте — рядом с кодом; `gallery/*.conf` из архива кладём туда же, куда .deb/AUR.
+if [ -d "$SRC/gallery" ]; then
+    mkdir -p "$GALLERY"
+    install -m 0644 "$SRC"/gallery/*.conf "$GALLERY/"
+fi
 install -m 0755 "$SRC/install-launcher.sh" "$SRC/install-daemon.sh" "$LIB/"
 rm -rf "$LIB/icons" "$LIB/docs"
 cp -a "$SRC/icons" "$LIB/icons"
@@ -271,6 +282,7 @@ echo "  команды:  $BIN/gridsnap-tiler, $BIN/gridsnap-daemon, $BIN/gridsna
 echo "  справка:  MANPATH=$PREFIX/share/man man gridsnap (en; ru и zh_CN — по локали)"
 echo "  ман:      ${MAN_DIRS# }"
 echo "  переводы: $LOCALEDIR/<язык>/LC_MESSAGES (gridsnap, gridsnap@metapeka)"
+echo "  галерея:  $GALLERY (готовые раскладки — «Из галереи…» в редакторе)"
 echo "  автозапуск: $LIB/install-daemon.sh (демон + привязка профилей к экранам)";
 if [ "$LAUNCHER" -eq 1 ]; then
     echo "  ярлык:    $APPS/gridsnap.desktop"

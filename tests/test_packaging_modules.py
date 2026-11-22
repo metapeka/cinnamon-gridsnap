@@ -11,6 +11,10 @@
 
 Тест читает сами списки (текстом), а не повторяет их: разойтись с упаковкой он не
 может, а новый модуль в корне заставит дописать его везде.
+
+Тем же тестом стережётся и каталог `gallery/`: готовые раскладки — это данные, а
+не модули, но цена забытой строки та же — в установленном пакете меню «Из
+галереи…» пустое (тесты из чекаута этого не видят: в чекауте каталог лежит рядом).
 """
 
 import os
@@ -29,6 +33,19 @@ SOURCES = {
 }
 
 MODULE_RE = re.compile(r"[A-Za-z0-9_-]+\.py")
+
+GALLERY_DIR = os.path.join(ROOT, "gallery")
+
+# Готовые раскладки ищутся в `<префикс>/share/gridsnap/gallery` (см.
+# `zone_config.gallery_dir`), а в tar.gz едет каталог `gallery/` целиком. Что
+# именно проверить в каждом файле: путь установки и то, что копируются сами
+# `*.conf`, а не пустой каталог (добавишь раскладку — новые файлы доедут без
+# правки списков, но только если каталог вообще есть в поставке).
+GALLERY_MARKERS = {
+    "install.sh": ("share/gridsnap/gallery", "gallery/*.conf"),
+    "debian/install": ("gallery usr/share/gridsnap",),
+    "PKGBUILD": ("usr/share/gridsnap/gallery", "gallery/*.conf"),
+}
 
 
 def root_modules():
@@ -82,3 +99,54 @@ class TestPackagingLists(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestGalleryPackaging(unittest.TestCase):
+    """Каталог `gallery/` доезжает до пользователя всеми четырьмя путями.
+
+    Раскладки — данные, а не модули: забыть их в списке так же легко, а цена
+    другая — не `ModuleNotFoundError`, а пустое меню «Из галереи…» в
+    установленном пакете. Из чекаута такой провал не виден: там каталог лежит
+    рядом с кодом, и тест `test_gallery` его находит.
+    """
+
+    def test_gallery_has_layouts(self):
+        layouts = sorted(
+            name for name in os.listdir(GALLERY_DIR) if name.endswith(".conf")
+        )
+        self.assertTrue(
+            layouts,
+            "нет gallery/*.conf — поставке нечего ставить, а тест проверяет пустое",
+        )
+
+    def test_tarball_ships_gallery_directory(self):
+        with open(os.path.join(ROOT, "Makefile"), encoding="utf-8") as fh:
+            text = fh.read()
+        start = text.index("RELEASE_DIRS :=")
+        end = text.index("\n\n", start)
+        self.assertIn(
+            "gallery",
+            text[start:end].split(),
+            "Makefile: gallery/ не попал в RELEASE_DIRS — в tar.gz раскладок не будет",
+        )
+        self.assertIn(
+            "usr/share/gridsnap/gallery",
+            text,
+            "Makefile: `make deb` не ставит раскладки в /usr/share/gridsnap/gallery",
+        )
+        self.assertIn(
+            "gallery/*.conf",
+            text,
+            "Makefile: `make deb` не копирует сами *.conf — каталог уедет пустым",
+        )
+
+    def test_every_install_path_mentions_gallery(self):
+        for name, markers in GALLERY_MARKERS.items():
+            with open(os.path.join(ROOT, name), encoding="utf-8") as fh:
+                text = fh.read()
+            for marker in markers:
+                self.assertIn(
+                    marker,
+                    text,
+                    f"{name}: нет «{marker}» — раскладки не доедут до пользователя "
+                    "этим путём (см. zone_config.gallery_dir)",
+                )

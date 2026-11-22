@@ -1646,6 +1646,258 @@ def remove_profile(name, conf_path=None):
     return path
 
 
+# ------------------------------------------------------------- галерея
+
+# Секция с человеческим названием и описанием раскладки. Есть только в файлах
+# галереи: в профиль пользователя она не переносится — профиль это раскладка,
+# а `[gallery]` это карточка каталога. Имя то же, что у каталога в поставке
+# (`gallery/`): одно слово для «где лежит» и для «что написано в файле».
+GALLERY_SECTION = "gallery"
+
+# Явное перекрытие каталога галереи (свои раскладки, тесты): как
+# `GRIDSNAP_LANG` у строк интерфейса — один способ сказать «возьми отсюда».
+GALLERY_ENV = "GRIDSNAP_GALLERY"
+
+# Порядок в меню у раскладки без `order` в `[gallery]`: такие идут после
+# раскладок с номерами и разбираются по названию.
+GALLERY_ORDER_DEFAULT = 100
+
+
+class GalleryError(ValueError):
+    """Ошибка галереи: нет раскладки, битая `[gallery]`, профиль уже есть.
+
+    Наследуется от ``ValueError``, как :class:`ProfileJsonError`: и редактор, и
+    CLI ловят ошибки ввода одним типом, а не знают про галерею особое слово.
+    """
+
+
+def _gallery_candidates():
+    """Где искать каталог галереи, в порядке приоритета."""
+    env = (os.environ.get(GALLERY_ENV) or "").strip()
+    if env:
+        yield env
+    # Чекаут: gallery/ рядом с кодом.
+    yield os.path.join(HERE, GALLERY_SECTION)
+    # Установка: код в <префикс>/lib/gridsnap, данные в <префикс>/share/gridsnap.
+    yield os.path.join(
+        os.path.dirname(os.path.dirname(HERE)), "share", "gridsnap", GALLERY_SECTION
+    )
+
+
+def gallery_dir():
+    """Каталог готовых раскладок — первый существующий из кандидатов.
+
+    Порядок: ``$GRIDSNAP_GALLERY``, затем ``gallery/`` рядом с кодом (чекаут),
+    затем ``<префикс>/share/gridsnap/gallery`` (установка: ``install.sh`` кладёт
+    данные туда, `.deb`/AUR — в ``/usr/share/gridsnap/gallery``). Если не нашлось
+    ничего, возвращается путь рядом с кодом: по нему в сообщении об ошибке видно,
+    чего не хватает.
+    """
+    for path in _gallery_candidates():
+        if os.path.isdir(path):
+            return path
+    return os.path.join(HERE, GALLERY_SECTION)
+
+
+def gallery_ids():
+    """id раскладок галереи (имена файлов без ``.conf``) по алфавиту."""
+    directory = gallery_dir()
+    try:
+        entries = os.listdir(directory)
+    except OSError:
+        return []
+    return sorted(
+        entry[: -len(PROFILE_EXT)]
+        for entry in entries
+        if entry.endswith(PROFILE_EXT)
+        and os.path.isfile(os.path.join(directory, entry))
+    )
+
+
+def gallery_layout_path(gid):
+    """Путь к файлу раскладки; неизвестное или неаккуратное id — ``GalleryError``.
+
+    id — имя файла без расширения, а не путь: оно проверяется тем же правилом,
+    что имя профиля, поэтому выйти из каталога галереи им нельзя.
+    """
+    name = str(gid or "").strip()
+    safe = sanitize_profile_name(name)
+    if not safe or safe != name:
+        raise GalleryError(_("нет раскладки «{id}» в галерее").format(id=name))
+    path = os.path.join(gallery_dir(), safe + PROFILE_EXT)
+    if not os.path.isfile(path):
+        raise GalleryError(_("нет раскладки «{id}» в галерее").format(id=name))
+    return path
+
+
+def _gallery_conf(path):
+    """``ConfigParser`` файла галереи; битый или нечитаемый — ``GalleryError``."""
+    cp = configparser.ConfigParser(
+        interpolation=None,
+        inline_comment_prefixes=("#", ";"),
+        delimiters=("=",),
+    )
+    try:
+        read = cp.read(path, encoding="utf-8")
+    except (configparser.Error, UnicodeError) as exc:
+        raise GalleryError(
+            _("не разобрать раскладку галереи {path}: {error}").format(
+                path=path, error=exc
+            )
+        ) from exc
+    except OSError as exc:
+        raise GalleryError(
+            _("не прочитать раскладку галереи {path}: {error}").format(
+                path=path, error=exc
+            )
+        ) from exc
+    if not read:
+        raise GalleryError(
+            _("не прочитать раскладку галереи {path}").format(path=path)
+        )
+    return cp
+
+
+def _gallery_meta(cp, layout_id):
+    """``(название, описание, порядок)`` из секции ``[gallery]``.
+
+    Названия нет — берётся id: раскладка без карточки всё равно должна быть
+    видна в меню, иначе файл, положенный руками, молча пропадёт.
+    """
+    title = ""
+    description = ""
+    order = GALLERY_ORDER_DEFAULT
+    if cp.has_section(GALLERY_SECTION):
+        title = cp.get(GALLERY_SECTION, "title", fallback="").strip()
+        description = cp.get(GALLERY_SECTION, "description", fallback="").strip()
+        raw = cp.get(GALLERY_SECTION, "order", fallback="").strip()
+        if raw:
+            try:
+                order = int(raw)
+            except ValueError:
+                raise GalleryError(
+                    _(
+                        "в раскладке «{id}» order в [gallery] должен быть "
+                        "числом, а не {value!r}"
+                    ).format(id=layout_id, value=raw)
+                ) from None
+    return (title or layout_id), description, order
+
+
+def _gallery_zone_names(cp):
+    """Имена зон ``[zones]`` без разбора геометрии — для списка в меню."""
+    if not cp.has_section("zones"):
+        return []
+    return [str(name).strip() for name in cp.options("zones")]
+
+
+def gallery_layouts():
+    """Готовые раскладки для меню: ``[{"id", "title", "description", "zones", "order"}]``.
+
+    ``zones`` — имена зон в порядке файла: этого хватает и меню, и CLI, чтобы
+    показать «зон: N»; геометрию отдаёт :func:`load_gallery_layout`. Порядок —
+    по ``order`` из ``[gallery]``, затем по названию: классика выше сценариев,
+    а одинаковый ``order`` не зависит от порядка каталога в файловой системе.
+    """
+    directory = gallery_dir()
+    items = []
+    for gid in gallery_ids():
+        cp = _gallery_conf(os.path.join(directory, gid + PROFILE_EXT))
+        title, description, order = _gallery_meta(cp, gid)
+        items.append(
+            {
+                "id": gid,
+                "title": title,
+                "description": description,
+                "zones": _gallery_zone_names(cp),
+                "order": order,
+            }
+        )
+    items.sort(key=lambda item: (item["order"], item["title"].casefold(), item["id"]))
+    return items
+
+
+def load_gallery_layout(gid):
+    """Раскладка галереи целиком — готовый «сценарий», а не только геометрия.
+
+    Ключи словаря: ``id``, ``title``, ``description``, ``order``, ``zones``
+    (список :class:`Zone` с привязками из ``[keys]``; пустой, если раскладка
+    задана только наборами мониторов), ``monitors`` (``{выход: [Zone]}``),
+    ``keys`` (``{зона: сочетание}``), ``rules`` и ``ignore`` (строки секций
+    дословно, в порядке файла).
+
+    Ошибки самой раскладки — :class:`GalleryError` (нет файла, битый
+    ``[gallery]``, нет зон), а кривая зона — ``SystemExit``, как у профиля:
+    сообщение с именем зоны печатает парсер раскладчика.
+    """
+    path = gallery_layout_path(gid)
+    layout_id = os.path.basename(path)[: -len(PROFILE_EXT)]
+    cp = _gallery_conf(path)
+    title, description, order = _gallery_meta(cp, layout_id)
+    default, monitors = _zone_sets(path)
+    if not default and not monitors:
+        raise GalleryError(
+            _("в раскладке «{id}» нет секции [zones]").format(id=layout_id)
+        )
+    extra = load_extra_sections(path, sections=["rules", "ignore"])
+    keys = {}
+    for chunk in [default or []] + list(monitors.values()):
+        for zone in chunk:
+            binding = (zone.binding or "").strip()
+            if binding and zone.name not in keys:
+                keys[zone.name] = binding
+    return {
+        "id": layout_id,
+        "title": title,
+        "description": description,
+        "order": order,
+        "zones": default or [],
+        "monitors": monitors,
+        "keys": keys,
+        "rules": extra.get("rules") or [],
+        "ignore": extra.get("ignore") or [],
+    }
+
+
+def install_gallery_layout(gid, name=None, force=False, conf_path=None):
+    """Скопировать раскладку галереи в профиль пользователя; вернуть путь.
+
+    Профиль — тот же, что создаёт редактор и читает ``profile use``:
+    ``templates/<имя>.conf`` рядом с ``zones.conf``. Переносится всё, что несёт
+    раскладка: зоны, наборы ``[zones:<выход>]``, ``[rules]``, ``[ignore]`` и
+    ``[keys]``. Секция ``[gallery]`` остаётся в каталоге: в профиле ей нечего
+    делать, иначе скопированная раскладка продолжала бы числиться в галерее.
+
+    Имя по умолчанию — id раскладки. Профиль с таким именем —
+    :class:`GalleryError`, пока не передан ``force``: тихая перезапись чужой
+    раскладки была бы потерей, а не «выбором из галереи».
+    """
+    layout = load_gallery_layout(gid)
+    safe = sanitize_profile_name(name if name is not None else layout["id"])
+    if not safe:
+        raise GalleryError(
+            _("плохое имя профиля для раскладки «{id}»: {name!r}").format(
+                id=layout["id"], name=name
+            )
+        )
+    path = profile_path(safe, conf_path)
+    if os.path.exists(path) and not force:
+        raise GalleryError(
+            _(
+                "профиль «{name}» уже есть: выберите другое имя или "
+                "перезапишите его"
+            ).format(name=safe)
+        )
+    return save_profile(
+        safe,
+        layout["zones"],
+        layout["rules"],
+        conf_path,
+        monitor_sets=layout["monitors"],
+        ignore=layout["ignore"],
+    )
+
+
 class ProfileJsonError(ValueError):
     """Ошибка JSON-профиля: формат, версия или значения (в CLI — код 3)."""
 
