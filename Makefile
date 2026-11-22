@@ -62,6 +62,9 @@ MAN_ALIASES    := gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
 MAN_DEFAULT    := en
 MAN_TRANSLATED := en zh_CN
 MAN_LANGS      := $(MAN_TRANSLATED) ru
+# Языки без пробелов: groff не разрывает строку между иероглифами, поэтому
+# собранной странице нужны точки переноса `\:` (см. tools/man-cjk.py).
+MAN_CJK        := zh_CN
 MAN_PO_DIR     := po/man
 MAN_PO4A_CONF  := man/po4a.conf
 MAN_POT        := $(MAN_PO_DIR)/gridsnap.1.pot
@@ -179,6 +182,9 @@ man:
 	@command -v po4a >/dev/null 2>&1 || { \
 		echo "make: нужен po4a (Debian: apt install po4a)" >&2; exit 1; }
 	po4a --no-update --keep 0 "$(MAN_PO4A_CONF)"
+	@for lang in $(MAN_CJK); do \
+		$(PYTHON) tools/man-cjk.py "$(MAN_BUILD)/$$lang/man1/gridsnap.1"; \
+	done
 	@mkdir -p $(foreach l,$(MAN_LANGS),"$(MAN_BUILD)/$(l)/man1")
 	cp "$(MAN_SOURCE)" "$(MAN_BUILD)/ru/man1/gridsnap.1"
 	@for lang in $(MAN_LANGS); do \
@@ -188,16 +194,12 @@ man:
 	done
 	@echo "собраны страницы в $(MAN_BUILD)/"
 
-# `check-man-i18n` — то, что гоняет CI: каталоги полны (тест на Python, без
-# gettext), страницы собираются, man-db не ругается ни на одну из трёх, а
-# русская страница байт-в-байт равна источнику.
+# `check-man-i18n` — то, что гоняет CI: страницы собираются и проходят
+# `tests/test_man_i18n.py` — он же меряет то, что видит пользователь: выбор языка
+# по локали, ширину в колонках и «cannot break line»; а русская страница
+# байт-в-байт равна источнику.
 check-man-i18n: man
 	@$(PYTHON) tests/test_man_i18n.py
-	@for lang in $(MAN_LANGS); do \
-		page="$(MAN_BUILD)/$$lang/man1/gridsnap.1"; \
-		man --warnings -E UTF-8 -l "$$page" >/dev/null 2>&1 || { \
-			echo "make: man --warnings ругается на $$page" >&2; exit 1; }; \
-	done
 	@cmp -s "$(MAN_SOURCE)" "$(MAN_BUILD)/ru/man1/gridsnap.1" || { \
 		echo "make: русская страница разошлась с $(MAN_SOURCE)" >&2; exit 1; }
 	@echo "man-страницы в порядке"
