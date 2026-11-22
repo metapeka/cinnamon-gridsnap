@@ -4,12 +4,14 @@
 setup-hotkeys.py — регистрирует в Cinnamon горячие клавиши для зон из zones.conf.
 
 Читает секцию [keys] (зона = сочетание), необязательные [move] (направление =
-сочетание), [focus] (сочетание режима «только эта зона») и [tabs] (сочетание
-«следующее окно зоны») и создаёт пользовательские сочетания Cinnamon вида:
-    zone-tiler: main        ->  python3 .../zone-tiler.py apply main --quiet
-    zone-tiler: move left   ->  python3 .../zone-tiler.py move left --quiet
-    zone-tiler: focus       ->  python3 .../zone-tiler.py focus main --quiet
-    zone-tiler: tabs-next   ->  python3 .../zone-tiler.py tabs-next --quiet
+сочетание), [focus] (сочетание режима «только эта зона»), [tabs] (сочетание
+«следующее окно зоны») и [action:<имя>] (действие с непустым `key`) и создаёт
+пользовательские сочетания Cinnamon вида:
+    zone-tiler: main          ->  python3 .../zone-tiler.py apply main --quiet
+    zone-tiler: move left     ->  python3 .../zone-tiler.py move left --quiet
+    zone-tiler: focus         ->  python3 .../zone-tiler.py focus main --quiet
+    zone-tiler: tabs-next     ->  python3 .../zone-tiler.py tabs-next --quiet
+    zone-tiler: action mirror ->  python3 .../zone-tiler.py action mirror --quiet
 
   python3 setup-hotkeys.py            # установить/обновить
   python3 setup-hotkeys.py --list     # показать, что будет установлено
@@ -108,13 +110,26 @@ def with_conf(command, conf=None):
     return command + f" --conf {os.path.abspath(conf)}"
 
 
+def conf_path(conf=None):
+    """Путь к конфигу для **чтения** секций: без `--conf` — как у zone-tiler.
+
+    В команду сочетания `--conf` без флага не попадает (`with_conf`), а читать
+    секции всё равно нужно из настоящего файла: `~/.config/gridsnap/zones.conf`,
+    а если его нет — тот, что рядом с кодом (`zone-tiler.default_conf`). Иначе
+    `setup-hotkeys.py --list` без `--conf` читал бы «ничего» и молча терял
+    сочетания `[focus]`/`[tabs]`/действий.
+    """
+    return conf or zone_config.zt.default_conf()
+
+
 def planned(conf=None):
     """Что установить: `(имя, сочетание, команда)` по порядку зон, направлений, режима.
 
     Имя идёт в префикс `zone-tiler: `: по нему `drop_owned` отличает свои
     сочетания от чужих и не трогает чужие при переустановке. `focus` —
-    имя секции `[focus]`, `tabs-next` — команда секции `[tabs]`: без этих
-    секций в плане ровно то же, что раньше.
+    имя секции `[focus]`, `tabs-next` — команда секции `[tabs]`, а ``action <имя>``
+    — действие из `[action:<имя>]` с непустым `key` (его команда —
+    `zone-tiler.py action <имя>`): без этих секций в плане ровно то же, что раньше.
     """
     items = []
     for zone, binding in zone_pairs(conf):
@@ -123,13 +138,14 @@ def planned(conf=None):
     for direction, binding in zone_pairs(conf, "--move"):
         command = with_conf(f"{sys.executable} {ZONEBIN} move {direction} --quiet", conf)
         items.append((f"move {direction}", binding, command))
-    focus = zone_config.load_focus_keys(conf)
+    path = conf_path(conf)
+    focus = zone_config.load_focus_keys(path)
     if focus:
         command = f"{sys.executable} {ZONEBIN} focus"
         if focus.get("zone"):
             command += f" {focus['zone']}"
         items.append(("focus", focus["key"], with_conf(command + " --quiet", conf)))
-    tabs = zone_config.load_tabs_config(conf)
+    tabs = zone_config.load_tabs_config(path)
     if tabs.get("key"):
         # Клавиша вкладок — тот же путь, что у `[focus]`: отдельный процесс
         # раскладчика, который только передаёт демону `tabs-next`. Сам демон
@@ -138,6 +154,16 @@ def planned(conf=None):
             "tabs-next",
             tabs["key"],
             with_conf(f"{sys.executable} {ZONEBIN} tabs-next --quiet", conf),
+        ))
+    for name, record in zone_config.load_actions(path).items():
+        if not record.get("key"):
+            continue
+        # Действие на клавише — та же команда, что человек запустил бы руками;
+        # имя сочетания «action <имя>» снимается `--remove` вместе с прочими.
+        items.append((
+            f"action {name}",
+            record["key"],
+            with_conf(f"{sys.executable} {ZONEBIN} action {name} --quiet", conf),
         ))
     return items
 

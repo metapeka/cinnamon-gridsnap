@@ -14,6 +14,7 @@ zone_config.py => /usr/lib/gridsnap/zone_config.py
 zone_geom.py => /usr/lib/gridsnap/zone_geom.py
 zone_reflow.py => /usr/lib/gridsnap/zone_reflow.py
 zone_ipc.py => /usr/lib/gridsnap/zone_ipc.py
+zone_actions.py => /usr/lib/gridsnap/zone_actions.py
 zone_tabs.py => /usr/lib/gridsnap/zone_tabs.py
 zone-picker.py => /usr/lib/gridsnap/zone-picker.py
 zone_picker_nav.py => /usr/lib/gridsnap/zone_picker_nav.py
