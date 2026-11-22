@@ -44,6 +44,12 @@ $PROG — установка GridSnap в префикс (по умолчанию
                           gridsnap-hotcorners, gridsnap-ctl, setup-hotkeys
   КАТАЛОГ/share/man/man1/ man-страницы (маны ставятся всегда: это документация, а не ярлык)
   КАТАЛОГ/share/...       ярлык, иконки, документация (если не --no-launcher)
+
+Автозапуск в сессии ставится отдельно и только для текущего пользователя:
+  КАТАЛОГ/lib/gridsnap/install-daemon.sh
+Он пишет в \$XDG_CONFIG_HOME/autostart (по умолчанию ~/.config/autostart) две
+записи: gridsnap-daemon.desktop (демон) и gridsnap-monitors.desktop
+(привязка профилей к экранам — `profile use-monitors --quiet`).
 EOF
 }
 
@@ -186,10 +192,15 @@ echo "GridSnap установлен в $PREFIX"
 echo "  код:      $LIB"
 echo "  команды:  $BIN/gridsnap-tiler, $BIN/gridsnap-daemon, $BIN/gridsnap-editor, $BIN/gridsnap-picker, $BIN/gridsnap-hotcorners, $BIN/gridsnap-ctl, $BIN/setup-hotkeys"
 echo "  справка:  man -M $PREFIX/share/man gridsnap";
+echo "  автозапуск: $LIB/install-daemon.sh (демон + привязка профилей к экранам)";
 if [ "$LAUNCHER" -eq 1 ]; then
     echo "  ярлык:    $APPS/gridsnap.desktop"
     echo "  иконки:   $ICONS"
 fi
+echo
+echo "Автозапуск в сессии (ставится один раз, для текущего пользователя):"
+echo "  $LIB/install-daemon.sh — пишет \$XDG_CONFIG_HOME/autostart/gridsnap-daemon.desktop"
+echo "  и gridsnap-monitors.desktop: при входе зовётся zone-tiler.py profile use-monitors --quiet"
 echo
 echo "Проверка:  $BIN/gridsnap-tiler --version"
 echo "Удаление:  ./$PROG --uninstall --prefix $PREFIX"
