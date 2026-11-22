@@ -29,7 +29,9 @@ GTK, ни X, поэтому конфиг-слой проверяется обы�
 - Зоны ищутся командой `zone-tiler.py list` (через `load_zonetiler`: `importlib` загружает модуль по
   пути `ZONEBIN`), поэтому раскладка не дублируется между редактором и раскладчиком.
 - Имя зоны санируется `sanitize_name`/`unique_name` — так же, как имена профилей
-  (`sanitize_profile_name`): путь не может выйти за каталог профилей.
+  (`sanitize_profile_name`). Свои символы имени: латиница, цифры, `_`, `.`, `-` и **вся кириллица
+  диапазоном U+0400–U+04FF** (поэтому сохраняются «ё» и украинские буквы), все прочие вместе с
+  пробелами сжимаются в один дефис. Путь профиля при этом не может выйти за каталог профилей.
 
 ## Возможности
 
@@ -71,6 +73,11 @@ GTK, ни X, поэтому конфиг-слой проверяется обы�
 
 - `load_workspace_map` / `save_workspace_map` — секция `[workspaces]` (стол → профиль),
   `load_monitor_map` / `save_monitor_map` — `[monitors]` (выход → профиль).
+- **Галерея готовых раскладок:** `gallery_dir()` (каталог в порядке `$GRIDSNAP_GALLERY` → `gallery/`
+  рядом с кодом → `<префикс>/share/gridsnap/gallery`), `gallery_ids()`/`gallery_layouts()` (карточки:
+  id, название, описание, зоны, `order`), `load_gallery_layout(id)` (раскладка целиком), 
+  `install_gallery_layout(id, name, force, conf)` (копия в профиль). Секция `[gallery]` есть только
+  в файле галереи и в профиль не переносится; ошибки — `GalleryError`.
 - `resolve_profile(monitor_map, workspace_map, output, workspace_code)` — единственное место, где
   решается, чей профиль применить: **экран важнее стола**.
 - `monitor_dialog_rows` / `workspace_dialog_rows` — строки для меню редактора («нет на экране»,
