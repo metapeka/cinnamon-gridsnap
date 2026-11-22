@@ -245,6 +245,22 @@ muffin с компенсацией рамки окна, поэтому рамк�
 Загрузить JSON-профиль в \fI<templates>/<имя>.conf\fP; имя берётся из JSON, а \fB\-\-name\fP
 \fIИМЯ\fP его перекрывает. Основным форматом остаётся \fI.conf\fP: JSON — только переносимый
 обмен между машинами.
+.TP
+.B gallery
+Список готовых раскладок из поставки: id, название, число зон и описание, по одной
+в строке; \fB\-\-json\fP печатает их же в JSON.
+.TP
+.B from\-gallery \fIID\fP
+Скопировать раскладку \fIID\fP в свой профиль: имя задаёт \fB\-\-name\fP \fIИМЯ\fP, по
+умолчанию — id раскладки. Имя занято — ошибка: выберите другое или удалите профиль
+(\fBprofile rm\fP).
+.IP
+Раскладки лежат в \fI<префикс>/share/gridsnap/gallery\fP (в чекауте — каталог
+\fIgallery/\fP рядом с кодом), свой каталог задаёт переменная \fIGRIDSNAP_GALLERY\fP.
+Файл раскладки — обычный \fI.conf\fP с дополнительной секцией \fB[gallery]\fP:
+\fItitle\fP, \fIdescription\fP и необязательный \fIorder\fP (порядок в меню, по
+умолчанию 100). Каталог галереи не правится: раскладка копируется в профиль и дальше
+живёт своей жизнью. В редакторе то же делает кнопка «Из галереи…».
 .RE
 .SS "gridsnap\-daemon — автоукладка новых окон"
 Необязательный долгоживущий демон: подписывается на \fIPropertyNotify\fP по
@@ -535,6 +551,8 @@ gridsnap\-tiler action mirror
 gridsnap\-tiler action term-main \-\-dry\-run
 gridsnap\-tiler profile save work
 gridsnap\-tiler profile use work \-\-no\-hotkeys
+gridsnap\-tiler profile gallery
+gridsnap\-tiler profile from\-gallery work \-\-name mine
 gridsnap\-tiler keys
 gridsnap\-daemon \-\-verbose
 gridsnap\-daemon \-\-once \-\-conf ~/.config/gridsnap/zones.conf
@@ -593,6 +611,11 @@ UNIX-сокет демона (права 0600, каталог 0700). Без \fI$
 .I ~/.config/gridsnap/templates/*.conf
 Профили раскладок (с учётом \fI$XDG_CONFIG_HOME\fP; с \fB\-\-conf\fP \fIПУТЬ\fP — каталог
 \fItemplates\fP рядом с этим файлом).
+.TP
+.I /usr/share/gridsnap/gallery/*.conf
+Готовые раскладки поставки (в чекауте — \fIgallery/\fP рядом с кодом). Свой каталог
+задаёт \fI$GRIDSNAP_GALLERY\fP. Копию раскладки в профиль делает
+\fBprofile from\-gallery\fP; сам каталог не правится.
 .TP
 .I /usr/lib/gridsnap
 Код пакета: \fIzone\-tiler.py\fP, \fIzone\-daemon.py\fP, \fIzone\-editor.py\fP,

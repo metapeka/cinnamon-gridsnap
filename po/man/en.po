@@ -4,7 +4,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap\n"
-"POT-Creation-Date: 2026-11-22 21:59+0300\n"
+"POT-Creation-Date: 2026-11-23 01:17+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: GridSnap project\n"
 "Language-Team: English\n"
@@ -229,7 +229,7 @@ msgstr ""
 "Does not touch windows."
 
 #. type: TP
-#: man/gridsnap.1:63 man/gridsnap.1:322
+#: man/gridsnap.1:63 man/gridsnap.1:338
 #, no-wrap
 msgid "B<apply >I<ЗОНА>"
 msgstr "B<apply >I<ZONE>"
@@ -255,7 +255,7 @@ msgstr ""
 "recorded in the history for B<undo>."
 
 #. type: TP
-#: man/gridsnap.1:72 man/gridsnap.1:327
+#: man/gridsnap.1:72 man/gridsnap.1:343
 #, no-wrap
 msgid "B<focus [>I<ЗОНА>B<]>"
 msgstr "B<focus [>I<ZONE>B<]>"
@@ -802,14 +802,65 @@ msgstr ""
 "name is taken from the JSON, and B<--name> I<NAME> overrides it. The main "
 "format remains I<.conf>: JSON is only a portable exchange between machines."
 
+#. type: TP
+#: man/gridsnap.1:248
+#, no-wrap
+msgid "B<gallery>"
+msgstr "B<gallery>"
+
+#. type: Plain text
+#: man/gridsnap.1:252
+msgid ""
+"Список готовых раскладок из поставки: id, название, число зон и описание, по "
+"одной в строке; B<--json> печатает их же в JSON."
+msgstr ""
+"List the ready-made layouts shipped with the package: id, title, number of "
+"zones and description, one per line; B<--json> prints the same in JSON."
+
+#. type: TP
+#: man/gridsnap.1:252
+#, no-wrap
+msgid "B<from-gallery >I<ID>"
+msgstr "B<from-gallery >I<ID>"
+
+#. type: Plain text
+#: man/gridsnap.1:257
+msgid ""
+"Скопировать раскладку I<ID> в свой профиль: имя задаёт B<--name> I<ИМЯ>, по "
+"умолчанию — id раскладки. Имя занято — ошибка: выберите другое или удалите "
+"профиль (B<profile rm>)."
+msgstr ""
+"Copy layout I<ID> into your profile: the name is set by B<--name> I<NAME>, "
+"by default the layout's id. If the name is taken it is an error: choose "
+"another name or remove the profile (B<profile rm>)."
+
+#. type: Plain text
+#: man/gridsnap.1:264
+msgid ""
+"Раскладки лежат в I<E<lt>префиксE<gt>/share/gridsnap/gallery> (в чекауте — "
+"каталог I<gallery/> рядом с кодом), свой каталог задаёт переменная "
+"I<GRIDSNAP_GALLERY>.  Файл раскладки — обычный I<.conf> с дополнительной "
+"секцией B<[gallery]>: I<title>, I<description> и необязательный I<order> "
+"(порядок в меню, по умолчанию 100). Каталог галереи не правится: раскладка "
+"копируется в профиль и дальше живёт своей жизнью. В редакторе то же делает "
+"кнопка «Из галереи…»."
+msgstr ""
+"Layouts live in I<E<lt>prefixE<gt>/share/gridsnap/gallery> (in a checkout — "
+"the I<gallery/> directory next to the code); the I<GRIDSNAP_GALLERY> "
+"variable sets a custom directory.  A layout file is an ordinary I<.conf> "
+"with an extra B<[gallery]> section: I<title>, I<description> and an optional "
+"I<order> (position in the menu, 100 by default). The gallery directory is "
+"never modified: the layout is copied into the profile and lives its own life "
+"from then on. In the editor the same is done by the “From gallery…” button."
+
 #. type: SS
-#: man/gridsnap.1:249
+#: man/gridsnap.1:265
 #, no-wrap
 msgid "gridsnap-daemon — автоукладка новых окон"
 msgstr "gridsnap-daemon — auto-tiling of new windows"
 
 #. type: Plain text
-#: man/gridsnap.1:256
+#: man/gridsnap.1:272
 msgid ""
 "Необязательный долгоживущий демон: подписывается на I<PropertyNotify> по "
 "I<_NET_CLIENT_LIST> на root, читает список через B<xprop>(1) B<-root> и "
@@ -831,7 +882,7 @@ msgstr ""
 "restart."
 
 #. type: Plain text
-#: man/gridsnap.1:261
+#: man/gridsnap.1:277
 msgid ""
 "При B<[daemon] reflow = neighbors> освободившаяся зона расширяется соседней "
 "занятой зоной в пределах того же монитора, а когда в неё снова встаёт окно "
@@ -845,7 +896,7 @@ msgstr ""
 "not trigger."
 
 #. type: Plain text
-#: man/gridsnap.1:267
+#: man/gridsnap.1:283
 msgid ""
 "По умолчанию демон поднимает IPC-сокет (B<--socket> I<ПУТЬ> меняет путь, B<--"
 "no-socket> отключает IPC). B<--verbose> печатает, что делает демон.  B<--"
@@ -860,7 +911,7 @@ msgstr ""
 "(B<SIGINT>) or B<gridsnap-ctl quit>."
 
 #. type: Plain text
-#: man/gridsnap.1:274
+#: man/gridsnap.1:290
 msgid ""
 "Демон ведёт и режим «только эта зона» (IPC-команда B<focus>): окно кладётся "
 "в зону, а остальные окна его стола и монитора сворачиваются; окна, "
@@ -880,13 +931,13 @@ msgstr ""
 "from where B<gridsnap-tiler focus --off> finishes the job."
 
 #. type: SS
-#: man/gridsnap.1:274
+#: man/gridsnap.1:290
 #, no-wrap
 msgid "gridsnap-editor — визуальный редактор зон"
 msgstr "gridsnap-editor — the visual zone editor"
 
 #. type: Plain text
-#: man/gridsnap.1:284
+#: man/gridsnap.1:300
 msgid ""
 "Окно GTK 3 с рабочей областью монитора в натуральном масштабе. Зону можно "
 "таскать мышью и тянуть за край или угол; прилипание — к краям экрана, к "
@@ -912,13 +963,13 @@ msgstr ""
 "saves a snapshot of the interface and exits (for checks)."
 
 #. type: SS
-#: man/gridsnap.1:284
+#: man/gridsnap.1:300
 #, no-wrap
 msgid "gridsnap-picker — оверлей выбора зоны"
 msgstr "gridsnap-picker — the zone picking overlay"
 
 #. type: Plain text
-#: man/gridsnap.1:291
+#: man/gridsnap.1:307
 msgid ""
 "Показывает поверх рабочего стола зоны активного монитора. Зона под курсором "
 "и текущее выделение подсвечиваются; стрелки двигают выделение по геометрии "
@@ -937,7 +988,7 @@ msgstr ""
 "overlay grabs the keyboard itself, so the arrows do not go to another window."
 
 #. type: Plain text
-#: man/gridsnap.1:297
+#: man/gridsnap.1:313
 msgid ""
 "B<--select> I<ЗОНА> задаёт начальное выделение, B<--monitor> I<N> — монитор "
 "(по умолчанию монитор активного окна, иначе под курсором), B<--window> "
@@ -954,13 +1005,13 @@ msgstr ""
 "overlay to PNG and exits without interaction."
 
 #. type: SS
-#: man/gridsnap.1:297
+#: man/gridsnap.1:313
 #, no-wrap
 msgid "gridsnap-hotcorners — подсветка зон при перетаскивании"
 msgstr "gridsnap-hotcorners — zone highlighting while dragging a window"
 
 #. type: Plain text
-#: man/gridsnap.1:301
+#: man/gridsnap.1:317
 msgid ""
 "Перетаскивание окна за заголовок подсвечивает зону под курсором, а "
 "отпускание вкладывает в неё окно. Отдельный процесс: для обычной работы не "
@@ -973,7 +1024,7 @@ msgstr ""
 "hotkey for it themselves (as for B<gridsnap-picker>)."
 
 #. type: Plain text
-#: man/gridsnap.1:308
+#: man/gridsnap.1:324
 msgid ""
 "«Окно тащат» в X11 никто не сообщает, поэтому watcher слушает raw-события "
 "XInput2 на root (они приходят, даже когда устройство захвачено оконным "
@@ -994,7 +1045,7 @@ msgstr ""
 "second. Details are in I<docs/specs/zone-hotcorners.md>."
 
 #. type: Plain text
-#: man/gridsnap.1:313
+#: man/gridsnap.1:329
 msgid ""
 "B<--no-hud> выключает подсветку (окно всё равно вкладывается по отпусканию, "
 "I<edge-tiling> не трогается), B<--dry-run> печатает, что watcher сделал бы, "
@@ -1007,13 +1058,13 @@ msgstr ""
 "(press, HUD shown, I<edge-tiling>, drop) to stderr."
 
 #. type: SS
-#: man/gridsnap.1:313
+#: man/gridsnap.1:329
 #, no-wrap
 msgid "gridsnap-ctl — клиент IPC демона"
 msgstr "gridsnap-ctl — the daemon's IPC client"
 
 #. type: Plain text
-#: man/gridsnap.1:316
+#: man/gridsnap.1:332
 msgid ""
 "Говорит с UNIX-сокетом B<gridsnap-daemon>: одна JSON-команда на соединение, "
 "ответ — тоже JSON-строка. Команды:"
@@ -1022,13 +1073,13 @@ msgstr ""
 "connection, the reply is also a JSON line. Commands:"
 
 #. type: TP
-#: man/gridsnap.1:316
+#: man/gridsnap.1:332
 #, no-wrap
 msgid "B<status>"
 msgstr "B<status>"
 
 #. type: Plain text
-#: man/gridsnap.1:322
+#: man/gridsnap.1:338
 msgid ""
 "Состояние демона: I<conf>, I<version>, I<reflow>, I<profile> (пока I<null>), "
 "I<monitors> (рабочие области), I<zones> (доли 0..1), I<zones_px> (пиксельные "
@@ -1041,7 +1092,7 @@ msgstr ""
 "I<filled> (expanded reflow neighbours)."
 
 #. type: Plain text
-#: man/gridsnap.1:327
+#: man/gridsnap.1:343
 msgid ""
 "Вложить окно в зону: B<--window> I<XID> (по умолчанию активное окно), B<--"
 "monitor> I<N>. Успех записывается в трекер демона, поэтому закрытие окна "
@@ -1052,7 +1103,7 @@ msgstr ""
 "the window then starts reflow as usual."
 
 #. type: Plain text
-#: man/gridsnap.1:333
+#: man/gridsnap.1:349
 msgid ""
 "Режим «только эта зона»: свернуть все окна того же стола и монитора, кроме "
 "целевого (B<--window> I<XID>, по умолчанию активное), и положить его в "
@@ -1066,13 +1117,13 @@ msgstr ""
 "is taken from the target window."
 
 #. type: TP
-#: man/gridsnap.1:333
+#: man/gridsnap.1:349
 #, no-wrap
 msgid "B<reload>"
 msgstr "B<reload>"
 
 #. type: Plain text
-#: man/gridsnap.1:336
+#: man/gridsnap.1:352
 msgid ""
 "Перечитать I<zones.conf> (сетка, правила, reflow); кэш мониторов "
 "сбрасывается."
@@ -1080,24 +1131,24 @@ msgstr ""
 "Re-read I<zones.conf> (grid, rules, reflow); the monitor cache is dropped."
 
 #. type: TP
-#: man/gridsnap.1:336
+#: man/gridsnap.1:352
 #, no-wrap
 msgid "B<quit>"
 msgstr "B<quit>"
 
 #. type: Plain text
-#: man/gridsnap.1:339
+#: man/gridsnap.1:355
 msgid "Попросить демон завершиться после текущего события."
 msgstr "Ask the daemon to terminate after the current event."
 
 #. type: TP
-#: man/gridsnap.1:339
+#: man/gridsnap.1:355
 #, no-wrap
 msgid "B<watch>"
 msgstr "B<watch>"
 
 #. type: Plain text
-#: man/gridsnap.1:351
+#: man/gridsnap.1:367
 msgid ""
 "Подписаться на события демона и печатать их: по одной JSON-строке на событие "
 "в stdout, пока соединение не закроют (B<Ctrl-C> — код 0). Подписка — на все "
@@ -1125,7 +1176,7 @@ msgstr ""
 "number, I<monitor> is I<[x, y, w, h]>."
 
 #. type: Plain text
-#: man/gridsnap.1:354
+#: man/gridsnap.1:370
 msgid ""
 "B<--socket> I<ПУТЬ> задаёт путь сокета, B<--raw> печатает ответ одной "
 "строкой, B<--quiet> ничего не печатает при успехе."
@@ -1134,13 +1185,13 @@ msgstr ""
 "line, B<--quiet> prints nothing on success."
 
 #. type: SS
-#: man/gridsnap.1:354
+#: man/gridsnap.1:370
 #, no-wrap
 msgid "setup-hotkeys — сочетания клавиш Cinnamon"
 msgstr "setup-hotkeys — Cinnamon hotkeys"
 
 #. type: Plain text
-#: man/gridsnap.1:369
+#: man/gridsnap.1:385
 msgid ""
 "Читает B<[keys]> через B<gridsnap-tiler keys> (и B<[move]> — через B<keys --"
 "move>)  и создаёт пользовательские сочетания Cinnamon (схемы "
@@ -1178,13 +1229,13 @@ msgstr ""
 "points at the config."
 
 #. type: SH
-#: man/gridsnap.1:369
+#: man/gridsnap.1:385
 #, no-wrap
 msgid "ПАРАМЕТРЫ"
 msgstr "OPTIONS"
 
 #. type: Plain text
-#: man/gridsnap.1:371
+#: man/gridsnap.1:387
 msgid ""
 "Ключи B<gridsnap-tiler> (общие для всех его команд, если не сказано иное):"
 msgstr ""
@@ -1192,24 +1243,24 @@ msgstr ""
 "otherwise):"
 
 #. type: TP
-#: man/gridsnap.1:371
+#: man/gridsnap.1:387
 #, no-wrap
 msgid "B<-h, --help>"
 msgstr "B<-h, --help>"
 
 #. type: Plain text
-#: man/gridsnap.1:374
+#: man/gridsnap.1:390
 msgid "Справка по аргументам и выход."
 msgstr "Help on the arguments and exit."
 
 #. type: TP
-#: man/gridsnap.1:374
+#: man/gridsnap.1:390
 #, no-wrap
 msgid "B<--conf>I< ПУТЬ>"
 msgstr "B<--conf>I< PATH>"
 
 #. type: Plain text
-#: man/gridsnap.1:378
+#: man/gridsnap.1:394
 msgid ""
 "Файл конфигурации. По умолчанию I<$XDG_CONFIG_HOME/gridsnap/zones.conf>, а "
 "если его нет — I<zones.conf> рядом с кодом. Флаг уводит за собой и каталог "
@@ -1220,13 +1271,13 @@ msgstr ""
 "the profiles directory along with it."
 
 #. type: TP
-#: man/gridsnap.1:378
+#: man/gridsnap.1:394
 #, no-wrap
 msgid "B<--monitor>I< N>"
 msgstr "B<--monitor>I< N>"
 
 #. type: Plain text
-#: man/gridsnap.1:382
+#: man/gridsnap.1:398
 msgid ""
 "Номер монитора (по умолчанию 0). Используется командами B<list>, B<apply>, "
 "B<stack> и B<action> (у действия — экран, на котором ищется зона)."
@@ -1236,13 +1287,13 @@ msgstr ""
 "looked up)."
 
 #. type: TP
-#: man/gridsnap.1:382
+#: man/gridsnap.1:398
 #, no-wrap
 msgid "B<--window>I< XID>"
 msgstr "B<--window>I< XID>"
 
 #. type: Plain text
-#: man/gridsnap.1:386
+#: man/gridsnap.1:402
 msgid ""
 "Идентификатор окна для B<apply>, B<focus> и B<action>: десятичный или I<0x…"
 ">. По умолчанию активное окно."
@@ -1251,13 +1302,13 @@ msgstr ""
 ">. The active window by default."
 
 #. type: TP
-#: man/gridsnap.1:386
+#: man/gridsnap.1:402
 #, no-wrap
 msgid "B<--off>"
 msgstr "B<--off>"
 
 #. type: Plain text
-#: man/gridsnap.1:390
+#: man/gridsnap.1:406
 msgid ""
 "B<focus>: явно выйти из режима «только эта зона» (развернуть свёрнутое "
 "режимом), а не входить в него."
@@ -1266,111 +1317,111 @@ msgstr ""
 "minimized) instead of entering it."
 
 #. type: TP
-#: man/gridsnap.1:390
+#: man/gridsnap.1:406
 #, no-wrap
 msgid "B<--by>I< auto|rules|order>"
 msgstr "B<--by>I< auto|rules|order>"
 
 #. type: Plain text
-#: man/gridsnap.1:393
+#: man/gridsnap.1:409
 msgid "Способ выбора окон для B<arrange> (по умолчанию I<auto>), см. выше."
 msgstr "How windows are chosen for B<arrange> (I<auto> by default), see above."
 
 #. type: TP
-#: man/gridsnap.1:393
+#: man/gridsnap.1:409
 #, no-wrap
 msgid "B<--all>"
 msgstr "B<--all>"
 
 #. type: Plain text
-#: man/gridsnap.1:396
+#: man/gridsnap.1:412
 msgid "B<undo>: откатить всю историю, а не последнюю операцию."
 msgstr "B<undo>: roll back the whole history instead of the last operation."
 
 #. type: TP
-#: man/gridsnap.1:396
+#: man/gridsnap.1:412
 #, no-wrap
 msgid "B<--no-hotkeys>"
 msgstr "B<--no-hotkeys>"
 
 #. type: Plain text
-#: man/gridsnap.1:399
+#: man/gridsnap.1:415
 msgid ""
 "B<profile use>: не регистрировать сочетания клавиш после активации профиля."
 msgstr "B<profile use>: do not register hotkeys after activating the profile."
 
 #. type: TP
-#: man/gridsnap.1:399
+#: man/gridsnap.1:415
 #, no-wrap
 msgid "B<--json>"
 msgstr "B<--json>"
 
 #. type: Plain text
-#: man/gridsnap.1:402
+#: man/gridsnap.1:418
 msgid "B<profile export>: печатать JSON в stdout, а не писать файл."
 msgstr "B<profile export>: print JSON to stdout instead of writing a file."
 
 #. type: TP
-#: man/gridsnap.1:402
+#: man/gridsnap.1:418
 #, no-wrap
 msgid "B<--name>I< ИМЯ>"
 msgstr "B<--name>I< NAME>"
 
 #. type: Plain text
-#: man/gridsnap.1:405
+#: man/gridsnap.1:421
 msgid "B<profile import>: имя профиля; по умолчанию берётся из JSON."
 msgstr "B<profile import>: the profile name; taken from the JSON by default."
 
 #. type: TP
-#: man/gridsnap.1:405
+#: man/gridsnap.1:421
 #, no-wrap
 msgid "B<--dry-run>"
 msgstr "B<--dry-run>"
 
 #. type: Plain text
-#: man/gridsnap.1:408
+#: man/gridsnap.1:424
 msgid "Только посчитать рамку: окно не двигать, в историю не писать."
 msgstr "Only compute the frame: do not move the window, write no history."
 
 #. type: TP
-#: man/gridsnap.1:408
+#: man/gridsnap.1:424
 #, no-wrap
 msgid "B<--verify>"
 msgstr "B<--verify>"
 
 #. type: Plain text
-#: man/gridsnap.1:411
+#: man/gridsnap.1:427
 msgid "Перечитать реальную геометрию окна после раскладки и сравнить с зоной."
 msgstr ""
 "Re-read the real window geometry after the layout and compare it with the "
 "zone."
 
 #. type: TP
-#: man/gridsnap.1:411
+#: man/gridsnap.1:427
 #, no-wrap
 msgid "B<--quiet>"
 msgstr "B<--quiet>"
 
 #. type: Plain text
-#: man/gridsnap.1:414
+#: man/gridsnap.1:430
 msgid ""
 "Не печатать сообщения об успехе (в справке B<--help> описание не выводится)."
 msgstr ""
 "Do not print success messages (in B<--help> the description is not shown)."
 
 #. type: TP
-#: man/gridsnap.1:414
+#: man/gridsnap.1:430
 #, no-wrap
 msgid "B<--version>"
 msgstr "B<--version>"
 
 #. type: Plain text
-#: man/gridsnap.1:417
+#: man/gridsnap.1:433
 msgid "Печатает I<zone-tiler 0.2.0> и выходит."
 msgstr "Prints I<zone-tiler 0.2.0> and exits."
 
 #. type: Plain text
-#: man/gridsnap.1:420
+#: man/gridsnap.1:436
 msgid ""
 "Ключи остальных команд перечислены в разделе КОМАНДЫ; у каждой есть также B<-"
 "h> и B<--version>."
@@ -1379,13 +1430,13 @@ msgstr ""
 "them also has B<-h> and B<--version>."
 
 #. type: SH
-#: man/gridsnap.1:420
+#: man/gridsnap.1:436
 #, no-wrap
 msgid "КОНФИГУРАЦИЯ"
 msgstr "CONFIGURATION"
 
 #. type: Plain text
-#: man/gridsnap.1:427
+#: man/gridsnap.1:443
 msgid ""
 "Конфигурация — один INI-файл UTF-8 I<zones.conf>. По умолчанию берётся "
 "I<$XDG_CONFIG_HOME/gridsnap/zones.conf> (обычно I<~/.config/gridsnap/"
@@ -1404,13 +1455,13 @@ msgstr ""
 "I<re:E<lt>regexE<gt>> is not split at the colon."
 
 #. type: SS
-#: man/gridsnap.1:427
+#: man/gridsnap.1:443
 #, no-wrap
 msgid "[grid]"
 msgstr "[grid]"
 
 #. type: Plain text
-#: man/gridsnap.1:430
+#: man/gridsnap.1:446
 msgid ""
 "Линии сетки: B<cols> и B<rows> — возрастающие списки долей через запятую, "
 "пробел или точку с запятой; последняя линия обязана быть I<1.0>. Нужны "
@@ -1421,13 +1472,13 @@ msgstr ""
 "by range zones."
 
 #. type: SS
-#: man/gridsnap.1:430
+#: man/gridsnap.1:446
 #, no-wrap
 msgid "[zones]"
 msgstr "[zones]"
 
 #. type: Plain text
-#: man/gridsnap.1:433
+#: man/gridsnap.1:449
 msgid ""
 "Имя зоны = одна из двух форм (имена зон приводятся к нижнему регистру — так "
 "работает ConfigParser):"
@@ -1436,13 +1487,13 @@ msgstr ""
 "ConfigParser works):"
 
 #. type: TP
-#: man/gridsnap.1:434
+#: man/gridsnap.1:450
 #, no-wrap
 msgid "B<x, y, w, h>"
 msgstr "B<x, y, w, h>"
 
 #. type: Plain text
-#: man/gridsnap.1:439
+#: man/gridsnap.1:455
 msgid ""
 "Свободный прямоугольник в долях рабочей области: I<0 E<lt>= x E<lt> 1>, I<0 "
 "E<lt>= y E<lt> 1>, I<w E<gt> 0>, I<h E<gt> 0>, I<x+w E<lt>= 1>, I<y+h E<lt>= "
@@ -1453,13 +1504,13 @@ msgstr ""
 "1>. This is the canonical form; the editor saves the file in it."
 
 #. type: TP
-#: man/gridsnap.1:439
+#: man/gridsnap.1:455
 #, no-wrap
 msgid "B<c0:c1, r0:r1>"
 msgstr "B<c0:c1, r0:r1>"
 
 #. type: Plain text
-#: man/gridsnap.1:443
+#: man/gridsnap.1:459
 msgid ""
 "Диапазон ячеек сетки: индексы линий B<cols> и B<rows> (I<0 E<lt>= c0 E<lt> "
 "c1 E<lt>= число колонок>). Читается для совместимости."
@@ -1468,18 +1519,18 @@ msgstr ""
 "c0 E<lt> c1 E<lt>= number of columns>). Read for compatibility."
 
 #. type: Plain text
-#: man/gridsnap.1:446
+#: man/gridsnap.1:462
 msgid "Хотя бы одна зона обязательна."
 msgstr "At least one zone is required."
 
 #. type: SS
-#: man/gridsnap.1:446
+#: man/gridsnap.1:462
 #, no-wrap
 msgid "[rules]"
 msgstr "[rules]"
 
 #. type: Plain text
-#: man/gridsnap.1:452
+#: man/gridsnap.1:468
 msgid ""
 "Секция необязательна. Правила автоукладки: I<селектор = имя зоны>. Селектор "
 "— glob по I<WM_CLASS> без учёта регистра или I<re:E<lt>regexE<gt>> — "
@@ -1496,13 +1547,13 @@ msgstr ""
 "expression simply never matches. Key case is preserved in this section."
 
 #. type: SS
-#: man/gridsnap.1:452
+#: man/gridsnap.1:468
 #, no-wrap
 msgid "[ignore]"
 msgstr "[ignore]"
 
 #. type: Plain text
-#: man/gridsnap.1:458
+#: man/gridsnap.1:474
 msgid ""
 "Секция необязательна. Окна-исключения: I<селектор = заметка>. Селекторы те "
 "же, что у B<[rules]> (glob по I<WM_CLASS> или I<re:E<lt>regexE<gt>> по "
@@ -1520,13 +1571,13 @@ msgstr ""
 "can be moved only by removing the rule."
 
 #. type: SS
-#: man/gridsnap.1:458
+#: man/gridsnap.1:474
 #, no-wrap
 msgid "[keys]"
 msgstr "[keys]"
 
 #. type: Plain text
-#: man/gridsnap.1:460
+#: man/gridsnap.1:476
 msgid ""
 "Привязки клавиш: I<имя зоны = сочетание> Cinnamon, например "
 "I<E<lt>SuperE<gt>E<lt>AltE<gt>1>."
@@ -1535,13 +1586,13 @@ msgstr ""
 "I<E<lt>SuperE<gt>E<lt>AltE<gt>1>."
 
 #. type: SS
-#: man/gridsnap.1:460
+#: man/gridsnap.1:476
 #, no-wrap
 msgid "[move]"
 msgstr "[move]"
 
 #. type: Plain text
-#: man/gridsnap.1:464
+#: man/gridsnap.1:480
 msgid ""
 "Секция необязательна. Перемещение окна в соседнюю зону: I<направление = "
 "сочетание> Cinnamon, направления — I<left>, I<right>, I<up>, I<down> "
@@ -1554,13 +1605,13 @@ msgstr ""
 "that is not one of the directions is a config error (code 3)."
 
 #. type: SS
-#: man/gridsnap.1:464
+#: man/gridsnap.1:480
 #, no-wrap
 msgid "[focus]"
 msgstr "[focus]"
 
 #. type: Plain text
-#: man/gridsnap.1:470
+#: man/gridsnap.1:486
 msgid ""
 "Секция необязательна. B<key> — сочетание режима «только эта зона» в "
 "синтаксисе Cinnamon; B<zone> — зона, в которую кладётся окно "
@@ -1577,13 +1628,13 @@ msgstr ""
 "tiler: focus\") and by the editor; it is not part of layout profiles."
 
 #. type: SS
-#: man/gridsnap.1:470
+#: man/gridsnap.1:486
 #, no-wrap
 msgid "[tabs]"
 msgstr "[tabs]"
 
 #. type: Plain text
-#: man/gridsnap.1:478
+#: man/gridsnap.1:494
 msgid ""
 "Секция необязательна. B<key> — сочетание «следующее окно зоны» (команда "
 "B<tabs-next>) в синтаксисе Cinnamon; B<height> — высота полосы вкладок в "
@@ -1606,13 +1657,13 @@ msgstr ""
 "profiles."
 
 #. type: SS
-#: man/gridsnap.1:478
+#: man/gridsnap.1:494
 #, no-wrap
 msgid "[action:E<lt>имяE<gt>]"
 msgstr "[action:E<lt>nameE<gt>]"
 
 #. type: Plain text
-#: man/gridsnap.1:481
+#: man/gridsnap.1:497
 msgid ""
 "Секция необязательна: одна секция — один экземпляр действия, имя из I<[a-"
 "z0-9_-]> (команда B<action E<lt>имяE<gt>>). Поля:"
@@ -1621,13 +1672,13 @@ msgstr ""
 "from I<[a-z0-9_-]> (the B<action E<lt>nameE<gt>> command). Fields:"
 
 #. type: TP
-#: man/gridsnap.1:482
+#: man/gridsnap.1:498
 #, no-wrap
 msgid "B<run>"
 msgstr "B<run>"
 
 #. type: Plain text
-#: man/gridsnap.1:487
+#: man/gridsnap.1:503
 msgid ""
 "Обязательное: I<builtin:E<lt>имяE<gt>> (I<minimize-others>, I<show-window>, "
 "I<mirror>, I<terminal>) либо своя команда — она разбирается B<shlex>, без "
@@ -1638,13 +1689,13 @@ msgstr ""
 "without a shell and without waiting."
 
 #. type: TP
-#: man/gridsnap.1:487
+#: man/gridsnap.1:503
 #, no-wrap
 msgid "B<zone>"
 msgstr "B<zone>"
 
 #. type: Plain text
-#: man/gridsnap.1:491
+#: man/gridsnap.1:507
 msgid ""
 "Зона-предмет: окно ищется в ней (активное, если оно там, иначе верхнее по "
 "I<_NET_CLIENT_LIST>). Без поля предмет — активное окно и зона, в которой оно "
@@ -1655,13 +1706,13 @@ msgstr ""
 "subject is the active window and the zone it stands in."
 
 #. type: TP
-#: man/gridsnap.1:491
+#: man/gridsnap.1:507
 #, no-wrap
 msgid "B<key>"
 msgstr "B<key>"
 
 #. type: Plain text
-#: man/gridsnap.1:495
+#: man/gridsnap.1:511
 msgid ""
 "Сочетание Cinnamon для B<setup-hotkeys>; имя сочетания — «zone-tiler: action "
 "E<lt>имяE<gt>»."
@@ -1670,13 +1721,13 @@ msgstr ""
 "action E<lt>nameE<gt>\"."
 
 #. type: TP
-#: man/gridsnap.1:495
+#: man/gridsnap.1:511
 #, no-wrap
 msgid "B<command>"
 msgstr "B<command>"
 
 #. type: Plain text
-#: man/gridsnap.1:499
+#: man/gridsnap.1:515
 msgid ""
 "Только у I<builtin:terminal>: чем запускать терминал (по умолчанию I<x-"
 "terminal-emulator>)."
@@ -1685,13 +1736,13 @@ msgstr ""
 "emulator> by default)."
 
 #. type: TP
-#: man/gridsnap.1:499
+#: man/gridsnap.1:515
 #, no-wrap
 msgid "B<axis>"
 msgstr "B<axis>"
 
 #. type: Plain text
-#: man/gridsnap.1:503
+#: man/gridsnap.1:519
 msgid ""
 "Только у I<builtin:mirror>: ось зеркала I<horizontal> (по умолчанию) или "
 "I<vertical>."
@@ -1700,7 +1751,7 @@ msgstr ""
 "I<vertical>."
 
 #. type: Plain text
-#: man/gridsnap.1:509
+#: man/gridsnap.1:525
 msgid ""
 "Пустое поле, неизвестное поле секции, B<command> или B<axis> не у своего "
 "действия, ось не из списка, имя секции не из I<[a-z0-9_-]> — ошибка конфига "
@@ -1714,13 +1765,13 @@ msgstr ""
 "section and carries it over verbatim, like B<[focus]>/B<[tabs]>."
 
 #. type: SS
-#: man/gridsnap.1:509
+#: man/gridsnap.1:525
 #, no-wrap
 msgid "[workspaces]"
 msgstr "[workspaces]"
 
 #. type: Plain text
-#: man/gridsnap.1:513
+#: man/gridsnap.1:529
 msgid ""
 "Секция необязательна. Своя сетка на рабочий стол Cinnamon: I<номер стола = "
 "имя профиля> (нумерация EWMH, с нуля). Демон берёт сетку по столу окна и "
@@ -1733,13 +1784,13 @@ msgstr ""
 "workspace.  Edited in the editor (\"Workspace profiles…\")."
 
 #. type: SS
-#: man/gridsnap.1:513
+#: man/gridsnap.1:529
 #, no-wrap
 msgid "[monitors]"
 msgstr "[monitors]"
 
 #. type: Plain text
-#: man/gridsnap.1:519
+#: man/gridsnap.1:535
 msgid ""
 "Секция необязательна. Своя сетка на экран: I<имя выхода = имя профиля> "
 "(I<HDMI-1>, I<eDP-1>). Экран важнее стола: B<apply>/B<move>/B<arrange>/"
@@ -1756,13 +1807,13 @@ msgstr ""
 "start."
 
 #. type: SS
-#: man/gridsnap.1:519
+#: man/gridsnap.1:535
 #, no-wrap
 msgid "[daemon]"
 msgstr "[daemon]"
 
 #. type: Plain text
-#: man/gridsnap.1:523
+#: man/gridsnap.1:539
 msgid ""
 "Секция необязательна. B<reflow = off | neighbors> (по умолчанию I<off>; "
 "регистр и пробелы не важны, неизвестное значение трактуется как I<off>). "
@@ -1773,13 +1824,13 @@ msgstr ""
 "I<neighbors> mode is described in the COMMANDS section."
 
 #. type: SH
-#: man/gridsnap.1:523
+#: man/gridsnap.1:539
 #, no-wrap
 msgid "ПРИМЕРЫ"
 msgstr "EXAMPLES"
 
 #. type: Plain text
-#: man/gridsnap.1:550
+#: man/gridsnap.1:568
 #, no-wrap
 msgid ""
 "gridsnap-tiler list\n"
@@ -1795,6 +1846,8 @@ msgid ""
 "gridsnap-tiler action term-main --dry-run\n"
 "gridsnap-tiler profile save work\n"
 "gridsnap-tiler profile use work --no-hotkeys\n"
+"gridsnap-tiler profile gallery\n"
+"gridsnap-tiler profile from-gallery work --name mine\n"
 "gridsnap-tiler keys\n"
 "gridsnap-daemon --verbose\n"
 "gridsnap-daemon --once --conf ~/.config/gridsnap/zones.conf\n"
@@ -1821,6 +1874,8 @@ msgstr ""
 "gridsnap-tiler action term-main --dry-run\n"
 "gridsnap-tiler profile save work\n"
 "gridsnap-tiler profile use work --no-hotkeys\n"
+"gridsnap-tiler profile gallery\n"
+"gridsnap-tiler profile from-gallery work --name mine\n"
 "gridsnap-tiler keys\n"
 "gridsnap-daemon --verbose\n"
 "gridsnap-daemon --once --conf ~/.config/gridsnap/zones.conf\n"
@@ -1835,13 +1890,13 @@ msgstr ""
 "gridsnap-editor --conf ~/.config/gridsnap/zones.conf\n"
 
 #. type: SH
-#: man/gridsnap.1:551
+#: man/gridsnap.1:569
 #, no-wrap
 msgid "ГОРЯЧИЕ КЛАВИШИ"
 msgstr "HOTKEYS"
 
 #. type: Plain text
-#: man/gridsnap.1:557
+#: man/gridsnap.1:575
 msgid ""
 "Сочетания задаются в секции B<[keys]> файла I<zones.conf> и регистрируются в "
 "Cinnamon командой B<setup-hotkeys> (или кнопкой в редакторе) как "
@@ -1858,7 +1913,7 @@ msgstr ""
 "tied to keys."
 
 #. type: Plain text
-#: man/gridsnap.1:561
+#: man/gridsnap.1:579
 msgid ""
 "В поставляемом I<zones.conf> четыре зоны и четыре сочетания: I<main> — "
 "I<E<lt>SuperE<gt>E<lt>AltE<gt>1>, I<top-right> — "
@@ -1873,7 +1928,7 @@ msgstr ""
 "I<E<lt>SuperE<gt>E<lt>AltE<gt>4>."
 
 #. type: Plain text
-#: man/gridsnap.1:565
+#: man/gridsnap.1:583
 msgid ""
 "Необязательная секция B<[focus]> даёт клавишу режима «только эта зона» "
 "(B<gridsnap-tiler focus>): она регистрируется под именем «zone-tiler: "
@@ -1884,7 +1939,7 @@ msgstr ""
 "focus\", so B<setup-hotkeys --remove> removes it together with the zone keys."
 
 #. type: Plain text
-#: man/gridsnap.1:569
+#: man/gridsnap.1:587
 msgid ""
 "Необязательная секция B<[tabs]> даёт клавишу «следующее окно зоны» "
 "(B<gridsnap-tiler tabs-next>) под именем «zone-tiler: tabs-next». Клавиша "
@@ -1897,7 +1952,7 @@ msgstr ""
 "there is nothing to switch."
 
 #. type: Plain text
-#: man/gridsnap.1:574
+#: man/gridsnap.1:592
 msgid ""
 "Секции B<[action:E<lt>имяE<gt>]> с непустым B<key> дают клавиши действий под "
 "именем «zone-tiler: action E<lt>имяE<gt>»: команда — B<gridsnap-tiler action "
@@ -1910,7 +1965,7 @@ msgstr ""
 "the zone keys. B<setup-hotkeys --remove> removes them together with the rest."
 
 #. type: Plain text
-#: man/gridsnap.1:579
+#: man/gridsnap.1:597
 msgid ""
 "Смена профиля одной клавишей — обычное пользовательское сочетание Cinnamon, "
 "вызывающее B<gridsnap-tiler profile use E<lt>имяE<gt>>: своих клавиш для "
@@ -1925,19 +1980,19 @@ msgstr ""
 "installs only the zone keys from B<[keys]>."
 
 #. type: SH
-#: man/gridsnap.1:579
+#: man/gridsnap.1:597
 #, no-wrap
 msgid "ФАЙЛЫ"
 msgstr "FILES"
 
 #. type: TP
-#: man/gridsnap.1:580
+#: man/gridsnap.1:598
 #, no-wrap
 msgid "I<~/.config/gridsnap/zones.conf>"
 msgstr "I<~/.config/gridsnap/zones.conf>"
 
 #. type: Plain text
-#: man/gridsnap.1:584
+#: man/gridsnap.1:602
 msgid ""
 "Активный конфиг (с учётом I<$XDG_CONFIG_HOME>). Если файла нет, читается и "
 "пишется I<zones.conf> рядом с кодом (I</usr/lib/gridsnap/zones.conf>)."
@@ -1947,13 +2002,13 @@ msgstr ""
 "read and written."
 
 #. type: TP
-#: man/gridsnap.1:584
+#: man/gridsnap.1:602
 #, no-wrap
 msgid "I<~/.local/state/gridsnap/history.json>"
 msgstr "I<~/.local/state/gridsnap/history.json>"
 
 #. type: Plain text
-#: man/gridsnap.1:588
+#: man/gridsnap.1:606
 msgid ""
 "История раскладок (с учётом I<$XDG_STATE_HOME>): JSON, последние 20 "
 "операций, запись атомарная. Нужна B<undo> в отдельном процессе."
@@ -1962,13 +2017,13 @@ msgstr ""
 "operations, written atomically. Needed by B<undo> in a separate process."
 
 #. type: TP
-#: man/gridsnap.1:588
+#: man/gridsnap.1:606
 #, no-wrap
 msgid "I<$XDG_RUNTIME_DIR/gridsnap/daemon.sock>"
 msgstr "I<$XDG_RUNTIME_DIR/gridsnap/daemon.sock>"
 
 #. type: Plain text
-#: man/gridsnap.1:592
+#: man/gridsnap.1:610
 msgid ""
 "UNIX-сокет демона (права 0600, каталог 0700). Без I<$XDG_RUNTIME_DIR> — I</"
 "tmp/gridsnap-E<lt>uidE<gt>/daemon.sock>."
@@ -1977,13 +2032,13 @@ msgstr ""
 "I<$XDG_RUNTIME_DIR> — I</tmp/gridsnap-E<lt>uidE<gt>/daemon.sock>."
 
 #. type: TP
-#: man/gridsnap.1:592
+#: man/gridsnap.1:610
 #, no-wrap
 msgid "I<~/.config/gridsnap/templates/*.conf>"
 msgstr "I<~/.config/gridsnap/templates/*.conf>"
 
 #. type: Plain text
-#: man/gridsnap.1:596
+#: man/gridsnap.1:614
 msgid ""
 "Профили раскладок (с учётом I<$XDG_CONFIG_HOME>; с B<--conf> I<ПУТЬ> — "
 "каталог I<templates> рядом с этим файлом)."
@@ -1992,13 +2047,31 @@ msgstr ""
 "I<templates> directory next to that file)."
 
 #. type: TP
-#: man/gridsnap.1:596
+#: man/gridsnap.1:614
+#, no-wrap
+msgid "I</usr/share/gridsnap/gallery/*.conf>"
+msgstr "I</usr/share/gridsnap/gallery/*.conf>"
+
+#. type: Plain text
+#: man/gridsnap.1:619
+msgid ""
+"Готовые раскладки поставки (в чекауте — I<gallery/> рядом с кодом). Свой "
+"каталог задаёт I<$GRIDSNAP_GALLERY>. Копию раскладки в профиль делает "
+"B<profile from-gallery>; сам каталог не правится."
+msgstr ""
+"Ready-made layouts shipped with the package (in a checkout — I<gallery/> "
+"next to the code). The I<$GRIDSNAP_GALLERY> variable sets a custom "
+"directory. A copy of a layout into a profile is made by "
+"B<profile from-gallery>; the directory itself is never modified."
+
+#. type: TP
+#: man/gridsnap.1:619
 #, no-wrap
 msgid "I</usr/lib/gridsnap>"
 msgstr "I</usr/lib/gridsnap>"
 
 #. type: Plain text
-#: man/gridsnap.1:601
+#: man/gridsnap.1:624
 msgid ""
 "Код пакета: I<zone-tiler.py>, I<zone-daemon.py>, I<zone-editor.py>, I<zone-"
 "picker.py>, I<zone-tabstrip.py>, I<gridsnap-ctl>, I<setup-hotkeys.py> и "
@@ -2009,13 +2082,13 @@ msgstr ""
 "and the helper modules, as well as the shipped I<zones.conf>."
 
 #. type: TP
-#: man/gridsnap.1:601
+#: man/gridsnap.1:624
 #, no-wrap
 msgid "I</usr/bin/gridsnap-tiler>"
 msgstr "I</usr/bin/gridsnap-tiler>"
 
 #. type: Plain text
-#: man/gridsnap.1:606
+#: man/gridsnap.1:629
 msgid ""
 "Запускалки команд (I<gridsnap-tiler>, I<gridsnap-daemon>, I<gridsnap-"
 "editor>, I<gridsnap-picker>, I<gridsnap-ctl>, I<setup-hotkeys>) — обёртки "
@@ -2026,19 +2099,19 @@ msgstr ""
 "around the code in I</usr/lib/gridsnap>."
 
 #. type: SH
-#: man/gridsnap.1:606
+#: man/gridsnap.1:629
 #, no-wrap
 msgid "КОДЫ ВОЗВРАТА"
 msgstr "EXIT STATUS"
 
 #. type: TP
-#: man/gridsnap.1:607
+#: man/gridsnap.1:630
 #, no-wrap
 msgid "B<0>"
 msgstr "B<0>"
 
 #. type: Plain text
-#: man/gridsnap.1:611
+#: man/gridsnap.1:634
 msgid ""
 "Успех. У B<arrange> и B<stack> без подходящих окон и у B<undo> с пустой "
 "историей — тоже 0."
@@ -2047,13 +2120,13 @@ msgstr ""
 "an empty history are 0 too."
 
 #. type: TP
-#: man/gridsnap.1:611
+#: man/gridsnap.1:634
 #, no-wrap
 msgid "B<1>"
 msgstr "B<1>"
 
 #. type: Plain text
-#: man/gridsnap.1:616
+#: man/gridsnap.1:639
 msgid ""
 "Ошибка выполнения: нет дисплея или активного окна, не прочитан "
 "I<_NET_CLIENT_LIST>, не удалось поднять IPC-сокет (демон), нет связи с "
@@ -2066,13 +2139,13 @@ msgstr ""
 "(B<setup-hotkeys>)."
 
 #. type: TP
-#: man/gridsnap.1:616
+#: man/gridsnap.1:639
 #, no-wrap
 msgid "B<2>"
 msgstr "B<2>"
 
 #. type: Plain text
-#: man/gridsnap.1:620
+#: man/gridsnap.1:643
 msgid ""
 "Ошибка аргументов: неизвестная команда или зона, плохое имя профиля, "
 "неверный флаг.  Сообщает её B<argparse> или сама команда."
@@ -2081,13 +2154,13 @@ msgstr ""
 "flag.  It is reported by B<argparse> or by the command itself."
 
 #. type: TP
-#: man/gridsnap.1:620
+#: man/gridsnap.1:643
 #, no-wrap
 msgid "B<3>"
 msgstr "B<3>"
 
 #. type: Plain text
-#: man/gridsnap.1:625
+#: man/gridsnap.1:648
 msgid ""
 "Ошибка конфига: файла нет, нет ни одной зоны, кривые числа, доли вне 0..1, "
 "правило на неизвестную зону, отсутствующий или битый профиль. Так отвечают "
@@ -2100,7 +2173,7 @@ msgstr ""
 "B<gridsnap-picker> exits with code 1 in the same cases."
 
 #. type: Plain text
-#: man/gridsnap.1:629
+#: man/gridsnap.1:652
 msgid ""
 "У B<gridsnap-ctl> коды 0, 1 и 2; у B<gridsnap-daemon> — 0, 1 (сокет) и 3 "
 "(конфиг); у B<gridsnap-editor> и B<gridsnap-picker> — 0 и 1 (плюс 2 от "
@@ -2111,13 +2184,13 @@ msgstr ""
 "B<argparse>); B<setup-hotkeys> — 0, 1 and 2."
 
 #. type: SH
-#: man/gridsnap.1:629
+#: man/gridsnap.1:652
 #, no-wrap
 msgid "СМОТРИ ТАКЖЕ"
 msgstr "SEE ALSO"
 
 #. type: Plain text
-#: man/gridsnap.1:633
+#: man/gridsnap.1:656
 msgid ""
 "B<gridsnap-tiler>(1), B<gridsnap-daemon>(1), B<gridsnap-editor>(1), "
 "B<gridsnap-picker>(1), B<gridsnap-hotcorners>(1), B<gridsnap-ctl>(1), "
@@ -2128,7 +2201,7 @@ msgstr ""
 "B<setup-hotkeys>(1), B<man>(1), B<xprop>(1), B<xwininfo>(1), B<gsettings>(1)."
 
 #. type: Plain text
-#: man/gridsnap.1:634
+#: man/gridsnap.1:657
 msgid ""
 "Документация пакета — I</usr/share/doc/gridsnap/> (README, SPEC и I<docs/>)."
 msgstr ""

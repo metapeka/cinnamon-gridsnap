@@ -12,7 +12,8 @@ roff, собранные страницы ставятся в `/usr/share/man/<�
 * **страница не отстала от кода**: множества длинных ключей `--…` в
   `man/gridsnap.1` и в `--help` семи команд совпадают; все секции `zones.conf`,
   которые знает `zone_config`, имеют свой `.SS`; команды и подкоманды из раздела
-  ПРИМЕРЫ настоящие;
+  ПРИМЕРЫ настоящие; действия `profile` в странице — ровно `PROFILE_ACTIONS` из
+  `zone-tiler.py` (галерея так и выпадала из страницы незаметно);
 * **собранные страницы** (если `make man` уже прогнан) ведут себя как у
   пользователя: кладутся во временный `MANPATH`, и `man gridsnap` под нужной
   локалью показывает нужный язык, укладывается в колонку и не оставляет строк,
@@ -92,6 +93,8 @@ COMMANDS = (
 FILE_OF = dict(COMMANDS)
 
 OPTION_RE = re.compile(r"--([a-z][a-z-]*)")
+# Действие `profile` в странице: `.B list`, `.B from\-gallery \fIID\fP` и т. п.
+PROFILE_ACTION_RE = re.compile(r"^\.B ([a-z][a-z0-9\\-]*)")
 SECTION_RE = re.compile(r'^\.SS "?\[([^\]]+)\]"?', re.M)
 # Скелет страницы: макросы структуры, а не шрифта. `.B x` po4a превращает в
 # `\fBx\fP`, поэтому шрифтовые макросы в сверке не участвуют.
@@ -295,6 +298,33 @@ class ManMatchesCliTest(unittest.TestCase):
             self.assertIn(tokens[1], text,
                           f"в --help {tokens[0]} нет подкоманды {tokens[1]!r} "
                           f"(пример {line!r})")
+
+    def test_profile_actions_match_cli(self):
+        """Действия `profile` в man-странице и в коде — одно и то же множество.
+
+        Список действий `profile` задаёт не argparse, а `PROFILE_ACTIONS` в
+        `zone-tiler.py`; без этой сверки новая подкоманда тихо не попадает
+        в страницу (так выпала галерея).
+        """
+        lines = source_body().splitlines()
+        try:
+            start = next(
+                n for n, line in enumerate(lines) if line.startswith(".B profile ")
+            )
+        except StopIteration:
+            self.fail("в man-странице нет блока .B profile")
+        end = next(
+            (n for n in range(start + 1, len(lines)) if lines[n].startswith(".SS ")),
+            len(lines),
+        )
+        documented = {
+            match.group(1).replace("\\-", "-")
+            for match in (PROFILE_ACTION_RE.match(line) for line in lines[start + 1:end])
+            if match
+        }
+        real = set(zc.load_zonetiler().PROFILE_ACTIONS)
+        self.assertEqual(sorted(documented), sorted(real),
+                         "действия profile в man-странице разошлись с PROFILE_ACTIONS")
 
     def test_source_renders_without_warnings(self):
         if shutil.which("man") is None:
