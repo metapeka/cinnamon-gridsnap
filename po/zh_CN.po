@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 23:55+0300\n"
+"POT-Creation-Date: 2026-11-23 02:20+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -693,6 +693,15 @@ msgid "zone-tiler: profile — укажите действие: list | show <и�
 msgstr "zone-tiler: profile — 请给出动作：list | show <名称> | save <名称> | use <名称> | use-monitors | rm <名称> | export <名称> [文件 | --json] | import <文件> [--name <名称>] | gallery | from-gallery <id> [--name <名称>]"
 
 #: zone-tiler.py
+msgid "; имя профиля задаёт --name"
+msgstr "；方案名称由 --name 指定"
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "zone-tiler: profile {action} — лишнее слово «{extra}»: столько аргументов у действия нет{hint}"
+msgstr "zone-tiler: profile {action} —— 多余的词「{extra}」：该操作没有这么多参数{hint}"
+
+#: zone-tiler.py
 msgid "файл JSON-профиля"
 msgstr "JSON 方案文件"
 
@@ -769,8 +778,8 @@ msgid "profile use/use-monitors: не регистрировать сочета�
 msgstr "profile use/use-monitors：激活后不注册快捷键"
 
 #: zone-tiler.py
-msgid "profile export: печатать JSON в stdout, а не писать файл"
-msgstr "profile export：把 JSON 打印到 stdout，而不是写文件"
+msgid "profile export/gallery: печатать JSON (у export — в stdout, а не в файл)"
+msgstr "profile export/gallery：输出 JSON（export 输出到标准输出，而不是写文件）"
 
 #: zone-tiler.py
 msgid "ИМЯ"
@@ -2667,6 +2676,9 @@ msgstr "gridsnap-ctl：watch 没有区域/窗口/显示器"
 #, python-brace-format
 msgid "gridsnap-ctl: {error}"
 msgstr "gridsnap-ctl: {error}"
+
+#~ msgid "profile export: печатать JSON в stdout, а не писать файл"
+#~ msgstr "profile export：把 JSON 打印到 stdout，而不是写文件"
 
 #~ msgid "profile from-gallery: перезаписать существующий профиль"
 #~ msgstr "profile from-gallery：覆盖已存在的方案"
