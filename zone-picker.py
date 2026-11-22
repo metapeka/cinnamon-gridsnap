@@ -50,17 +50,6 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")
 
-# Внешний тип `cairo.Context` PyGObject сопоставляет с pycairo только по явному
-# запросу. Без него `PangoCairo.create_layout()` на контексте, созданном *pycairo*
-# (снимок `--shot` рисуется в `cairo.ImageSurface`, а не в окне GTK), падает с
-# `KeyError: 'could not find foreign type Context'`: так ведёт себя связка
-# python3-cairo из Ubuntu 24.04 (она же в CI), хотя на свежих pycairo+PyGObject тип
-# находится и без этого вызова.
-try:
-    gi.require_foreign("cairo")
-except Exception:  # старый PyGObject без require_foreign — остаётся как было
-    pass
-
 from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402  # type: ignore
 
 import zone_config as zc  # noqa: E402
