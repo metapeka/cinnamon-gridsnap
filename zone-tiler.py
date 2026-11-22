@@ -81,12 +81,21 @@ zone-tiler — раскладывает активное окно по зона�
   zone-tiler.py profile save work         # текущий zones.conf — в профиль «work»
   zone-tiler.py profile use work          # активировать профиль (и обновить сочетания)
   zone-tiler.py profile use work --no-hotkeys
+  zone-tiler.py profile use-monitors      # снимок профилей экранов из [monitors]
+  zone-tiler.py profile use-monitors --dry-run   # показать конфиг, ничего не писать
   zone-tiler.py profile show work
   zone-tiler.py profile rm work
   zone-tiler.py profile export work              # JSON в stdout (для пайпов)
   zone-tiler.py profile export work work.json    # JSON в файл — поделиться раскладкой
   zone-tiler.py profile import work.json         # JSON → templates/<имя>.conf
   zone-tiler.py profile import work.json --name home  # то же, но под другим именем
+
+Своя сетка на экране — привязка в секции `[monitors]` (`HDMI-1 = work`):
+`profile use-monitors` собирает из профилей экранов снимок (`[zones]` первого
+экрана плюс `[zones:<выход>]` остальных, слияние `[rules]`/`[ignore]`/`[keys]`),
+а `apply`/`move`/`arrange`/`stack` ищут зону в профиле экрана (у `move`,
+`arrange` — экрана окна, у `apply`/`stack` — того, что задан `--monitor`),
+потом стола, потом в `zones.conf`.
 
 JSON-профиль — переносимый обмен между машинами (``gridsnap_profile``: 1);
 основным остаётся ``.conf``, JSON только для выгрузки и загрузки.
@@ -109,6 +118,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from typing import NoReturn
 
@@ -789,18 +799,82 @@ def workspace_profile(conf_path, workspace):
     return profile if os.path.exists(path) else None
 
 
-def require_zone(grid, zone, workspace=None, profile=None):
+def grid_for_output(conf_path, output, fallback=None, workspace=None, quiet=False):
+    """Сетка экрана: профиль из ``[monitors]`` → ``[workspaces]`` → активный конфиг.
+
+    ``output`` — имя выхода окна (``HDMI-1``); ``workspace`` — номер стола из EWMH
+    (с нуля), ``None`` — активный. Порядок разбора —
+    :func:`zone_config.resolve_profile`: экран важнее стола, стол важнее активного
+    конфига. ``fallback`` — уже сосчитанная сетка стола: ею экран живёт, если
+    профиля нет на диске или он не найден. Откат с предупреждением, а не отказ:
+    раскладку на экране без профиля пользователь всё равно ждёт.
+
+    Возвращает ``(Grid, имя профиля | None)``: имя — чтобы сказать в сообщении, из
+    какого профиля взята сетка. ``--workspace conf`` профилей не читает вообще —
+    редактор обязан считать ту же сетку, что на холсте.
+    """
+    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как у grid_for_workspace
+
+    if workspace is None:
+        workspace = current_workspace()
+    if workspace == WORKSPACE_CONF:
+        return (fallback if fallback is not None else Grid(conf_path)), None
+    base = fallback if fallback is not None else Grid(conf_path)
+    monitor_map = zc.load_monitor_map(conf_path)
+    profile = zc.resolve_profile(
+        monitor_map,
+        zc.load_workspace_map(conf_path),
+        output,
+        workspace,
+    )
+    if profile is None:
+        return base, None
+    # Профиль мог прийти со стола, а не с экрана: сетку стола base уже несёт, и
+    # подпись «экран …» в сообщениях была бы враньём.
+    bound_to_screen = any(
+        str(key).strip().casefold() == str(output or "").strip().casefold()
+        for key in monitor_map
+    )
+    if not bound_to_screen:
+        return base, None
+    try:
+        path = zc.profile_path(profile, conf_path)
+    except ValueError:
+        path = None
+    if path is None or not os.path.exists(path):
+        if not quiet:
+            where = f"экран {output}" if output else "экран окна"
+            print(
+                f"zone-tiler: профиля «{zc.sanitize_profile_name(profile)}» нет на диске: "
+                f"{where} раскладывается общим набором зон",
+                file=sys.stderr,
+            )
+        return base, None
+    return Grid(path), profile
+
+
+def monitor_bindings(conf_path):
+    """Есть ли в конфиге привязки экранов ``[monitors]`` (без обращения к X)."""
+    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как у grid_for_output
+
+    return bool(zc.load_monitor_map(conf_path))
+
+
+def require_zone(grid, zone, workspace=None, profile=None, output=None):
     """Проверить, что зона есть в наборе сетки; иначе ошибка конфига (код 3).
 
     Зона ищется в объединении наборов показанной сетки (общий `[zones]` и
     `[zones:<выход>]`) — то есть ровно там, где её найдёт раскладка. Перечень
     доступных зон печатается целиком: по нему видно, что стол получил не тот
-    профиль, а не только что имя набрано с ошибкой.
+    профиль, а не только что имя набрано с ошибкой. ``output`` — экран, чей
+    профиль дал сетку: сообщение про «сетку стола» на профиле экрана врало бы.
     """
     known = grid.all_zone_names()
     if zone in known:
         return
-    if profile and workspace is not None:
+    if output and profile:
+        where = f" в сетке экрана {output} (профиль «{profile}»)"
+    elif profile and workspace is not None:
         where = f" в сетке стола {workspace + 1} (профиль «{profile}»)"
     elif profile:
         where = f" в сетке профиля «{profile}»"
@@ -960,6 +1034,28 @@ def resolve_monitor(spec, outputs=None):
         f"zone-tiler: монитора '{text}' нет. Доступны: {available or 'нет'}",
         EXIT_USAGE,
     )
+
+
+def target_output(args, outputs=None):
+    """Имя выхода, к которому относится `apply`/`stack`, или ``None``.
+
+    Не поднимает ошибку, а отвечает ``None``, если мониторов нет или
+    `--monitor` не разрешается: проверка зоны идёт раньше, и человек должен
+    увидеть «нет зоны», а не «нет монитора». Внятную ошибку про монитор всё равно
+    даст `resolve_monitor` в самой команде.
+    """
+    outputs = monitor_outputs() if outputs is None else outputs
+    if not outputs:
+        return None
+    text = str(monitor_arg(args)).strip()
+    for name, _wa in outputs:
+        if name == text:
+            return name
+    if re.fullmatch(r"[+-]?\d+", text):
+        number = int(text)
+        if 0 <= number < len(outputs):
+            return outputs[number][0]
+    return None
 
 
 def frame_extents(win):
@@ -2182,6 +2278,10 @@ def cmd_move(grid, args):
     зона. На краю сетки соседа нет: это не ошибка — сообщаем в stderr и
     выходим с кодом 0. Удачный переезд (не `--dry-run`) пишется в историю
     операцией `move`, поэтому `undo` возвращает окно на прежнее место.
+
+    Сетка — профиль **экрана** окна: `[monitors]` → `[workspaces]` → `zones.conf`
+    (`grid_for_output`); профиля нет на диске — откат на сетку стола с
+    предупреждением, а не отказ укладки.
     """
     nav = picker_nav()
     direction = (args.zone or "").strip().lower()
@@ -2192,14 +2292,6 @@ def cmd_move(grid, args):
         )
     outputs = monitor_outputs()
     window = args.window or active_window()
-    if window_is_excluded(window, grid.ignore):
-        if not args.quiet:
-            print(
-                f"zone-tiler: окно 0x{window:x} под исключением "
-                "([ignore]/служебный тип) — не двигаю",
-                file=sys.stderr,
-            )
-        return EXIT_OK
     extents = frame_extents(window)
     try:
         frame = read_frame(window, extents)
@@ -2214,6 +2306,22 @@ def cmd_move(grid, args):
     else:
         index, output = resolve_monitor(args.monitor, outputs)
         wa = outputs[index][1]
+    # Зона ищется в профиле экрана окна, а не только в профиле его стола.
+    grid, _profile = grid_for_output(
+        args.conf,
+        output,
+        fallback=grid,
+        workspace=resolve_workspace(args.workspace),
+        quiet=args.quiet,
+    )
+    if window_is_excluded(window, grid.ignore):
+        if not args.quiet:
+            print(
+                f"zone-tiler: окно 0x{window:x} под исключением "
+                "([ignore]/служебный тип) — не двигаю",
+                file=sys.stderr,
+            )
+        return EXIT_OK
     names = list(grid.zones_for(output))
     zones = [grid.fractions(name, monitor_name=output) for name in names]
     wx, wy, ww, wh = wa
@@ -2272,8 +2380,9 @@ def cmd_arrange(grid, args):
     """Разложить клиентские окна `_NET_CLIENT_LIST` по зонам.
 
     Режим `--by` (auto/rules/order) выбирает окна чистой `choose_assignments`;
-    окна группируются по монитору, и в каждой группе работает набор зон этого
-    монитора (`[zones:<выход>]`) или общий `[zones]`. Несколько окон,
+    окна группируются по монитору, и в каждой группе работает сетка **экрана**
+    (`grid_for_output`: профиль из `[monitors]` → `[workspaces]` → `zones.conf`),
+    в ней — набор `[zones:<выход>]` или общий `[zones]`. Несколько окон,
     попавших в одну зону одного монитора, получают общую рамку вкладки
     (`in_zone_rect`): зона минус полоса `[tabs] height`; одно окно в зоне
     ставится ровно по зоне. Прежние рамки записываются в историю для `undo`.
@@ -2284,13 +2393,17 @@ def cmd_arrange(grid, args):
     metas = {win: read_window_meta(win) for win in client_ids}
     outputs = monitor_outputs()
     groups = group_windows_by_monitor(client_ids, outputs)
+    workspace = resolve_workspace(args.workspace)
     assignments = []
     for output, wa, wins in groups:
-        zones = list(grid.zones_for(output))
+        screen_grid, _profile = grid_for_output(
+            args.conf, output, fallback=grid, workspace=workspace, quiet=args.quiet
+        )
+        zones = list(screen_grid.zones_for(output))
         for win, zone in choose_assignments(
-            wins, metas, zones, grid.rules, args.by, ignore=grid.ignore
+            wins, metas, zones, screen_grid.rules, args.by, ignore=screen_grid.ignore
         ):
-            assignments.append((win, zone, output, wa))
+            assignments.append((win, zone, output, wa, screen_grid))
     if not groups:
         if not args.quiet:
             print("zone-tiler: не удалось определить монитор ни для одного окна", file=sys.stderr)
@@ -2300,12 +2413,12 @@ def cmd_arrange(grid, args):
             print("zone-tiler: нет окон, подходящих под раскладку")
         return
     x11 = None if args.dry_run else X11()
-    totals = collections.Counter((wa, zone) for _win, zone, _output, wa in assignments)
+    totals = collections.Counter((wa, zone) for _win, zone, _output, wa, _grid in assignments)
     height = tabs_height(grid)
     records = []
     try:
-        for win, zone, output, wa in assignments:
-            base = grid.rect(zone, wa, monitor_name=output)
+        for win, zone, output, wa, screen_grid in assignments:
+            base = screen_grid.rect(zone, wa, monitor_name=output)
             rect = in_zone_rect(base, totals[(wa, zone)], height)
             if args.dry_run:
                 x, y, w, h = rect
@@ -2468,7 +2581,7 @@ def cmd_keys(grid, move=False, conf=None):
 
 # ---------------------------------------------------------------- профили
 
-PROFILE_ACTIONS = ("list", "show", "save", "use", "rm", "export", "import")
+PROFILE_ACTIONS = ("list", "show", "save", "use", "use-monitors", "rm", "export", "import")
 
 
 def _run_hotkeys(conf, quiet=False):
@@ -2517,6 +2630,302 @@ def _profile_import(zc, args, path, conf):
     )
 
 
+def section_pairs(lines):
+    """Пары ``(ключ, значение)`` из тела секции в порядке строк.
+
+    Тело — строки как их отдаёт ``zone_config.load_extra_sections`` (или готовые
+    пары): комментарии, пустые строки и строки без ``=`` пропускаются, инлайн-
+    комментарий после пробела отбрасывается, как у ``ConfigParser``. Нужно для
+    слияния ``[rules]``/``[ignore]``: сопоставлять надо селектор, а не текст строки.
+    """
+    pairs = []
+    for item in lines or []:
+        if isinstance(item, (tuple, list)) and len(item) == 2:
+            key, value = str(item[0]).strip(), str(item[1]).strip()
+        else:
+            line = str(item).strip()
+            if not line or line[0] in "#;":
+                continue
+            line = re.sub(r"\s[#;].*$", "", line)
+            if "=" not in line:
+                continue
+            key, value = (part.strip() for part in line.split("=", 1))
+        if key:
+            pairs.append((key, value))
+    return pairs
+
+
+def monitor_screen_map(conf_path):
+    """``[(выход, профиль)]`` из ``[monitors]`` в порядке строк, регистр — из файла.
+
+    :func:`zone_config.load_monitor_map` валидирует секцию и санирует имена
+    профилей, но ``ConfigParser`` опускает регистр ключей, а секции
+    ``[zones:<выход>]`` принято писать так, как выход печатает ``xrandr``
+    (``HDMI-1``). Поэтому имя берём из текста секции (публичный
+    ``load_extra_sections``), а профиль — из проверенной карты; сравнение —
+    без учёта регистра, как у резолвера. Пустая секция — ``[]``.
+    """
+    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как у grid_for_workspace
+
+    mapping = zc.load_monitor_map(conf_path)
+    if not mapping:
+        return []
+    by_lower = {str(key).casefold(): name for key, name in mapping.items()}
+    rows, seen = [], set()
+    body = zc.load_extra_sections(conf_path, sections=[zc.MONITORS_SECTION]).get(
+        zc.MONITORS_SECTION, []
+    )
+    for key, _value in section_pairs(body):
+        output = key.strip()
+        lowered = output.casefold()
+        profile = by_lower.get(lowered)
+        if profile is None or lowered in seen:
+            continue
+        seen.add(lowered)
+        rows.append((output, profile))
+    for lowered, profile in mapping.items():
+        if lowered not in seen:
+            rows.append((lowered, profile))
+    return rows
+
+
+def _render_planned_config(zc, conf, default, monitor_sets, extra):
+    """Текст, который записал бы ``use-monitors``, без записи в настоящий конфиг.
+
+    Пишем во временный файл через тот же ``zone_config._write_config``: иначе
+    `--dry-run` пришлось бы повторять его правила сборки вручную, и показанное
+    разошлось бы с тем, что реально легло бы на диск.
+    """
+    fd, tmp = tempfile.mkstemp(prefix="gridsnap-plan-", suffix=".conf")
+    try:
+        with open(conf, encoding="utf-8") as src:
+            data = src.read()
+        with os.fdopen(fd, "w", encoding="utf-8") as dst:
+            fd = None
+            dst.write(data)
+        zc._write_config(tmp, default, monitor_sets, extra)
+        with open(tmp, encoding="utf-8") as fh:
+            return fh.read()
+    finally:
+        if fd is not None:
+            os.close(fd)
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def _profile_screen_zone_set(output, zones, monitor_sets):
+    """Набор зон экрана из профиля: ``[zones:<выход>]``, иначе общий ``[zones]``."""
+    for name, chunk in (monitor_sets or {}).items():
+        if str(name).casefold() == str(output).casefold():
+            return list(chunk)
+    return list(zones or [])
+
+
+def _profile_zone_chunks(zones, monitor_sets):
+    """Наборы зон профиля в порядке файла: общий, затем ``[zones:<выход>]``."""
+    return [zones or []] + list((monitor_sets or {}).values())
+
+
+def merge_monitor_profiles(screens):
+    """Слить профили экранов в снимок активного конфига (чистая функция).
+
+    ``screens`` — ``[(выход, профиль, zones, rules, monitor_sets, ignore)]`` в
+    порядке строк ``[monitors]``; зоны — ``Zone`` с привязками ``[keys]``.
+
+    Набор по умолчанию — ``[zones]`` **первого** экрана, у которого есть зоны (его
+    ``[zones:<выход>]``, если общего набора в профиле нет). ``[zones:<выход>]``
+    пишется для каждого экрана: свой набор профиля, иначе его общий ``[zones]``.
+    ``[rules]``, ``[ignore]`` и ``[keys]`` сливаются по всем экранам: где селектор
+    или имя зоны расходятся, выигрывает первый экран, а расхождение попадает в
+    ``overrides`` (ничего не теряется молча). Правило на зону, которой нет в
+    итоговом объединении наборов, отбрасывается в ``dropped_rules``: иначе
+    ``Grid`` отказал бы кодом 3 и конфиг стал бы нечитаемым целиком.
+    """
+    default = None
+    monitor_sets = {}
+    zone_names = set()
+    bindings = {}  # имя зоны -> (выход, профиль, сочетание)
+    key_reported = set()
+    raw_rules = []  # (селектор, зона, выход, профиль)
+    raw_ignore = []  # (селектор, заметка, выход, профиль)
+    overrides = []
+    usable = []
+    for output, profile, zones, rules, sets, ignore in screens:
+        own = _profile_screen_zone_set(output, zones, sets)
+        if not own:
+            continue
+        usable.append((output, profile))
+        monitor_sets[output] = [zone.copy() for zone in own]
+        if default is None:
+            default = [zone.copy() for zone in (list(zones or []) or own)]
+        for chunk in _profile_zone_chunks(zones, sets):
+            for zone in chunk:
+                zone_names.add(zone.name)
+                binding = (zone.binding or "").strip()
+                if not binding:
+                    continue
+                owner = bindings.get(zone.name)
+                if owner is None:
+                    bindings[zone.name] = (output, profile, binding)
+                elif owner[2] != binding and zone.name not in key_reported:
+                    key_reported.add(zone.name)
+                    overrides.append(
+                        f"клавиша зоны «{zone.name}»: «{owner[2]}» (профиль «{owner[1]}», "
+                        f"экран {owner[0]}) вместо «{binding}» (профиль «{profile}», "
+                        f"экран {output}) — оставлена первая"
+                    )
+        for selector, target in section_pairs(rules):
+            raw_rules.append((selector, target, output, profile))
+        for selector, note in section_pairs(ignore):
+            raw_ignore.append((selector, note, output, profile))
+
+    dropped, seen_dropped = [], set()
+    merged_rules = []
+    rule_owner = {}
+    for selector, target, output, profile in raw_rules:
+        if target not in zone_names:
+            if (selector, target) not in seen_dropped:
+                seen_dropped.add((selector, target))
+                dropped.append((selector, target))
+            continue
+        owner = rule_owner.get(selector)
+        if owner is None:
+            rule_owner[selector] = (target, output, profile)
+            merged_rules.append((selector, target))
+        elif owner[0] != target:
+            overrides.append(
+                f"правило для «{selector}»: зона «{owner[0]}» (профиль «{owner[2]}», "
+                f"экран {owner[1]}) вместо «{target}» (профиль «{profile}», "
+                f"экран {output}) — оставлено первое"
+            )
+
+    merged_ignore = []
+    ignore_owner = {}
+    for selector, note, output, profile in raw_ignore:
+        owner = ignore_owner.get(selector)
+        if owner is None:
+            ignore_owner[selector] = (note, output, profile)
+            merged_ignore.append((selector, note))
+        elif owner[0] != note:
+            overrides.append(
+                f"исключение «{selector}»: заметка «{owner[0]}» (профиль «{owner[2]}», "
+                f"экран {owner[1]}) вместо «{note}» (профиль «{profile}», "
+                f"экран {output}) — оставлена первая"
+            )
+
+    # `[keys]` пишется по первому появлению имени зоны: проставляем победившую
+    # привязку всем записанным наборам, иначе проигравший экран перебил бы её.
+    for chunk in [default] + list(monitor_sets.values()):
+        for zone in chunk:
+            owner = bindings.get(zone.name)
+            zone.binding = owner[2] if owner else ""
+    return {
+        "default": default,
+        "monitor_sets": monitor_sets,
+        "rules": merged_rules,
+        "ignore": merged_ignore,
+        "dropped_rules": dropped,
+        "overrides": overrides,
+        "screens": usable,
+    }
+
+
+def _profile_use_monitors(zc, args, conf):
+    """``profile use-monitors``: снимок профилей экранов из ``[monitors]``.
+
+    Пишет в **активный** конфиг то, что видят все, кто профилей не читает
+    (пикер, редактор, апплет): ``[zones]`` первого экрана, ``[zones:<выход>]``
+    каждого экрана, слитые ``[rules]``/``[ignore]``/``[keys]``. Прочие секции
+    (``[grid]``, ``[monitors]``, ``[workspaces]``, ``[daemon]``, …) переживают
+    запись дословно. Экран без файла профиля пропускается с предупреждением:
+    строка ``[monitors]`` остаётся и заработает, когда профиль вернут.
+    """
+    if (args.name or "").strip():
+        fail(
+            "zone-tiler: profile use-monitors не берёт имени профиля: экраны и "
+            "профили задаёт секция [monitors]",
+            EXIT_USAGE,
+        )
+    if not os.path.exists(conf):
+        # Пустой [monitors] читается и из несуществующего файла, но писать снимок
+        # некуда: опечатка в --conf не должна выглядеть как «нечего менять».
+        fail(f"zone-tiler: не найден конфиг {conf}", EXIT_CONFIG)
+    monitor_map = monitor_screen_map(conf)
+    if not monitor_map:
+        if not args.quiet:
+            print("zone-tiler: в [monitors] нет ни одного экрана — активный конфиг не меняю")
+        return
+    screens = []
+    for output, name in monitor_map:
+        safe = zc.sanitize_profile_name(name)
+        try:
+            path = zc.profile_path(name, conf)
+        except ValueError:
+            path = None
+        if path is None or not os.path.exists(path):
+            print(
+                f"zone-tiler: профиля «{safe}» нет на диске: экран {output} пропущен, "
+                "строка [monitors] остаётся и заработает, когда профиль вернут",
+                file=sys.stderr,
+            )
+            continue
+        zones, rules, sets, ignore = zc.read_profile_sets(name, conf)
+        if not zones and not sets:
+            print(
+                f"zone-tiler: в профиле «{safe}» нет ни одной зоны: экран {output} пропущен",
+                file=sys.stderr,
+            )
+            continue
+        screens.append((output, name, zones, rules, sets, ignore))
+    if not screens:
+        if not args.quiet:
+            print(
+                "zone-tiler: ни один экран из [monitors] не нашёл своего профиля — "
+                "активный конфиг не меняю"
+            )
+        return
+    plan = merge_monitor_profiles(screens)
+    if not args.quiet:
+        for message in plan["overrides"]:
+            print(f"zone-tiler: переопределено: {message}")
+    for selector, zone in plan["dropped_rules"]:
+        print(
+            f"zone-tiler: правило «{selector} = {zone}» пропущено: зоны '{zone}' нет "
+            "в итоговом наборе — иначе конфиг стал бы невалидным",
+            file=sys.stderr,
+        )
+    host = zc.load_extra_sections(conf)
+    host.pop("rules", None)
+    host.pop("ignore", None)
+    if plan["rules"]:
+        host["rules"] = plan["rules"]
+    if plan["ignore"]:
+        host["ignore"] = plan["ignore"]
+    if args.dry_run:
+        if not args.quiet:
+            sys.stdout.write(
+                _render_planned_config(
+                    zc, conf, plan["default"], plan["monitor_sets"], host
+                )
+            )
+        return
+    zc._write_config(conf, plan["default"], plan["monitor_sets"], host)
+    if not args.quiet:
+        for output, name in plan["screens"]:
+            print(
+                f"zone-tiler: экран {output} — профиль «{zc.sanitize_profile_name(name)}»: "
+                f"{len(plan['monitor_sets'][output])} зон"
+            )
+        print(
+            f"zone-tiler: активный конфиг обновлён: экранов {len(plan['screens'])}, "
+            f"правил {len(plan['rules'])}, исключений {len(plan['ignore'])}"
+        )
+    if not args.no_hotkeys:
+        _run_hotkeys(conf, quiet=args.quiet)
+
+
 def cmd_profile(args):
     """Профили раскладок: list/show/save/use/rm/export/import (zone_config лениво)."""
     import zone_config as zc
@@ -2525,7 +2934,7 @@ def cmd_profile(args):
     if action not in PROFILE_ACTIONS:
         fail(
             "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | "
-            "use <имя> | rm <имя> | export <имя> [файл | --json] | "
+            "use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | "
             "import <файл> [--name <имя>]",
             EXIT_USAGE,
         )
@@ -2533,6 +2942,14 @@ def cmd_profile(args):
     if action == "list":
         for name in zc.list_profiles(conf):
             print(name)
+        return
+    if action == "use-monitors":
+        try:
+            _profile_use_monitors(zc, args, conf)
+        except ValueError as exc:
+            fail(f"zone-tiler: {exc}", EXIT_USAGE)
+        except FileNotFoundError as exc:
+            fail(f"zone-tiler: {exc}", EXIT_CONFIG)
         return
 
     name = (args.name or "").strip()
@@ -2579,7 +2996,7 @@ def main(argv=None):
         epilog=(
             "Примеры: zone-tiler.py arrange --by order; zone-tiler.py stack main; "
             "zone-tiler.py tabs-next; zone-tiler.py undo --all; "
-            "zone-tiler.py profile use work"
+            "zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
         ),
     )
     ap.add_argument(
@@ -2646,7 +3063,7 @@ def main(argv=None):
     ap.add_argument(
         "--no-hotkeys",
         action="store_true",
-        help="profile use: не регистрировать сочетания клавиш после активации",
+        help="profile use/use-monitors: не регистрировать сочетания клавиш после активации",
     )
     ap.add_argument(
         "--json",
@@ -2659,7 +3076,11 @@ def main(argv=None):
         metavar="ИМЯ",
         help="profile import: имя профиля (по умолчанию — из JSON)",
     )
-    ap.add_argument("--dry-run", action="store_true", help="только посчитать рамку")
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="только посчитать рамку (у profile use-monitors — показать конфиг), ничего не меняя",
+    )
     ap.add_argument(
         "--off",
         action="store_true",
@@ -2704,10 +3125,18 @@ def main(argv=None):
 
     # list/apply/arrange/stack работают сеткой своего стола: `--workspace N` или
     # активный стол по умолчанию; сетка берётся через grid_for_workspace, поэтому
-    # стол без профиля молча живёт в общем [zones].
+    # стол без профиля молча живёт в общем [zones]. Экран важнее стола: у apply/stack
+    # адресат — экран из --monitor, и сетка берётся из его профиля.
     workspace = resolve_workspace(args.workspace)
     profile = workspace_profile(args.conf, workspace)
     grid = grid_for_workspace(args.conf, workspace)
+    output = None
+    if args.command in ("apply", "stack") and monitor_bindings(args.conf):
+        output = target_output(args)
+        if output is not None:
+            grid, profile = grid_for_output(
+                args.conf, output, fallback=grid, workspace=workspace, quiet=args.quiet
+            )
     if args.command == "list":
         cmd_list(grid, args, profile=profile)
         return EXIT_OK
@@ -2722,9 +3151,9 @@ def main(argv=None):
         return EXIT_OK
     if not args.zone:
         fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)
-    # Зона ищется в наборе показанной сетки (монитор + общий [zones]); нет её
-    # там — это ошибка конфига: конфиг и профиль стола разошлись.
-    require_zone(grid, args.zone, workspace=workspace, profile=profile)
+    # Зона ищется в наборе показанной сетки (экран + стол + общий [zones]); нет её
+    # там — это ошибка конфига: конфиг и профиль разошлись.
+    require_zone(grid, args.zone, workspace=workspace, profile=profile, output=output)
     if args.command == "stack":
         cmd_stack(grid, args)
         return EXIT_OK

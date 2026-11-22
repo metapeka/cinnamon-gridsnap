@@ -15,6 +15,7 @@ import contextlib
 import importlib.util
 import io
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,8 @@ from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 TILER = os.path.join(ROOT, "zone-tiler.py")
 
 
@@ -415,6 +418,116 @@ class TestTabsArrangement(ConfMixin, unittest.TestCase):
             code, out, _err = self.run_cli("stack", "main")
         self.assertEqual(code, 0)
         self.assertIn("x=0 y=0 1000x1000", out)
+
+
+class TestScreenProfile(ConfMixin, unittest.TestCase):
+    """Рабочие команды берут сетку из профиля **экрана** (`[monitors]`).
+
+    Экран важнее стола, а отсутствующий файл профиля — не отказ укладки, а откат
+    на сетку стола/активного конфига с предупреждением. Без X: мониторы, рамка
+    окна и исключения подменены; всё считается на `--dry-run`.
+    """
+
+    CONF = (
+        BASE_GRID
+        + "[zones]\nglobal = 0, 0, 1, 1\n"
+        + "[tabs]\nheight = 30\n"
+        + "[monitors]\nMON2 = wide\n"
+    )
+    PROFILE = (
+        "[zones]\nleft = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\nbig = 0, 0, 1, 1\n"
+        "[zones:MON2]\nleft = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\n"
+    )
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="gridsnap-screen-profile-")
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.conf_path = os.path.join(self.dir, "zones.conf")
+        with open(self.conf_path, "w", encoding="utf-8") as fh:
+            fh.write(self.CONF)
+        self.templates = os.path.join(self.dir, "templates")
+        os.makedirs(self.templates)
+        self.profile_path = os.path.join(self.templates, "wide.conf")
+        with open(self.profile_path, "w", encoding="utf-8") as fh:
+            fh.write(self.PROFILE)
+        self.outputs = [("MON1", (0, 0, 1000, 1000)), ("MON2", (1000, 0, 1000, 1000))]
+        for name, value in (
+            ("monitor_outputs", lambda: self.outputs),
+            ("current_workspace", lambda: None),
+            ("read_client_list", lambda: [0x1]),
+            ("read_window_meta", lambda win: zt.WindowMeta("Firefox", f"окно {win}", frozenset())),
+            # Окно — на втором мониторе, в левой половине его области.
+            ("window_monitor", lambda win, areas: areas[1]),
+            ("frame_extents", lambda win: (0, 0, 0, 0)),
+            ("read_frame", lambda win, extents: (1000, 0, 500, 1000)),
+            ("window_is_excluded", lambda win, ignore=(): False),
+        ):
+            patcher = mock.patch.object(zt, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def run_cli(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = zt.main([*argv, "--dry-run", "--conf", self.conf_path])
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 1
+        return code, out.getvalue(), err.getvalue()
+
+    def test_apply_takes_zones_from_the_screen_profile(self):
+        # `[zones:MON2]` профиля, а не общий `[zones]` активного конфига.
+        code, out, err = self.run_cli("apply", "right", "--monitor", "MON2")
+        self.assertEqual(code, 0, err)
+        self.assertIn("right: x=1500 y=0 500x1000 (монитор 1: MON2)", out)
+
+    def test_apply_sees_zones_of_the_profile_default_set_too(self):
+        # Зоны `big` нет в `[zones:MON2]`, но она есть в `[zones]` профиля —
+        # Grid откатывается на этот набор, а не на active config.
+        code, out, err = self.run_cli("apply", "big", "--monitor", "MON2")
+        self.assertEqual(code, 0, err)
+        self.assertIn("big: x=1000 y=0 1000x1000", out)
+
+    def test_apply_rejects_zone_of_another_screen(self):
+        # MON1 не привязан к профилю: зоны `left` там нет — код 3, а не молчаливый промах.
+        code, _out, err = self.run_cli("apply", "left")
+        self.assertEqual(code, 3)
+        self.assertIn("нет зоны 'left'", err)
+        self.assertIn("global", err)
+
+    def test_apply_names_the_screen_profile_in_the_error(self):
+        code, _out, err = self.run_cli("apply", "nosuch", "--monitor", "MON2")
+        self.assertEqual(code, 3)
+        self.assertIn("в сетке экрана MON2 (профиль «wide»)", err)
+
+    def test_apply_falls_back_when_profile_file_is_gone(self):
+        os.remove(self.profile_path)
+        code, out, err = self.run_cli("apply", "global", "--monitor", "MON2")
+        self.assertEqual(code, 0, err)
+        self.assertIn("global: x=1000 y=0 1000x1000", out)
+        self.assertIn("профиля «wide» нет на диске", err)
+        self.assertIn("общим набором зон", err)
+
+    def test_stack_uses_the_screen_profile_zone(self):
+        code, out, err = self.run_cli("stack", "right", "--monitor", "MON2")
+        self.assertEqual(code, 0, err)
+        # Одно окно — вся зона профиля на втором мониторе.
+        self.assertIn("x=1500 y=0 500x1000", out)
+
+    def test_move_finds_the_window_zone_in_the_screen_profile(self):
+        code, out, err = self.run_cli("move", "right", "--window", "0x1")
+        self.assertEqual(code, 0, err)
+        # Окно на MON2 в зоне left профиля; сосед справа — right, а не global.
+        self.assertIn("зона 'left' -> 'right'", out)
+        self.assertIn("монитор 1: MON2", out)
+
+    def test_arrange_uses_the_screen_profile(self):
+        code, out, err = self.run_cli("arrange", "--by", "order")
+        self.assertEqual(code, 0, err)
+        # На MON2 — зоны профиля (left/right), а не `global` активного конфига;
+        # одно окно в зоне занимает её целиком.
+        self.assertIn("зона 'left': x=1000 y=0 500x1000", out)
 
 
 if __name__ == "__main__":
