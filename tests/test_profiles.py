@@ -354,6 +354,41 @@ class TestHeadless(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertEqual(cli("profile", "list", "--conf", conf).stdout.strip(), "")
 
+    def test_cli_profile_rejects_extra_positional_words(self):
+        """Лишнее слово у действия `profile` — ошибка, а не молча съеденный аргумент.
+
+        `profile from-gallery work mine` раньше создавал профиль «work», а `mine`
+        уходило в никуда: ошибка в команде выглядела как успех.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = os.path.join(tmp, "zones.conf")
+            with open(conf, "w", encoding="utf-8") as fh:
+                fh.write(ACTIVE)
+            tiler = os.path.join(ROOT, "zone-tiler.py")
+
+            def cli(*args):
+                return self.run_python(None, tiler, *args, "--conf", conf)
+
+            for action, words in (("from-gallery", ("work", "mine")),
+                                  ("gallery", ("mine",)),
+                                  ("list", ("mine",)),
+                                  ("use", ("demo", "mine")),
+                                  ("show", ("demo", "extra"))):
+                r = cli("profile", action, *words)
+                self.assertEqual(r.returncode, 2, f"profile {action}: {r.stdout}{r.stderr}")
+                self.assertIn("лишнее слово", r.stderr)
+                self.assertIn(words[-1], r.stderr)
+            # Подсказка про `--name` нужна там, где имя и задаётся: у from-gallery.
+            r = cli("profile", "from-gallery", "work", "mine")
+            self.assertIn("--name", r.stderr)
+            # А второе слово у `export` — файл, и оно не лишнее.
+            r = cli("profile", "save", "demo")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            exported = os.path.join(tmp, "demo.json")
+            r = cli("profile", "export", "demo", exported)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertTrue(os.path.exists(exported))
+
     def test_cli_profile_export_import_keeps_zones_rules_keys(self):
         # JSON — обмен, а не второй формат: круг export → rm → import
         # возвращает тот же профиль (зоны, правила, клавиши) под новым именем.

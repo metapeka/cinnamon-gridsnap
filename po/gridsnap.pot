@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.2.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-23 02:17+0300\n"
+"POT-Creation-Date: 2026-11-23 02:20+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -692,6 +692,15 @@ msgstr ""
 
 #: zone-tiler.py
 msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>]"
+msgstr ""
+
+#: zone-tiler.py
+msgid "; имя профиля задаёт --name"
+msgstr ""
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "zone-tiler: profile {action} — лишнее слово «{extra}»: столько аргументов у действия нет{hint}"
 msgstr ""
 
 #: zone-tiler.py

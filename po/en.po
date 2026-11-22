@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-23 02:17+0300\n"
+"POT-Creation-Date: 2026-11-23 02:20+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -691,6 +691,15 @@ msgstr "apply it with: zone-tiler.py profile use {name}"
 #: zone-tiler.py
 msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>]"
 msgstr "zone-tiler: profile - name an action: list | show <name> | save <name> | use <name> | use-monitors | rm <name> | export <name> [file | --json] | import <file> [--name <name>] | gallery | from-gallery <id> [--name <name>]"
+
+#: zone-tiler.py
+msgid "; имя профиля задаёт --name"
+msgstr "; the profile name is set by --name"
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "zone-tiler: profile {action} — лишнее слово «{extra}»: столько аргументов у действия нет{hint}"
+msgstr "zone-tiler: profile {action} - extra word '{extra}': the action takes no such argument{hint}"
 
 #: zone-tiler.py
 msgid "файл JSON-профиля"

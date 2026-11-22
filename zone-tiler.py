@@ -3326,6 +3326,33 @@ PROFILE_ACTIONS = (
     "from-gallery",
 )
 
+# Действия `profile`, которые не берут ни одного позиционного слова: у них
+# лишним считается и первое слово после действия. `use-monitors` здесь нет: у
+# него своя проверка имени (`_profile_use_monitors`) с более точной подсказкой
+# про секцию `[monitors]`.
+PROFILE_NO_ARG_ACTIONS = ("list", "gallery")
+
+
+def profile_extra_word(args, action):
+    """Лишнее позиционное слово у действия `profile` — оно же причина отказа.
+
+    Слов у действия не больше, чем описано в справке: у `export` второе слово —
+    файл, у `list`/`gallery` слов нет вовсе, у остальных только одно (имя или
+    id). Молча проглоченный аргумент — ошибка в команде, которая выглядит как
+    успех: `profile from-gallery work mine` создавал профиль «work», а `mine`
+    уходило в никуда.
+    """
+    if action == "export":
+        words = ()
+    elif action in PROFILE_NO_ARG_ACTIONS:
+        words = (args.name, args.target)
+    else:
+        words = (args.target,)
+    for word in words:
+        if (word or "").strip():
+            return word.strip()
+    return ""
+
 
 def _run_hotkeys(conf, quiet=False):
     """Перечитать [keys] из conf и обновить сочетания Cinnamon (best-effort)."""
@@ -3810,6 +3837,16 @@ def cmd_profile(args):
             EXIT_USAGE,
         )
     conf = args.conf
+    extra = profile_extra_word(args, action)
+    if extra:
+        hint = _("; имя профиля задаёт --name") if action == "from-gallery" else ""
+        fail(
+            _(
+                "zone-tiler: profile {action} — лишнее слово «{extra}»: столько "
+                "аргументов у действия нет{hint}"
+            ).format(action=action, extra=extra, hint=hint),
+            EXIT_USAGE,
+        )
     if action == "list":
         for name in zc.list_profiles(conf):
             print(name)
