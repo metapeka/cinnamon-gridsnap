@@ -15,26 +15,84 @@
 </nav>
 <header id="top">
 <h1>Gridsnap</h1>
-<p class="tagline"><!-- translate --></p>
-<p><a class="button" href="#install"><!-- translate --></a></p>
+<p class="tagline">Cinnamon（X11）上的窗口网格：自己画区域，用快捷键把窗口放进去，其余交给守护进程。</p>
+<p><a class="button" href="#install">安装</a></p>
 </header>
 <section id="features">
-<h2><!-- translate --></h2>
-<!-- translate -->
+<h2>它能做什么</h2>
+<ul>
+<li><strong>区域编辑器</strong>：在屏幕画布上画网格 —— 拖动和缩放区域、吸附到边缘和 1/4、1/3、1/2 线、模板、自己的方案。</li>
+<li><strong>一个键把窗口放进区域</strong>：每个区域一个快捷键（默认 <code>Super+Alt+1..4</code>），窗口像素级落进区域，连窗口边框一起补偿。</li>
+<li><strong>守护进程自动布局</strong>：新窗口按 <code>[rules]</code> 规则（WM_CLASS 或标题）自己进区域，不用手点。</li>
+<li><strong>区域内的标签页</strong>：区域里的第二个窗口不会叠成一堆，而是变成标签页，区域上方出现标签条。</li>
+<li><strong>「只留这个区域」模式</strong>：一个键把窗口放进区域，并最小化同一桌面、同一显示器上的其他窗口，再按一次还原。</li>
+<li><strong>热区</strong>：抓住标题栏往网格上拖，网格出现并高亮，松手窗口就位。</li>
+<li><strong>选择器 <code>Super+Z</code></strong>：覆盖层上用方向键选区域，<code>Enter</code> 放入窗口，<code>Esc</code> 取消。</li>
+<li><strong>动作</strong>：把自定义命令绑到按键（<code>[action:&lt;名字&gt;]</code>），命令能拿到窗口、区域和像素范围。</li>
+<li><strong>多显示器</strong>：每台屏幕有自己的区域集合和方案（<code>[monitors]</code>），窗口在它所在的那台屏幕上布局。</li>
+<li><strong>方案</strong>：布局按屏幕和按工作桌面保存（<code>[workspaces]</code>），一条命令或一个按键就能切换。</li>
+</ul>
 </section>
 <section id="screenshots">
-<h2><!-- translate --></h2>
-<img class="shot" src="assets/editor.png" alt="区域编辑器">
+<h2>截图</h2>
+<img class="shot" src="assets/editor.png" alt="区域编辑器：屏幕上的区域和右侧的区域列表">
 <img class="shot" src="assets/demo.gif" alt="编辑器把窗口放进区域">
 </section>
 <section id="install">
-<h2><!-- translate --></h2>
-<!-- translate -->
+<h2>安装</h2>
+<p>两条互相独立的路径，装的是同一份代码；版本号取自 <code>zone-tiler.py</code>/<code>zone-daemon.py</code> 里的 <code>VERSION</code>。</p>
+<h3>自己用（从仓库安装）</h3>
+<p>除了 <code>python3</code>、PyGObject 和 <code>libX11</code>（Debian 里已经装好）什么都不需要：</p>
+<pre><code>./install-launcher.sh             # 菜单里的快捷方式和图标
+./install-launcher.sh --desktop   # 再加一个桌面快捷方式
+./install-daemon.sh               # 自动启动自动布局守护进程
+python3 setup-hotkeys.py          # 在 Cinnamon 中注册快捷键</code></pre>
+<h3>以软件包安装</h3>
+<p>Debian/Ubuntu 用 <code>.deb</code>，Arch 用 AUR 配方，发布版 <code>.tar.gz</code> 适用于任何系统：</p>
+<pre><code>make deb          # dist/gridsnap_&lt;版本&gt;_all.deb
+sudo apt install ./dist/gridsnap_&lt;版本&gt;_all.deb
+
+make tarball      # dist/gridsnap-&lt;版本&gt;.tar.gz
+tar -xzf gridsnap-&lt;版本&gt;.tar.gz &amp;&amp; cd gridsnap-&lt;版本&gt;
+./install.sh      # ~/.local：代码、命令、菜单快捷方式、图标</code></pre>
+<p>守护进程、<code>zones.conf</code> 和各种标志的完整说明见 <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.zh.md">README</a>。</p>
 </section>
 <section id="docs">
-<h2><!-- translate --></h2>
-<!-- translate -->
+<h2>文档</h2>
+<ul>
+<li>README：<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.md">English</a> ·
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.zh.md">简体中文</a> ·
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.ru.md">Русский</a> ——
+安装、<code>zones.conf</code>、守护进程、标签页、动作、热区、选择器、快捷键、面板小程序、故障排查。</li>
+<li>规格说明：<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/zone-tiler.md">布局器</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/zone-editor.md">区域编辑器</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/daemon.md">守护进程</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/zone-ipc.md">IPC</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/zone-tabs.md">标签页</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/actions.md">动作</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/zone-picker.md">选择器</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/zone-hotcorners.md">热区</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/hotkeys.md">快捷键</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/profiles.md">方案</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/reflow.md">reflow</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/launcher.md">快捷方式</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/applet.md">面板小程序</a>。</li>
+<li>man 手册页（软件包安装后可用 <code>man gridsnap</code>）：
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/man/gridsnap.1">gridsnap(1)</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/man/gridsnap-tiler.1">gridsnap-tiler(1)</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/man/gridsnap-daemon.1">gridsnap-daemon(1)</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/man/gridsnap-editor.1">gridsnap-editor(1)</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/man/gridsnap-picker.1">gridsnap-picker(1)</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/man/gridsnap-ctl.1">gridsnap-ctl(1)</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/man/setup-hotkeys.1">setup-hotkeys(1)</a>。</li>
+<li>架构和计划：<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/SPEC.md">SPEC.md</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/architecture.md">docs/architecture.md</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/ROADMAP.md">docs/ROADMAP.md</a>。</li>
+</ul>
 </section>
-<footer><!-- translate --></footer>
+<footer>
+<p>本译文由机器生成，尚未经母语者校对。</p>
+<p>Gridsnap —— Cinnamon（X11）的窗口网格。代码和文档：<a href="https://github.com/metapeka/cinnamon-gridsnap">metapeka/cinnamon-gridsnap</a>。</p>
+</footer>
 </body>
 </html>
