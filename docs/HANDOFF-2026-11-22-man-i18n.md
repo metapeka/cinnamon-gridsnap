@@ -1,0 +1,131 @@
+# Передача: волна «перевод man-страниц и лицензия MIT» (22.11.2026)
+
+Предыдущая — `HANDOFF-2026-11-22-i18n.md` (локализация интерфейса). Здесь состояние на конец следующей
+сессии. Контекст прежней сессии в новый чат не переносится — всё существенное ниже.
+
+## Где что лежит
+
+| Что | Где |
+|---|---|
+| Проект (живой код) | `/home/db1/thinkrail/gridsnape`, ветка `main` = `e02c3a0` (влит PR #41) |
+| Репозиторий на GitHub | `metapeka/cinnamon-gridsnap` |
+| Влитый PR этой волны | **#41 «Перевод man-страниц: английский и китайский, лицензия MIT»** |
+| Правила работы агентов | `AGENTS.md` в корне — читается автоматически, начинать с него |
+| План | `docs/ROADMAP.md`: перевод man закрыт, лицензия объявлена, долг спек закрыт |
+| Спека конвейера man | **`docs/specs/man-i18n.md`** — всё «почему» про po4a, раскладку установки, точки переноса |
+| Спеки конфига и навигации | `docs/specs/zone_config.md`, `docs/specs/zone_picker_nav.md` (были висячие связи) |
+| Лицензия | `LICENSE` (MIT, `metapeka <188594035+metapeka@users.noreply.github.com>`) |
+| Проверки | `python3 -m unittest discover -s tests` → **1275 OK** (4 skipped); дымовые `tests/smoke*.sh` — **11 сценариев**, все зелёные |
+| Наблюдатели | `tools/ci-watch.sh --pr N`, `tools/worker-watch.sh <dispatch-id>` |
+
+## Что сделано (PR #41)
+
+Man-страницы перестали быть русскими при любой локали, объявлена лицензия, закрыт долг спек.
+
+1. **Лицензия.** `LICENSE` (MIT) в корне, раздел «13. Лицензия» в трёх README, полный текст в
+   `debian/copyright`, `license=('MIT')` в `PKGBUILD` (и `LICENSE` ставится всеми путями, в AUR —
+   в `/usr/share/licenses/gridsnap/`).
+2. **Источник догнал код.** В `man/gridsnap.1` не было `profile export`/`profile import`, ключей
+   `--json`/`--name` и целых секций `[move]`, `[workspaces]`, `[monitors]`. Это сделано **до**
+   перевода, иначе устаревание закрепилось бы на трёх языках.
+3. **Конвейер.** `man/po4a.conf`; шаблон `po/man/gridsnap.1.pot` (207 записей) и каталоги
+   `po/man/en.po`, `po/man/zh_CN.po`; цели `make man-pot` / `man` / `check-man-i18n`. `en` и `zh_CN`
+   собирает po4a, **русская страница кладётся копией источника** (po4a переливает roff: пустой
+   каталог даёт 44935 байт против 44400 у источника), английская — язык по умолчанию.
+4. **Точки переноса для CJK.** `tools/man-cjk.py` ставит `\:` везде, где рядом с символом есть
+   CJK. Без этого китайская страница выходила строками по 190+ колонок и `man --warnings` сыпал
+   «cannot break line».
+5. **Установка.** `install.sh` (и `--uninstall`, и откат на русский источник, если сборки нет),
+   `make deb`, штатный `debian/` (`po4a` в `Build-Depends`, `make man` на шаге сборки), `PKGBUILD`
+   (`po4a` в `makedepends`, `build()` зовёт `make man`). Страницы ложатся в
+   `/usr/share/man/[<язык>/]man1/`; `.so`-псевдонимы работают на всех трёх языках.
+6. **Тесты.** `tests/test_man_i18n.py`: полнота каталогов, двусторонняя сверка ключей `--…` с
+   `--help` семи команд, секции `zones.conf` в `.SS`, реальность примеров, скелет roff, байт-в-байт
+   русская страница и проверка собранных страниц «как у пользователя» (временный `MANPATH` +
+   локаль: выбор языка, ширина в колонках, отсутствие «cannot break line»).
+7. **CI.** Job «Каталоги переводов (gettext и po4a)» ставит `po4a`, `python3-gi` и `locales`,
+   генерирует `zh_CN.UTF-8`/`ru_RU.UTF-8`, гоняет `check-man-i18n` и проверяет, что `make man-pot` не
+   меняет `po/man/`; jobs `package` и `debian` проверяют страницы трёх языков и `LICENSE`.
+
+## Что важно знать про эту волну (грабли)
+
+- **po4a переливает roff.** Пустой каталог воспроизводит источник не байт-в-байт: абзацы
+  переливаются, `.B x` становится `\fBx\fP`, `.TP` превращается в `.TP `. Поэтому русскую страницу
+  нельзя собирать po4a — она копируется.
+- **groff не разрывает строку между иероглифами.** В CJK нет пробелов, а без пробела у troff нет
+  точки переноса. `\:` — точка переноса нулевой ширины — лечит. Ставить её надо **всюду, где рядом
+  есть CJK** (в том числе рядом с латиницей): список `GRIDSNAP_WINDOW、GRIDSNAP_ZONE` иначе остаётся
+  одним неразрывным куском, и именно на таких списках (а не на прозе) страница вылезала.
+- **Проверять man-страницу через `man путь/zh_CN/man1/…` нельзя** — man-db ведёт себя иначе, когда
+  ему дают файл из каталога локали, и замер врёт. На этом уже дважды ловили ложную тревогу.
+- **Короткий временный `MANPATH` не годится:** под `<tmp>` man-db не включает языковые макросы
+  groff, и страница форматируется не так, как у пользователя. Проверка с коротким путём была
+  **зелёной на сломанной странице**. Нужен путь вида `<tmp>/usr/share/man`.
+- **Одно предупреждение у китайской страницы остаётся** — «cannot adjust line»: troff не может
+  растянуть строку без пробелов. Обычный `man` предупреждений не печатает, и порог проверки его
+  допускает, а «cannot break line» — нет.
+- **`lintian` по-прежнему говорит `no-manual-page`** про `usr/bin/gridsnap-hotcorners`. Это
+  унаследованный хвост (команда есть, страницы нет; в `man/gridsnap.1` она только в NAME и
+  SYNOPSIS). Записан хвостом в `docs/ROADMAP.md`.
+- **`install.sh` из чекаута без `make man`** ставит русский источник в `man1/` и пишет об этом
+  строкой: без сборки английских страниц нет, а молча подсунуть русскую вместо английской нельзя.
+- **`.mso ja.tmac` не нужен** — им можно было бы включить CJK-переносы, но проверено, что под
+  настоящим `MANPATH` хватает `\:` и страница укладывается в 79 колонок.
+
+## Как проверить, что всё живо
+
+```bash
+cd /home/db1/thinkrail/gridsnape            # после git pull
+env -u DISPLAY python3 -m unittest discover -s tests      # 1275 OK (4 skipped)
+make check-i18n                                           # каталоги gettext в порядке
+sudo apt-get install -y po4a                              # если ещё нет
+make check-man-i18n                                       # 13 тестов + сборка страниц
+
+# страницы как у пользователя
+tmp=$(mktemp -d); mkdir -p "$tmp/usr/share/man"
+make man >/dev/null
+cp -a man/build/en/man1 "$tmp/usr/share/man/"; cp -a man/build/ru "$tmp/usr/share/man/"; cp -a man/build/zh_CN "$tmp/usr/share/man/"
+for loc in C ru_RU.UTF-8 zh_CN.UTF-8; do LC_ALL=$loc MANPATH=$tmp/usr/share/man man gridsnap | head -3; done
+LC_ALL=zh_CN.UTF-8 MANPATH=$tmp/usr/share/man man --warnings -E UTF-8 gridsnap 2>&1 >/dev/null | grep -c 'cannot break line'   # 0
+
+# установка и снятие
+tmp2=$(mktemp -d); make tarball >/dev/null && tar -xzf dist/gridsnap-0.1.0.tar.gz -C "$tmp2"
+"$tmp2"/gridsnap-0.1.0/install.sh --prefix "$tmp2/prefix" --no-launcher
+find "$tmp2/prefix/share/man" -type f | wc -l             # 21
+"$tmp2"/gridsnap-0.1.0/install.sh --uninstall --prefix "$tmp2/prefix"
+
+make deb && dpkg-deb -c dist/gridsnap_*.deb | grep 'share/man'    # 21 файл в трёх языках
+
+dbus-run-session -- sh tests/run-smoke.sh tests/smoke.sh
+sh tools/ci-watch.sh --pr <N>                             # CI: 0 зелено / 1 упало / 2 зависло
+```
+
+На машине этой сессии пришлось доставить `po4a` (сборочная зависимость) и сгенерировать локали
+`zh_CN.UTF-8` и `ru_RU.UTF-8` (`sudo localedef -i zh_CN -f UTF-8 zh_CN.UTF-8`) — без них языковые
+проверки man-страниц пропускаются.
+
+## Открытые хвосты и мелочи
+
+- **`gridsnap-hotcorners` без man-страницы** — `lintian` `no-manual-page`; нужен `.so`-псевдоним и
+  раздел про горячие края в `man/gridsnap.1` (новый текст сразу в трёх языках). Запись в
+  `docs/ROADMAP.md`.
+- **`debian/control`** (описание пакета) остаётся русским — решим при работе над архивом Debian.
+- **Китайские тексты машинные** — и интерфейс, и man-страница; носителем не вычитаны (пометка в
+  README и на сайте).
+- **`dpkg-buildpackage` локально прогонялся** и собирается; в CI job `debian` остаётся
+  `continue-on-error: true`.
+- **Ветка `fix/actions-contract`** (`7ff53a3`) — по решению владельца отревьюена и влита отдельным
+  PR (см. ниже, если он уже влит).
+- **Записи Orca** от прошлых волн (failed-диспачи, старые воркспейсы) остаются: Orca не даёт удалять
+  попытки. Воркспейсы этой волны (`man-i18n-home`, `man-i18n-en`, `man-i18n-zh`, `man-i18n-pack`)
+  убираются после мержа вместе с ветками.
+- **`README.ru.md` — источник правды для переводов.** Правя русский README, правьте и два перевода:
+  `tests/test_docs_languages.py` поймает только расхождение разделов, а не текстов.
+
+## Очередь: что дальше (`docs/ROADMAP.md`)
+
+1. **DPI (HiDPI-масштаб).** Отложено: нет железа проверить; но проверяется и без железа —
+   `Xvfb` + `GDK_SCALE=2`/`GDK_DPI_SCALE`, дымовые сценарии уже работают на Xvfb.
+2. **Wayland-бэкенд.** Отдельный слой поверх `niri msg`/`hyprctl`/`swaymsg`; целиться первым в niri.
+3. **Пакет в архив Debian.** Лицензия объявлена — остались ITP-баг, спонсор и ревью.
+4. **Man-страница для `gridsnap-hotcorners`** (см. хвосты).
