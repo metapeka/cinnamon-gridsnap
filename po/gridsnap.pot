@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 07:15+0300\n"
+"POT-Creation-Date: 2026-11-22 07:47+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1835,6 +1835,28 @@ msgstr ""
 msgid "в JSON-профиле keys должен быть объектом {зона: сочетание}"
 msgstr ""
 
+#: zone_geom.py
+msgid "zone_geom: в наборе не зона, а {zone!r}"
+msgstr ""
+
+#: zone_geom.py
+msgid "общий набор [zones] — его наследуют остальные мониторы"
+msgstr ""
+
+#: zone_geom.py
+#, python-brace-format
+msgid "свой набор [zones:{monitor}]"
+msgstr ""
+
+#: zone_geom.py
+msgid "наследует [zones]"
+msgstr ""
+
+#: zone_geom.py
+#, python-brace-format
+msgid "{text} · нет на экране"
+msgstr ""
+
 #: zone-picker.py
 msgid "стрелки — выбор · Enter — вложить · Esc — отмена"
 msgstr ""
@@ -2035,6 +2057,68 @@ msgstr ""
 
 #: zone-picker.py
 msgid "zone-picker: сетка {}"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "строка не в UTF-8: {error}"
+msgstr ""
+
+#: zone_ipc.py
+msgid "строка протокола должна быть str или bytes"
+msgstr ""
+
+#: zone_ipc.py
+msgid "пустая строка протокола"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "не разобрать JSON: {error}"
+msgstr ""
+
+#: zone_ipc.py
+msgid "команда должна быть JSON-объектом"
+msgstr ""
+
+#: zone_ipc.py
+msgid "в команде нет непустого строкового поля 'cmd'"
+msgstr ""
+
+#: zone_ipc.py
+msgid "строка длиннее предела протокола"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "неизвестная команда: {name}"
+msgstr ""
+
+#: zone_ipc.py
+msgid "обработчик вернул не объект"
+msgstr ""
+
+#: zone_ipc.py
+msgid "соединение закрыто без ответа"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "не разобрать ответ: {error}"
+msgstr ""
+
+#: zone_ipc.py
+msgid "ответ должен быть JSON-объектом"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "не создать каталог сокета {dir}: {error}"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "сокет {path} уже обслуживается другим процессом"
 msgstr ""
 
 #: zone_actions.py
@@ -2274,6 +2358,11 @@ msgstr ""
 #: setup-hotkeys.py
 #, python-brace-format
 msgid "setup-hotkeys: установлено сочетаний: {count}"
+msgstr ""
+
+#: make-icon.py
+#, python-brace-format
+msgid "иконки Gridsnap: {sizes}"
 msgstr ""
 
 #: gridsnap-ctl

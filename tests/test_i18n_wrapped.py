@@ -31,6 +31,10 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 # Файлы с пользовательскими строками (апплет — JavaScript, у него свой тест).
+# Список — все модули приложения, а не только те, где строки были на момент
+# обёртки: иначе следующая строка, добавленная в «тихий» модуль, осталась бы
+# русской только на русском (так и случилось с `zone_geom.set_origin_text`,
+# который видно в статусе редактора и на демонстрации).
 SOURCES = (
     "zone-editor.py",
     "zone-picker.py",
@@ -40,7 +44,14 @@ SOURCES = (
     "zone-daemon.py",
     "zone_config.py",
     "zone_actions.py",
+    "zone_geom.py",
+    "zone_ipc.py",
+    "zone_reflow.py",
+    "zone_tabs.py",
+    "zone_picker_nav.py",
+    "zone_tabstrip_nav.py",
     "setup-hotkeys.py",
+    "make-icon.py",
     "gridsnap-ctl",
 )
 
