@@ -15,6 +15,12 @@
     gridsnap-ctl focus --off                # выйти из режима
     gridsnap-ctl reload                     # демон перечитает zones.conf
     gridsnap-ctl quit                       # попросить демон завершиться
+    gridsnap-ctl watch                      # подписаться и печатать события
+
+`watch` — не команда-запрос: соединение остаётся открытым, демон шлёт в него по
+строке JSON на событие (`window-appeared`/`window-closed`/`window-moved`,
+`focus-on`/`focus-off`), а отписка — закрыть соединение (`Ctrl-C`). Строки
+печатаются как есть — фильтровать и разбирать их можно снаружи (`jq`, `grep`).
 
 Путь сокета — по умолчанию `$XDG_RUNTIME_DIR/gridsnap/daemon.sock`, как у
 демона; переопределяется `--socket PATH` (тот же флаг у демона).
@@ -46,6 +52,18 @@ VERSION = "0.2.0"
 TIMEOUT = 5.0
 
 
+class _DevNull:
+    """Приёмник, который ничего не печатает: `watch --quiet` без строки о подписке."""
+
+    @staticmethod
+    def write(_text):
+        return 0
+
+    @staticmethod
+    def flush():
+        return None
+
+
 def send_command(request, path, timeout=TIMEOUT):
     """Отправить одну команду и вернуть ответ-dict.
 
@@ -60,6 +78,81 @@ def send_command(request, path, timeout=TIMEOUT):
         return zone_ipc.read_response(conn)
     finally:
         conn.close()
+
+
+def watch(path, stream=None, notice=None, timeout=TIMEOUT):
+    """Подписаться на события демона и печатать их до обрыва или `Ctrl-C`.
+
+    Подписка (`subscribe`) — единственная команда, после которой соединение
+    только на чтение: демон шлёт по строке JSON на событие, отписка — закрыть
+    соединение. Строки печатаются как есть и сразу (`flush`): `watch` и смотрят
+    глазами, и служит подписчиком скриптам и дымовому тесту. Человеку — одна
+    строка о подписке в `stderr`, чтобы поток в `stdout` оставался чистым.
+
+    Возвращает код `EXIT_OK` или `EXIT_FAIL`; `KeyboardInterrupt` и закрытый
+    приёмник (`gridsnap-ctl watch | head`) — не ошибка, а конец наблюдения.
+    """
+    stream = stream if stream is not None else sys.stdout
+    notice = notice if notice is not None else sys.stderr
+    conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        conn.settimeout(timeout)
+        conn.connect(path)
+        conn.sendall(zone_ipc.encode_message({"cmd": "subscribe"}))
+        answer = zone_ipc.read_response(conn)
+        if not answer.get("ok"):
+            print(
+                _("gridsnap-ctl: демон отклонил подписку: {error}").format(
+                    error=answer.get("error", _("команда отклонена"))
+                ),
+                file=notice,
+            )
+            return EXIT_FAIL
+        groups = ", ".join(str(g) for g in answer.get("subscribed") or [])
+        print(
+            _("gridsnap-ctl: подписка принята ({groups}) — Ctrl-C для выхода").format(
+                groups=groups
+            ),
+            file=notice,
+            flush=True,
+        )
+        conn.settimeout(None)  # события идут, когда захотят
+        reader = zone_ipc.LineReader()
+        while True:
+            data = conn.recv(4096)
+            if not data:  # демон закрыл соединение (завершился)
+                tail = reader.tail().strip()
+                if tail:
+                    _print_event(tail, stream)
+                return EXIT_OK
+            for line in reader.feed(data):
+                if line.strip():
+                    _print_event(line, stream)
+    except BrokenPipeError:  # приёмник закрылся: watch | head — не ошибка
+        return EXIT_OK
+    except zone_ipc.ProtocolError as exc:
+        print(
+            _("gridsnap-ctl: демон ответил непонятно: {error}").format(error=exc),
+            file=notice,
+        )
+        return EXIT_FAIL
+    except OSError as exc:
+        print(
+            _(
+                "gridsnap-ctl: нет связи с демоном по сокету {path} ({error}). "
+                "Запущен ли zone-daemon.py?"
+            ).format(path=path, error=exc),
+            file=notice,
+        )
+        return EXIT_FAIL
+    finally:
+        conn.close()
+
+
+def _print_event(line, stream):
+    """Напечатать строку события как есть; битую — тоже (разберёт потребитель)."""
+    text = line.decode("utf-8", "replace") if isinstance(line, bytes) else str(line)
+    print(text, file=stream, flush=True)
 
 
 def build_request(args):
@@ -118,10 +211,10 @@ def main(argv=None):
     )
     ap.add_argument(
         "command",
-        choices=["status", "apply", "focus", "reload", "quit"],
+        choices=["status", "apply", "focus", "reload", "quit", "watch"],
         help=_(
             "status — состояние; apply — вложить окно в зону; focus — режим «только эта "
-            "зона»; reload — перечитать конфиг; quit — выйти"
+            "зона»; reload — перечитать конфиг; quit — выйти; watch — слушать события"
         ),
     )
     ap.add_argument(
@@ -150,8 +243,20 @@ def main(argv=None):
     ap.add_argument("--version", action="version", version=f"gridsnap-ctl {VERSION}")
     args = ap.parse_args(argv)
 
-    request = build_request(args)
     path = args.socket or zone_ipc.default_socket_path()
+    if args.command == "watch":
+        if args.zone or args.window is not None or args.monitor is not None or args.off:
+            print(
+                _("gridsnap-ctl: у watch нет зоны/окна/монитора"),
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
+        try:
+            return watch(path, notice=None if not args.quiet else _DevNull())
+        except KeyboardInterrupt:
+            return EXIT_OK
+
+    request = build_request(args)
     try:
         response = send_command(request, path)
     except zone_ipc.ProtocolError as exc:

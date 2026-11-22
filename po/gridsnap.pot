@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.2.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 20:54+0300\n"
+"POT-Creation-Date: 2026-11-22 21:48+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -494,6 +494,15 @@ msgid "окно 0x{window:x}: зона '{here}' -> '{zone}': x={x} y={y} {w}x{h}
 msgstr ""
 
 #: zone-tiler.py
+msgid "демон отклонил arrange"
+msgstr ""
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "окно {window}: демон не переставил его ({error})"
+msgstr ""
+
+#: zone-tiler.py
 msgid "zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)"
 msgstr ""
 
@@ -824,6 +833,11 @@ msgstr ""
 
 #: zone-daemon.py
 #, python-brace-format
+msgid "не удалось разослать событие '{kind}': {exc}"
+msgstr ""
+
+#: zone-daemon.py
+#, python-brace-format
 msgid "не удалось определить активный стол: {exc}"
 msgstr ""
 
@@ -997,17 +1011,35 @@ msgstr ""
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "монитора {index} нет (всего {total})"
+msgid "подписка на события: {groups}"
+msgstr ""
+
+#: zone-daemon.py
+msgid "команда arrange: нужен непустой список 'placements'"
+msgstr ""
+
+#: zone-daemon.py
+msgid "запись раскладки должна быть объектом"
 msgstr ""
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "нет зоны '{zone}'. Есть: {known}"
+msgid "не понять окно '{raw}'"
 msgstr ""
 
 #: zone-daemon.py
 #, python-brace-format
 msgid "не удалось определить монитор окна 0x{window:x}"
+msgstr ""
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "нет зоны '{zone}'"
+msgstr ""
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "не прочитать окно 0x{window:x}: {exc}"
 msgstr ""
 
 #: zone-daemon.py
@@ -1018,6 +1050,16 @@ msgstr ""
 #: zone-daemon.py
 #, python-brace-format
 msgid "не удалось вложить окно 0x{window:x} в зону '{zone}'"
+msgstr ""
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "монитора {index} нет (всего {total})"
+msgstr ""
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "нет зоны '{zone}'. Есть: {known}"
 msgstr ""
 
 #: zone-daemon.py
@@ -2235,6 +2277,21 @@ msgid "в команде нет непустого строкового поля
 msgstr ""
 
 #: zone_ipc.py
+#, python-brace-format
+msgid "неизвестный вид события '{kind}'"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "поле 'events' должно быть непустым списком групп: {known}"
+msgstr ""
+
+#: zone_ipc.py
+#, python-brace-format
+msgid "неизвестная группа событий '{item}': можно {known}"
+msgstr ""
+
+#: zone_ipc.py
 msgid "строка длиннее предела протокола"
 msgstr ""
 
@@ -2519,6 +2576,30 @@ msgid "иконки Gridsnap: {sizes}"
 msgstr ""
 
 #: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: демон отклонил подписку: {error}"
+msgstr ""
+
+#: gridsnap-ctl
+msgid "команда отклонена"
+msgstr ""
+
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: подписка принята ({groups}) — Ctrl-C для выхода"
+msgstr ""
+
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: демон ответил непонятно: {error}"
+msgstr ""
+
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: нет связи с демоном по сокету {path} ({error}). Запущен ли zone-daemon.py?"
+msgstr ""
+
+#: gridsnap-ctl
 msgid "gridsnap-ctl: для apply укажите зону, например: apply main"
 msgstr ""
 
@@ -2544,7 +2625,7 @@ msgid "Примеры: gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ct
 msgstr ""
 
 #: gridsnap-ctl
-msgid "status — состояние; apply — вложить окно в зону; focus — режим «только эта зона»; reload — перечитать конфиг; quit — выйти"
+msgid "status — состояние; apply — вложить окно в зону; focus — режим «только эта зона»; reload — перечитать конфиг; quit — выйти; watch — слушать события"
 msgstr ""
 
 #: gridsnap-ctl
@@ -2576,20 +2657,10 @@ msgid "ничего не печатать при успехе"
 msgstr ""
 
 #: gridsnap-ctl
-#, python-brace-format
-msgid "gridsnap-ctl: демон ответил непонятно: {error}"
-msgstr ""
-
-#: gridsnap-ctl
-#, python-brace-format
-msgid "gridsnap-ctl: нет связи с демоном по сокету {path} ({error}). Запущен ли zone-daemon.py?"
+msgid "gridsnap-ctl: у watch нет зоны/окна/монитора"
 msgstr ""
 
 #: gridsnap-ctl
 #, python-brace-format
 msgid "gridsnap-ctl: {error}"
-msgstr ""
-
-#: gridsnap-ctl
-msgid "команда отклонена"
 msgstr ""

@@ -208,6 +208,11 @@ jobs:
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-focus.sh
       - name: Дымовой тест вкладок в зоне
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-tabs.sh
+      # Подписка на события: свой Xvfb, свой демон и подписчик
+      # (`gridsnap-ctl watch`), проверка window-appeared/closed/moved,
+      # focus-on/off и того, что обрыв подписчика демон не роняет.
+      - name: Дымовой тест подписки на события демона
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-events.sh
       - name: Дымовой тест действий
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-actions.sh
       - name: Дымовой тест привязки профиля к экрану

@@ -614,6 +614,7 @@ class Daemon:
         active_window=None,
         strip=None,
         monitor_outputs=None,
+        subscribers=None,
         verbose=False,
     ):
         self.conf_path = conf_path or tiler.default_conf()
@@ -649,6 +650,12 @@ class Daemon:
         # Полоса вкладок — отдельный GTK-процесс (`TabStripProcess`) или None:
         # без неё вкладки работают, просто нет подсказки на экране.
         self.strip = strip
+        # Подписчики на события (`zone_ipc.Subscribers`): один и тот же реестр
+        # держит и слушающий сокет (`main` передаёт его в `Server`), и рассылка
+        # (`_emit`). Инъекция — для юнит-тестов без сокета.
+        self.subscribers = (
+            subscribers if subscribers is not None else zone_ipc.Subscribers()
+        )
         # Высота полосы из `[tabs]`; нет секции или мусор — умолчание ядра.
         self.tabs_height = read_tabs_height(self.grid.conf)
         # Последний отданный полосе снимок: одинаковые не пишем повторно.
@@ -717,6 +724,44 @@ class Daemon:
     def log(self, message):
         if self.verbose:
             print(message, flush=True)
+
+    # -- события наружу
+
+    def _emit(self, kind, build):
+        """Разослать событие подписчикам; без них строка и не строится.
+
+        `build` — замыкание, собирающее строку протокола: события идут на каждое
+        окно, а подписчиков обычно нет, поэтому JSON собирается только тогда,
+        когда его кому-то посылать. Сбой рассылки (чужой клиент) демон не роняет.
+        """
+        subscribers = getattr(self, "subscribers", None)
+        if subscribers is None or not subscribers.wants(kind):
+            return 0
+        try:
+            return subscribers.broadcast(kind, build())
+        except (Exception, SystemExit) as exc:
+            self.log(
+                _("не удалось разослать событие '{kind}': {exc}").format(
+                    kind=kind, exc=exc
+                )
+            )
+            return 0
+
+    def _emit_appeared(self, win):
+        """Окно появилось в `_NET_CLIENT_LIST`; зона — куда его уложили (или None)."""
+        self._emit(
+            "window-appeared",
+            lambda: zone_ipc.event_window_appeared(
+                win,
+                self.windows.get(win),
+                self.win_workspace.get(win),
+                self.win_monitor.get(win),
+            ),
+        )
+
+    def _emit_closed(self, win, zone):
+        """Окно ушло из списка клиентов; `zone` — где оно стояло в последний раз."""
+        self._emit("window-closed", lambda: zone_ipc.event_window_closed(win, zone))
 
     # -- рабочие столы
 
@@ -1040,6 +1085,12 @@ class Daemon:
         X-сервера (например, исчерпаны соединения), а он не подкласс
         `Exception`. `KeyboardInterrupt` не перехватываем. Удачная укладка
         запоминается: позже по её рамке видно, что окно вышло из зоны.
+
+        `window-moved` отсюда не шлётся: у этой воронки нет новых координат
+        окна (монитор и стол в трекер пишет вызывающий после `_apply`), а у
+        большинства вызовов зона и не меняется — выравнивание вкладок, возврат
+        reflow-держателя, возврат единственной вкладке всей зоны. Переезд
+        сообщает `_settle_in_zone`: она знает и прежнюю зону, и новую.
         """
         try:
             self.apply(win, rect, label=zone, quiet=True)
@@ -1493,6 +1544,15 @@ class Daemon:
         self.win_class[win] = wm_class
         self._align_stack(stack, rect)
         if previous[0] is not None and previous[0] != zone:
+            # Окно действительно сменило зону (`apply`/`focus` командой,
+            # `arrange`) — это и есть `window-moved`. Выравнивание вкладок и
+            # расширение reflow зону не меняют, поэтому молчат.
+            self._emit(
+                "window-moved",
+                lambda: zone_ipc.event_window_moved(
+                    win, zone, previous=previous[0], workspace=workspace, monitor=wa
+                ),
+            )
             self._collapse_stack(previous[0], previous[1], previous[2])
         self._save_state()
         self._restore_holder(workspace, wa, zone)
@@ -1707,6 +1767,113 @@ class Daemon:
 
     # -- IPC: обработчики команд сокета
 
+    def ipc_subscribe(self, request=None):
+        """Подписка на события: после неё соединение только на чтение.
+
+        Группы разбирает чистый `zone_ipc.parse_subscription`: без поля `events`
+        подписываемся на всё (`window` + `focus`), пустой список — отказ (иначе
+        опечатка молча дала бы поток, которого клиент не ждал). Возвращается
+        `zone_ipc.Subscription`: транспорт по нему оставляет соединение открытым
+        и кладёт его в `self.subscribers`, а демон туда только пишет. Отписка —
+        закрыть соединение.
+        """
+        groups = zone_ipc.parse_subscription(request or {})
+        self.log(_("подписка на события: {groups}").format(groups=", ".join(groups)))
+        return zone_ipc.Subscription(groups)
+
+    def ipc_arrange(self, request):
+        """Разложить окна по зонам, которые назвал клиент (команда `arrange`).
+
+        Какие окна куда встают, решает раскладчик (`zone-tiler.py arrange` — там
+        же выбор `--by` и история `undo`), а **применяет их демон**: иначе его
+        трекер разошёлся бы с раскладкой (закрытие окна запускало бы reflow не
+        туда), а подписчики не увидели бы `window-moved`. Геометрию считает
+        `_settle_in_zone` — ровно как при появлении окна по правилу, поэтому
+        вкладки и полоса считаются по тому же трекеру.
+
+        Запрос: `{"cmd": "arrange", "workspace": N, "placements": [{"window":
+        "0x…", "zone": …, "monitor": [x, y, w, h]}, …]}` (`monitor` и
+        `workspace` необязательны — берутся у окна и текущий). Ответ:
+        `{"arranged": [hex…], "skipped": [{"window": …, "error": …}]}`.
+        """
+        placements = request.get("placements")
+        if not isinstance(placements, list) or not placements:
+            raise ValueError(
+                _("команда arrange: нужен непустой список 'placements'")
+            )
+        workspace = request.get("workspace")
+        if not isinstance(workspace, int):
+            workspace = self.workspace
+        arranged = []
+        skipped = []
+        for item in placements:
+            window, error = self._arrange_one(item, workspace)
+            if error is not None:
+                skipped.append(
+                    {
+                        "window": hex(window) if window is not None else None,
+                        "error": error,
+                    }
+                )
+            else:
+                arranged.append(hex(window))
+        if arranged:
+            self.sync_strips()
+            self._save_state()
+        return {"arranged": arranged, "skipped": skipped}
+
+    def _arrange_one(self, item, workspace):
+        """Поставить одно окно из `arrange`: `(окно, None)` или `(окно, отказ)`.
+
+        Отказ одного окна не отменяет остальные: у раскладчика окна могли
+        исчезнуть между чтением списка и командой. Второй элемент — текст отказа
+        (или `None`, если окно легло в зону).
+        """
+        if not isinstance(item, dict):
+            return None, _("запись раскладки должна быть объектом")
+        raw = item.get("window")
+        try:
+            window = int(raw, 0) if isinstance(raw, str) else int(raw)
+        except (TypeError, ValueError):
+            return None, _("не понять окно '{raw}'").format(raw=raw)
+        zone = item.get("zone")
+        wa = item.get("monitor")
+        try:
+            wa = tuple(int(v) for v in wa) if wa else self._monitor_of(window)
+        except (TypeError, ValueError):
+            wa = None
+        if wa is None:
+            return window, _(
+                "не удалось определить монитор окна 0x{window:x}"
+            ).format(window=window)
+        grid = self._grid_for(workspace, self._output_for(wa))
+        if not isinstance(zone, str) or zone not in grid.all_zone_names():
+            return window, _("нет зоны '{zone}'").format(zone=zone)
+        try:
+            meta = self.read_meta(window)
+        except (Exception, SystemExit) as exc:
+            return window, _("не прочитать окно 0x{window:x}: {exc}").format(
+                window=window, exc=exc
+            )
+        wm_class = getattr(meta, "wm_class", "") or ""
+        if window_excluded(
+            wm_class,
+            getattr(meta, "wm_title", "") or "",
+            getattr(meta, "window_type", ()),
+            grid.ignore or self.grid.ignore,
+        ):
+            return window, _(
+                "окно 0x{window:x} под исключением ([ignore]/служебный тип) — "
+                "не двигаю"
+            ).format(window=window)
+        if self._settle_in_zone(
+            window, zone, wa, workspace, wm_class, grid=grid
+        ) is None:
+            return window, _(
+                "не удалось вложить окно 0x{window:x} в зону '{zone}'"
+            ).format(window=window, zone=zone)
+        return window, None
+
     def build_dispatcher(self):
         """Диспетчер команд сокета с инъекцией обработчиков демона.
 
@@ -1720,6 +1887,8 @@ class Daemon:
                 "focus": self.ipc_focus,
                 "reload": self.ipc_reload,
                 "quit": self.ipc_quit,
+                "subscribe": self.ipc_subscribe,
+                "arrange": self.ipc_arrange,
                 zone_tabs.TABS_NEXT: self.ipc_tabs_next,
                 zone_tabs.TABS_SWITCH: self.ipc_tabs_switch,
             }
@@ -2203,6 +2372,16 @@ class Daemon:
                 total=len(state["minimized"]),
             )
         )
+        # `focus-off` шлётся из единственной воронки выхода: сюда приходят и
+        # toggle/`off`, и исчезновение цели, и завершение демона.
+        self._emit(
+            "focus-off",
+            lambda: zone_ipc.event_focus_off(
+                state.get("zone"),
+                restored=len(restored),
+                total=len(state["minimized"]),
+            ),
+        )
         return restored, remaining, state
 
     def _focus_records(self, windows):
@@ -2412,6 +2591,12 @@ class Daemon:
         for win in self._focus_candidates(window, wa):
             self._focus_minimize(win)
         self.sync_strips()
+        minimized = len(self.focus["minimized"])
+        # `focus-on` шлётся после сворачивания: счётчик — уже итоговый.
+        self._emit(
+            "focus-on",
+            lambda: zone_ipc.event_focus_on(zone, window, minimized=minimized),
+        )
         return {
             "zone": zone,
             "window": hex(window),
@@ -2461,14 +2646,22 @@ class Daemon:
         увидит её занятой и соседей не сдвинет.
         """
         current = set(client_ids)
+        # Зоны на начало прохода: `on_destroy` и `_detach` чистят трекер, а
+        # `window-closed` нужна последняя известная зона окна (у вынесенного
+        # руками окна она в трекере уже другая — потому снимок до всего).
+        zones_before = dict(self.windows)
         # Память прошлого запуска и переезды пользователя — до укладки: окно,
         # которое вынесли из зоны, не должно быть уложено снова.
         self._apply_pending(current)
         self._refresh_detached()
+        previous_seen = set(self.seen)
         new = [win for win in dict.fromkeys(client_ids) if win not in self.seen]
         for win in new:
             self.log(_("новое окно 0x{win:x} в _NET_CLIENT_LIST").format(win=win))
             self.on_map(win)
+            # Событие — после укладки: в нём уже есть зона, стол и монитор окна.
+            # Шлётся и на окно без зоны (под `[ignore]`, без правила).
+            self._emit_appeared(win)
         for win in list(self.windows):
             if win not in current:
                 self.on_destroy(win)
@@ -2481,6 +2674,11 @@ class Daemon:
         # первый проход её не увидит, а режим без цели держать незачем.
         if self.focus is not None and self.focus["target"] not in current:
             self.on_destroy(self.focus["target"])
+        # `window-closed` — на каждое исчезнувшее окно списка, включая те, что в
+        # трекере не были (без правила): подписчику важно, что окно ушло.
+        for win in sorted(previous_seen):
+            if win not in current:
+                self._emit_closed(win, zones_before.get(win))
         self._prune_state(current)
         self.seen = current
         # Состав стопок мог измениться без укладки (окно вынесли руками, вторая
@@ -2855,6 +3053,10 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     `ipc` — слушающий сокет `zone_ipc.Server`: его дескриптор добавляется в тот же
     `select`, а команды обслуживаются между X-событиями; команда `quit` ставит
     `dae.stop_requested`, и цикл завершается.
+
+    Дескрипторы подписчиков (`dae.subscribers`) добавляются в тот же `select`, а
+    то, что они присылают, разбирает `Subscribers.poll`: так обрыв подписчика
+    замечается между X-событиями и демон его забывает, а не пишет в пустоту.
     """
     if x11 is None:
         x11 = tiler.X11()
@@ -2882,9 +3084,13 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
         # Раскладываем окна, уже открытые к запуску (вход в готовую сессию).
         _reconcile_if_known(dae, read_clients)
         while True:
+            subscribers = getattr(dae, "subscribers", None)
+            watch_now = list(watch)
+            if subscribers is not None:
+                watch_now.extend(subscribers.filenos())
             if not x11.x.XPending(x11.dpy):
                 ready, _unused, _unused_again = select.select(
-                    watch, [], [], once_timeout if once else None
+                    watch_now, [], [], once_timeout if once else None
                 )
                 if not ready:
                     break  # once: событий так и не пришло
@@ -2902,6 +3108,9 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
                     )
             if ipc is not None:
                 _serve_ipc(dae, ipc)
+            if subscribers is not None:
+                # Обрыв подписчика — не событие X: замечаем его здесь.
+                subscribers.poll()
             if getattr(dae, "stop_requested", False):
                 break
             if once and handled:
@@ -2967,7 +3176,9 @@ def main(argv=None):
     if not args.no_socket:
         path = args.socket or zone_ipc.default_socket_path()
         try:
-            server = zone_ipc.Server(path, dae.build_dispatcher())
+            server = zone_ipc.Server(
+                path, dae.build_dispatcher(), subscribers=dae.subscribers
+            )
         except OSError as exc:
             print(
                 "zone-daemon: " + _("IPC-сокет: {exc}").format(exc=exc),

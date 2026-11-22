@@ -475,6 +475,7 @@ python3 gridsnap-ctl focus main                  # 「只留这个区域」模�
 python3 gridsnap-ctl focus --off                 # 退出该模式
 python3 gridsnap-ctl reload                      # 守护进程重新读取 zones.conf
 python3 gridsnap-ctl quit                        # 停掉守护进程
+python3 gridsnap-ctl watch                       # 监听守护进程事件（每个事件一行 JSON）
 ```
 
 协议是每条命令一行 JSON，回答也是 JSON（`{"ok": true, ...}` 或
@@ -482,6 +483,22 @@ python3 gridsnap-ctl quit                        # 停掉守护进程
 断开）不会让守护进程崩溃 —— 它记日志并继续盯着窗口。`apply` 会写进守护进程的跟踪表，
 因此之后关闭窗口会照常触发 reflow。软件包安装时客户端就是命令
 `gridsnap-ctl`（`.deb` 和 `install.sh` 都会把它放到 `$PREFIX/bin`）。
+
+守护进程还会**主动讲述发生了什么**。客户端在单独的连接里发送 `{"cmd": "subscribe"}`，收到
+`{"ok": true, "subscribed": [...]}`；此后这个连接只用于读取 —— 守护进程每发生一个事件就往
+里面写一行 JSON：
+
+```json
+{"event": "window-appeared", "window": "0xc00030", "zone": "right", "workspace": 0, "monitor": [0, 0, 1920, 1080]}
+{"event": "window-closed", "window": "0xe00030", "zone": "right"}
+{"event": "window-moved", "window": "0xc00030", "zone": "main", "previous": "right", "workspace": 0, "monitor": [0, 0, 1920, 1080]}
+{"event": "focus-on", "zone": "main", "window": "0xc00030", "minimized": 1}
+{"event": "focus-off", "zone": "main", "restored": 1, "total": 1}
+```
+
+退订就是关闭连接，没有单独的「退订」命令。`gridsnap-ctl watch` 打开的就是这个连接，并随到随打印
+这些行：面板、脚本或 Cinnamon 小程序可以立刻反应，而不必轮询 `status`。不再读取的订阅者会被守护
+进程丢弃，而不是替它堆积缓冲；订阅者断开也不会让守护进程崩溃。
 
 <!-- section: daemon-tabs -->
 ### 5.2. 区域内的标签页：一个区域放多个窗口

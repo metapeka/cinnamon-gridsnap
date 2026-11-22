@@ -511,6 +511,7 @@ python3 gridsnap-ctl focus main                  # "only this zone" mode (the wi
 python3 gridsnap-ctl focus --off                 # leave the mode
 python3 gridsnap-ctl reload                      # the daemon re-reads zones.conf
 python3 gridsnap-ctl quit                        # stop the daemon
+python3 gridsnap-ctl watch                       # listen to daemon events (one JSON line per event)
 ```
 
 The protocol is one JSON line per command, the reply is JSON as well (`{"ok": true, ...}` or
@@ -519,6 +520,23 @@ line, a disconnect) does not bring the daemon down — it logs it and keeps watc
 is recorded in the daemon's tracker, so closing the window afterwards starts the reflow as usual.
 With a packaged install the client is available as `gridsnap-ctl` (in the `.deb` and via
 `install.sh` — the command in `$PREFIX/bin`).
+
+The daemon also **tells about what happens**. A client sends `{"cmd": "subscribe"}` in its own
+connection and gets `{"ok": true, "subscribed": [...]}`; from then on that connection is read-only —
+the daemon writes one JSON line per event:
+
+```json
+{"event": "window-appeared", "window": "0xc00030", "zone": "right", "workspace": 0, "monitor": [0, 0, 1920, 1080]}
+{"event": "window-closed", "window": "0xe00030", "zone": "right"}
+{"event": "window-moved", "window": "0xc00030", "zone": "main", "previous": "right", "workspace": 0, "monitor": [0, 0, 1920, 1080]}
+{"event": "focus-on", "zone": "main", "window": "0xc00030", "minimized": 1}
+{"event": "focus-off", "zone": "main", "restored": 1, "total": 1}
+```
+
+The subscription ends by closing the connection — there is no `unsubscribe`. `gridsnap-ctl watch` opens
+exactly that connection and prints the lines as they come, so a panel, a script or the Cinnamon applet
+can react right away instead of polling `status`. A subscriber that stops reading is dropped rather
+than buffered, and a broken one never takes the daemon down.
 
 <!-- section: daemon-tabs -->
 ### 5.2. Tabs inside a zone: several windows in one zone

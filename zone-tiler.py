@@ -1722,6 +1722,10 @@ def cmd_apply(grid, args):
 
 # Сколько ждать ответа демона, секунд (тот же порядок, что у `gridsnap-ctl`).
 DAEMON_TIMEOUT = 5.0
+# Укладка по `arrange` — не мгновенный запрос: демон ставит каждое окно сам и
+# перечитывает его рамку, поэтому на большом столе 5 с на ответ может не хватить,
+# хотя демон жив и работает.
+DAEMON_ARRANGE_TIMEOUT = 30.0
 
 
 def daemon_request(request, timeout=DAEMON_TIMEOUT):
@@ -2966,6 +2970,72 @@ def group_windows_by_monitor(client_ids, outputs):
     return [(name_of.get(wa), wa, wins) for wa, wins in groups.items()]
 
 
+def arrange_via_daemon(assignments, workspace, quiet=False):
+    """Разложить окна силами демона: он применит их и разошлёт события.
+
+    Алгоритм выбора окон и зон и память `undo` остаются здесь
+    (`choose_assignments` + `remember`), а применяет и запоминает укладки демон:
+    только он ведёт трекер, по которому закрытие окна запускает reflow, и только
+    он шлёт подписчикам `window-moved`. Без демона `False` — вызывающий
+    раскладывает окна сам, как раньше.
+
+    Снимки «до» берутся **до** отправки команды: после неё окна уже переехали, и
+    `undo` вернул бы их не туда. В историю идут только те окна, которые демон
+    действительно переставил (ответ `arranged`); отказы по отдельным окнам
+    печатаются, а не тонут в молчании.
+    """
+    placements = []
+    records = []
+    for win, zone, _output, wa, _grid in assignments:
+        placements.append(
+            {
+                "window": hex(win),
+                "zone": zone,
+                "monitor": [int(v) for v in wa],
+            }
+        )
+        try:
+            before = snapshot_window(win, zone=zone)
+        except Exception:
+            before = None
+        if before is not None:
+            records.append(before)
+    response = daemon_request(
+        {"cmd": "arrange", "workspace": workspace, "placements": placements},
+        timeout=DAEMON_ARRANGE_TIMEOUT,
+    )
+    if response is None:
+        return False
+    if not response.get("ok"):
+        fail(
+            _("zone-tiler: {error}").format(
+                error=response.get("error", _("демон отклонил arrange"))
+            ),
+            EXIT_FAIL,
+        )
+    applied = set()
+    for value in response.get("arranged") or []:
+        try:
+            applied.add(int(value, 0))
+        except (TypeError, ValueError):
+            continue
+    for item in response.get("skipped") or []:
+        if quiet or not isinstance(item, dict):
+            continue
+        print(
+            _("окно {window}: демон не переставил его ({error})").format(
+                window=item.get("window"), error=item.get("error")
+            ),
+            file=sys.stderr,
+        )
+    remember(
+        "arrange",
+        [record for record in records if record["id"] in applied],
+        quiet=quiet,
+    )
+    return True
+
+
 def cmd_arrange(grid, args):
     """Разложить клиентские окна `_NET_CLIENT_LIST` по зонам.
 
@@ -3008,6 +3078,12 @@ def cmd_arrange(grid, args):
         if not args.quiet:
             print(_("zone-tiler: нет окон, подходящих под раскладку"))
         return
+    if not args.dry_run and not args.verify:
+        # Живой демон — один хозяин укладки: он применит раскладку, обновит свой
+        # трекер (иначе закрытие окна запускало бы reflow не туда) и разошлёт
+        # подписчикам `window-moved`. `--verify` и `--dry-run` остаются локальными.
+        if arrange_via_daemon(assignments, workspace, quiet=args.quiet):
+            return
     x11 = None if args.dry_run else X11()
     totals = collections.Counter((wa, zone) for _win, zone, _output, wa, _grid in assignments)
     height = tabs_height(grid)
