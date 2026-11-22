@@ -487,6 +487,7 @@ python3 gridsnap-ctl focus main                  # режим «только э�
 python3 gridsnap-ctl focus --off                 # выйти из режима
 python3 gridsnap-ctl reload                      # демон перечитает zones.conf
 python3 gridsnap-ctl quit                        # остановить демон
+python3 gridsnap-ctl watch                       # слушать события демона (строка JSON на событие)
 ```
 
 Протокол — одна JSON-строка на команду, ответ — тоже JSON (`{"ok": true, ...}` или
@@ -494,6 +495,23 @@ python3 gridsnap-ctl quit                        # остановить демо
 обрыв) демон не роняет — логирует и продолжает следить за окнами. `apply` пишется в трекер демона,
 поэтому закрытие окна затем штатно запускает reflow. Для пакетных установок клиент доступен как
 `gridsnap-ctl` (в `.deb` и через `install.sh` — команда в `$PREFIX/bin`).
+
+Демон ещё и **рассказывает, что происходит**. Клиент шлёт в отдельном соединении
+`{"cmd": "subscribe"}` и получает `{"ok": true, "subscribed": [...]}`; дальше это соединение только
+на чтение — демон пишет в него по строке JSON на событие:
+
+```json
+{"event": "window-appeared", "window": "0xc00030", "zone": "right", "workspace": 0, "monitor": [0, 0, 1920, 1080]}
+{"event": "window-closed", "window": "0xe00030", "zone": "right"}
+{"event": "window-moved", "window": "0xc00030", "zone": "main", "previous": "right", "workspace": 0, "monitor": [0, 0, 1920, 1080]}
+{"event": "focus-on", "zone": "main", "window": "0xc00030", "minimized": 1}
+{"event": "focus-off", "zone": "main", "restored": 1, "total": 1}
+```
+
+Отписка — закрыть соединение, команды «отписаться» нет. `gridsnap-ctl watch` открывает ровно такое
+соединение и печатает строки по мере поступления: панель, скрипт или апплет Cinnamon могут
+реагировать сразу, а не опрашивать `status`. Подписчика, который перестал читать, демон отбрасывает,
+а не копит за него буфер; обрыв подписчика демон не роняет.
 
 <!-- section: daemon-tabs -->
 ### 5.2. Вкладки в зоне: несколько окон в одной зоне
