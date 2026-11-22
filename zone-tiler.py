@@ -1722,6 +1722,10 @@ def cmd_apply(grid, args):
 
 # Сколько ждать ответа демона, секунд (тот же порядок, что у `gridsnap-ctl`).
 DAEMON_TIMEOUT = 5.0
+# Укладка по `arrange` — не мгновенный запрос: демон ставит каждое окно сам и
+# перечитывает его рамку, поэтому на большом столе 5 с на ответ может не хватить,
+# хотя демон жив и работает.
+DAEMON_ARRANGE_TIMEOUT = 30.0
 
 
 def daemon_request(request, timeout=DAEMON_TIMEOUT):
@@ -2997,7 +3001,8 @@ def arrange_via_daemon(assignments, workspace, quiet=False):
         if before is not None:
             records.append(before)
     response = daemon_request(
-        {"cmd": "arrange", "workspace": workspace, "placements": placements}
+        {"cmd": "arrange", "workspace": workspace, "placements": placements},
+        timeout=DAEMON_ARRANGE_TIMEOUT,
     )
     if response is None:
         return False
