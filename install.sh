@@ -23,6 +23,12 @@ ACTION="install"
 SIZES="16 22 24 32 48 64 128 256 512"
 MANPAGES="gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1
            gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1"
+# Man-страницы — не gettext-домен: man-db выбирает их по каталогу языка, а не
+# по каталогу перевода. Собирает их `make man` в man/build/<язык>/man1/;
+# английская — язык по умолчанию, поэтому ложится в man1/ без языкового
+# каталога (её получает LANG=C и любая локаль без перевода).
+MANLANGS="en ru zh_CN"
+MANBUILD="$SRC/man/build"
 
 usage() {
     cat <<EOF
@@ -42,7 +48,10 @@ $PROG — установка GridSnap в префикс (по умолчанию
   КАТАЛОГ/lib/gridsnap/   код, zones.conf, иконки, install-*.sh
   КАТАЛОГ/bin/            gridsnap-tiler, gridsnap-daemon, gridsnap-editor, gridsnap-picker,
                           gridsnap-hotcorners, gridsnap-ctl, setup-hotkeys
-  КАТАЛОГ/share/man/man1/ man-страницы (маны ставятся всегда: это документация, а не ярлык)
+  КАТАЛОГ/share/man/man1/ man-страницы: английская — язык по умолчанию
+  КАТАЛОГ/share/man/ru/man1/, .../zh_CN/man1/
+                          страницы ru и zh_CN: man-db выбирает их по локали
+                          (маны ставятся всегда: это документация, а не ярлык)
   КАТАЛОГ/share/locale/   каталоги переводов en и zh_CN (домены gridsnap и gridsnap@metapeka)
   КАТАЛОГ/share/...       ярлык, иконки, документация (если не --no-launcher)
 
@@ -86,6 +95,16 @@ APPS="$PREFIX/share/applications"
 ICONS="$PREFIX/share/icons/hicolor"
 DOC="$PREFIX/share/doc/gridsnap"
 MANDIR="$PREFIX/share/man/man1"
+
+# Каталог man-db для языка сборки: `en` — язык по умолчанию, без языкового
+# каталога; остальные — share/man/<язык>/man1/
+mandir_for() {  # $1 = en | ru | zh_CN
+    case "$1" in
+        en) echo "$MANDIR" ;;
+        *)  echo "$PREFIX/share/man/$1/man1" ;;
+    esac
+}
+
 # Каталоги переводов: по домену на язык. Апплет Cinnamon берёт
 # `gridsnap@metapeka.mo` из ~/.local/share/locale (префикс по умолчанию).
 LOCALEDIR="$PREFIX/share/locale"
@@ -114,10 +133,21 @@ if [ "$ACTION" = "uninstall" ]; then
         rm -f "$ICONS/${size}x${size}/apps/gridsnap.png"
     done
     rm -f "$ICONS/scalable/apps/gridsnap.svg"
-    for page in $MANPAGES; do
-        rm -f "$MANDIR/$page"
+    # Снимаем из всех трёх каталогов: в прошлых версиях страница была одна
+    # (русская) и лежала в man1/, и после обновления старый префикс не должен
+    # оставлять за собой ни русской страницы, ни пустых языковых каталогов.
+    for lang in $MANLANGS; do
+        dir="$(mandir_for "$lang")"
+        for page in $MANPAGES; do
+            rm -f "$dir/$page"
+        done
+        # снять опустевшие каталоги; чужие страницы (других пакетов) не трогаем
+        rmdir "$dir" 2>/dev/null || true
+        if [ "$lang" != "en" ]; then
+            rmdir "$PREFIX/share/man/$lang" 2>/dev/null || true
+        fi
     done
-    rmdir "$MANDIR" 2>/dev/null || true   # только если каталог опустел
+    rmdir "$PREFIX/share/man" 2>/dev/null || true
     for lang in $LANGUAGES; do
         for domain in $DOMAINS; do
             rm -f "$LOCALEDIR/$lang/LC_MESSAGES/$domain.mo"
@@ -147,10 +177,30 @@ install -m 0644 "$SRC/README.md" "$SRC/SPEC.md" "$SRC/LICENSE" "$DOC/"
 
 # --- man-страницы ----------------------------------------------------------
 # Документация, а не часть ярлыка: ставится и при --no-launcher.
-mkdir -p "$MANDIR"
-for page in $MANPAGES; do
-    install -m 0644 "$SRC/man/$page" "$MANDIR/"
-done
+# Готовые страницы трёх языков кладёт в архив `make tarball`; po4a при
+# установке не нужен.
+MAN_DIRS=""
+if [ -d "$MANBUILD" ]; then
+    for lang in $MANLANGS; do
+        dir="$(mandir_for "$lang")"
+        mkdir -p "$dir"
+        for page in $MANPAGES; do
+            install -m 0644 "$MANBUILD/$lang/man1/$page" "$dir/"
+        done
+        MAN_DIRS="$MAN_DIRS $dir"
+    done
+else
+    # Чекаут без сборки (`make man` не запускали): английских страниц нет.
+    # Ставим русский источник и псевдонимы в man1/ — так было до перевода. Но
+    # молча класть русскую страницу на место английской нельзя: английская тут
+    # язык по умолчанию, поэтому говорим об этом строкой в выводе.
+    echo "man-страницы: сборки нет (make man), ставлю русский источник в man1/"
+    mkdir -p "$MANDIR"
+    for page in $MANPAGES; do
+        install -m 0644 "$SRC/man/$page" "$MANDIR/"
+    done
+    MAN_DIRS="$MANDIR"
+fi
 
 # --- каталоги переводов ----------------------------------------------------
 # Собраны `make mo` (в tar.gz попадают из каталога locale/). Без них код
@@ -218,7 +268,8 @@ fi
 echo "GridSnap установлен в $PREFIX"
 echo "  код:      $LIB"
 echo "  команды:  $BIN/gridsnap-tiler, $BIN/gridsnap-daemon, $BIN/gridsnap-editor, $BIN/gridsnap-picker, $BIN/gridsnap-hotcorners, $BIN/gridsnap-ctl, $BIN/setup-hotkeys"
-echo "  справка:  man -M $PREFIX/share/man gridsnap";
+echo "  справка:  MANPATH=$PREFIX/share/man man gridsnap (en; ru и zh_CN — по локали)"
+echo "  ман:      ${MAN_DIRS# }"
 echo "  переводы: $LOCALEDIR/<язык>/LC_MESSAGES (gridsnap, gridsnap@metapeka)"
 echo "  автозапуск: $LIB/install-daemon.sh (демон + привязка профилей к экранам)";
 if [ "$LAUNCHER" -eq 1 ]; then

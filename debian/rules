@@ -3,9 +3,13 @@
 #
 # Компилировать нечего: Python-код и данные кладутся как есть по debian/install
 # и debian/docs. Цели dh_auto_* заглушены нарочно — иначе debhelper подхватил бы
-# корневой Makefile и запустил его цели сборки релизных tar.gz/deb. Единственное
-# исключение — каталоги переводов: их собирает `make mo` (шаг сборки), а
-# debian/install раскладывает готовые `.mo` в /usr/share/locale.
+# корневой Makefile и запустил его цели сборки релизных tar.gz/deb.
+#
+# Сборка всё же нужна, и только явными шагами: `make mo` собирает каталоги
+# переводов (в /usr/share/locale), `make man` — man-страницы трёх языков
+# (в /usr/share/man/<язык>/man1). Обе цели пишут только в git-ignored (locale/,
+# man/build/) каталоги, поэтому dh_auto_clean остаётся заглушённым.
+# Порядок важен для читателя, не для сборки: `man` от `mo` не зависит.
 #
 #   dpkg-buildpackage -b -us -uc     # собрать .deb
 #   debuild -b -us -uc               # то же через devscripts
@@ -18,6 +22,7 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	$(MAKE) mo
+	$(MAKE) man
 
 override_dh_auto_test:
 	:
