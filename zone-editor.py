@@ -35,6 +35,8 @@ from gi.repository import Gdk, Gtk, Pango, PangoCairo  # noqa: E402  # type: ign
 import zone_geom as geom  # noqa: E402
 from zone_config import (  # noqa: E402
     MONITORS_SECTION,
+    MONITOR_OFFLINE_NOTE,
+    MONITOR_SHARED,
     WORKSPACE_SHARED,
     WORKSPACES_SECTION,
     Zone,
@@ -44,6 +46,7 @@ from zone_config import (  # noqa: E402
     load_workspace_map,
     load_zone_sets,
     missing_rule_targets,
+    monitor_dialog_rows,
     profile_path,
     read_profile,
     remove_profile,
@@ -71,13 +74,6 @@ ACCENT = (1.0, 0.71, 0.33)
 
 CONF = zt.default_conf()
 
-# Подпись «экран без привязки» в диалоге «Профили экранов» — та же строка, что у
-# столов (:data:`zone_config.WORKSPACE_SHARED`): пустое значение убирает привязку.
-MONITOR_SHARED = WORKSPACE_SHARED
-
-# Как в диалоге помечен выход из `[monitors]`, которого сейчас нет на машине.
-MONITOR_OFFLINE_NOTE = "нет на экране"
-
 
 def desktops_count():
     """Число рабочих столов из ``_NET_NUMBER_OF_DESKTOPS`` или ``None``.
@@ -95,78 +91,6 @@ def desktops_count():
         return None
     found = re.search(r"=\s*(\d+)", out)
     return int(found.group(1)) if found else None
-
-
-def _monitor_row(output, profile, names, on_screen=True):
-    """Одна строка диалога «Профили экранов»: варианты, предупреждение и признак."""
-    options = [MONITOR_SHARED] + names
-    notes = []
-    if profile is not None and profile not in names:
-        options.append(profile)
-        notes.append(f"профиля «{profile}» нет на диске: экран пока "
-                     "раскладывается общим набором")
-    if not on_screen:
-        notes.append(f"выхода {output} сейчас {MONITOR_OFFLINE_NOTE}: привязка не "
-                     "действует, пока экран не подключён")
-    return (output, profile, options, "; ".join(notes), on_screen)
-
-
-def monitor_dialog_rows(mapping, profiles=None, outputs=None):
-    """Строки диалога «Профили экранов» — чистая функция без GTK и без X.
-
-    ``mapping`` — карта из :func:`zone_config.load_monitor_map`, ``profiles`` —
-    имена профилей на диске (:func:`zone_config.list_profiles`), ``outputs`` — имена
-    выходов в порядке ``xrandr --listmonitors``. Порядок значим: профиль первого
-    экрана решает спор при слиянии (``profile use-monitors``), и сохранение пишет
-    секцию ровно в порядке строк этого списка.
-
-    Строка — ``(выход, профиль, варианты, предупреждение, на_экране)``:
-
-    * ``выход`` — имя как его печатает xrandr; для выхода из ``[monitors]``, которого
-      сейчас нет на машине (отключён, переименован), — как записано в файле: строку
-      всё равно показываем, иначе её нельзя ни поправить, ни убрать;
-    * ``профиль`` — имя профиля экрана, ``None`` — общий набор (привязки нет);
-    * ``варианты`` — выпадающий список: :data:`MONITOR_SHARED`, затем имена профилей
-      с диска, и обязательно имя из сопоставления — профиль мог исчезнуть, но запись
-      показываем и не выбрасываем;
-    * ``предупреждение`` — пусто или текст про профиль, которого нет на диске, и про
-      выход, которого сейчас нет на экране;
-    * ``на_экране`` — ``False`` у строки выхода, которого сейчас нет.
-
-    Имена выходов сравниваются **без учёта регистра**: ``ConfigParser`` опускает
-    регистр ключей, поэтому из файла приходит ``hdmi-1``, а xrandr говорит
-    ``HDMI-1``. Строки идут в порядке xrandr, а записи про отсутствующие выходы —
-    следом, в порядке файла.
-    """
-    names = sorted({sanitize_profile_name(n) for n in (profiles or [])} - {""})
-    file_order = []
-    by_key = {}
-    for output, name in (mapping or {}).items():
-        output = str(output).strip()
-        if not output:
-            continue
-        key = output.casefold()
-        if key in by_key:
-            continue
-        # Имя профиля из файла уже санировано, но словарь могли собрать и руками.
-        file_order.append(output)
-        by_key[key] = (output, sanitize_profile_name(name) or None)
-    rows = []
-    seen = set()
-    for output in outputs or ():
-        name = str(output or "").strip()
-        if not name:
-            continue
-        key = name.casefold()
-        seen.add(key)
-        profile = by_key[key][1] if key in by_key else None
-        rows.append(_monitor_row(name, profile, names, on_screen=True))
-    for output in file_order:
-        key = output.casefold()
-        if key in seen:
-            continue
-        rows.append(_monitor_row(output, by_key[key][1], names, on_screen=False))
-    return rows
 
 
 def templates():

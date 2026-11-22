@@ -11,9 +11,11 @@
 и отключённых мониторов и `[keys]` без дублей (повтор имени в двух наборах не
 даёт повтора в секции — это забота писателя, а не текстовой чистки).
 
-Отдельно — диалог «Профили экранов»: строки `monitor_dialog_rows` из
-`zone-editor.py` (порядок выходов, пометка отсутствующего, «общий набор») и
-запись `[monitors]` по этим строкам через `zone_config.save_monitor_map`.
+Отдельно — диалог «Профили экранов»: строки `zone_config.monitor_dialog_rows`
+(порядок выходов, пометка отсутствующего, «общий набор») и запись `[monitors]`
+по этим строкам через `zone_config.save_monitor_map`. Чистая функция переехала в
+`zone_config.py` (как её аналог для столов), поэтому эти тесты идут без GTK —
+в CI, где `python3-gi` нет, они больше не пропускаются.
 
 Запуск:
     python3 -m unittest discover -s tests -v
@@ -21,7 +23,6 @@
 """
 
 import configparser
-import importlib.util
 import os
 import shutil
 import sys
@@ -35,32 +36,6 @@ if ROOT not in sys.path:
 
 import zone_config as zc  # noqa: E402  # isort: skip
 import zone_geom as geom  # noqa: E402  # isort: skip
-
-EDITOR = os.path.join(ROOT, "zone-editor.py")
-
-
-def gui_available():
-    """Есть ли GTK: `zone-editor.py` импортирует `gi` на уровне файла."""
-    try:
-        import gi
-
-        for part in ("Gtk", "Gdk", "Pango", "PangoCairo"):
-            gi.require_version(part, "3.0" if part in ("Gtk", "Gdk") else "1.0")
-        from gi.repository import Gdk, Gtk, Pango, PangoCairo  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
-HAS_GUI = gui_available()
-
-
-def load_editor_module(name="zone_editor_under_test"):
-    """Загрузить `zone-editor.py` как модуль: имя файла через дефис не импортируется."""
-    spec = importlib.util.spec_from_file_location(name, EDITOR)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def zone(name, rect=(0, 0, 1, 1), binding=""):
@@ -475,7 +450,6 @@ class WorkspaceDialogRowsTest(unittest.TestCase):
 # ----------------------------------------- «Профили экранов»: строки диалога
 
 
-@unittest.skipUnless(HAS_GUI, "нужен GTK: zone-editor.py импортирует gi")
 class MonitorDialogRowsTest(unittest.TestCase):
     """Строки диалога «Профили экранов» — чистая функция без окон.
 
@@ -486,15 +460,11 @@ class MonitorDialogRowsTest(unittest.TestCase):
     нельзя было бы ни поправить, ни убрать.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        cls.ed = load_editor_module()
-
     def rows(self, mapping, profiles=(), outputs=()):
-        return self.ed.monitor_dialog_rows(mapping, list(profiles), list(outputs))
+        return zc.monitor_dialog_rows(mapping, list(profiles), list(outputs))
 
     def test_shared_label_is_the_same_as_for_desktops(self):
-        self.assertEqual(self.ed.MONITOR_SHARED, zc.WORKSPACE_SHARED)
+        self.assertEqual(zc.MONITOR_SHARED, zc.WORKSPACE_SHARED)
 
     def test_row_per_screen_output_in_xrandr_order(self):
         rows = self.rows({}, [], ["eDP-1", "HDMI-1"])
@@ -571,7 +541,6 @@ class MonitorDialogRowsTest(unittest.TestCase):
         self.assertEqual(self.rows({}, ["work"], [None, ""]), [])
 
 
-@unittest.skipUnless(HAS_GUI, "нужен GTK: zone-editor.py импортирует gi")
 class MonitorMapSaveTest(ConfCase):
     """Выбор в диалоге -> `save_monitor_map`: порядок строк и целые чужие секции."""
 
@@ -582,10 +551,6 @@ class MonitorMapSaveTest(ConfCase):
         + "[monitors]\nHDMI-2 = cinema\nhdmi-1 = work\nvga-1 = old\n"
         + "[rules]\nChrome = main\n"
     )
-
-    @classmethod
-    def setUpClass(cls):
-        cls.ed = load_editor_module("zone_editor_monitor_map_under_test")
 
     def monitors_body(self):
         """Строки секции `[monitors]` в файле — порядок в них и проверяем."""
@@ -601,13 +566,13 @@ class MonitorMapSaveTest(ConfCase):
 
     def save_choices(self, picks, outputs=("HDMI-1", "HDMI-2"), profiles=("work", "cinema", "old")):
         """Пройти те же шаги, что диалог: строки -> выбор -> `save_monitor_map`."""
-        rows = self.ed.monitor_dialog_rows(
+        rows = zc.monitor_dialog_rows(
             zc.load_monitor_map(self.conf), list(profiles), list(outputs)
         )
         chosen = {}
         for output, profile, _options, _warning, _on_screen in rows:
-            text = picks.get(output, profile if profile is not None else self.ed.MONITOR_SHARED)
-            if text != self.ed.MONITOR_SHARED:
+            text = picks.get(output, profile if profile is not None else zc.MONITOR_SHARED)
+            if text != zc.MONITOR_SHARED:
                 chosen[output] = text
         zc.save_monitor_map(self.conf, chosen)
         return rows, chosen

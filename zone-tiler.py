@@ -883,7 +883,7 @@ def grid_for_output(conf_path, output, fallback=None, workspace=None, quiet=Fals
             where = f"экран {output}" if output else "экран окна"
             print(
                 f"zone-tiler: профиля «{zc.sanitize_profile_name(profile)}» нет на диске: "
-                f"{where} раскладывается общим набором зон",
+                f"{where} раскладывается без него: беру набор стола или общий",
                 file=sys.stderr,
             )
         return base, None
@@ -1130,31 +1130,41 @@ def client_size(rect, extents):
     return (x, y, max(1, w - left - right), max(1, h - top - bottom))
 
 
-def active_window():
+def read_active_window():
+    """Активное окно и текст ошибки: ``(окно | None, причина | None)``.
+
+    Разбор один на всех: `active_window` падает с кодом 1, когда окна нет (это
+    правильно для команд, которым окно нужно), а `active_window_quiet` отдаёт
+    ``None`` без сообщений в stderr — тому, для кого отсутствие окна не ошибка.
+    """
     try:
         txt = subprocess.check_output(
             ["xprop", "-root", "_NET_ACTIVE_WINDOW"], text=True, stderr=subprocess.DEVNULL
         )
     except Exception:
-        fail("zone-tiler: xprop не найден (пакет x11-utils)", EXIT_FAIL)
+        return None, "zone-tiler: xprop не найден (пакет x11-utils)"
     m = re.search(r"(0x[0-9a-fA-F]+)", txt)
     if not m or int(m.group(1), 16) == 0:
-        fail("zone-tiler: нет активного окна", EXIT_FAIL)
-    return int(m.group(1), 16)
+        return None, "zone-tiler: нет активного окна"
+    return int(m.group(1), 16), None
+
+
+def active_window():
+    """Активное окно; нет его — сообщение в stderr и код 1."""
+    window, error = read_active_window()
+    if window is None:
+        fail(error, EXIT_FAIL)
+    return window
 
 
 def active_window_quiet():
-    """Активное окно или ``None``: там, где его отсутствие — не ошибка.
+    """Активное окно или ``None`` — без сообщений в stderr.
 
-    `active_window()` падает с кодом 1, когда окна нет, и это правильно для
-    команд, которым окно нужно. Но выбор монитора по экрану окна должен пережить
-    его отсутствие — `apply --dry-run` в скрипте, окно вне зон, `stack` без окон.
-    Тогда берётся первый экран — как было до появления адресации по экрану.
+    Нужно там, где отсутствие окна не ошибка: выбор монитора по экрану окна,
+    `apply --dry-run` в скрипте, `stack` без окон. Тогда берётся первый экран —
+    как было до адресации по экрану.
     """
-    try:
-        return active_window()
-    except SystemExit:
-        return None
+    return read_active_window()[0]
 
 
 # ----------------------------------------------------------------------- X11

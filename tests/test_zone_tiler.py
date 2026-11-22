@@ -486,14 +486,14 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
         # Без `--monitor` адресат — экран окна (по подмене `read_frame` оно на
         # MON2), значит и зона берётся из профиля этого экрана: молча уводить окно
         # на первый экран и искать зону в чужом профиле было бы неправдой.
-        with mock.patch.object(zt, "active_window", lambda: 0x1):
+        with mock.patch.object(zt, "read_active_window", lambda: (0x1, None)):
             code, out, err = self.run_cli("apply", "right")
         self.assertEqual(code, 0, err)
         self.assertIn("right: x=1500 y=0 500x1000 (монитор 1: MON2)", out)
 
     def test_monitor_flag_overrides_the_window_screen(self):
         # `--monitor` важнее экрана окна: осознанный перенос на первый экран.
-        with mock.patch.object(zt, "active_window", lambda: 0x1):
+        with mock.patch.object(zt, "read_active_window", lambda: (0x1, None)):
             code, out, err = self.run_cli("apply", "global", "--monitor", "MON1")
         self.assertEqual(code, 0, err)
         self.assertIn("global: x=0 y=0 1000x1000 (монитор 0: MON1)", out)
@@ -506,7 +506,7 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
         self.assertIn("global: x=0 y=0 1000x1000 (монитор 0: MON1)", out)
 
     def test_stack_without_monitor_takes_the_active_window_screen(self):
-        with mock.patch.object(zt, "active_window", lambda: 0x1):
+        with mock.patch.object(zt, "read_active_window", lambda: (0x1, None)):
             code, out, err = self.run_cli("stack", "right")
         self.assertEqual(code, 0, err)
         # Одно окно — зона профиля второго экрана целиком.
@@ -538,7 +538,7 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertIn("global: x=1000 y=0 1000x1000", out)
         self.assertIn("профиля «wide» нет на диске", err)
-        self.assertIn("общим набором зон", err)
+        self.assertIn("беру набор стола или общий", err)
 
     def test_stack_uses_the_screen_profile_zone(self):
         code, out, err = self.run_cli("stack", "right", "--monitor", "MON2")
