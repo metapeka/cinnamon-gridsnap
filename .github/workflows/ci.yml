@@ -211,3 +211,7 @@ jobs:
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-actions.sh
       - name: Дымовой тест привязки профиля к экрану
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-monitor-profiles.sh
+      # HiDPI: сценарий сам выставляет GDK_SCALE=2, поэтому HiDPI-железо не нужно —
+      # хватает Xvfb, а расхождение логических и физических пикселей видно и там.
+      - name: Дымовой тест HiDPI-масштаба
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-dpi.sh
