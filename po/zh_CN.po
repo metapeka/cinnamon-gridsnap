@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 07:47+0300\n"
+"POT-Creation-Date: 2026-11-22 09:09+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -14,6 +14,11 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "zone-tiler: не разобрать конфиг {path}: {error}"
+msgstr "zone-tiler: 无法解析配置 {path}：{error}"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -1996,6 +2001,11 @@ msgstr ""
 
 #: zone_config.py
 #, python-brace-format
+msgid "zone_config: не разобрать конфиг {path}: {error}"
+msgstr "zone_config: 无法解析配置 {path}：{error}"
+
+#: zone_config.py
+#, python-brace-format
 msgid "zone_config: не найден конфиг {path}"
 msgstr "zone_config: 找不到配置 {path}"
 
@@ -2003,6 +2013,20 @@ msgstr "zone_config: 找不到配置 {path}"
 #, python-brace-format
 msgid "zone_config: в секции [{section}] нет ни одной зоны"
 msgstr "zone_config: 段 [{section}] 里没有任何区域"
+
+#: zone_config.py
+#, python-brace-format
+msgid "zone_config: секция [{name}] задана дважды: оставьте одну"
+msgstr "zone_config: 段 [{name}] 出现了两次：请只保留一个"
+
+#: zone_config.py
+#, python-brace-format
+msgid ""
+"zone_config: секции [{first}] и [{second}] отличаются только регистром: "
+"склеенная секция перестанет читаться — оставьте одну"
+msgstr ""
+"zone_config: 段 [{first}] 和 [{second}] 只有大小写不同："
+"合并后的段将无法读取——请只保留一个"
 
 #: zone_config.py
 msgid "плохое имя профиля: {name!r}"
@@ -2122,6 +2146,7 @@ msgid "общий набор [zones] — его наследуют осталь�
 msgstr "默认 [zones] 集合——其他显示器继承它"
 
 #: zone_geom.py
+#, python-brace-format
 msgid "свой набор [zones:{monitor}]"
 msgstr "本机 [zones:{monitor}] 集合"
 
@@ -2130,6 +2155,7 @@ msgid "наследует [zones]"
 msgstr "继承 [zones]"
 
 #: zone_geom.py
+#, python-brace-format
 msgid "{text} · нет на экране"
 msgstr "{text} · 不在屏幕上"
 
@@ -2349,6 +2375,7 @@ msgid "zone-picker: сетка {}"
 msgstr "zone-picker: 网格 {}"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "строка не в UTF-8: {error}"
 msgstr "字符串不是 UTF-8：{error}"
 
@@ -2361,6 +2388,7 @@ msgid "пустая строка протокола"
 msgstr "协议字符串为空"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "не разобрать JSON: {error}"
 msgstr "无法解析 JSON：{error}"
 
@@ -2377,6 +2405,7 @@ msgid "строка длиннее предела протокола"
 msgstr "字符串超过协议长度上限"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "неизвестная команда: {name}"
 msgstr "未知命令：{name}"
 
@@ -2389,6 +2418,7 @@ msgid "соединение закрыто без ответа"
 msgstr "连接在没有响应的情况下关闭"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "не разобрать ответ: {error}"
 msgstr "无法解析响应：{error}"
 
@@ -2397,10 +2427,12 @@ msgid "ответ должен быть JSON-объектом"
 msgstr "响应必须是 JSON 对象"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "не создать каталог сокета {dir}: {error}"
 msgstr "无法创建套接字目录 {dir}：{error}"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "сокет {path} уже обслуживается другим процессом"
 msgstr "套接字 {path} 已由另一个进程提供服务"
 
@@ -2672,6 +2704,7 @@ msgid "setup-hotkeys: установлено сочетаний: {count}"
 msgstr "setup-hotkeys: 已安装快捷键：{count}"
 
 #: make-icon.py
+#, python-brace-format
 msgid "иконки Gridsnap: {sizes}"
 msgstr "Gridsnap 图标：{sizes}"
 

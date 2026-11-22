@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 07:47+0300\n"
+"POT-Creation-Date: 2026-11-22 09:09+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -14,6 +14,11 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "zone-tiler: не разобрать конфиг {path}: {error}"
+msgstr "zone-tiler: cannot parse config {path}: {error}"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -2071,6 +2076,11 @@ msgstr ""
 
 #: zone_config.py
 #, python-brace-format
+msgid "zone_config: не разобрать конфиг {path}: {error}"
+msgstr "zone_config: cannot parse config {path}: {error}"
+
+#: zone_config.py
+#, python-brace-format
 msgid "zone_config: не найден конфиг {path}"
 msgstr "zone_config: config not found: {path}"
 
@@ -2078,6 +2088,20 @@ msgstr "zone_config: config not found: {path}"
 #, python-brace-format
 msgid "zone_config: в секции [{section}] нет ни одной зоны"
 msgstr "zone_config: section [{section}] has no zones"
+
+#: zone_config.py
+#, python-brace-format
+msgid "zone_config: секция [{name}] задана дважды: оставьте одну"
+msgstr "zone_config: section [{name}] is defined twice: keep only one"
+
+#: zone_config.py
+#, python-brace-format
+msgid ""
+"zone_config: секции [{first}] и [{second}] отличаются только регистром: "
+"склеенная секция перестанет читаться — оставьте одну"
+msgstr ""
+"zone_config: sections [{first}] and [{second}] differ only in case: "
+"a merged section would no longer be readable — keep only one"
 
 #: zone_config.py
 msgid "плохое имя профиля: {name!r}"
@@ -2199,6 +2223,7 @@ msgid "общий набор [zones] — его наследуют осталь�
 msgstr "default [zones] set - the other monitors inherit it"
 
 #: zone_geom.py
+#, python-brace-format
 msgid "свой набор [zones:{monitor}]"
 msgstr "own [zones:{monitor}] set"
 
@@ -2207,6 +2232,7 @@ msgid "наследует [zones]"
 msgstr "inherits [zones]"
 
 #: zone_geom.py
+#, python-brace-format
 msgid "{text} · нет на экране"
 msgstr "{text} · not on screen"
 
@@ -2439,6 +2465,7 @@ msgid "zone-picker: сетка {}"
 msgstr "zone-picker: grid {}"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "строка не в UTF-8: {error}"
 msgstr "line is not UTF-8: {error}"
 
@@ -2451,6 +2478,7 @@ msgid "пустая строка протокола"
 msgstr "empty protocol line"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "не разобрать JSON: {error}"
 msgstr "cannot parse JSON: {error}"
 
@@ -2467,6 +2495,7 @@ msgid "строка длиннее предела протокола"
 msgstr "the line is longer than the protocol limit"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "неизвестная команда: {name}"
 msgstr "unknown command: {name}"
 
@@ -2479,6 +2508,7 @@ msgid "соединение закрыто без ответа"
 msgstr "the connection was closed without a response"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "не разобрать ответ: {error}"
 msgstr "cannot parse the response: {error}"
 
@@ -2487,10 +2517,12 @@ msgid "ответ должен быть JSON-объектом"
 msgstr "the response must be a JSON object"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "не создать каталог сокета {dir}: {error}"
 msgstr "cannot create the socket directory {dir}: {error}"
 
 #: zone_ipc.py
+#, python-brace-format
 msgid "сокет {path} уже обслуживается другим процессом"
 msgstr "socket {path} is already served by another process"
 
@@ -2771,6 +2803,7 @@ msgid "setup-hotkeys: установлено сочетаний: {count}"
 msgstr "setup-hotkeys: shortcuts installed: {count}"
 
 #: make-icon.py
+#, python-brace-format
 msgid "иконки Gridsnap: {sizes}"
 msgstr "Gridsnap icons: {sizes}"
 
