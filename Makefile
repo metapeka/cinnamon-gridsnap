@@ -32,13 +32,10 @@ BINDIR  := /usr/bin
 MODULES := zone-tiler.py zone-daemon.py zone-editor.py zone_config.py \
            zone_geom.py zone_reflow.py zone-picker.py zone_picker_nav.py \
            zone_ipc.py zone_actions.py zone_tabs.py zone-tabstrip.py \
-           zone_tabstrip_nav.py zone-hotcorners.py setup-hotkeys.py make-icon.py
+           zone_tabstrip_nav.py zone-hotcorners.py setup-hotkeys.py make-icon.py \
+           zone_i18n.py
 CLIENTS := gridsnap-ctl
 INSTALL_SH := install.sh install-launcher.sh install-daemon.sh
-RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.md Makefile PKGBUILD
-RELEASE_DIRS := icons docs contrib man
-MANPAGES := gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
-            gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1
 
 # Локализация: каталоги переводов. Язык исходника — русский, поэтому `ru.po`
 # нет; `en` и `zh_CN` ложатся поверх русских строк.
@@ -51,9 +48,22 @@ XGETTEXT_FLAGS := --keyword=_ --from-code=UTF-8 --no-wrap --add-location=file --
 APPLET_SRC  := contrib/applet/gridsnap@metapeka/applet.js
 APPLET_NAME := gridsnap@metapeka
 APPLET_DIR  := po/$(APPLET_NAME)
+
+RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.md Makefile PKGBUILD
+# `locale/` — сборка (`make mo`), но в tar.gz она обязательна: иначе install.sh
+# из архива нечего ставить. Поэтому tarball зависит от mo.
+RELEASE_DIRS := icons docs contrib man $(LOCALEDIR)
+MANPAGES := gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
+            gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1
 ICON_SIZES := 16 22 24 32 48 64 128 256 512
 ICON_RECIPES := $(foreach s,$(ICON_SIZES),install -Dm0644 "icons/gridsnap-$(s).png" "$(DEBROOT)/usr/share/icons/hicolor/$(s)x$(s)/apps/gridsnap.png";)
 MAN_RECIPES := $(foreach p,$(MANPAGES),install -Dm0644 "man/$(p)" "$(DEBROOT)/usr/share/man/man1/$(p)";)
+# Каталоги переводов: по домену на язык (`make mo` собирает их из .po).
+MO_RECIPES := $(foreach l,$(LANGS),\
+                install -Dm0644 "$(LOCALEDIR)/$(l)/LC_MESSAGES/$(PKG).mo" \
+                  "$(DEBROOT)/usr/share/locale/$(l)/LC_MESSAGES/$(PKG).mo";\
+                install -Dm0644 "$(LOCALEDIR)/$(l)/LC_MESSAGES/$(APPLET_NAME).mo" \
+                  "$(DEBROOT)/usr/share/locale/$(l)/LC_MESSAGES/$(APPLET_NAME).mo";)
 
 .PHONY: all tarball deb aur version clean check-version pot mo check-i18n
 
@@ -128,7 +138,7 @@ check-i18n: mo
 
 # --------------------------------------------------------------- tar.gz
 
-tarball: check-version
+tarball: check-version mo
 	@rm -rf "$(TARDIR)"
 	@mkdir -p "$(TARDIR)" "$(DIST)"
 	@cp -a $(RELEASE_FILES) "$(TARDIR)/"
@@ -149,7 +159,7 @@ endef
 
 # man-страницы: в debian/ их сжимает dh_compress, а здесь debhelper нет, поэтому
 # gzip -9n из обязательного пакета gzip (в .deb страницы лежат .gz).
-deb: check-version
+deb: check-version mo
 	@rm -rf "$(DEBROOT)"
 	@mkdir -p "$(DEBROOT)/DEBIAN" "$(DEBROOT)$(DATADIR)" \
 	          "$(DEBROOT)$(BINDIR)" "$(DEBROOT)/usr/share/applications" \
@@ -164,6 +174,8 @@ deb: check-version
 
 	@$(MAN_RECIPES)
 	@cd "$(DEBROOT)/usr/share/man/man1" && gzip -9n *.1
+
+	@$(MO_RECIPES)
 
 	@$(call deb_wrapper,zone-tiler.py,gridsnap-tiler)
 	@$(call deb_wrapper,zone-daemon.py,gridsnap-daemon)

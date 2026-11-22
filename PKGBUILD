@@ -16,6 +16,7 @@ arch=('any')
 url="https://github.com/metapeka/cinnamon-gridsnap"
 license=('custom')  # лицензия в репозитории не объявлена
 depends=('python' 'python-gobject' 'gtk3' 'libx11' 'xorg-xprop' 'xorg-xwininfo')
+makedepends=('gettext')  # msgfmt: каталоги переводов собираются в package()
 optdepends=('python-cairo: перерисовка иконок (make-icon.py)')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
@@ -27,7 +28,7 @@ package() {
         zone-hotcorners.py \
         zone_config.py zone_geom.py zone_picker_nav.py zone_reflow.py zone_ipc.py \
         zone_actions.py zone_tabs.py zone-tabstrip.py zone_tabstrip_nav.py \
-        setup-hotkeys.py make-icon.py \
+        zone_i18n.py setup-hotkeys.py make-icon.py \
         zones.conf \
         "$pkgdir/usr/lib/gridsnap/"
     install -m 0755 gridsnap-ctl "$pkgdir/usr/lib/gridsnap/"
@@ -65,6 +66,17 @@ package() {
     install -d "$pkgdir/usr/share/doc/$pkgname"
     install -m 0644 README.md SPEC.md "$pkgdir/usr/share/doc/$pkgname/"
     cp -a docs "$pkgdir/usr/share/doc/$pkgname/docs"
+
+    # Каталоги переводов (gettext в makedepends): два домена — Python-инстру-
+    # менты и апплет Cinnamon. Язык исходника — русский, каталога ru нет.
+    local lang
+    for lang in en zh_CN; do
+        install -d "$pkgdir/usr/share/locale/$lang/LC_MESSAGES"
+        msgfmt --check -o "$pkgdir/usr/share/locale/$lang/LC_MESSAGES/gridsnap.mo" \
+            "po/$lang.po"
+        msgfmt --check -o "$pkgdir/usr/share/locale/$lang/LC_MESSAGES/gridsnap@metapeka.mo" \
+            "po/gridsnap@metapeka/$lang.po"
+    done
 
     # man-страницы: в Arch их принято ставить сжатыми (.gz); -n — без имени
     # и времени файла, чтобы сборка была воспроизводимой.
