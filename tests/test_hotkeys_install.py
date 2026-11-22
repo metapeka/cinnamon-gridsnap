@@ -144,5 +144,95 @@ class InstallWriteTest(unittest.TestCase):
         self.assertEqual(names, ["'zone-tiler: main'", "'zone-tiler: top-right'"])
 
 
+class PlannedActionsTest(unittest.TestCase):
+    """Действия `[action:<имя>]` в плане сочетаний и снятие их по префиксу."""
+
+    def setUp(self):
+        self.mod = load_module()
+
+    def planned(self, actions, conf=None):
+        """`planned` без зон и прочих секций: только записи действий."""
+        with mock.patch.object(
+            self.mod, "zone_pairs", lambda conf=None, *flags: []
+        ), mock.patch.object(
+            self.mod.zone_config, "load_focus_keys", lambda path: None
+        ), mock.patch.object(
+            self.mod.zone_config,
+            "load_tabs_config",
+            lambda path: {"key": None, "height": 22},
+        ), mock.patch.object(
+            self.mod.zone_config, "load_actions", lambda path: actions
+        ):
+            return self.mod.planned(conf)
+
+    def test_action_with_key_is_planned(self):
+        items = self.planned({
+            "term-main": {
+                "run": "builtin:terminal",
+                "zone": "main",
+                "key": "<Super><Alt>t",
+                "command": None,
+                "axis": None,
+            },
+            "probe": {"run": "/bin/true", "key": None, "zone": None,
+                      "command": None, "axis": None},
+        })
+        self.assertEqual(len(items), 1, items)
+        name, binding, command = items[0]
+        self.assertEqual(name, "action term-main")
+        self.assertEqual(binding, "<Super><Alt>t")
+        self.assertIn("action term-main --quiet", command)
+
+    def test_action_without_key_is_skipped(self):
+        self.assertEqual(
+            self.planned({"probe": {"run": "/bin/true", "key": None}}), []
+        )
+
+    def test_action_command_carries_absolute_conf(self):
+        items = self.planned(
+            {"mirror": {"run": "builtin:mirror", "key": "<Super>m"}}, "zones.conf"
+        )
+        _name, _binding, command = items[0]
+        self.assertTrue(command.endswith(os.path.abspath("zones.conf")), command)
+
+    def test_default_conf_is_read_when_flag_missing(self):
+        # Без `--conf` читается тот же файл, что у раскладчика; в команду сочетания
+        # `--conf` при этом не попадает.
+        seen = {}
+
+        def fake_actions(path):
+            seen["actions"] = path
+            return {}
+
+        with mock.patch.object(self.mod, "zone_pairs", lambda conf=None, *flags: []), \
+                mock.patch.object(self.mod.zone_config, "load_focus_keys", lambda path: None), \
+                mock.patch.object(
+                    self.mod.zone_config,
+                    "load_tabs_config",
+                    lambda path: {"key": None, "height": 22},
+                ), \
+                mock.patch.object(self.mod.zone_config, "load_actions", fake_actions):
+            self.mod.planned(None)
+        self.assertEqual(seen["actions"], self.mod.zone_config.zt.default_conf())
+        self.assertEqual(self.mod.conf_path(None), self.mod.zone_config.zt.default_conf())
+
+    def test_drop_owned_removes_action_bindings_too(self):
+        names = {
+            "custom0": "zone-tiler: action mirror",
+            "custom1": "Чужое сочетание",
+        }
+        calls = []
+        with mock.patch.object(self.mod, "cb_name", lambda cid: names[cid]), \
+                mock.patch.object(
+                    self.mod.subprocess, "run",
+                    lambda *args, **kwargs: calls.append(args[0]),
+                ):
+            kept = self.mod.drop_owned(["custom0", "custom1"])
+        self.assertEqual(kept, ["custom1"])
+        self.assertEqual(len(calls), 1)
+        self.assertIn("reset-recursively", calls[0])
+        self.assertTrue(any("custom0" in part for part in calls[0]))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
