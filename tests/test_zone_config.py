@@ -586,6 +586,19 @@ class TestNames(unittest.TestCase):
     def test_sanitize_keeps_cyrillic(self):
         self.assertEqual(zc.sanitize_name("зона №1"), "зона-1")
 
+    def test_sanitize_keeps_russian_yo(self):
+        """«ё» — такая же русская буква, как «а», а не посторонний символ."""
+        self.assertEqual(zc.sanitize_name("ёлка"), "ёлка")
+        self.assertEqual(zc.sanitize_name("Всё хорошо"), "Всё-хорошо")
+        self.assertEqual(zc.sanitize_name("ЖЁЛУДЬ"), "ЖЁЛУДЬ")
+        self.assertEqual(zc.sanitize_profile_name("ёлка"), "ёлка")
+
+    def test_sanitize_keeps_all_cyrillic_letters(self):
+        """Диапазон кириллицы, а не только А-Яа-я: украинские и белорусские буквы тоже."""
+        self.assertEqual(zc.sanitize_name("їжачок"), "їжачок")
+        self.assertEqual(zc.sanitize_name("ўсё"), "ўсё")
+        self.assertEqual(zc.sanitize_name("ґанок"), "ґанок")
+
     def test_sanitize_empty(self):
         self.assertEqual(zc.sanitize_name(""), "")
         self.assertEqual(zc.sanitize_name("###"), "-")
