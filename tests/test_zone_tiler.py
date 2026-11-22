@@ -22,6 +22,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:

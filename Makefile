@@ -39,11 +39,23 @@ RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.m
 RELEASE_DIRS := icons docs contrib man
 MANPAGES := gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
             gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1
+
+# Локализация: каталоги переводов. Язык исходника — русский, поэтому `ru.po`
+# нет; `en` и `zh_CN` ложатся поверх русских строк.
+LANGS       := en zh_CN
+LOCALEDIR   := locale
+POT_FILES   := $(MODULES) $(CLIENTS)
+POT_DIR     ?= po
+XGETTEXT_FLAGS := --keyword=_ --from-code=UTF-8 --no-wrap --add-location=file --force-po \
+                  --package-name=$(PKG) --package-version=$(VERSION)
+APPLET_SRC  := contrib/applet/gridsnap@metapeka/applet.js
+APPLET_NAME := gridsnap@metapeka
+APPLET_DIR  := po/$(APPLET_NAME)
 ICON_SIZES := 16 22 24 32 48 64 128 256 512
 ICON_RECIPES := $(foreach s,$(ICON_SIZES),install -Dm0644 "icons/gridsnap-$(s).png" "$(DEBROOT)/usr/share/icons/hicolor/$(s)x$(s)/apps/gridsnap.png";)
 MAN_RECIPES := $(foreach p,$(MANPAGES),install -Dm0644 "man/$(p)" "$(DEBROOT)/usr/share/man/man1/$(p)";)
 
-.PHONY: all tarball deb aur version clean check-version
+.PHONY: all tarball deb aur version clean check-version pot mo check-i18n
 
 all: tarball deb
 
@@ -70,6 +82,49 @@ check-version:
 
 version:
 	@echo "$(VERSION)"
+
+# ---------------------------------------------------------- локализация
+
+# `make pot` — обновить шаблоны из кода. Отдельный домен апплета: xlet'ы берут
+# перевод через `Gettext.bindtextdomain(uuid, ...)`, поэтому у него своё имя и
+# свой `.mo`. Строки достаёт `xgettext` (`--keyword=_`), а не человек: забытая
+# обёртка видна тестом `tests/test_i18n_wrapped.py`.
+pot:
+	@mkdir -p "$(POT_DIR)" "$(POT_DIR)/$(APPLET_NAME)"
+	xgettext --language=Python $(XGETTEXT_FLAGS) \
+		--output=$(POT_DIR)/$(PKG).pot $(POT_FILES)
+	xgettext --language=JavaScript $(XGETTEXT_FLAGS) \
+		--output=$(POT_DIR)/$(APPLET_NAME)/$(APPLET_NAME).pot $(APPLET_SRC)
+	@echo "обновлены $(POT_DIR)/$(PKG).pot и $(POT_DIR)/$(APPLET_NAME)/$(APPLET_NAME).pot"
+
+# `make mo` — собрать каталоги в locale/<язык>/LC_MESSAGES/. `--check` ловит
+# битые записи и неверные подстановки, `--statistics` показывает полноту.
+mo:
+	@for lang in $(LANGS); do \
+		mkdir -p "$(LOCALEDIR)/$$lang/LC_MESSAGES"; \
+		echo "msgfmt $$lang"; \
+		msgfmt --check -o "$(LOCALEDIR)/$$lang/LC_MESSAGES/$(PKG).mo" "po/$$lang.po"; \
+		msgfmt --check -o "$(LOCALEDIR)/$$lang/LC_MESSAGES/$(APPLET_NAME).mo" \
+			"$(APPLET_DIR)/$$lang.po"; \
+	done
+	@echo "собраны каталоги в $(LOCALEDIR)/"
+
+# `make check-i18n` — то, что проверяет CI: каталоги собираются, шаблоны не
+# разошлись с кодом (сверяются наборы `msgid`, а не файлы целиком: дата сборки
+# в шапке меняется каждый раз), а каталога `ru` нет — русский это msgid как есть.
+check-i18n: mo
+	@test ! -e "po/ru.po" || { echo "make: po/ru.po не нужен: русский — исходные строки" >&2; exit 1; }
+	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+		$(MAKE) --no-print-directory -s pot POT_DIR="$$tmp" >/dev/null; \
+		grep '^msgid ' "po/$(PKG).pot" > "$$tmp/a"; \
+		grep '^msgid ' "$$tmp/$(PKG).pot" > "$$tmp/b"; \
+		diff -u "$$tmp/a" "$$tmp/b" || { \
+			echo "make: po/$(PKG).pot разошёлся с кодом — запустите make pot" >&2; exit 1; }; \
+		grep '^msgid ' "$(APPLET_DIR)/$(APPLET_NAME).pot" > "$$tmp/c"; \
+		grep '^msgid ' "$$tmp/$(APPLET_NAME)/$(APPLET_NAME).pot" > "$$tmp/d"; \
+		diff -u "$$tmp/c" "$$tmp/d" || { \
+			echo "make: $(APPLET_DIR)/$(APPLET_NAME).pot разошёлся с кодом — запустите make pot" >&2; exit 1; }
+	@echo "каталоги в порядке"
 
 # --------------------------------------------------------------- tar.gz
 

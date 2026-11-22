@@ -21,6 +21,8 @@ if ROOT not in sys.path:
 
 import zone_reflow  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 
 class TestReflow(unittest.TestCase):
     def test_right_neighbor_expands_left(self):

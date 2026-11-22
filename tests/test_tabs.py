@@ -24,6 +24,8 @@ if ROOT not in sys.path:
 
 import zone_tabs as tabs  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 # Зона на весь левый монитор и та же зона, которой полосы уже не хватает.
 ZONE = (0, 0, 960, 1080)
 NARROW = (0, 0, 960, tabs.STRIP_HEIGHT + tabs.MIN_WINDOW_H - 1)

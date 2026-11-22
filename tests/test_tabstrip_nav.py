@@ -29,6 +29,8 @@ if ROOT not in sys.path:
 
 import zone_tabstrip_nav as nav  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 # Полоса одной зоны: две вкладки, нижняя неактивна.
 RECORD = {
     "zone": "main",

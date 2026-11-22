@@ -25,6 +25,8 @@ if ROOT not in sys.path:
 import zone_actions as za  # noqa: E402
 import zone_tabs  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 # Полный контекст: окно 0x1a00007, зона main, её пиксельная рамка, монитор, стол.
 FULL = za.ActionContext(
     window=0x1A00007,

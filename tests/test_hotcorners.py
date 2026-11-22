@@ -36,6 +36,8 @@ import os
 import tempfile
 import unittest
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 WATCHER = os.path.join(ROOT, "zone-hotcorners.py")

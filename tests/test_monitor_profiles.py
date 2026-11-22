@@ -31,6 +31,8 @@ if ROOT not in sys.path:
 
 import zone_config as zc  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 
 def load_tiler():
     """`zone-tiler.py` как модуль: слияние и команда `profile use-monitors` живут там."""

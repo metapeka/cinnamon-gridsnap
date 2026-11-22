@@ -12,3 +12,6 @@ debian/files
 debian/*.substvars
 debian/gridsnap/
 debian/tmp/
+
+# сборка каталогов переводов (make mo); в репозитории лежат только .po и .pot
+locale/

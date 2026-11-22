@@ -24,12 +24,25 @@ jobs:
         run: |
           python3 -m compileall -q \
             zone-tiler.py zone-editor.py zone_reflow.py zone_config.py \
-            zone_geom.py zone-picker.py zone_picker_nav.py \
+            zone_geom.py zone-picker.py zone_picker_nav.py zone_i18n.py \
             zone_actions.py zone_tabs.py zone-tabstrip.py zone_tabstrip_nav.py \
             zone-daemon.py zone_ipc.py gridsnap-ctl setup-hotkeys.py \
             make-icon.py tests
       - name: Юнит-тесты
         run: python3 -m unittest discover -s tests -v
+
+  i18n:
+    name: Каталоги переводов
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Зависимости
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext
+      # check-i18n собирает .mo (msgfmt --check), сверяет шаблоны с кодом и
+      # проверяет, что каталога `ru` нет: русский — это msgid как есть.
+      - name: Каталоги
+        run: make check-i18n
 
   package:
     name: Сборка пакетов

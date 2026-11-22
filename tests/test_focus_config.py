@@ -37,6 +37,8 @@ if ROOT not in sys.path:
 
 import zone_config as zc  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 
 def load_ctl():
     """`gridsnap-ctl` — файл без `.py`: загружается через `SourceFileLoader`."""

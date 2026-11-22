@@ -1152,10 +1152,11 @@ def _write_config(path, default_zones, monitor_sets=None, extra=None):
     """
     extra = {str(k).strip().lower(): list(v) for k, v in (extra or {}).items()}
     lines = [
-        "# Сетка окон для zone-tiler. Файл создан визуальным редактором zone-editor.py.",
-        "# Зона = x,y,w,h в долях рабочей области (0..1), без панели задач.",
-        "# Горячие клавиши — в секции [keys].",
-        "# Набор монитора — секция вида zones:<имя выхода>, например zones:HDMI-1.",
+        # Заголовок файла — не текст интерфейса, а содержимое zones.conf.
+        "# Сетка окон для zone-tiler. Файл создан визуальным редактором zone-editor.py.",  # i18n: не переводится
+        "# Зона = x,y,w,h в долях рабочей области (0..1), без панели задач.",  # i18n: не переводится
+        "# Горячие клавиши — в секции [keys].",  # i18n: не переводится
+        "# Набор монитора — секция вида zones:<имя выхода>, например zones:HDMI-1.",  # i18n: не переводится
         "",
         "[grid]",
         "cols = 1.0",
@@ -1315,7 +1316,7 @@ def missing_rule_targets(extra_sections, zone_names):
 
 def sanitize_name(text):
     """Имя зоны из поля ввода: пробелы и посторонние символы — в дефисы."""
-    return re.sub(r"[^0-9A-Za-zА-Яа-я_.-]+", "-", (text or "").strip())
+    return re.sub(r"[^0-9A-Za-zА-Яа-я_.-]+", "-", (text or "").strip())  # i18n: не переводится
 
 
 def unique_name(zones, base="zone"):
@@ -1454,8 +1455,8 @@ def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None, ign
     path = profile_path(name, conf_path)
     safe = sanitize_profile_name(name)
     lines = [
-        f"# Профиль раскладки GridSnap: {safe}.",
-        "# Секции [zones], [zones:<монитор>], [rules], [ignore], [keys]; "
+        f"# Профиль раскладки GridSnap: {safe}.",  # i18n: не переводится
+        "# Секции [zones], [zones:<монитор>], [rules], [ignore], [keys]; "  # i18n: не переводится
         "активация — zone-tiler.py profile use <имя>.",
     ]
     written = []

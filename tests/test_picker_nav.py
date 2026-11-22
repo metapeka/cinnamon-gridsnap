@@ -23,6 +23,8 @@ if ROOT not in sys.path:
 
 import zone_picker_nav as nav  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 Rect = collections.namedtuple("Rect", "x y w h")
 
 # Сетка 2×2 в порядке [A, B, C, D]; A — левый верх, D — правый низ.

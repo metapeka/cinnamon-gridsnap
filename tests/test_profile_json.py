@@ -26,6 +26,8 @@ if ROOT not in sys.path:
 
 import zone_config as zc  # noqa: E402  # isort: skip
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 ZONES = [zc.Zone("main", 0, 0, 0.5, 1), zc.Zone("side", 0.5, 0, 0.5, 1, "<Super><Alt>2")]
 RULES = ["Chrome = main", "re:^VLC = side"]
 IGNORE = ["TelegramDesktop = диалоги Telegram"]

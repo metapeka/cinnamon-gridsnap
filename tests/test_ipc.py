@@ -26,6 +26,8 @@ if ROOT not in sys.path:
 
 import zone_ipc  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 CONF = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\n"

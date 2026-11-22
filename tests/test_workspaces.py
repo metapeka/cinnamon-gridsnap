@@ -27,6 +27,8 @@ import importlib.util  # noqa: E402
 
 import zone_config as zc  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 
 def load_tiler():
     """Загрузить `zone-tiler.py` как модуль: он не пакет, а скрипт."""

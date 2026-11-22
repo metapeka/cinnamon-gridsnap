@@ -38,6 +38,8 @@ if ROOT not in sys.path:
 import zone_config as zc  # noqa: E402
 import zone_tabs  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 
 def load_tiler():
     spec = importlib.util.spec_from_file_location("zone_tiler_tabs_conf_test", TILER)

@@ -16,6 +16,11 @@ set -u
 
 # Как и в smoke-picker.sh: X-сервер поднимаем свой, ровно на один сценарий.
 export XDG_SESSION_TYPE=x11
+
+# Интерфейс — на исходном языке: сценарий сверяет поведение по русским
+# сообщениям CLI, а перевод (каталоги en/zh_CN) выбирается из локали машины.
+GRIDSNAP_LANG=ru
+export GRIDSNAP_LANG
 unset WAYLAND_DISPLAY 2>/dev/null || true
 
 DISP=":97"

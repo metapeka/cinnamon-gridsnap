@@ -35,6 +35,8 @@ if ROOT not in sys.path:
 import zone_actions  # noqa: E402
 import zone_config as zc  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 BASE = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\nmain = 0, 0, 0.5, 1\nside = 0.5, 0, 0.5, 1\n"

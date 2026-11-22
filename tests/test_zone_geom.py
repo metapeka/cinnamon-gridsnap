@@ -22,6 +22,8 @@ if ROOT not in sys.path:
 
 import zone_geom as geom  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 Rect = collections.namedtuple("Rect", "x y w h")
 
 

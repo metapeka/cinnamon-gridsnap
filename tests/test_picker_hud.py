@@ -40,6 +40,8 @@ if ROOT not in sys.path:
 
 import zone_picker_nav as nav  # noqa: E402
 
+import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+
 PICKER = os.path.join(ROOT, "zone-picker.py")
 
 Rect = collections.namedtuple("Rect", "x y w h")
