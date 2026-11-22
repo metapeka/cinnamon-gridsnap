@@ -17,12 +17,18 @@ import os
 import sys
 import unittest
 
+try:
+    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    from tests import i18n_env  # noqa: F401
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 import zone_tabs as tabs  # noqa: E402
+
 
 # Зона на весь левый монитор и та же зона, которой полосы уже не хватает.
 ZONE = (0, 0, 960, 1080)

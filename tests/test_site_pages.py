@@ -22,6 +22,12 @@ import os
 import unittest
 from urllib.parse import urlparse
 
+
+try:
+    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    from tests import i18n_env  # noqa: F401
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SITE = os.path.join(ROOT, "site")

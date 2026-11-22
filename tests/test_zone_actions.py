@@ -17,6 +17,11 @@ import os
 import sys
 import unittest
 
+try:
+    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    from tests import i18n_env  # noqa: F401
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -24,6 +29,7 @@ if ROOT not in sys.path:
 
 import zone_actions as za  # noqa: E402
 import zone_tabs  # noqa: E402
+
 
 # Полный контекст: окно 0x1a00007, зона main, её пиксельная рамка, монитор, стол.
 FULL = za.ActionContext(

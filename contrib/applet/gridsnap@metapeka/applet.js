@@ -25,6 +25,14 @@ const Util = imports.misc.util;
 const Main = imports.ui.main;
 const GLib = imports.gi.GLib;
 const Gio = imports.gi.Gio;
+const Gettext = imports.gettext;
+
+// Домен перевода — uuid апплета: так его ищут xlet'ы Cinnamon. Каталог
+// `~/.local/share/locale` — стандартный пользовательский путь, туда кладёт
+// `gridsnap@metapeka.mo` установка с префиксом по умолчанию (~/.local).
+const UUID = "gridsnap@metapeka";
+Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale");
+const _ = (str) => Gettext.dgettext(UUID, str);
 
 const TILER = "zone-tiler.py";
 const EDITOR = "zone-editor.py";
@@ -39,8 +47,13 @@ const REASON_MAX = 80;
 
 // Строка зоны из `zone-tiler.py list`: "  main  x=0  y=40  1605x1040".
 const ZONE_RE = /^\s*(\S+)\s+x=(-?\d+)\s+y=(-?\d+)\s+(\d+)x(\d+)\s*$/;
-// Строка рабочей области: "рабочая область монитора 0: 0,40 1920x1040".
-const WORKAREA_RE = /^рабочая область монитора\s+(\d+):\s+(-?\d+),(-?\d+)\s+(\d+)x(\d+)/;
+// Первая строка `zone-tiler.py list` — рабочая область монитора:
+// "рабочая область монитора 0: 0,40 1920x1040" (слова переводятся, числа нет).
+// Разбираем числа `N: x,y WxH`, не опираясь на слова: под en/zh первая строка
+// другая, а подменю «Рабочие области» должно собирать надпись само. Номер
+// монитора здесь необязателен: если перевод не оставил `N:` перед рамкой,
+// берём индекс монитора Cinnamon (он же аргумент `--monitor`).
+const WORKAREA_RE = /(?:(\d+)\s*[:：]\s*)?(-?\d+),(-?\d+)\s+(\d+)x(\d+)/;
 // Вывод `xprop -root _NET_ACTIVE_WINDOW`:
 // "_NET_ACTIVE_WINDOW(WINDOW): window id # 0x1a00007".
 const ACTIVE_WINDOW_RE = /window id #\s*(0x[0-9a-fA-F]+)/;
@@ -299,7 +312,9 @@ class GridSnapApplet extends Applet.TextIconApplet {
                 let first = (stdout.split("\n")[0] || "").trim();
                 let m = first.match(WORKAREA_RE);
                 if (ok && m) {
-                    lines[index] = _("Монитор ") + m[1] + ": " + m[4] + "×" + m[5] +
+                    // Номер из строки CLI — если он там есть; иначе индекс Cinnamon.
+                    let monitorIndex = m[1] !== undefined ? m[1] : String(index);
+                    lines[index] = _("Монитор ") + monitorIndex + ": " + m[4] + "×" + m[5] +
                                    "   " + m[2] + "," + m[3];
                 } else if (ok && first) {
                     lines[index] = first;

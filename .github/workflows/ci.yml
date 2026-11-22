@@ -24,12 +24,25 @@ jobs:
         run: |
           python3 -m compileall -q \
             zone-tiler.py zone-editor.py zone_reflow.py zone_config.py \
-            zone_geom.py zone-picker.py zone_picker_nav.py \
+            zone_geom.py zone-picker.py zone_picker_nav.py zone_i18n.py \
             zone_actions.py zone_tabs.py zone-tabstrip.py zone_tabstrip_nav.py \
             zone-daemon.py zone_ipc.py gridsnap-ctl setup-hotkeys.py \
             make-icon.py tests
       - name: Юнит-тесты
         run: python3 -m unittest discover -s tests -v
+
+  i18n:
+    name: Каталоги переводов
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Зависимости
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext
+      # check-i18n собирает .mo (msgfmt --check), сверяет шаблоны с кодом и
+      # проверяет, что каталога `ru` нет: русский — это msgid как есть.
+      - name: Каталоги
+        run: make check-i18n
 
   package:
     name: Сборка пакетов
@@ -37,6 +50,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      # gettext нужен, чтобы собрать каталоги переводов: tar.gz и deb кладут
+      # собранные .mo внутрь, а install.sh ставит их в префикс.
+      - name: Зависимости
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext
       - name: Собрать tar.gz и deb
         run: |
           make tarball
@@ -49,8 +66,11 @@ jobs:
           dpkg-deb -c "$deb" | grep -q usr/lib/gridsnap/zone-tiler.py
           dpkg-deb -c "$deb" | grep -q usr/lib/gridsnap/zone_geom.py
           dpkg-deb -c "$deb" | grep -q usr/lib/gridsnap/zone_ipc.py
+          dpkg-deb -c "$deb" | grep -q usr/lib/gridsnap/zone_i18n.py
           dpkg-deb -c "$deb" | grep -q usr/bin/gridsnap-tiler
           dpkg-deb -c "$deb" | grep -q usr/bin/gridsnap-ctl
+          dpkg-deb -c "$deb" | grep -q usr/share/locale/en/LC_MESSAGES/gridsnap.mo
+          dpkg-deb -c "$deb" | grep -q usr/share/locale/zh_CN/LC_MESSAGES/gridsnap.mo
           dpkg-deb -c "$deb" | grep -q \
             usr/share/applications/gridsnap.desktop
           tmp="$(mktemp -d)"
@@ -67,6 +87,13 @@ jobs:
           "$tmp/prefix/bin/gridsnap-tiler" --version
           test -x "$tmp/prefix/bin/gridsnap-ctl"
           "$tmp/prefix/bin/gridsnap-ctl" --version
+          test -f "$tmp/prefix/share/locale/en/LC_MESSAGES/gridsnap.mo"
+          test -f "$tmp/prefix/share/locale/zh_CN/LC_MESSAGES/gridsnap.mo"
+          # Каталог работает из установленного префикса: под en русских букв нет.
+          if GRIDSNAP_LANG=en "$tmp/prefix/bin/gridsnap-tiler" --help | grep -q '[а-яА-Я]'; then
+            echo "под GRIDSNAP_LANG=en в справке осталась кириллица" >&2
+            exit 1
+          fi
 
   debian:
     name: Штатный пакет Debian (debian/)

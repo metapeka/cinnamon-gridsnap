@@ -22,6 +22,8 @@ import re
 import zone_actions
 import zone_tabs
 
+from zone_i18n import _  # строки интерфейса; без каталога — исходный текст
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 
@@ -88,14 +90,14 @@ MONITORS_SECTION = "monitors"
 
 # Подпись «стол без профиля» в диалоге «Профили столов». С настоящим именем
 # профиля не совпадёт: имена санируются, пробел в них превращается в дефис.
-WORKSPACE_SHARED = "общий набор"
+WORKSPACE_SHARED = _("общий набор")
 
 # Подпись «экран без привязки» в диалоге «Профили экранов» — та же строка, что
 # у столов: пустое значение убирает привязку.
 MONITOR_SHARED = WORKSPACE_SHARED
 
 # Как в диалоге помечен выход из `[monitors]`, которого сейчас нет на машине.
-MONITOR_OFFLINE_NOTE = "нет на экране"
+MONITOR_OFFLINE_NOTE = _("нет на экране")
 
 # Сколько столов показать в диалоге, если ``_NET_NUMBER_OF_DESKTOPS`` не прочитать.
 WORKSPACE_DESKTOPS_DEFAULT = 4
@@ -112,7 +114,7 @@ def load_zonetiler(path=ZONEBIN):
     """Загрузить ``zone-tiler.py`` как модуль (в нём парсер конфига)."""
     spec = importlib.util.spec_from_file_location("zone_tiler", path)
     if spec is None or spec.loader is None:
-        raise ImportError(f"zone_config: не удалось загрузить {path}")
+        raise ImportError(_("zone_config: не удалось загрузить {path}").format(path=path))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -178,7 +180,10 @@ class _SpecParser:
         """
         spec = self.zones.get(zone)
         if spec is None:
-            zt.fail(f"zone-tiler: зоны '{zone}' нет в наборе", zt.EXIT_CONFIG)
+            zt.fail(
+                _("zone-tiler: зоны '{zone}' нет в наборе").format(zone=zone),
+                zt.EXIT_CONFIG,
+            )
         return spec
 
 
@@ -200,15 +205,18 @@ def load_workspace_map(path):
         number = str(key).strip()
         if not number.isdigit() or int(number) < 1:
             zt.fail(
-                f"zone_config: в [{WORKSPACES_SECTION}] номер стола должен быть "
-                f"целым с 1, а не '{number}'",
+                _(
+                    "zone_config: в [{section}] номер стола должен быть целым с 1, "
+                    "а не '{number}'"
+                ).format(section=WORKSPACES_SECTION, number=number),
                 zt.EXIT_CONFIG,
             )
         profile = sanitize_profile_name(value)
         if not profile:
             zt.fail(
-                f"zone_config: в [{WORKSPACES_SECTION}] у стола {number} пустое "
-                "имя профиля",
+                _(
+                    "zone_config: в [{section}] у стола {number} пустое имя профиля"
+                ).format(section=WORKSPACES_SECTION, number=number),
                 zt.EXIT_CONFIG,
             )
         mapping[int(number)] = profile
@@ -238,15 +246,23 @@ def load_move_keys(path):
         direction = str(name).strip().lower()
         if direction not in MOVE_DIRECTIONS:
             zt.fail(
-                f"zone_config: в [{MOVE_SECTION}] неизвестное направление "
-                f"'{direction}': можно {', '.join(MOVE_DIRECTIONS)}",
+                _(
+                    "zone_config: в [{section}] неизвестное направление "
+                    "'{direction}': можно {directions}"
+                ).format(
+                    section=MOVE_SECTION,
+                    direction=direction,
+                    directions=", ".join(MOVE_DIRECTIONS),
+                ),
                 zt.EXIT_CONFIG,
             )
         combo = str(value).strip()
         if not combo:
             zt.fail(
-                f"zone_config: в [{MOVE_SECTION}] у направления '{direction}' "
-                "пустое сочетание",
+                _(
+                    "zone_config: в [{section}] у направления '{direction}' "
+                    "пустое сочетание"
+                ).format(section=MOVE_SECTION, direction=direction),
                 zt.EXIT_CONFIG,
             )
         keys[direction] = combo
@@ -272,8 +288,10 @@ def load_focus_keys(path):
         field = str(name).strip().lower()
         if field not in ("key", "zone"):
             zt.fail(
-                f"zone_config: в [{FOCUS_SECTION}] неизвестный ключ '{field}': "
-                "можно key, zone",
+                _(
+                    "zone_config: в [{section}] неизвестный ключ '{field}': "
+                    "можно key, zone"
+                ).format(section=FOCUS_SECTION, field=field),
                 zt.EXIT_CONFIG,
             )
         text = str(value).strip()
@@ -282,7 +300,9 @@ def load_focus_keys(path):
             continue
         if not text:
             zt.fail(
-                f"zone_config: в [{FOCUS_SECTION}] пустое значение zone",
+                _("zone_config: в [{section}] пустое значение zone").format(
+                    section=FOCUS_SECTION
+                ),
                 zt.EXIT_CONFIG,
             )
         zone = text
@@ -314,8 +334,14 @@ def load_tabs_config(path):
         field = str(name).strip().lower()
         if field not in TABS_FIELDS:
             zt.fail(
-                f"zone_config: в [{TABS_SECTION}] неизвестный ключ '{field}': "
-                f"можно {', '.join(TABS_FIELDS)}",
+                _(
+                    "zone_config: в [{section}] неизвестный ключ '{field}': "
+                    "можно {fields}"
+                ).format(
+                    section=TABS_SECTION,
+                    field=field,
+                    fields=", ".join(TABS_FIELDS),
+                ),
                 zt.EXIT_CONFIG,
             )
         text = str(value).strip()
@@ -334,8 +360,10 @@ def _tabs_height(text):
         height = 0
     if height <= 0:
         zt.fail(
-            f"zone_config: в [{TABS_SECTION}] height — целое число пикселей больше "
-            f"нуля, а не '{text}'",
+            _(
+                "zone_config: в [{section}] height — целое число пикселей больше "
+                "нуля, а не '{text}'"
+            ).format(section=TABS_SECTION, text=text),
             zt.EXIT_CONFIG,
         )
     return height
@@ -380,9 +408,10 @@ def load_actions(path):
             continue
         if name in sections:
             zt.fail(
-                f"zone_config: действие '{name}' задано дважды: "
-                f"[{sections[name]}] и [{section}] — имена действий сравниваются "
-                "без учёта регистра",
+                _(
+                    "zone_config: действие '{name}' задано дважды: [{first}] и "
+                    "[{second}] — имена действий сравниваются без учёта регистра"
+                ).format(name=name, first=sections[name], second=section),
                 zt.EXIT_CONFIG,
             )
         actions[name] = _action_entry(section, cp.items(section))
@@ -404,15 +433,19 @@ def _action_section_name(section):
     short = name[len(ACTION_SECTION_PREFIX):].strip().lower()
     if not short:
         zt.fail(
-            f"zone_config: пустое имя действия в секции [{name}]: пишите "
-            "[action:<имя>], например [action:term-main]",
+            _(
+                "zone_config: пустое имя действия в секции [{section}]: пишите "
+                "[action:<имя>], например [action:term-main]"
+            ).format(section=name),
             zt.EXIT_CONFIG,
         )
     if not ACTION_NAME_RE.match(short):
         zt.fail(
-            f"zone_config: имя действия '{short}' из секции [{name}]: можно "
-            "строчные латинские буквы, цифры, дефис и подчёркивание — имя "
-            "попадает в командную строку клавиши",
+            _(
+                "zone_config: имя действия '{name}' из секции [{section}]: можно "
+                "строчные латинские буквы, цифры, дефис и подчёркивание — имя "
+                "попадает в командную строку клавиши"
+            ).format(name=short, section=name),
             zt.EXIT_CONFIG,
         )
     return short
@@ -427,7 +460,6 @@ def _action_entry(section, items):
     регистрозависима), ``axis`` — приведённой к нижнему регистру, как её
     разбирает ``zone_actions.mirror_fractions``.
     """
-    where = f"zone_config: в [{section}]"
     raw = {}
     for field, value in items:
         # ConfigParser приводит ключи к нижнему регистру, так что ``Run`` в файле
@@ -435,8 +467,14 @@ def _action_entry(section, items):
         field = str(field).strip().lower()
         if field not in ACTION_FIELDS:
             zt.fail(
-                f"{where} неизвестное поле '{field}': можно "
-                + ", ".join(ACTION_FIELDS),
+                _(
+                    "zone_config: в [{section}] неизвестное поле '{field}': "
+                    "можно {fields}"
+                ).format(
+                    section=section,
+                    field=field,
+                    fields=", ".join(ACTION_FIELDS),
+                ),
                 zt.EXIT_CONFIG,
             )
         raw[field] = str(value).strip()
@@ -444,8 +482,10 @@ def _action_entry(section, items):
     run = raw.get("run", "")
     if not run:
         zt.fail(
-            f"{where} пустое обязательное поле run: нужно builtin:<имя> или "
-            "внешняя команда",
+            _(
+                "zone_config: в [{section}] пустое обязательное поле run: нужно "
+                "builtin:<имя> или внешняя команда"
+            ).format(section=section),
             zt.EXIT_CONFIG,
         )
     try:
@@ -453,26 +493,43 @@ def _action_entry(section, items):
     except zone_actions.ActionError as exc:
         # Имя встроенного действия проверяет ядро: список известных и сообщение
         # об опечатке должны быть одни и те же в конфиге и в раскладчике.
-        zt.fail(f"{where} {exc}", zt.EXIT_CONFIG)
+        zt.fail(
+            _("zone_config: в [{section}] {error}").format(section=section, error=exc),
+            zt.EXIT_CONFIG,
+        )
 
     entry = {"run": run, "zone": None, "key": None, "command": None, "axis": None}
     for field in ("zone", "key"):
         if field not in raw:
             continue
         if not raw[field]:
-            zt.fail(f"{where} пустое значение {field}", zt.EXIT_CONFIG)
+            zt.fail(
+                _("zone_config: в [{section}] пустое значение {field}").format(
+                    section=section, field=field
+                ),
+                zt.EXIT_CONFIG,
+            )
         entry[field] = raw[field]
 
     if "command" in raw:
         if builtin != zone_actions.TERMINAL:
             zt.fail(
-                f"{where} поле command бывает только у builtin:"
-                f"{zone_actions.TERMINAL}, а run = '{run}'",
+                _(
+                    "zone_config: в [{section}] поле command бывает только у "
+                    "builtin:{builtin}, а run = '{run}'"
+                ).format(
+                    section=section,
+                    builtin=zone_actions.TERMINAL,
+                    run=run,
+                ),
                 zt.EXIT_CONFIG,
             )
         if not raw["command"]:
             zt.fail(
-                f"{where} пустое значение command: чем запускать терминал",
+                _(
+                    "zone_config: в [{section}] пустое значение command: "
+                    "чем запускать терминал"
+                ).format(section=section),
                 zt.EXIT_CONFIG,
             )
         entry["command"] = raw["command"]
@@ -480,15 +537,23 @@ def _action_entry(section, items):
     if "axis" in raw:
         if builtin != zone_actions.MIRROR:
             zt.fail(
-                f"{where} поле axis бывает только у builtin:"
-                f"{zone_actions.MIRROR}, а run = '{run}'",
+                _(
+                    "zone_config: в [{section}] поле axis бывает только у "
+                    "builtin:{builtin}, а run = '{run}'"
+                ).format(section=section, builtin=zone_actions.MIRROR, run=run),
                 zt.EXIT_CONFIG,
             )
         axis = raw["axis"].lower()
         if axis not in zone_actions.MIRROR_AXES:
             zt.fail(
-                f"{where} неизвестная ось зеркала axis = '{raw['axis']}': можно "
-                + ", ".join(zone_actions.MIRROR_AXES),
+                _(
+                    "zone_config: в [{section}] неизвестная ось зеркала "
+                    "axis = '{axis}': можно {axes}"
+                ).format(
+                    section=section,
+                    axis=raw["axis"],
+                    axes=", ".join(zone_actions.MIRROR_AXES),
+                ),
                 zt.EXIT_CONFIG,
             )
         entry["axis"] = axis
@@ -500,9 +565,13 @@ def _workspace_number(value):
     try:
         number = int(value)
     except (TypeError, ValueError):
-        raise ValueError(f"номер стола должен быть целым: {value!r}") from None
+        raise ValueError(
+            _("номер стола должен быть целым: {value!r}").format(value=value)
+        ) from None
     if number < 1:
-        raise ValueError(f"номер стола должен быть с 1, а не {number}")
+        raise ValueError(
+            _("номер стола должен быть с 1, а не {number}").format(number=number)
+        )
     return number
 
 
@@ -522,7 +591,9 @@ def _workspace_body(mapping):
         profile = sanitize_profile_name(items[number])
         if not profile:
             raise ValueError(
-                f"пустое имя профиля у стола {number}: {items[number]!r}"
+                _("пустое имя профиля у стола {number}: {name!r}").format(
+                    number=number, name=items[number]
+                )
             )
         lines.append(f"{number} = {profile}")
     return lines
@@ -633,10 +704,14 @@ def _monitor_body(mapping):
     for output, name in (mapping or {}).items():
         output = str(output).strip()
         if not output:
-            raise ValueError(f"пустое имя выхода: {output!r}")
+            raise ValueError(_("пустое имя выхода: {output!r}").format(output=output))
         profile = sanitize_profile_name(name)
         if not profile:
-            raise ValueError(f"пустое имя профиля у выхода {output}: {name!r}")
+            raise ValueError(
+                _("пустое имя профиля у выхода {output}: {name!r}").format(
+                    output=output, name=name
+                )
+            )
         lines.append(f"{output} = {profile}")
     return lines
 
@@ -664,14 +739,17 @@ def load_monitor_map(path):
         output = str(key).strip()
         if not output:
             zt.fail(
-                f"zone_config: в [{MONITORS_SECTION}] пустое имя выхода",
+                _("zone_config: в [{section}] пустое имя выхода").format(
+                    section=MONITORS_SECTION
+                ),
                 zt.EXIT_CONFIG,
             )
         profile = sanitize_profile_name(value)
         if not profile:
             zt.fail(
-                f"zone_config: в [{MONITORS_SECTION}] у выхода {output} пустое имя "
-                "профиля",
+                _(
+                    "zone_config: в [{section}] у выхода {output} пустое имя профиля"
+                ).format(section=MONITORS_SECTION, output=output),
                 zt.EXIT_CONFIG,
             )
         mapping[output] = profile
@@ -753,10 +831,18 @@ def _monitor_row(output, profile, names, on_screen=True):
     notes = []
     if profile is not None and profile not in names:
         options.append(profile)
-        notes.append(f"профиля «{profile}» нет на диске: привязка пока не действует")
+        notes.append(
+            _("профиля «{profile}» нет на диске: привязка пока не действует").format(
+                profile=profile
+            )
+        )
     if not on_screen:
-        notes.append(f"выхода {output} сейчас {MONITOR_OFFLINE_NOTE}: привязка не "
-                     "действует, пока экран не подключён")
+        notes.append(
+            _(
+                "выхода {output} сейчас {note}: привязка не действует, "
+                "пока экран не подключён"
+            ).format(output=output, note=MONITOR_OFFLINE_NOTE)
+        )
     return (output, profile, options, "; ".join(notes), on_screen)
 
 
@@ -863,8 +949,10 @@ def workspace_dialog_rows(mapping, profiles=None, desktops=None):
             options.append(profile)
         warning = ""
         if missing:
-            warning = (f"профиля «{profile}» нет на диске: стол {number} пока "
-                       "раскладывается общим набором")
+            warning = _(
+                "профиля «{profile}» нет на диске: стол {number} пока "
+                "раскладывается общим набором"
+            ).format(profile=profile, number=number)
         rows.append((number, profile, options, warning))
     return rows
 
@@ -893,8 +981,10 @@ def _monitor_of(section):
     monitor = name[len(MONITOR_SECTION_PREFIX):].strip()
     if not monitor:
         zt.fail(
-            f"zone_config: пустое имя монитора в секции [{name}]: "
-            "пишите [zones:<имя выхода>], например [zones:HDMI-1]",
+            _(
+                "zone_config: пустое имя монитора в секции [{section}]: "
+                "пишите [zones:<имя выхода>], например [zones:HDMI-1]"
+            ).format(section=name),
             zt.EXIT_CONFIG,
         )
     return monitor
@@ -910,7 +1000,10 @@ def _read_conf(path, missing_ok=False):
     if not cp.read(path, encoding="utf-8"):
         if missing_ok:
             return None
-        zt.fail(f"zone_config: не найден конфиг {path}", zt.EXIT_CONFIG)
+        zt.fail(
+            _("zone_config: не найден конфиг {path}").format(path=path),
+            zt.EXIT_CONFIG,
+        )
     return cp
 
 
@@ -939,7 +1032,12 @@ def _zone_set(cp, section):
     for name, spec in cp.items(section):
         parser.add(name, spec)
     if not parser.zones:
-        zt.fail(f"zone_config: в секции [{section}] нет ни одной зоны", zt.EXIT_CONFIG)
+        zt.fail(
+            _("zone_config: в секции [{section}] нет ни одной зоны").format(
+                section=section
+            ),
+            zt.EXIT_CONFIG,
+        )
     return [Zone(name, *parser.fractions_of(name)) for name in parser.zones]
 
 
@@ -1152,10 +1250,11 @@ def _write_config(path, default_zones, monitor_sets=None, extra=None):
     """
     extra = {str(k).strip().lower(): list(v) for k, v in (extra or {}).items()}
     lines = [
-        "# Сетка окон для zone-tiler. Файл создан визуальным редактором zone-editor.py.",
-        "# Зона = x,y,w,h в долях рабочей области (0..1), без панели задач.",
-        "# Горячие клавиши — в секции [keys].",
-        "# Набор монитора — секция вида zones:<имя выхода>, например zones:HDMI-1.",
+        # Заголовок файла — не текст интерфейса, а содержимое zones.conf.
+        "# Сетка окон для zone-tiler. Файл создан визуальным редактором zone-editor.py.",  # i18n: не переводится
+        "# Зона = x,y,w,h в долях рабочей области (0..1), без панели задач.",  # i18n: не переводится
+        "# Горячие клавиши — в секции [keys].",  # i18n: не переводится
+        "# Набор монитора — секция вида zones:<имя выхода>, например zones:HDMI-1.",  # i18n: не переводится
         "",
         "[grid]",
         "cols = 1.0",
@@ -1315,7 +1414,7 @@ def missing_rule_targets(extra_sections, zone_names):
 
 def sanitize_name(text):
     """Имя зоны из поля ввода: пробелы и посторонние символы — в дефисы."""
-    return re.sub(r"[^0-9A-Za-zА-Яа-я_.-]+", "-", (text or "").strip())
+    return re.sub(r"[^0-9A-Za-zА-Яа-я_.-]+", "-", (text or "").strip())  # i18n: не переводится
 
 
 def unique_name(zones, base="zone"):
@@ -1370,11 +1469,15 @@ def profile_path(name, conf_path=None):
     """
     safe = sanitize_profile_name(name)
     if not safe:
-        raise ValueError(f"плохое имя профиля: {name!r}")
+        raise ValueError(
+            _("плохое имя профиля: {name!r}").format(name=name)
+        )
     directory = profiles_dir(conf_path)
     path = os.path.join(directory, safe + PROFILE_EXT)
     if os.path.dirname(os.path.realpath(path)) != os.path.realpath(directory):
-        raise ValueError(f"плохое имя профиля: {name!r}")
+        raise ValueError(
+            _("плохое имя профиля: {name!r}").format(name=name)
+        )
     return path
 
 
@@ -1393,7 +1496,7 @@ def list_profiles(conf_path=None):
 
 
 def _profile_missing(name):
-    return FileNotFoundError(f"нет профиля «{name}»")
+    return FileNotFoundError(_("нет профиля «{name}»").format(name=name))
 
 
 def profile_text(name, conf_path=None):
@@ -1450,12 +1553,12 @@ def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None, ign
         if clean is not None and monitor_zones:
             sets[clean] = list(monitor_zones)
     if not zones and not sets:
-        raise ValueError("профиль без зон сохранять нечего")
+        raise ValueError(_("профиль без зон сохранять нечего"))
     path = profile_path(name, conf_path)
     safe = sanitize_profile_name(name)
     lines = [
-        f"# Профиль раскладки GridSnap: {safe}.",
-        "# Секции [zones], [zones:<монитор>], [rules], [ignore], [keys]; "
+        f"# Профиль раскладки GridSnap: {safe}.",  # i18n: не переводится
+        "# Секции [zones], [zones:<монитор>], [rules], [ignore], [keys]; "  # i18n: не переводится
         "активация — zone-tiler.py profile use <имя>.",
     ]
     written = []
@@ -1484,7 +1587,11 @@ def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None, ign
         with open(path, "w", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\n")
     except OSError as exc:
-        raise OSError(f"не удалось записать профиль «{safe}»: {exc}") from exc
+        raise OSError(
+            _("не удалось записать профиль «{name}»: {error}").format(
+                name=safe, error=exc
+            )
+        ) from exc
     return path
 
 
@@ -1578,7 +1685,11 @@ def write_profile_json(data, path):
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(dumps_profile(data))
     except OSError as exc:
-        raise ProfileJsonError(f"не удалось записать JSON-профиль {path}: {exc}") from exc
+        raise ProfileJsonError(
+            _("не удалось записать JSON-профиль {path}: {error}").format(
+                path=path, error=exc
+            )
+        ) from exc
     return path
 
 
@@ -1588,9 +1699,15 @@ def read_profile_json(path):
         with open(path, encoding="utf-8") as fh:
             return json.load(fh)
     except OSError as exc:
-        raise ProfileJsonError(f"не удалось прочитать JSON-профиль {path}: {exc}") from exc
+        raise ProfileJsonError(
+            _("не удалось прочитать JSON-профиль {path}: {error}").format(
+                path=path, error=exc
+            )
+        ) from exc
     except ValueError as exc:
-        raise ProfileJsonError(f"{path} — не JSON: {exc}") from exc
+        raise ProfileJsonError(
+            _("{path} — не JSON: {error}").format(path=path, error=exc)
+        ) from exc
 
 
 def profile_zone_total(data):
@@ -1604,19 +1721,33 @@ def profile_zone_total(data):
 def _dict_zone_rect(name, spec):
     """``[x, y, w, h]`` из JSON с проверками; ошибка — ``ProfileJsonError``."""
     if isinstance(spec, (str, bytes, dict)):
-        raise ProfileJsonError(f"зона '{name}': ожидался список [x, y, w, h], а не {spec!r}")
+        raise ProfileJsonError(
+            _("зона '{zone}': ожидался список [x, y, w, h], а не {spec!r}").format(
+                zone=name, spec=spec
+            )
+        )
     try:
         values = list(spec)
     except TypeError:
         raise ProfileJsonError(
-            f"зона '{name}': ожидался список [x, y, w, h], а не {spec!r}"
+            _("зона '{zone}': ожидался список [x, y, w, h], а не {spec!r}").format(
+                zone=name, spec=spec
+            )
         ) from None
     if len(values) != 4:
-        raise ProfileJsonError(f"зона '{name}': ожидалось 4 доли [x, y, w, h], а не {spec!r}")
+        raise ProfileJsonError(
+            _("зона '{zone}': ожидалось 4 доли [x, y, w, h], а не {spec!r}").format(
+                zone=name, spec=spec
+            )
+        )
     numbers = []
     for item in values:
         if isinstance(item, bool) or not isinstance(item, (int, float)):
-            raise ProfileJsonError(f"зона '{name}': доли должны быть числами, а не {item!r}")
+            raise ProfileJsonError(
+                _("зона '{zone}': доли должны быть числами, а не {item!r}").format(
+                    zone=name, item=item
+                )
+            )
         numbers.append(float(item))
     x, y, w, h = numbers
     if not (
@@ -1628,7 +1759,9 @@ def _dict_zone_rect(name, spec):
         and y + h <= 1.0001
     ):
         raise ProfileJsonError(
-            f"зона '{name}': доли вне 0..1 или w/h ≤ 0: {spec!r}"
+            _("зона '{zone}': доли вне 0..1 или w/h ≤ 0: {spec!r}").format(
+                zone=name, spec=spec
+            )
         )
     return x, y, w, h
 
@@ -1639,13 +1772,18 @@ def _dict_zones(body, where):
         return []
     if not isinstance(body, dict):
         raise ProfileJsonError(
-            f"в JSON-профиле {where} должен быть объектом {{зона: [x, y, w, h]}}"
+            _(
+                "в JSON-профиле {where} должен быть объектом "
+                "{{зона: [x, y, w, h]}}"
+            ).format(where=where)
         )
     zones = []
     for raw_name, spec in body.items():
         name = str(raw_name).strip()
         if not name:
-            raise ProfileJsonError(f"в JSON-профиле {where}: пустое имя зоны")
+            raise ProfileJsonError(
+                _("в JSON-профиле {where}: пустое имя зоны").format(where=where)
+            )
         zones.append(Zone(name, *_dict_zone_rect(name, spec)))
     return zones
 
@@ -1665,19 +1803,25 @@ def profile_from_dict(data, name=None, conf_path=None):
     Возвращает путь записанного профиля.
     """
     if not isinstance(data, dict):
-        raise ProfileJsonError("в JSON-профиле ожидался объект {...}")
+        raise ProfileJsonError(_("в JSON-профиле ожидался объект {...}"))
     version = data.get(PROFILE_JSON_KEY)
     if isinstance(version, bool) or version != PROFILE_JSON_VERSION:
         raise ProfileJsonError(
-            f"в JSON-профиле {PROFILE_JSON_KEY} должно быть "
-            f"{PROFILE_JSON_VERSION}, а не {version!r}"
+            _(
+                "в JSON-профиле {key} должно быть {version}, а не {value!r}"
+            ).format(
+                key=PROFILE_JSON_KEY,
+                version=PROFILE_JSON_VERSION,
+                value=version,
+            )
         )
 
     safe = sanitize_profile_name(name if name is not None else data.get("name"))
     if not safe:
         raise ValueError(
-            "плохое имя профиля: укажите --name, в JSON имя "
-            f"{data.get('name')!r} не годится"
+            _(
+                "плохое имя профиля: укажите --name, в JSON имя {name!r} не годится"
+            ).format(name=data.get("name"))
         )
 
     zones = _dict_zones(data.get("zones"), "zones")
@@ -1686,13 +1830,18 @@ def profile_from_dict(data, name=None, conf_path=None):
         raw_monitors = {}
     if not isinstance(raw_monitors, dict):
         raise ProfileJsonError(
-            "в JSON-профиле monitors должен быть объектом {выход: {зона: [x, y, w, h]}}"
+            _(
+                "в JSON-профиле monitors должен быть объектом "
+                "{выход: {зона: [x, y, w, h]}}"
+            )
         )
     monitor_sets = {}
     for raw_monitor, body in raw_monitors.items():
         monitor = _clean_monitor(raw_monitor)
         if monitor is None:
-            raise ProfileJsonError("в JSON-профиле пустое имя монитора в monitors")
+            raise ProfileJsonError(
+                _("в JSON-профиле пустое имя монитора в monitors")
+            )
         parsed = _dict_zones(body, f"monitors.{monitor}")
         if parsed:
             monitor_sets[monitor] = parsed
@@ -1701,44 +1850,55 @@ def profile_from_dict(data, name=None, conf_path=None):
     for chunk in monitor_sets.values():
         names |= {z.name for z in chunk}
     if not names:
-        raise ProfileJsonError("в JSON-профиле нет ни одной зоны")
+        raise ProfileJsonError(_("в JSON-профиле нет ни одной зоны"))
 
     rules = data.get("rules")
     if rules is None:
         rules = []
     if isinstance(rules, str) or not isinstance(rules, (list, tuple)):
-        raise ProfileJsonError("в JSON-профиле rules должен быть списком строк")
+        raise ProfileJsonError(_("в JSON-профиле rules должен быть списком строк"))
     rules = [str(line) for line in rules]
     for line in rules:
         text = line.strip()
         if not text or text[0] in "#;":
             continue
         if "=" not in _INLINE_COMMENT_RE.sub("", text):
-            raise ProfileJsonError(f"правило без «селектор = зона»: {line!r}")
+            raise ProfileJsonError(
+                _("правило без «селектор = зона»: {line!r}").format(line=line)
+            )
     for selector, target in _rule_pairs(rules):
         if target not in names:
             raise ProfileJsonError(
-                f"правило «{selector} = {target}» ссылается на неизвестную зону '{target}'"
+                _(
+                    "правило «{selector} = {zone}» ссылается на неизвестную "
+                    "зону '{zone}'"
+                ).format(selector=selector, zone=target)
             )
 
     ignore = data.get("ignore")
     if ignore is None:
         ignore = []
     if isinstance(ignore, str) or not isinstance(ignore, (list, tuple)):
-        raise ProfileJsonError("в JSON-профиле ignore должен быть списком строк")
+        raise ProfileJsonError(_("в JSON-профиле ignore должен быть списком строк"))
     ignore = [str(line) for line in ignore]
     for line in ignore:
         text = line.strip()
         if not text or text[0] in "#;":
             continue
         if "=" not in _INLINE_COMMENT_RE.sub("", text):
-            raise ProfileJsonError(f"исключение без «селектор = заметка»: {line!r}")
+            raise ProfileJsonError(
+                _("исключение без «селектор = заметка»: {line!r}").format(
+                    line=line
+                )
+            )
 
     keys = data.get("keys")
     if keys is None:
         keys = {}
     if not isinstance(keys, dict):
-        raise ProfileJsonError("в JSON-профиле keys должен быть объектом {зона: сочетание}")
+        raise ProfileJsonError(
+            _("в JSON-профиле keys должен быть объектом {зона: сочетание}")
+        )
     bindings = {str(k).strip(): str(v).strip() for k, v in keys.items()}
     for chunk in [zones] + list(monitor_sets.values()):
         for zone in chunk:

@@ -15,6 +15,15 @@
 юнит-тестам без X и без GTK.
 """
 
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+from zone_i18n import _  # noqa: E402  (строки интерфейса и их перевод)
+
 MIN_SIZE = 0.05          # минимальный размер зоны (доля экрана)
 SNAP_PX = 9              # прилипание, пикселей
 MARGIN = 26              # поля холста редактора вокруг «экрана», пикселей
@@ -191,7 +200,7 @@ def _zone_fields(zone):
         )
     values = tuple(zone)
     if len(values) < 4:
-        raise ValueError(f"zone_geom: в наборе не зона, а {zone!r}")
+        raise ValueError(_("zone_geom: в наборе не зона, а {zone!r}").format(zone=zone))
     name = str(values[0]) if len(values) > 4 else ""
     x, y, w, h = values[-4], values[-3], values[-2], values[-1]
     return name, float(x), float(y), float(w), float(h), ""
@@ -231,12 +240,14 @@ def set_origin_text(monitor, own, shared=False, offline=False):
     иначе набор унаследован. Отключённый выход помечается отдельно.
     """
     if shared:
-        text = "общий набор [zones] — его наследуют остальные мониторы"
+        text = _("общий набор [zones] — его наследуют остальные мониторы")
     elif own:
-        text = f"свой набор [zones:{monitor}]"
+        text = _("свой набор [zones:{monitor}]").format(monitor=monitor)
     else:
-        text = "наследует [zones]"
-    return f"{text} · нет на экране" if offline else text
+        text = _("наследует [zones]")
+    if offline:
+        return _("{text} · нет на экране").format(text=text)
+    return text
 
 
 def _binding_of(zone):

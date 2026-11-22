@@ -27,6 +27,12 @@ X, GTK и ffmpeg тесту не нужны — только байты файл
 import os
 import unittest
 
+
+try:
+    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    from tests import i18n_env  # noqa: F401
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 GIF = os.path.join(ROOT, "site", "assets", "demo.gif")

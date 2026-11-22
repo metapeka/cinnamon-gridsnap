@@ -10,6 +10,10 @@
 #   4. второе окно в ту же зону — сверху полоса вкладок, вкладка переключается;
 #   5. режим «только эта зона»: чужое окно свёрнуто, повторная команда вернула.
 #
+# Сцена снимается на **английском**: `GRIDSNAP_LANG=en` выставляется самим
+# скриптом, а окна-декорации подписаны по-английски — демонстрация идёт в
+# README и на сайт, где главная страница английская.
+#
 # Сцена пишется через `ffmpeg -f x11grab`, затем собирается GIF (палитра
 # `palettegen`/`paletteuse`). Ширину GIF скрипт подбирает сам: 960 → 800 → 720
 # → 640 px, пока файл не влезет в 2.5 МБ (ниже 640 не опускается: тогда лучше
@@ -38,6 +42,11 @@ set -u
 # становится оконным менеджером. См. tests/smoke.sh.
 export XDG_SESSION_TYPE=x11
 unset WAYLAND_DISPLAY 2>/dev/null || true
+
+# Язык сцены — английский: демонстрация идёт в README и на сайт, где главная
+# страница английская, а незнакомая локаль и так даёт английский. Переменная
+# зафиксирована, чтобы GIF не зависела от локали машины, на которой снимали.
+export GRIDSNAP_LANG=en
 
 ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 OUT="$ROOT/site/assets/demo.gif"
@@ -229,7 +238,7 @@ top-right = <Super>2
 bottom-right = <Super>3
 
 [rules]
-re:Календарь$ = main
+re:Calendar$ = main
 
 [tabs]
 height = 32
@@ -237,9 +246,9 @@ EOF
 
 # --- зависимости сцены ---------------------------------------------------
 # Тексты окон: короткие строки, читаемые в маленьком GIF.
-printf 'Входящие\n\n  Отчёт за ноябрь\n  Планёрка 10:00\n  GridSnap: демо\n' >"$WORK/mail.txt"
-printf 'Календарь\n\n  Пн 10:00 планёрка\n  Ср 15:00 ревью\n' >"$WORK/cal.txt"
-printf 'Файлы\n\n  demo.gif\n  zones.conf\n  README.md\n' >"$WORK/files.txt"
+printf 'Inbox\n\n  November report\n  Standup 10:00\n  GridSnap: demo\n' >"$WORK/mail.txt"
+printf 'Calendar\n\n  Mon 10:00 standup\n  Wed 15:00 review\n' >"$WORK/cal.txt"
+printf 'Files\n\n  demo.gif\n  zones.conf\n  README.md\n' >"$WORK/files.txt"
 
 # Занятость дисплея проверяется подключением, а не файлом блокировки: после
 # падения Xvfb сокет и lock-файл могут остаться, и «занят» по файлу было бы
@@ -287,8 +296,8 @@ fi
 
 # Первое окно — свободное, но открыто оно ДО записи: в кадр оно попадает уже на
 # своём месте, когда редактор свернётся. Вложение делает демон (как апплет).
-W1PID=$(open_window "Почта — входящие" "$WORK/mail.txt")
-W1=$(wait_window "Почта" 40) || die "окно «Почта» не открылось ($(log_tail "$WORK/windows.log"))"
+W1PID=$(open_window "Mail — inbox" "$WORK/mail.txt")
+W1=$(wait_window "Mail" 40) || die "окно «Mail» не открылось ($(log_tail "$WORK/windows.log"))"
 xdotool windowmove "$W1" 130 130
 
 python3 "$ROOT/zone-editor.py" --conf "$CONF" >"$WORK/editor.log" 2>&1 &
@@ -325,13 +334,15 @@ sleep 1.5
 # ДО вкладок: полоса вкладок — окно поверх оверлея и закрыла бы подпись зоны
 # `main` у верхней кромки.
 say "  шаг 3: пикер"
-W3PID=$(open_window "Файлы" "$WORK/files.txt")
-W3=$(wait_window "Файлы" 40) || die "окно «Файлы» не открылось ($(log_tail "$WORK/windows.log"))"
+W3PID=$(open_window "Files" "$WORK/files.txt")
+W3=$(wait_window "Files" 40) || die "окно «Files» не открылось ($(log_tail "$WORK/windows.log"))"
 sleep 1.0
 python3 "$ROOT/zone-picker.py" --window "$W3" --monitor 0 --select main \
     --conf "$CONF" --quiet >"$WORK/picker.log" 2>&1 &
 PICKPID=$!
-if ! wait_for 40 xdotool search --name "выбор зоны"; then
+# Окно пикера ищется по WM_CLASS, а не по заголовку: заголовок переводится,
+# а класс процесса — нет. Так сцена не зависит от языка интерфейса.
+if ! wait_for 40 xdotool search --classname zone-picker.py; then
     die "оверлей пикера не появился ($(log_tail "$WORK/picker.log"))"
 fi
 sleep 1.5            # оверлею нужно взять клавиатуру
@@ -347,8 +358,8 @@ sleep 1.5
 
 # 4. Второе окно в ту же зону: правила демона делают из него вкладку.
 say "  шаг 4: вкладки"
-W2PID=$(open_window "Календарь" "$WORK/cal.txt")
-W2=$(wait_window "Календарь" 40) || die "окно «Календарь» не открылось ($(log_tail "$WORK/windows.log"))"
+W2PID=$(open_window "Calendar" "$WORK/cal.txt")
+W2=$(wait_window "Calendar" 40) || die "окно «Calendar» не открылось ($(log_tail "$WORK/windows.log"))"
 expect_frame "$W2" main 2 40 || die "второе окно не стало вкладкой: $(cat "$WORK/frame.log" 2>/dev/null)"
 expect_frame "$W1" main 2 20 || die "первая вкладка не переставлена на общую рамку: $(cat "$WORK/frame.log" 2>/dev/null)"
 sleep 1.8

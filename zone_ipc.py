@@ -16,7 +16,14 @@ import contextlib
 import json
 import os
 import socket
+import sys
 import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+from zone_i18n import _  # noqa: E402  (строки интерфейса и их перевод)
 
 # Максимальная длина одной строки протокола: защита от неограниченного буфера.
 MAX_LINE = 1 << 20  # 1 МиБ
@@ -45,21 +52,21 @@ def parse_command(raw):
         try:
             raw = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise ProtocolError(f"строка не в UTF-8: {exc}") from None
+            raise ProtocolError(_("строка не в UTF-8: {error}").format(error=exc)) from None
     if not isinstance(raw, str):
-        raise ProtocolError("строка протокола должна быть str или bytes")
+        raise ProtocolError(_("строка протокола должна быть str или bytes"))
     text = raw.strip()
     if not text:
-        raise ProtocolError("пустая строка протокола")
+        raise ProtocolError(_("пустая строка протокола"))
     try:
         request = json.loads(text)
     except ValueError as exc:
-        raise ProtocolError(f"не разобрать JSON: {exc}") from None
+        raise ProtocolError(_("не разобрать JSON: {error}").format(error=exc)) from None
     if not isinstance(request, dict):
-        raise ProtocolError("команда должна быть JSON-объектом")
+        raise ProtocolError(_("команда должна быть JSON-объектом"))
     cmd = request.get("cmd")
     if not isinstance(cmd, str) or not cmd.strip():
-        raise ProtocolError("в команде нет непустого строкового поля 'cmd'")
+        raise ProtocolError(_("в команде нет непустого строкового поля 'cmd'"))
     request["cmd"] = cmd.strip()
     return request
 
@@ -83,7 +90,7 @@ class LineReader:
             line, self.buf = self.buf.split(b"\n", 1)
             lines.append(line)
         if len(self.buf) > self.max_line:
-            raise ProtocolError("строка длиннее предела протокола")
+            raise ProtocolError(_("строка длиннее предела протокола"))
         return lines
 
     def tail(self):
@@ -121,7 +128,7 @@ class Dispatcher:
         if handler is None:
             return {
                 "ok": False,
-                "error": f"неизвестная команда: {name}",
+                "error": _("неизвестная команда: {name}").format(name=name),
                 "code": "unknown_command",
             }
         try:
@@ -133,7 +140,7 @@ class Dispatcher:
         if not isinstance(result, dict):
             return {
                 "ok": False,
-                "error": "обработчик вернул не объект",
+                "error": _("обработчик вернул не объект"),
                 "code": "handler_error",
             }
         response = {"ok": True}
@@ -199,7 +206,7 @@ def read_response(conn, timeout=None):
     while True:
         data = conn.recv(4096)
         if not data:
-            raise ProtocolError("соединение закрыто без ответа")
+            raise ProtocolError(_("соединение закрыто без ответа"))
         lines = reader.feed(data)
         for line in lines:
             if not line.strip():
@@ -207,9 +214,9 @@ def read_response(conn, timeout=None):
             try:
                 obj = json.loads(line.decode("utf-8"))
             except (UnicodeDecodeError, ValueError) as exc:
-                raise ProtocolError(f"не разобрать ответ: {exc}") from None
+                raise ProtocolError(_("не разобрать ответ: {error}").format(error=exc)) from None
             if not isinstance(obj, dict):
-                raise ProtocolError("ответ должен быть JSON-объектом")
+                raise ProtocolError(_("ответ должен быть JSON-объектом"))
             return obj
 
 
@@ -268,10 +275,12 @@ class Server:
             try:
                 os.makedirs(parent, mode=0o700, exist_ok=True)
             except OSError as exc:
-                raise OSError(f"не создать каталог сокета {parent}: {exc}") from None
+                raise OSError(_("не создать каталог сокета {dir}: {error}").format(
+                    dir=parent, error=exc)) from None
         if os.path.exists(path):
             if _is_live_socket(path):
-                raise OSError(f"сокет {path} уже обслуживается другим процессом")
+                raise OSError(_("сокет {path} уже обслуживается другим процессом").format(
+                    path=path))
             _unlink_quiet(path)  # мёртвый сокет от упавшего демона
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:

@@ -29,6 +29,11 @@ import sys
 import tempfile
 import unittest
 
+try:
+    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    from tests import i18n_env  # noqa: F401
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -36,6 +41,7 @@ if ROOT not in sys.path:
 
 import zone_config as zc  # noqa: E402  # isort: skip
 import zone_geom as geom  # noqa: E402  # isort: skip
+
 
 
 def zone(name, rect=(0, 0, 1, 1), binding=""):

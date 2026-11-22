@@ -29,6 +29,8 @@ from dataclasses import dataclass
 
 import zone_tabs
 
+from zone_i18n import _  # строки интерфейса; без каталога — исходный текст
+
 # Встроенные действия записываются в `[action:<имя>] run` как `builtin:<имя>`:
 # так одна и та же запись может быть и своей командой, и готовым действием
 # проекта, а ядро не путает одно с другим.
@@ -162,8 +164,13 @@ def builtin_name(run):
     name = text[len(BUILTIN_PREFIX):].strip().lower()
     if name not in BUILTINS:
         raise ActionError(
-            f"неизвестное встроенное действие 'builtin:{name}': можно "
-            + ", ".join(f"builtin:{builtin}" for builtin in BUILTINS)
+            _(
+                "неизвестное встроенное действие 'builtin:{name}': "
+                "можно {builtins}"
+            ).format(
+                name=name,
+                builtins=", ".join(f"builtin:{builtin}" for builtin in BUILTINS),
+            )
         )
     return name
 
@@ -178,13 +185,15 @@ def expand_command(command, context, splitter=shlex.split):
     """
     text = str(command or "").strip()
     if not text:
-        raise ActionError("у действия пустая команда в run")
+        raise ActionError(_("у действия пустая команда в run"))
     try:
         tokens = splitter(text)
     except ValueError as exc:
-        raise ActionError(f"не разобрать команду действия: {exc}") from None
+        raise ActionError(
+            _("не разобрать команду действия: {error}").format(error=exc)
+        ) from None
     if not tokens:
-        raise ActionError("у действия пустая команда в run")
+        raise ActionError(_("у действия пустая команда в run"))
     values = context.values()
     return [_expand_token(token, values) for token in tokens]
 
@@ -196,8 +205,13 @@ def _expand_token(token, values):
         name = match.group(1)
         if name not in values:
             raise ActionError(
-                f"в команде действия неизвестная подстановка '{{{name}}}': можно "
-                + ", ".join("{" + known + "}" for known in PLACEHOLDERS)
+                _(
+                    "в команде действия неизвестная подстановка '{{{name}}}': "
+                    "можно {known}"
+                ).format(
+                    name=name,
+                    known=", ".join("{" + known + "}" for known in PLACEHOLDERS),
+                )
             )
         return values[name]
 
@@ -224,7 +238,9 @@ def _mirror_axis(axis):
     name = str(axis or DEFAULT_MIRROR_AXIS).strip().lower()
     if name not in MIRROR_AXES:
         raise ActionError(
-            f"неизвестная ось зеркала '{name}': можно " + ", ".join(MIRROR_AXES)
+            _("неизвестная ось зеркала '{axis}': можно {axes}").format(
+                axis=name, axes=", ".join(MIRROR_AXES)
+            )
         )
     return name
 
@@ -242,7 +258,9 @@ def find_mirror(zones, subject, axis=DEFAULT_MIRROR_AXIS):
     Неизвестное имя `subject` — :class:`ActionError`.
     """
     if subject not in zones:
-        raise ActionError(f"зоны '{subject}' нет в сетке — зеркалить нечего")
+        raise ActionError(
+            _("зоны '{zone}' нет в сетке — зеркалить нечего").format(zone=subject)
+        )
     target = mirror_fractions(zones[subject], axis)
     tx, ty = _center(target)
     best = None

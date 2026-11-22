@@ -13,6 +13,11 @@ import sys
 import cairo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+from zone_i18n import _  # noqa: E402  (строки интерфейса и их перевод)
+
 ICONS = os.path.join(HERE, "icons")
 SIZES = (16, 22, 24, 32, 48, 64, 128, 256, 512)
 
@@ -120,7 +125,7 @@ def main():
         make_png(os.path.join(ICONS, f"gridsnap-{size}.png"), size)
     with open(os.path.join(ICONS, "gridsnap.svg"), "w", encoding="utf-8") as fh:
         fh.write(SVG)
-    print("иконки Gridsnap:", ", ".join(str(s) for s in SIZES))
+    print(_("иконки Gridsnap: {sizes}").format(sizes=", ".join(str(s) for s in SIZES)))
 
 
 if __name__ == "__main__":

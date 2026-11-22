@@ -18,6 +18,11 @@ set -u
 # muffin (Mutter) выбирает бэкенд по logind/$XDG_SESSION_TYPE: без X11 он не
 # становится оконным менеджером в CI. См. tests/smoke.sh.
 export XDG_SESSION_TYPE=x11
+
+# Интерфейс — на исходном языке: сценарий сверяет поведение по русским
+# сообщениям CLI, а перевод (каталоги en/zh_CN) выбирается из локали машины.
+GRIDSNAP_LANG=ru
+export GRIDSNAP_LANG
 unset WAYLAND_DISPLAY 2>/dev/null || true
 
 DISP=":98"

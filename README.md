@@ -10,6 +10,29 @@ Tested on Debian 13, Cinnamon 6.4.10 (Muffin, X11), a 1920×1040 work area.
 
 ![Zone editor in action](site/assets/demo.gif)
 
+<!-- section: languages -->
+## Interface languages
+
+The interface speaks **English**, **Simplified Chinese** and **Russian**. The strings in the source
+are Russian — that is the source language — and English is the default for every other locale:
+
+- `ru*` (`ru`, `ru_RU.UTF-8`) — Russian, the source strings themselves; no catalog is needed;
+- `zh*` (`zh_CN`, `zh_CN.UTF-8`, `zh-Hans`) — Simplified Chinese;
+- everything else (`en`, `de`, `C`, nothing set) — English.
+
+The language comes from `GRIDSNAP_LANG` first and then from `LC_ALL`, `LC_MESSAGES`, `LANG`, so it
+can be switched for a single command:
+
+```bash
+GRIDSNAP_LANG=en gridsnap-tiler list
+```
+
+Running from a checkout needs no build: when the compiled catalogs are missing, the tools read
+`po/<language>.po` straight from the repository (`make mo` builds them, and the installers put the
+compiled `.mo` under `share/locale`). The Cinnamon applet follows the session locale, as xlets do,
+and does not look at `GRIDSNAP_LANG`. The English and Chinese catalogs are machine translations, not
+proofread by native speakers. The man pages are still Russian only.
+
 <!-- section: install -->
 ## Installation
 
