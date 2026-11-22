@@ -34,6 +34,12 @@ unset XDG_CONFIG_HOME 2>/dev/null || true
 
 LOGDIR=$(mktemp -d 2>/dev/null || echo /tmp)
 MUFFIN_LOG="$LOGDIR/gridsnap-smoke-arrange-muffin.log"
+# Сокет демона — в своём каталоге: при живом демоне владельца `arrange`
+# делегирует ему, и сценарий разбирал бы поведение чужого процесса.
+RUNTIME="$LOGDIR/run"
+mkdir -p "$RUNTIME"
+chmod 700 "$RUNTIME"
+export XDG_RUNTIME_DIR="$RUNTIME"
 
 fails=0
 say() { printf '%s\n' "$1"; }

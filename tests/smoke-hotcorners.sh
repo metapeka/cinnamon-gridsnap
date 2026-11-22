@@ -58,6 +58,12 @@ mkdir -p "$XDG_CONFIG_HOME"
 LOGDIR=$(mktemp -d 2>/dev/null || echo /tmp)
 MUFFIN_LOG="$LOGDIR/gridsnap-smoke-hotcorners-muffin.log"
 WATCHER_LOG="$LOGDIR/gridsnap-smoke-hotcorners-watcher.log"
+# Сокет демона — в своём каталоге: при живом демоне владельца сценарий
+# разбирал бы поведение чужого процесса, а не наше.
+RUNTIME="$LOGDIR/run"
+mkdir -p "$RUNTIME"
+chmod 700 "$RUNTIME"
+export XDG_RUNTIME_DIR="$RUNTIME"
 
 fails=0
 say() { printf '%s\n' "$1"; }

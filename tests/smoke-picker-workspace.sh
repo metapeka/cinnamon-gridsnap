@@ -29,6 +29,12 @@ PICKER="$ROOT/zone-picker.py"
 
 LOGDIR=$(mktemp -d 2>/dev/null || echo /tmp)
 export XDG_STATE_HOME="$LOGDIR/state"
+# Сокет демона — в своём каталоге: при живом демоне владельца сценарий
+# разбирал бы поведение чужого процесса, а не наше.
+RUNTIME="$LOGDIR/run"
+mkdir -p "$RUNTIME"
+chmod 700 "$RUNTIME"
+export XDG_RUNTIME_DIR="$RUNTIME"
 
 fails=0
 say() { printf '%s\n' "$1"; }

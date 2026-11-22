@@ -69,6 +69,12 @@ HELPER_LOG="$LOGDIR/gridsnap-monitors-helper.log"
 export XDG_STATE_HOME="$LOGDIR/state"
 export XDG_CONFIG_HOME="$LOGDIR/config"
 mkdir -p "$LOGDIR/state" "$LOGDIR/config"
+# Сокет демона — в своём каталоге: при живом демоне владельца сценарий
+# разбирал бы поведение чужого процесса, а не наше.
+RUNTIME="$LOGDIR/run"
+mkdir -p "$RUNTIME"
+chmod 700 "$RUNTIME"
+export XDG_RUNTIME_DIR="$RUNTIME"
 
 fails=0
 say() { printf '%s\n' "$1"; }

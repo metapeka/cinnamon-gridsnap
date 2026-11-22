@@ -57,6 +57,8 @@ zone-tiler.py action <имя> [--monitor N|ИМЯ] [--window ID] [--dry-run|--qu
 zone-tiler.py undo [--all] [--verify|--quiet] [--conf PATH]
 zone-tiler.py profile list | show <имя> | save <имя> | use <имя> | rm <имя> [--no-hotkeys] [--conf PATH]
 zone-tiler.py profile use-monitors [--dry-run|--quiet|--no-hotkeys] [--conf PATH]
+zone-tiler.py profile gallery [--json] [--conf PATH]
+zone-tiler.py profile from-gallery <id> [--name ИМЯ] [--conf PATH]
 zone-tiler.py --version
 ```
 
@@ -218,6 +220,13 @@ zone}`. `frame` — прежняя **внешняя** рамка окна (ка�
 - `profile use-monitors` — активировать привязки экранов (`[monitors]`): снимок зон по экранам плюс
   слитые `[rules]`/`[ignore]`/`[keys]`, с перечнем переопределённого и пропуском правил на зоны, которых
   нет в итоговом наборе. Идемпотентна; `--dry-run` ничего не пишет; `--no-hotkeys` не трогает сочетания.
+- `profile gallery` — список готовых раскладок поставки (`id`, название, число зон, описание; `--json` —
+  то же в JSON). Каталог берётся из `$GRIDSNAP_GALLERY`, иначе `gallery/` рядом с кодом, иначе
+  `<префикс>/share/gridsnap/gallery`; каталога нет или он пуст — код `1`.
+- `profile from-gallery <id>` — копия раскладки в профиль пользователя (`--name` задаёт имя, по
+  умолчанию — id): зоны, наборы `[zones:<выход>]`, `[rules]`, `[ignore]` и `[keys]`; секция `[gallery]`
+  в профиль не переносится, каталог галереи не правится. Занятое имя — код `3` (перезаписи из CLI нет:
+  `force` передаёт только редактор после диалога).
 
 Коды: плохое/пустое имя — `2`, отсутствующий или битый профиль — `3`. Чистая логика каталога, чтения,
 записи и применения живёт в `zone_config.py` (`profiles_dir`, `profile_path`, `list_profiles`,
