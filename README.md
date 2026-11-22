@@ -31,7 +31,9 @@ Running from a checkout needs no build: when the compiled catalogs are missing, 
 `po/<language>.po` straight from the repository (`make mo` builds them, and the installers put the
 compiled `.mo` under `share/locale`). The Cinnamon applet follows the session locale, as xlets do,
 and does not look at `GRIDSNAP_LANG`. The English and Chinese catalogs are machine translations, not
-proofread by native speakers. The man pages are still Russian only.
+proofread by native speakers. The man pages follow the same rule: `man gridsnap` picks the page by
+locale — English by default, Russian under `ru*`, Chinese under `zh*` — and the English and Chinese
+pages are machine translations too.
 
 <!-- section: install -->
 ## Installation
@@ -112,11 +114,12 @@ mkdir -p ~/.config/gridsnap && cp /usr/lib/gridsnap/zones.conf ~/.config/gridsna
 <!-- section: install-help -->
 ### Reference
 
-The man pages come with the package (`/usr/share/man/man1`), and `install.sh` puts them into
-`PREFIX/share/man/man1` — including under `--no-launcher`: they are documentation, not part of the
-launcher. `man gridsnap` — the package commands, `zones.conf`, the files and the exit codes;
-`man gridsnap-tiler` — the same page (as are `man gridsnap-daemon`, `man gridsnap-editor`,
-`man gridsnap-picker`, `man gridsnap-ctl`, `man setup-hotkeys`).
+The man pages come with the package: English in `/usr/share/man/man1` (it is what any locale without
+a translation gets), Russian in `/usr/share/man/ru/man1`, Chinese in `/usr/share/man/zh_CN/man1`;
+`install.sh` lays the same three under `PREFIX/share/man` — including under `--no-launcher`: they
+are documentation, not part of the launcher. `man gridsnap` — the package commands, `zones.conf`,
+the files and the exit codes; `man gridsnap-tiler` — the same page (as are `man gridsnap-daemon`,
+`man gridsnap-editor`, `man gridsnap-picker`, `man gridsnap-ctl`, `man setup-hotkeys`).
 
 <!-- section: cinnamon-native -->
 ## 1. What Cinnamon can do out of the box
@@ -808,3 +811,15 @@ What is in the menu, which settings exist and what the limits are — in `contri
 * the Cinnamon applet: `python3 -m json.tool` for `metadata.json` and `settings-schema.json`,
   `node --check applet.js`, loading into a live Cinnamon (a headless `Xvfb` + a private dbus) —
   `Loaded applet gridsnap@metapeka`, and exactly it in the panel (`contrib/applet/check-cinnamon.sh`).
+
+* the man pages: `make check-man-i18n` builds all three languages with po4a, checks that every entry
+  of the po4a template is translated, that the `--…` keys in `man/gridsnap.1` match the real `--help`
+  of all seven commands, that `man --warnings` is silent, and that the Russian page is
+  byte-identical to the source.
+
+## 13. License
+
+<!-- section: license -->
+
+MIT — see [`LICENSE`](LICENSE). Copyright (c) 2026 metapeka
+<188594035+metapeka@users.noreply.github.com>.

@@ -2,9 +2,8 @@
 #
 # Рецепт AUR для GridSnap. Ставит то же, что и .deb: код в /usr/lib/gridsnap,
 # команды-запускалки в /usr/bin, ярлык в /usr/share/applications и man-страницы
-# в /usr/share/man/man1 (для Arch — сжатыми gzip).
-# Собирать не обязательно — это рецепт для Arch; версия обязана совпадать с
-# VERSION в zone-tiler.py (make aur это проверяет).
+# трёх языков в /usr/share/man/<язык>/man1 (для Arch — сжатыми gzip).
+# Версия обязана совпадать с VERSION в zone-tiler.py (make aur это проверяет).
 #
 # Сборка:
 #   makepkg -si
@@ -14,12 +13,23 @@ pkgrel=1
 pkgdesc="Раскладка окон по зонам для Cinnamon/X11"
 arch=('any')
 url="https://github.com/metapeka/cinnamon-gridsnap"
-license=('custom')  # лицензия в репозитории не объявлена
+license=('MIT')
 depends=('python' 'python-gobject' 'gtk3' 'libx11' 'xorg-xprop' 'xorg-xwininfo')
-makedepends=('gettext')  # msgfmt: каталоги переводов собираются в package()
+# gettext — каталоги переводов (msgfmt), po4a — man-страницы (тоже в build()).
+makedepends=('gettext' 'po4a')
 optdepends=('python-cairo: перерисовка иконок (make-icon.py)')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
+
+# Архив с GitHub (`archive/refs/tags/...`) собранного man/build не содержит:
+# каталог в .gitignore, в репозитории лежат только источник и каталоги po4a.
+# Поэтому страницы нужно собрать здесь же: `make man` — тот же конвейер, что и
+# в .deb/tar.gz (po4a для en и zh_CN, копия источника для ru, псевдонимы во все
+# три языка, точки переноса для китайской). Повторять то же руками медленнее и
+# легче разойтись с Makefile.
+build() {
+    make man
+}
 
 package() {
     install -d "$pkgdir/usr/lib/gridsnap"
@@ -66,6 +76,7 @@ package() {
     install -d "$pkgdir/usr/share/doc/$pkgname"
     install -m 0644 README.md SPEC.md "$pkgdir/usr/share/doc/$pkgname/"
     cp -a docs "$pkgdir/usr/share/doc/$pkgname/docs"
+    install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 
     # Каталоги переводов (gettext в makedepends): два домена — Python-инстру-
     # менты и апплет Cinnamon. Язык исходника — русский, каталога ru нет.
@@ -78,13 +89,23 @@ package() {
             "po/gridsnap@metapeka/$lang.po"
     done
 
-    # man-страницы: в Arch их принято ставить сжатыми (.gz); -n — без имени
-    # и времени файла, чтобы сборка была воспроизводимой.
-    install -d "$pkgdir/usr/share/man/man1"
-    local page
-    for page in gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 \
-                gridsnap-editor.1 gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1; do
-        gzip -9n -c "man/$page" > "$pkgdir/usr/share/man/man1/$page.gz"
-        chmod 0644 "$pkgdir/usr/share/man/man1/$page.gz"
+    # man-страницы: три языка, каждый в свой каталог man-db. Английская —
+    # язык по умолчанию (man1/), русская и китайская — man/ru/man1 и
+    # man/zh_CN/man1: man-db выбирает их по локали. Псевдонимы (.so man1/gridsnap.1)
+    # уже лежат в каталогах сборки и ставятся так же, как основная страница.
+    # В Arch страницы принято ставить сжатыми; -n — без имени и времени файла,
+    # чтобы сборка была воспроизводимой.
+    local lang mdir page
+    for lang in en ru zh_CN; do
+        case "$lang" in
+            en) mdir="man1" ;;
+            *)  mdir="$lang/man1" ;;
+        esac
+        install -d "$pkgdir/usr/share/man/$mdir"
+        for page in gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 \
+                    gridsnap-editor.1 gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1; do
+            gzip -9n -c "man/build/$lang/man1/$page" > "$pkgdir/usr/share/man/$mdir/$page.gz"
+            chmod 0644 "$pkgdir/usr/share/man/$mdir/$page.gz"
+        done
     done
 }

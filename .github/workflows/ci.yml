@@ -27,22 +27,45 @@ jobs:
             zone_geom.py zone-picker.py zone_picker_nav.py zone_i18n.py \
             zone_actions.py zone_tabs.py zone-tabstrip.py zone_tabstrip_nav.py \
             zone-daemon.py zone_ipc.py gridsnap-ctl setup-hotkeys.py \
-            make-icon.py tests
+            make-icon.py tools tests
       - name: Юнит-тесты
         run: python3 -m unittest discover -s tests -v
 
   i18n:
-    name: Каталоги переводов
+    name: Каталоги переводов (gettext и po4a)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      # python3-gi нужен не каталогам, а сверке man-страницы с `--help`: у трёх
+      # команд из семи без GTK справка не запускается, и сверка ключей пропускается.
       - name: Зависимости
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gettext po4a python3-gi gir1.2-gtk-3.0 locales
+          # Локали нужны проверкам man-страниц: под zh_CN.UTF-8 groff считает
+          # иероглиф двумя колонками, под C — одной, и ширина страницы выходит
+          # разной; без сгенерированной локали языковые проверки пропускаются.
+          sudo localedef -i zh_CN -f UTF-8 zh_CN.UTF-8
+          sudo localedef -i ru_RU -f UTF-8 ru_RU.UTF-8
       # check-i18n собирает .mo (msgfmt --check), сверяет шаблоны с кодом и
       # проверяет, что каталога `ru` нет: русский — это msgid как есть.
-      - name: Каталоги
+      - name: Каталоги gettext
         run: make check-i18n
+      # check-man-i18n собирает man-страницы po4a и гоняет tests/test_man_i18n.py:
+      # полнота каталогов, сверка ключей `--…` с `--help` всех семи команд, скелет
+      # roff-макросов и проверка собранных страниц как у пользователя (временный
+      # MANPATH вида <tmp>/usr/share/man плюс локаль: выбор языка, ширина в
+      # колонках и «cannot break line»).
+      - name: Каталоги man
+        run: make check-man-i18n
+      # Шаблон po4a обязан собираться из текущей страницы без изменений: иначе
+      # правка man/gridsnap.1 забыла `make man-pot`, и перевод молча отстал.
+      - name: Шаблон po4a не разошёлся со страницей
+        run: |
+          make man-pot
+          git diff --exit-code -- po/man/
 
   package:
     name: Сборка пакетов
@@ -50,10 +73,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      # gettext нужен, чтобы собрать каталоги переводов: tar.gz и deb кладут
-      # собранные .mo внутрь, а install.sh ставит их в префикс.
+      # gettext и po4a нужны, чтобы собрать каталоги перевода и man-страницы:
+      # tar.gz и deb кладут их внутрь, а install.sh ставит их в префикс.
       - name: Зависимости
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gettext po4a
       - name: Собрать tar.gz и deb
         run: |
           make tarball
@@ -71,6 +96,12 @@ jobs:
           dpkg-deb -c "$deb" | grep -q usr/bin/gridsnap-ctl
           dpkg-deb -c "$deb" | grep -q usr/share/locale/en/LC_MESSAGES/gridsnap.mo
           dpkg-deb -c "$deb" | grep -q usr/share/locale/zh_CN/LC_MESSAGES/gridsnap.mo
+          # man-страницы: английская — по умолчанию (man1/), русская и китайская — по языкам
+          dpkg-deb -c "$deb" | grep -q usr/share/man/man1/gridsnap.1.gz
+          dpkg-deb -c "$deb" | grep -q usr/share/man/man1/gridsnap-tiler.1.gz
+          dpkg-deb -c "$deb" | grep -q usr/share/man/ru/man1/gridsnap.1.gz
+          dpkg-deb -c "$deb" | grep -q usr/share/man/zh_CN/man1/gridsnap.1.gz
+          dpkg-deb -c "$deb" | grep -q usr/share/doc/gridsnap/LICENSE
           dpkg-deb -c "$deb" | grep -q \
             usr/share/applications/gridsnap.desktop
           tmp="$(mktemp -d)"
@@ -89,6 +120,12 @@ jobs:
           "$tmp/prefix/bin/gridsnap-ctl" --version
           test -f "$tmp/prefix/share/locale/en/LC_MESSAGES/gridsnap.mo"
           test -f "$tmp/prefix/share/locale/zh_CN/LC_MESSAGES/gridsnap.mo"
+          test -f "$tmp/prefix/share/man/man1/gridsnap.1"
+          test -f "$tmp/prefix/share/man/ru/man1/gridsnap.1"
+          test -f "$tmp/prefix/share/man/zh_CN/man1/gridsnap.1"
+          test -f "$tmp/prefix/share/doc/gridsnap/LICENSE"
+          # Страница ставится в префикс вместе с псевдонимами, и man её открывает.
+          man --warnings -E UTF-8 -l "$tmp/prefix/share/man/ru/man1/gridsnap.1" >/dev/null
           # Каталог работает из установленного префикса: под en русских букв нет.
           if GRIDSNAP_LANG=en "$tmp/prefix/bin/gridsnap-tiler" --help | grep -q '[а-яА-Я]'; then
             echo "под GRIDSNAP_LANG=en в справке осталась кириллица" >&2
@@ -106,7 +143,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential debhelper dh-exec lintian
+            build-essential debhelper dh-exec lintian gettext po4a
       - name: Собрать dpkg-buildpackage
         run: |
           set -e
@@ -122,6 +159,9 @@ jobs:
           grep -q usr/bin/setup-hotkeys /tmp/deb.list
           grep -q usr/share/applications/gridsnap.desktop /tmp/deb.list
           grep -q icons/hicolor/256x256/apps/gridsnap.png /tmp/deb.list
+          grep -q usr/share/man/man1/gridsnap.1.gz /tmp/deb.list
+          grep -q usr/share/man/ru/man1/gridsnap.1.gz /tmp/deb.list
+          grep -q usr/share/man/zh_CN/man1/gridsnap.1.gz /tmp/deb.list
           lintian "$deb"
 
   smoke:
