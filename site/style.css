@@ -1,0 +1,94 @@
+/* Стиль страницы сайта GridSnap: один файл на три языка, без сборки и внешних ресурсов. */
+:root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #1b1f24;
+    --muted: #5c6672;
+    --line: #dfe3e8;
+    --accent: #2f6feb;
+    --code-bg: #f0f2f5;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #14171c;
+        --card: #1b1f26;
+        --text: #e7eaee;
+        --muted: #a2acb9;
+        --line: #2b3138;
+        --accent: #6fa1ff;
+        --code-bg: #222831;
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0 16px 64px;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+}
+
+main, nav, header, footer { max-width: 900px; margin: 0 auto; }
+
+nav#lang {
+    display: flex;
+    gap: 16px;
+    padding: 16px 0;
+    font-size: 15px;
+}
+
+nav#lang .current { color: var(--muted); }
+
+header#top { padding: 32px 0 8px; }
+
+h1 { font-size: 40px; line-height: 1.15; margin: 0 0 8px; }
+
+.tagline { font-size: 20px; color: var(--muted); margin: 0 0 20px; }
+
+.button {
+    display: inline-block;
+    padding: 10px 18px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin: 20px 0;
+}
+
+section h2 { margin-top: 0; font-size: 22px; }
+
+ul { padding-left: 22px; }
+
+li { margin: 6px 0; }
+
+a { color: var(--accent); }
+
+.shot { width: 100%; border: 1px solid var(--line); border-radius: 8px; margin: 12px 0; }
+
+pre {
+    background: var(--code-bg);
+    border-radius: 8px;
+    padding: 12px 14px;
+    overflow-x: auto;
+}
+
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
+
+footer {
+    color: var(--muted);
+    font-size: 14px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    margin-top: 32px;
+}

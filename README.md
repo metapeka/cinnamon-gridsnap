@@ -1,174 +1,188 @@
-# Gridsnap — сетка окон в Cinnamon: редактор зон и горячие клавиши
+# Gridsnap — a window grid for Cinnamon: zone editor and hotkeys
 
-English: [README.en.md](README.en.md)
+[**English**](README.md) · [简体中文](README.zh.md) · [Русский](README.ru.md)
 
-Проверено на Debian 13, Cinnamon 6.4.10 (Muffin, X11), монитор 1920×1040 рабочей области.
+Tested on Debian 13, Cinnamon 6.4.10 (Muffin, X11), a 1920×1040 work area.
 
-![Иконка Gridsnap](icons/gridsnap-256.png)
+![Gridsnap icon](icons/gridsnap-256.png)
 
-![Редактор сетки](docs/editor.png)
+![Zone editor](site/assets/editor.png)
 
-![Редактор сетки в работе](docs/demo.gif)
+![Zone editor in action](site/assets/demo.gif)
 
-## Установка
+<!-- section: install -->
+## Installation
 
-Два независимых пути: **для себя** (из этого каталога, без пакетного менеджера) и **пакетом**
-(`.deb` для Debian/Ubuntu, AUR-рецепт для Arch; релизный `.tar.gz` — для любой системы).
-Оба ставят один и тот же код; версия берётся из `VERSION` в `zone-tiler.py`/`zone-daemon.py`.
+Two independent paths: **for yourself** (from this directory, without a package manager) and **as a
+package** (a `.deb` for Debian/Ubuntu, an AUR recipe for Arch; the release `.tar.gz` for any system).
+Both install the same code; the version comes from `VERSION` in `zone-tiler.py`/`zone-daemon.py`.
 
-### Для себя (из репозитория)
+<!-- section: install-self -->
+### From the repository (for yourself)
 
-Ничего не требуется, кроме `python3`, PyGObject и `libX11` (в Debian уже стоят):
+Nothing is required beyond `python3`, PyGObject and `libX11` (already present in Debian):
 
 ```bash
-./install-launcher.sh             # ярлык Gridsnap в меню + иконки
-./install-launcher.sh --desktop   # ещё и ярлык на рабочем столе
-./install-daemon.sh               # автозапуск демона автоукладки (--list / --remove)
-python3 setup-hotkeys.py          # сочетания клавиш в Cinnamon
+./install-launcher.sh             # Gridsnap launcher in the menu + icons
+./install-launcher.sh --desktop   # also a shortcut on the desktop
+./install-daemon.sh               # autostart the auto-tiling daemon (--list / --remove)
+python3 setup-hotkeys.py          # keybindings in Cinnamon
 ```
 
-Ярлык ссылается на абсолютный путь к `zone-editor.py`; если каталог переехал — перезапустите
-`./install-launcher.sh`. Это тот путь, которым пользуется сам автор на своей машине.
+The launcher points at an absolute path to `zone-editor.py`; if the directory has moved, re-run
+`./install-launcher.sh`. This is the path the author himself uses on his machine.
 
-### Пакетом
+<!-- section: install-package -->
+### As a package
 
-**Штатным пакетом Debian.** В каталоге есть `debian/` (debhelper, compat 13, плюс `dh-exec`
-для переименования иконок); зависимости сборки — только из `main` тризки:
+**The stock Debian package.** The directory ships `debian/` (debhelper, compat 13, plus `dh-exec` to
+rename the icons); the only build dependencies come from `main`:
 
 ```bash
-sudo apt install debhelper dh-exec    # разовые зависимости сборки
-dpkg-buildpackage -b -us -uc          # соберёт ../gridsnap_<версия>-1_all.deb
-sudo apt install ../gridsnap_<версия>-1_all.deb
+sudo apt install debhelper dh-exec    # one-off build dependencies
+dpkg-buildpackage -b -us -uc          # builds ../gridsnap_<version>-1_all.deb
+sudo apt install ../gridsnap_<version>-1_all.deb
 ```
 
-**Через `Makefile`** (без debhelper): нужны `make` и `dpkg-deb` из штатного `dpkg`.
+**Through the `Makefile`** (without debhelper): this needs `make` and `dpkg-deb` from the stock
+`dpkg`.
 
 ```bash
-make tarball      # dist/gridsnap-<версия>.tar.gz
-make deb          # dist/gridsnap_<версия>_all.deb
-make aur          # рецепт AUR в dist/PKGBUILD
+make tarball      # dist/gridsnap-<version>.tar.gz
+make deb          # dist/gridsnap_<version>_all.deb
+make aur          # AUR recipe in dist/PKGBUILD
 ```
 
-Оба пути ставят одно и то же: код в `/usr/lib/gridsnap`, команды `gridsnap-tiler`, `gridsnap-daemon`,
-`gridsnap-editor`, `gridsnap-picker`, `gridsnap-ctl`, `setup-hotkeys` — в `/usr/bin`, ярлык и иконки —
-в `/usr/share`. Установка `make deb`:
+Both paths install the same thing: the code into `/usr/lib/gridsnap`, the commands `gridsnap-tiler`,
+`gridsnap-daemon`, `gridsnap-editor`, `gridsnap-picker`, `gridsnap-ctl`, `setup-hotkeys` into
+`/usr/bin`, the launcher and icons into `/usr/share`. Installing the `make deb` artifact:
 
 ```bash
-sudo apt install ./dist/gridsnap_<версия>_all.deb
+sudo apt install ./dist/gridsnap_<version>_all.deb
 ```
 
-`tar.gz` ставится в префикс скриптом `install.sh` (по умолчанию `$HOME/.local`):
+The `tar.gz` is installed into a prefix by the `install.sh` script (by default `$HOME/.local`):
 
 ```bash
-tar -xzf gridsnap-<версия>.tar.gz && cd gridsnap-<версия>
-./install.sh                    # ~/.local: код, команды, ярлык в меню, иконки
+tar -xzf gridsnap-<version>.tar.gz && cd gridsnap-<version>
+./install.sh                    # ~/.local: code, commands, menu launcher, icons
 ./install.sh --prefix /usr/local
-./install.sh --no-launcher      # только код и команды, без ярлыка и иконок
-./install.sh --uninstall        # убрать поставленное из этого префикса
+./install.sh --no-launcher      # code and commands only, no launcher or icons
+./install.sh --uninstall        # remove what was installed from this prefix
 ```
 
-AUR-рецепт (`PKGBUILD`) — для Arch: положите его в каталог пакета и соберите `makepkg -si`.
+The AUR recipe (`PKGBUILD`) is for Arch: put it in the package directory and build with
+`makepkg -si`.
 
-Конфиг и там, и там ищется сначала в `~/.config/gridsnap/zones.conf`, а если его нет — рядом с кодом.
-Каталог кода системного пакета доступен только на чтение, поэтому для правки сетки под `deb`
-скопируйте конфиг в XDG:
+In both cases the config is looked up first in `~/.config/gridsnap/zones.conf` and, if it is not
+there, next to the code. The code directory of a system package is read-only, so to edit the grid
+under `deb`, copy the config to XDG:
 
 ```bash
 mkdir -p ~/.config/gridsnap && cp /usr/lib/gridsnap/zones.conf ~/.config/gridsnap/
 ```
 
-> «Для себя» и «пакетом» не мешают друг другу, но и не синхронизируются: `install-launcher.sh`
-> и `install-daemon.sh` работают с каталогом репозитория, а пакет — со своими путями `/usr`.
+> “For yourself” and “as a package” do not get in each other's way, but they are not synchronized
+> either: `install-launcher.sh` and `install-daemon.sh` work with the repository directory, while the
+> package works with its own `/usr` paths.
 
-### Справка
+<!-- section: install-help -->
+### Reference
 
-man-страницы входят в пакет (`/usr/share/man/man1`), а `install.sh` кладёт их в
-`ПРЕФИКС/share/man/man1` — в том числе при `--no-launcher`: это документация, а не часть ярлыка.
-`man gridsnap` — команды пакета, `zones.conf`, файлы и коды возврата; `man gridsnap-tiler` —
-та же страница (как и `man gridsnap-daemon`, `man gridsnap-editor`, `man gridsnap-picker`,
-`man gridsnap-ctl`, `man setup-hotkeys`).
+The man pages come with the package (`/usr/share/man/man1`), and `install.sh` puts them into
+`PREFIX/share/man/man1` — including under `--no-launcher`: they are documentation, not part of the
+launcher. `man gridsnap` — the package commands, `zones.conf`, the files and the exit codes;
+`man gridsnap-tiler` — the same page (as are `man gridsnap-daemon`, `man gridsnap-editor`,
+`man gridsnap-picker`, `man gridsnap-ctl`, `man setup-hotkeys`).
 
-## 1. Что есть в Cinnamon из коробки
+<!-- section: cinnamon-native -->
+## 1. What Cinnamon can do out of the box
 
-Встроенного редактора сетки (как FancyZones в Windows) в Cinnamon **нет**. Есть только
-фиксированный набор плиток: половины и четверти экрана.
+Cinnamon has **no** built-in grid editor (like FancyZones in Windows). There is only a fixed set of
+tiles: halves and quarters of the screen.
 
 ```bash
-cinnamon-settings tiling     # Параметры → «Мозаика окон»
-cinnamon-settings keyboard   # Параметры → Клавиатура → Горячие клавиши → раздел «Мозаика»
+cinnamon-settings tiling     # Settings → "Window tiling"
+cinnamon-settings keyboard   # Settings → Keyboard → Shortcuts → "Tiling" section
 ```
 
-| Действие | Как |
+| Action | How |
 |---|---|
-| половина экрана | `Super+←/→/↑/↓` или перетащить окно к краю |
-| четверть экрана | `Super+←`, затем `Super+↑/↓`; либо перетащить в угол |
-| развернуть / снять | `Alt+F10` / `Alt+F5` |
+| half of the screen | `Super+←/→/↑/↓` or drag a window to an edge |
+| quarter of the screen | `Super+←`, then `Super+↑/↓`; or drag into a corner |
+| maximize / restore | `Alt+F10` / `Alt+F5` |
 
-В настройках мозаики всего два переключателя (включить тайлинг/прилипание и «разворачивать,
-а не тайлить, у верхнего края») — свою сетку там не задать.
+The tiling settings have only two toggles (enable tiling/snapping and "maximize instead of tiling at
+the top edge") — you cannot define your own grid there.
 
-## 2. Готовая сетка «выделил ячейки»: расширение gTile
+<!-- section: gtile -->
+## 2. A ready-made “pick the cells” grid: the gTile extension
 
-`Параметры → Расширения → вкладка «Загрузка» → gTile`. Управление: `Super+G` — сетка,
-стрелки — выделение, `Shift`+стрелки — растянуть на ячейки, `Пробел` — вложить окно,
-`1..4` — наборы сеток, `Alt`+стрелки — другой монитор
-([страница gTile](https://cinnamon-spices.linuxmint.com/extensions/view/76)).
+`Settings → Extensions → the “Download” tab → gTile`. Controls: `Super+G` — the grid, arrows — the
+selection, `Shift`+arrows — extend over cells, `Space` — place the window, `1..4` — grid presets,
+`Alt`+arrows — another monitor
+([the gTile page](https://cinnamon-spices.linuxmint.com/extensions/view/76)).
 
-## 3. Свои зоны: визуальный редактор и раскладчик
+<!-- section: zones -->
+## 3. Your own zones: the visual editor and the tiler
 
-Три файла-инструмента в этом каталоге:
+Three tool files in this directory:
 
-* `zone-editor.py` — **визуальный редактор** сетки (окно с экраном, зоны таскаются мышью);
-* `zone-tiler.py` — раскладчик: вкладывает активное окно в зону по имени;
-* `zone-picker.py` — **визуальный выбор зоны** по `Super+Z` (оверлей, стрелки, `Enter`).
+* `zone-editor.py` — the **visual grid editor** (a window with the screen on it, zones are dragged
+  with the mouse);
+* `zone-tiler.py` — the tiler: places the active window into a zone by name;
+* `zone-picker.py` — the **visual zone picker** on `Super+Z` (an overlay, arrows, `Enter`).
 
-Зависимости: `python3`, `python3-gi` (GTK 3), `libX11`, `xprop` — в Debian уже стоят.
-`python3-cairo` нужен для перерисовки иконки и для снимка оверлея выбора зоны.
+Dependencies: `python3`, `python3-gi` (GTK 3), `libX11`, `xprop` — already present in Debian.
+`python3-cairo` is needed to redraw the icon and for the picker overlay snapshot.
 
-### 3.1. Запуск редактора
+<!-- section: zones-run -->
+### 3.1. Starting the editor
 
-Иконка в меню: **Gridsnap** (Избранное и Параметры/Служебные). Ярлык ставится командой:
-
-```bash
-./install-launcher.sh             # ярлык в меню
-./install-launcher.sh --desktop   # ещё и ярлык на рабочем столе
-./install-launcher.sh --remove    # убрать всё
-```
-
-Или прямо из терминала:
+Menu icon: **Gridsnap** (Favorites and Settings/Accessories). The launcher is installed with:
 
 ```bash
-python3 zone-editor.py             # обычный запуск
-python3 zone-editor.py --conf /путь/zones.conf
-python3 zone-editor.py --shot ui.png   # снимок интерфейса без показа окна
+./install-launcher.sh             # launcher in the menu
+./install-launcher.sh --desktop   # also a shortcut on the desktop
+./install-launcher.sh --remove    # remove everything
 ```
 
-Если каталог переедет в другое место — перезапустите `./install-launcher.sh`, ярлык
-содержит абсолютный путь.
+Or straight from a terminal:
 
-### 3.2. Что умеет редактор
+```bash
+python3 zone-editor.py             # normal launch
+python3 zone-editor.py --conf /path/zones.conf
+python3 zone-editor.py --shot ui.png   # a UI snapshot without showing the window
+```
 
-| Действие | Как |
+If the directory moves elsewhere, re-run `./install-launcher.sh`; the launcher contains an absolute
+path.
+
+<!-- section: zones-editor -->
+### 3.2. What the editor can do
+
+| Action | How |
 |---|---|
-| выбрать зону | клик по зоне или по строке в списке справа |
-| переместить | тащить зону мышью |
-| изменить размер | тянуть за край или угол (курсор меняется) |
-| новая зона | двойной клик по пустому месту, кнопка «+» |
-| удалить | `Delete` или кнопка «−» |
-| копия / очистить всё | кнопки на панели |
-| шаблоны | кнопка «Шаблоны»: 2 колонки, 1+2, 2×2, 3 колонки, главное + стек, чистый лист |
-| свои профили | кнопка «Профили»: загрузить профиль в холст, «Сохранить текущую раскладку как профиль…», удалить |
-| точная подгонка | стрелки — сдвиг, `Ctrl`+стрелки — размер, колесо — ширина |
-| прилипание | к краям экрана, к краям соседних зон и к линиям 1/4, 1/3, 1/2, 2/3, 3/4 |
-| имя и клавиша зоны | поля «Имя» и «Клавиши» в панели справа |
-| сохранить | кнопка «Сохранить» или `Ctrl+S` |
-| применить клавиши | кнопка «сочетания клавиш» → обновляет горячие клавиши Cinnamon |
-| проверить | кнопка «▶» — вкладывает активное окно в выделенную зону |
+| select a zone | click a zone or a row in the list on the right |
+| move | drag a zone with the mouse |
+| resize | drag an edge or a corner (the cursor changes) |
+| new zone | double-click on empty space, the “+” button |
+| delete | `Delete` or the “−” button |
+| duplicate / clear all | buttons on the toolbar |
+| templates | the “Templates” button: 2 columns, 1+2, 2×2, 3 columns, main + stack, blank canvas |
+| your own profiles | the “Profiles” button: load a profile onto the canvas, “Save the current layout as a profile…”, delete |
+| fine adjustment | arrows — move, `Ctrl`+arrows — resize, wheel — width |
+| snapping | to the screen edges, to the edges of neighbouring zones and to the 1/4, 1/3, 1/2, 2/3, 3/4 lines |
+| zone name and key | the “Name” and “Keys” fields in the panel on the right |
+| save | the “Save” button or `Ctrl+S` |
+| apply keys | the “keybindings” button → updates the Cinnamon hotkeys |
+| test | the “▶” button — places the active window into the selected zone |
 
-Размеры хранятся в долях рабочей области, поэтому сетка не ломается при смене
-разрешения и учитывает панель задач.
+Sizes are stored as fractions of the work area, so the grid does not break when the resolution
+changes and it takes the taskbar into account.
 
-### 3.3. Формат `zones.conf`
+<!-- section: zones-conf -->
+### 3.3. The `zones.conf` format
 
 ```ini
 [grid]
@@ -176,7 +190,7 @@ cols = 1.0
 rows = 1.0
 
 [zones]
-main      = 0, 0, 0.5, 1        # x, y, w, h в долях (0..1)
+main      = 0, 0, 0.5, 1        # x, y, w, h as fractions (0..1)
 top-right = 0.5, 0, 0.25, 0.5
 bottom    = 0.5, 0.5, 0.5, 0.5
 
@@ -185,25 +199,25 @@ main      = <Super><Alt>1
 top-right = <Super><Alt>2
 ```
 
-Если экранов несколько, у монитора может быть свой набор зон — секция `[zones:<имя выхода>]`
-(имя выхода берётся из `xrandr --listmonitors`: `eDP-1`, `HDMI-1`). Монитор без своей секции
-берёт общий `[zones]`, поэтому старый файл продолжает работать на любом числе экранов:
+With several screens a monitor can have its own set of zones — the `[zones:<output>]` section (the
+output name comes from `xrandr --listmonitors`: `eDP-1`, `HDMI-1`). A monitor without a section of
+its own takes the shared `[zones]`, so an old file keeps working on any number of screens:
 
 ```ini
-[zones]              # набор по умолчанию
+[zones]              # the default set
 main = 0, 0, 0.5, 1
 side = 0.5, 0, 0.5, 1
 
-[zones:HDMI-1]       # вертикальный экран: своя сетка
+[zones:HDMI-1]       # a vertical screen: its own grid
 top    = 0, 0, 1, 0.5
 bottom = 0, 0.5, 1, 0.5
 ```
 
-`--monitor` принимает и имя выхода, и номер (`--monitor HDMI-1`, `--monitor 1`); секция
-отключённого монитора остаётся в файле и ждёт, пока его подключат.
+`--monitor` accepts both an output name and a number (`--monitor HDMI-1`, `--monitor 1`); the section
+of a disconnected monitor stays in the file and waits until it is plugged in.
 
-Рабочие столы получают свои сетки через профили — секция `[workspaces]` сопоставляет номер стола
-(как в интерфейсе Cinnamon, с 1) и профиль из `templates/`:
+Workspaces get their grids through profiles — the `[workspaces]` section maps a workspace number
+(as in the Cinnamon UI, starting from 1) to a profile from `templates/`:
 
 ```ini
 [workspaces]
@@ -211,342 +225,377 @@ bottom = 0, 0.5, 1, 0.5
 2 = cinema
 ```
 
-`zone-tiler.py apply main --workspace 1` кладёт окно по сетке второго стола, `--workspace conf` — всегда
-по общему `zones.conf` (так делает редактор), а без флага берётся активный стол.
+`zone-tiler.py apply main --workspace 1` places the window on the second workspace's grid,
+`--workspace conf` always uses the shared `zones.conf` (that is what the editor does), and without
+the flag the active workspace is taken.
 
-Старый вариант «зона как диапазон ячеек сетки» тоже поддерживается:
-`cols = 0.5, 0.75, 1.0`, `rows = 0.5, 1.0`, `main = 0:1, 0:2`. Редактор при сохранении
-переводит всё в доли `x,y,w,h`.
+The old “a zone as a range of grid cells” variant is supported too:
+`cols = 0.5, 0.75, 1.0`, `rows = 0.5, 1.0`, `main = 0:1, 0:2`. When saving, the editor converts
+everything to `x,y,w,h` fractions.
 
-Автоукладку задаёт секция `[rules]` (селектор → зона), а окна, которые GridSnap не должен двигать —
-секция `[ignore]` с теми же селекторами; обе описаны в §5.
+Auto-tiling is configured by the `[rules]` section (selector → zone), and windows Gridsnap must not
+move by the `[ignore]` section with the same selectors; both are described in §5.
 
-Высоту полосы вкладок и клавишу переключения окон в зоне задаёт необязательная секция `[tabs]`
-(сама фича — в §5.2):
+The height of the tab strip and the key that switches windows inside a zone come from the optional
+`[tabs]` section (the feature itself is in §5.2):
 
 ```ini
 [tabs]
-height = 22          # высота полосы вкладок, px (по умолчанию 22)
-key = <Super><Alt>g  # «следующее окно зоны», заводится как остальные сочетания
+height = 22          # tab strip height, px (22 by default)
+key = <Super><Alt>g  # "next window of the zone", installed like the other shortcuts
 ```
 
-Файл ищется сначала в `~/.config/gridsnap/zones.conf` (учитывается `$XDG_CONFIG_HOME`), а если
-его там нет — рядом с кодом, `<каталог репозитория>/zones.conf`. Так текущие установки
-не ломаются, а сетку можно вынести из репозитория:
+The file is looked up first in `~/.config/gridsnap/zones.conf` (`$XDG_CONFIG_HOME` is honoured) and,
+if it is not there, next to the code, `<repository directory>/zones.conf`. This way existing
+installations do not break and the grid can live outside the repository:
 
 ```bash
 mkdir -p ~/.config/gridsnap && cp zones.conf ~/.config/gridsnap/
 ```
 
-Путь всегда можно задать явно флагом `--conf`. Профили раскладок лежат рядом с `zones.conf` в
-подкаталоге `templates/` (по умолчанию `~/.config/gridsnap/templates/`).
+The path can always be set explicitly with the `--conf` flag. Layout profiles live next to
+`zones.conf` in the `templates/` subdirectory (by default `~/.config/gridsnap/templates/`).
 
-## 4. Раскладчик из терминала
+<!-- section: tiler -->
+## 4. The tiler from the terminal
 
 ```bash
-python3 zone-tiler.py list                  # зоны и их пиксельные рамки
-python3 zone-tiler.py apply main --dry-run  # посчитать рамку
-python3 zone-tiler.py apply main --verify   # вложить активное окно и сверить геометрию
+python3 zone-tiler.py list                  # zones and their pixel frames
+python3 zone-tiler.py apply main --dry-run  # compute the frame
+python3 zone-tiler.py apply main --verify   # place the active window and check the geometry
 python3 zone-tiler.py apply bottom --monitor 1
-python3 zone-tiler.py arrange               # разложить окна по зонам (правила + свободные зоны)
-python3 zone-tiler.py arrange --by order    # разложить по зонам в порядке списка окон
-python3 zone-tiler.py stack main            # собрать окна зоны main вкладками
-python3 zone-tiler.py tabs-next             # поднять следующую вкладку зоны активного окна
-python3 zone-tiler.py undo                  # вернуть окна из последней раскладки
-python3 zone-tiler.py undo --all            # откатить всю историю раскладок
-python3 zone-tiler.py focus main            # режим «только эта зона»: окно в main, остальные свёрнуты
-python3 zone-tiler.py focus --off           # выйти из режима (см. 4.2)
-python3 zone-tiler.py profile list          # свои профили раскладок
-python3 zone-tiler.py profile save work     # сохранить текущий zones.conf как профиль «work»
-python3 zone-tiler.py profile use work      # активировать профиль и обновить сочетания
-python3 zone-tiler.py profile use work --no-hotkeys   # только активировать, без сочетаний
-python3 zone-tiler.py profile show work      # что лежит в профиле
-python3 zone-tiler.py profile rm work       # удалить профиль
-python3 zone-tiler.py profile use-monitors  # разложить экраны по их профилям ([monitors])
-python3 zone-tiler.py --version             # версия раскладчика
+python3 zone-tiler.py arrange               # lay windows out into zones (rules + free zones)
+python3 zone-tiler.py arrange --by order    # lay out into zones in window-list order
+python3 zone-tiler.py stack main            # collect the windows of the main zone as tabs
+python3 zone-tiler.py tabs-next             # raise the next tab of the active window's zone
+python3 zone-tiler.py undo                  # return windows from the last layout
+python3 zone-tiler.py undo --all            # roll back the whole layout history
+python3 zone-tiler.py focus main            # "only this zone" mode: the window in main, the rest minimized
+python3 zone-tiler.py focus --off           # leave the mode (see 4.2)
+python3 zone-tiler.py profile list          # your own layout profiles
+python3 zone-tiler.py profile save work     # save the current zones.conf as the "work" profile
+python3 zone-tiler.py profile use work      # activate the profile and update the shortcuts
+python3 zone-tiler.py profile use work --no-hotkeys   # activate only, without the shortcuts
+python3 zone-tiler.py profile show work     # what the profile contains
+python3 zone-tiler.py profile rm work       # delete the profile
+python3 zone-tiler.py profile use-monitors  # lay the screens out by their profiles ([monitors])
+python3 zone-tiler.py --version             # tiler version
 ```
 
-`arrange` берёт клиентские окна `_NET_CLIENT_LIST` и кладёт их по зонам: `--by auto` (по умолчанию) —
-сначала по правилам `[rules]`, затем остальные по свободным зонам; `--by rules` — только по правилам;
-`--by order` — по порядку в зоны по порядку. Окна без `WM_CLASS`, служебные (диалоги, splash) и попавшие под
-`[ignore]` не трогаются. Несколько окон в одной зоне больше не сдвигаются каскадом: они встают
-**вкладками** на общей рамке — одно видно целиком, остальные ждут переключения (§5.2), — а
-`stack <зона>` собирает все окна в одну зону теми же вкладками. Флага `--offset` и каскада больше нет:
-вызов с `--offset` — ошибка аргументов (код 2), а не молчаливое игнорирование.
+`arrange` takes the client windows from `_NET_CLIENT_LIST` and puts them into zones: `--by auto` (the
+default) — first by `[rules]`, then the rest into free zones; `--by rules` — by rules only;
+`--by order` — in order into zones in order. Windows without `WM_CLASS`, utility windows (dialogs,
+splash) and windows caught by `[ignore]` are left alone. Several windows in one zone are no longer
+cascaded: they sit **as tabs** on a shared frame — one is visible in full, the others wait to be
+switched to (§5.2) — and `stack <zone>` collects all windows into a single zone with the same tabs.
+The `--offset` flag and the cascade are gone: a call with `--offset` is an argument error (code 2),
+not a silent no-op.
 
-Каждая раскладка (`apply`, `arrange`, `stack`) записывается в историю; `undo` возвращает прежние
-рамки (`--all` — сразу всю историю). История лежит в `~/.local/state/gridsnap/history.json`
-(учитывается `$XDG_STATE_HOME`), хранит последние 20 операций и переживает перезапуск. Если окно
-уже закрыто или его XID переиспользован другим приложением, оно аккуратно пропускается. С запущенным
-демоном `arrange`/`undo` не согласованы — сначала остановите демон.
+Every layout (`apply`, `arrange`, `stack`) is recorded in history; `undo` restores the previous
+frames (`--all` — the whole history at once). The history lives in
+`~/.local/state/gridsnap/history.json` (`$XDG_STATE_HOME` is honoured), keeps the last 20 operations
+and survives a restart. If a window is already closed or its XID has been reused by another
+application, it is skipped gracefully. With the daemon running, `arrange`/`undo` are not coordinated
+with it — stop the daemon first.
 
-Коды возврата: `0` — успех, `1` — ошибка выполнения (нет X, нет активного окна),
-`2` — ошибка аргументов (неизвестная зона, плохое имя профиля), `3` — ошибка конфига (нет/битый
-профиль).
+Exit codes: `0` — success, `1` — runtime error (no X, no active window), `2` — argument error
+(unknown zone, bad profile name), `3` — config error (missing or broken profile).
 
-**Профиль раскладки** — это полный набор: секции `[zones]` (+ привязки из `[keys]`), `[rules]` и `[ignore]`.
-Секции `[grid]` и `[daemon]` в профиль не входят. Профили лежат в `~/.config/gridsnap/templates/<имя>.conf`
-(учитывается `$XDG_CONFIG_HOME`; с `--conf PATH` — каталог `templates` рядом с этим файлом), формат —
-как у `zones.conf`, читается и переносится глазами. `profile save` берёт текущий `zones.conf`,
-`profile use` перекладывает зоны/правила/исключения/клавиши профиля в активный `zones.conf`, не трогая
-`[grid]`, `[daemon]` и прочие секции. После `use` обновляются сочетания клавиш (`setup-hotkeys.py --conf …`);
-`--no-hotkeys` отключает это. Экспорт/импорт JSON (`profile export`/`import`) переносит тот же набор.
-Подробности — в `docs/specs/zone-tiler.md`.
+A **layout profile** is the complete set: the `[zones]` sections (plus the bindings from `[keys]`),
+`[rules]` and `[ignore]`. The `[grid]` and `[daemon]` sections are not part of a profile. Profiles
+live in `~/.config/gridsnap/templates/<name>.conf` (`$XDG_CONFIG_HOME` is honoured; with
+`--conf PATH` — the `templates` directory next to that file), the format is the same as
+`zones.conf` — readable and portable by hand. `profile save` takes the current `zones.conf`,
+`profile use` moves the profile's zones/rules/exclusions/keys into the active `zones.conf` without
+touching `[grid]`, `[daemon]` and the other sections. After `use` the keybindings are updated
+(`setup-hotkeys.py --conf …`); `--no-hotkeys` turns that off. JSON export/import
+(`profile export`/`import`) carries the same set. The details are in `docs/specs/zone-tiler.md`.
 
-Работает через EWMH-сообщения muffin: снимает максимизацию/фуллскрин, компенсирует рамку
-окна (`_NET_FRAME_EXTENTS`), поэтому зона совпадает с рамкой окна пиксель в пиксель.
+It works through muffin's EWMH messages: it clears maximization/fullscreen and compensates for the
+window frame (`_NET_FRAME_EXTENTS`), so the zone matches the window frame pixel for pixel.
 
-### 4.1. Профиль на экране: «монитор 2 — кино» (`[monitors]`)
+<!-- section: tiler-monitors -->
+### 4.1. A profile per screen: “monitor 2 — cinema” (`[monitors]`)
 
-У каждого экрана может быть свой профиль — тогда правый монитор живёт кино-раскладкой, а левый —
-рабочей:
+Every screen can have a profile of its own — then the right monitor lives with a cinema layout and
+the left one with a work layout:
 
 ```ini
 [monitors]
-HDMI-1 = work       # имя выхода как в xrandr --listmonitors
+HDMI-1 = work       # the output name as in xrandr --listmonitors
 HDMI-2 = cinema
 ```
 
-- **Зона ищется в профиле того экрана, где окно.** `apply`, `move`, `stack` и `arrange` без `--monitor`
-  работают на экране окна (как и раньше `move`), а демон кладёт окно по правилам и зонам профиля его
-  экрана; экран важнее стола из `[workspaces]`, стол — важнее общего `zones.conf`. Раньше
-  `apply`/`stack` без флага всегда адресовали первый монитор — с двумя экранами окно уезжало на левый.
-- **Включить раскладку** — одной командой: `zone-tiler.py profile use-monitors`. Она собирает активный
-  `zones.conf`: зоны каждого экрана из его профиля, а `[rules]`/`[ignore]`/`[keys]` сливает (где расходятся —
-  решает профиль первого экрана, и команда печатает, что переопределила). `--dry-run` показывает, что
-  ляжет, `--no-hotkeys` не трогает сочетания.
-- **При входе в сессию** привязку применяет автозапуск (`install-daemon.sh` кладёт
-  `gridsnap-monitors.desktop`); в редакторе привязка задаётся кнопкой «Профили экранов…» рядом с
-  «Профили столов…».
-- Профиль экрана нужно изменить и не звать команду снова — демон подхватит его после
-  `gridsnap-ctl reload`, а пикер и редактор читают профили сами.
+- **A zone is looked up in the profile of the screen the window is on.** `apply`, `move`, `stack`
+  and `arrange` without `--monitor` work on the window's screen (as `move` always did), and the
+  daemon places a window by the rules and zones of its screen's profile; the screen beats the
+  workspace from `[workspaces]`, and the workspace beats the shared `zones.conf`. Previously
+  `apply`/`stack` without the flag always addressed the first monitor — with two screens a window
+  went off to the left one.
+- **Enabling the layout** is a single command: `zone-tiler.py profile use-monitors`. It assembles
+  the active `zones.conf`: the zones of each screen from its profile, and it merges
+  `[rules]`/`[ignore]`/`[keys]` (where they disagree, the first screen's profile decides, and the
+  command prints what it overrode). `--dry-run` shows what would be written, `--no-hotkeys` leaves
+  the shortcuts alone.
+- **On session start** the binding is applied by autostart (`install-daemon.sh` writes
+  `gridsnap-monitors.desktop`); in the editor the binding is set with the “Screen profiles…”
+  button next to “Workspace profiles…”.
+- You have changed a screen's profile and do not want to call the command again — the daemon picks
+  it up after `gridsnap-ctl reload`, while the picker and the editor read profiles themselves.
 
-### 4.2. Режим «только эта зона» (`focus`)
+<!-- section: tiler-focus -->
+### 4.2. Focus mode: “only this zone” (`focus`)
 
-Быстрый фокус-режим: окно кладётся в зону, а остальные окна **того же рабочего стола и монитора**
-сворачиваются. Другие экраны не трогаются — на втором мониторе может идти кино.
+A quick focus mode: the window is placed into a zone and the other windows of **the same workspace
+and monitor** are minimized. Other screens are not touched — a film may be playing on the second
+monitor.
 
 ```bash
-python3 zone-tiler.py focus main            # активное окно в main, остальные свёрнуты
+python3 zone-tiler.py focus main            # the active window into main, the rest minimized
 python3 zone-tiler.py focus main --window 0x1a00007
-python3 zone-tiler.py focus                 # то же, но без перекладывания: «только это окно»
-python3 zone-tiler.py focus main            # повторно — выход и разворот свёрнутого режимом
-python3 zone-tiler.py focus --off           # явный выход (для скриптов и второй клавиши)
-python3 zone-tiler.py focus main --dry-run  # посмотреть, что будет, ничего не делая
+python3 zone-tiler.py focus                 # the same, but without moving: "only this window"
+python3 zone-tiler.py focus main            # again — leave the mode and restore what it minimized
+python3 zone-tiler.py focus --off           # an explicit exit (for scripts and a second key)
+python3 zone-tiler.py focus main --dry-run  # see what would happen without doing anything
 ```
 
-- Вход и выход — **одна команда**: повторный `focus` разворачивает только те окна, которые свернул
-  режим; свёрнутое вручную остаётся свёрнутым, а окна под `[ignore]` и служебные типы (диалоги,
-  splash) не сворачиваются вовсе — диалог целевого приложения переживает вход в режим.
-- Свёрнутое окно остаётся в `_NET_CLIENT_LIST` и сохраняет геометрию, поэтому демон не считает его
-  вышедшим из зоны и не запускает reflow.
-- При запущенном демоне команда отдаёт работу ему: только демон доворачивает окна, появившиеся
-  **после** входа в режим. Новое окно этого стола при активном режиме сразу уходит в свёрнутые.
-  Без демона режим работает разово (новые окна не отслеживаются), а список свёрнутых лежит в
-  `~/.local/state/gridsnap/focus.json` (учитывается `$XDG_STATE_HOME`).
-- **Режим живёт на своём рабочем столе**, и смена стола его не снимает: окна того стола и так не
-  видны, вернувшись — увидите режим как был. Снять его там было бы нельзя: muffin игнорирует разворот
-  окна не на активном столе (проверено), и окна остались бы свёрнутыми без хозяина. **Выход** (`--off`
-  или та же клавиша) работает с любого стола: команда сама переходит на стол режима и разворачивает окна.
-  Режим сам выключается только с закрытием целевого окна **при запущенном демоне**; при остановке
-  демона (`Ctrl-C`, `gridsnap-ctl quit`) свёрнутое разворачивается, а если развернуть не вышло (окна на
-  другом столе) — список передаётся в `focus.json` со столом каждого окна, и его доведёт `focus --off`.
-- **Вкладки зоны-цели остаются видимыми.** Режим сворачивает окна других зон, а окна той самой зоны —
-  в том числе неактивные вкладки — не трогает: иначе он прятал бы окна зоны, которую пользователь
-  только что оставил. Окно, пришедшее в эту зону уже во время режима, тоже становится вкладкой и
-  остаётся видимым.
-- Код возврата `1`, если не удалось определить активный рабочий стол; окно-исключение режим не
-  включает (как `apply`).
+- Entering and leaving is **one command**: a repeated `focus` restores only the windows the mode
+  minimized; what was minimized by hand stays minimized, while windows under `[ignore]` and utility
+  types (dialogs, splash) are not minimized at all — a dialog of the target application survives
+  entering the mode.
+- A minimized window stays in `_NET_CLIENT_LIST` and keeps its geometry, so the daemon does not
+  consider it to have left the zone and does not start a reflow.
+- With the daemon running, the command hands the work over to it: only the daemon catches windows
+  that appear **after** the mode was entered. A new window of that workspace goes straight into the
+  minimized set while the mode is active. Without the daemon the mode works once (new windows are
+  not tracked), and the list of minimized windows lives in
+  `~/.local/state/gridsnap/focus.json` (`$XDG_STATE_HOME` is honoured).
+- **The mode lives on its own workspace**, and switching workspaces does not lift it: the windows of
+  that workspace are invisible anyway, so coming back you will find the mode as it was. It could not
+  be lifted there: muffin ignores restoring a window that is not on the active workspace (verified),
+  and the windows would be left minimized with no owner. **Leaving** (`--off` or the same key) works
+  from any workspace: the command switches to the mode's workspace itself and restores the windows.
+  The mode turns itself off only when the target window closes **while the daemon is running**; when
+  the daemon stops (`Ctrl-C`, `gridsnap-ctl quit`) the minimized windows are restored, and if
+  restoring did not work out (windows on another workspace) the list is written to `focus.json`
+  together with each window's workspace, and `focus --off` finishes the job.
+- **The tabs of the target zone stay visible.** The mode minimizes the windows of other zones but
+  does not touch the windows of that very zone — inactive tabs included: otherwise it would hide the
+  windows of the zone the user has just left. A window that arrives in that zone while the mode is
+  already active also becomes a tab and stays visible.
+- Exit code `1` if the active workspace cannot be determined; an excluded window does not turn the
+  mode on (just like `apply`).
 
-## 5. Демон: автоукладка новых окон
-Чтобы окно вставало в зону само (по правилу), запустите демон:
+<!-- section: daemon -->
+## 5. The daemon: auto-tiling new windows
+
+To have a window go into a zone by itself (by rule), start the daemon:
 
 ```bash
-python3 zone-daemon.py             # слушать события до Ctrl-C (и поднять IPC-сокет)
-python3 zone-daemon.py --verbose   # показывать, что делает
-python3 zone-daemon.py --once      # обработать одно изменение списка окон и выйти
-python3 zone-daemon.py --no-socket # без IPC, только автоукладка
-python3 zone-daemon.py --socket /путь/daemon.sock
+python3 zone-daemon.py             # listen for events until Ctrl-C (and raise the IPC socket)
+python3 zone-daemon.py --verbose   # show what it is doing
+python3 zone-daemon.py --once      # process one window-list change and exit
+python3 zone-daemon.py --no-socket # no IPC, auto-tiling only
+python3 zone-daemon.py --socket /path/daemon.sock
 python3 zone-daemon.py --version
 ```
 
-Демон следит за EWMH-списком `_NET_CLIENT_LIST` и при появлении окна вкладывает его по правилам из
-`zones.conf`. Секция `[rules]` — «селектор → зона»:
+The daemon watches the EWMH `_NET_CLIENT_LIST` and, when a window appears, places it by the rules
+from `zones.conf`. The daemon knows both workspaces and screens: it takes the grid by the window's
+**screen** and, if there is no binding for it, by the window's workspace (see §3.3 on `[workspaces]`
+and §4.1 on `[monitors]`), it counts occupancy by the “workspace + monitor” pair, and it reflows only
+on the visible workspace — windows of invisible workspaces are not moved. The daemon re-reads a
+screen's profile after `gridsnap-ctl reload`.
 
-Демон знает и рабочие столы, и экраны: сетку он берёт по **экрану** окна, а если для него нет привязки —
-по столу окна (см. §3.3 про `[workspaces]` и §4.1 про `[monitors]`), занятость считает по паре
-«стол + монитор», а reflow делает только на видимом столе — окна невидимых столов не
-переставляются. Профиль экрана демон перечитывает после `gridsnap-ctl reload`.
+The `[rules]` section is “selector → zone”:
 
 ```ini
 [rules]
-Chrome = main                   # glob по WM_CLASS без учёта регистра
+Chrome = main                   # case-insensitive glob on WM_CLASS
 TelegramDesktop = top-right
-re:^(Navigator|firefox) = main  # регулярка по строке "класс|заголовок"
+re:^(Navigator|firefox) = main  # regex on the "class|title" string
 ```
 
-Побеждает первое совпадение; правило на неизвестную зону — ошибка конфига.
+The first match wins; a rule pointing at an unknown zone is a config error.
 
-Что демон **не** трогает, задаётся двумя слоями. Первый — служебные типы `_NET_WM_WINDOW_TYPE`
-(`DIALOG`, `SPLASH`, `TOOLTIP`, `DROPDOWN_MENU`, `UTILITY`) — неотключаемая защита от всплывающих окон.
-Второй — секция `[ignore]`, те же селекторы, что у `[rules]`; правая часть строки — заметка для человека и
-журнала демона:
+What the daemon does **not** touch is set by two layers. The first is the utility values of
+`_NET_WM_WINDOW_TYPE` (`DIALOG`, `SPLASH`, `TOOLTIP`, `DROPDOWN_MENU`, `UTILITY`) — a protection
+against pop-up windows that cannot be turned off. The second is the `[ignore]` section with the same
+selectors as `[rules]`; the right-hand side of a line is a note for a human and for the daemon's
+log:
 
 ```ini
 [ignore]
-TelegramDesktop = диалоги Telegram
-re:^(Navigator|firefox).*(Library|Библиотека) = окно библиотеки
+TelegramDesktop = Telegram dialogs
+re:^(Navigator|firefox).*(Library|Библиотека) = library window
 ```
 
-Исключённое окно не двигают ни демон (`on_map`), ни `arrange`/`stack`, ни горячие клавиши `apply`/`move`,
-ни `undo`, ни пикер (`Enter` откажет с сообщением), ни watcher перетаскивания `zone-hotcorners` (HUD для
-такого окна не появится) — везде работает одна проверка `window_excluded`.
-Хотите переставить такое окно — уберите или поправьте правило.
+An excluded window is moved neither by the daemon (`on_map`), nor by `arrange`/`stack`, nor by the
+`apply`/`move` hotkeys, nor by `undo`, nor by the picker (`Enter` refuses with a message), nor by
+the drag watcher `zone-hotcorners` (no HUD appears for such a window) — one check,
+`window_excluded`, works everywhere. If you want to move such a window, remove or fix the rule.
 
-Окно, которое пользователь сам вынес из зоны, демон больше туда не возвращает: он запоминает рамку
-укладки и на каждой реконсиляции видит, что окно ушло. Это переживает перезапуск демона (файл состояния
-`~/.local/state/gridsnap/placed.json`) и сбрасывается, когда окно закрывают и открывают заново. Монитор окна
-демон определяет сам — по центру окна, — и укладывает в рабочей области этого монитора (флага `--monitor`
-у него нет); reflow остаётся в пределах одного монитора.
+A window the user has carried out of a zone is not returned there by the daemon: it remembers the
+frame it placed and sees on every reconciliation that the window has left. This survives a daemon
+restart (the state file `~/.local/state/gridsnap/placed.json`) and is reset when the window is
+closed and opened again. The daemon determines a window's monitor itself — from the window centre —
+and tiles into that monitor's work area (it has no `--monitor` flag); the reflow also stays within a
+single monitor.
 
-Чтобы при закрытии окна соседняя занятая зона расширялась на освободившуюся площадь (если их объединение —
-прямоугольник), включите reflow:
+To have a neighbouring occupied zone expand into the freed area when a window closes (if their union
+is a rectangle), enable reflow:
 
 ```ini
 [daemon]
-reflow = neighbors   # off (по умолчанию) | neighbors
+reflow = neighbors   # off (default) | neighbors
 ```
 
-Когда в освободившуюся зону снова встаёт окно по правилу, расширенный сосед возвращается к своей
-исходной рамке из конфига.
+When a window goes into the freed zone by rule again, the expanded neighbour returns to its original
+frame from the config.
 
-Автозапуск в сессии Cinnamon:
+Autostart in a Cinnamon session:
 
 ```bash
-./install-daemon.sh            # включить автозапуск
-./install-daemon.sh --list     # показать, что стоит
-./install-daemon.sh --remove   # выключить
+./install-daemon.sh            # enable autostart
+./install-daemon.sh --list     # show what is enabled
+./install-daemon.sh --remove   # disable
 ```
 
-Скрипт кладёт `~/.config/autostart/gridsnap-daemon.desktop` с `Exec=python3 <каталог>/zone-daemon.py`.
-Демон читает тот же `zones.conf` (сначала XDG, затем рядом с кодом); путь можно задать `--conf`.
+The script writes `~/.config/autostart/gridsnap-daemon.desktop` with
+`Exec=python3 <directory>/zone-daemon.py`. The daemon reads the same `zones.conf` (first XDG, then
+next to the code); the path can be set with `--conf`.
 
-### 5.1. IPC: управление демоном через `gridsnap-ctl`
+<!-- section: daemon-ipc -->
+### 5.1. IPC: driving the daemon with `gridsnap-ctl`
 
-Пока демон работает, он слушает локальный UNIX-сокет (`$XDG_RUNTIME_DIR/gridsnap/daemon.sock`, права
-`0600`; флаг `--socket PATH` у демона и клиента, `--no-socket` — выключить IPC). Отдельный клиент
-`gridsnap-ctl` (Python, без зависимостей) говорит с ним по JSON:
+While the daemon runs it listens on a local UNIX socket
+(`$XDG_RUNTIME_DIR/gridsnap/daemon.sock`, mode `0600`; the `--socket PATH` flag on both the daemon
+and the client, `--no-socket` turns IPC off). A separate client, `gridsnap-ctl` (Python, no
+dependencies), talks to it in JSON:
 
 ```bash
-python3 gridsnap-ctl status                      # зоны, окно→зона, монитор, reflow (JSON)
-python3 gridsnap-ctl apply main                  # вложить активное окно в зону main
+python3 gridsnap-ctl status                      # zones, window→zone, monitor, reflow (JSON)
+python3 gridsnap-ctl apply main                  # place the active window into the main zone
 python3 gridsnap-ctl apply main --window 0x1a00007
 python3 gridsnap-ctl apply top-right --monitor 1
-python3 gridsnap-ctl focus main                  # режим «только эта зона» (окно в main, остальные свёрнуты)
-python3 gridsnap-ctl focus --off                 # выйти из режима
-python3 gridsnap-ctl reload                      # демон перечитает zones.conf
-python3 gridsnap-ctl quit                        # остановить демон
+python3 gridsnap-ctl focus main                  # "only this zone" mode (the window in main, the rest minimized)
+python3 gridsnap-ctl focus --off                 # leave the mode
+python3 gridsnap-ctl reload                      # the daemon re-reads zones.conf
+python3 gridsnap-ctl quit                        # stop the daemon
 ```
 
-Протокол — одна JSON-строка на команду, ответ — тоже JSON (`{"ok": true, ...}` или
-`{"ok": false, "error": "..."}`); сокет только локальный, TCP нет. Ошибка сокета (битая строка,
-обрыв) демон не роняет — логирует и продолжает следить за окнами. `apply` пишется в трекер демона,
-поэтому закрытие окна затем штатно запускает reflow. Для пакетных установок клиент доступен как
-`gridsnap-ctl` (в `.deb` и через `install.sh` — команда в `$PREFIX/bin`).
+The protocol is one JSON line per command, the reply is JSON as well (`{"ok": true, ...}` or
+`{"ok": false, "error": "..."}`); the socket is local only, there is no TCP. A socket error (a broken
+line, a disconnect) does not bring the daemon down — it logs it and keeps watching windows. `apply`
+is recorded in the daemon's tracker, so closing the window afterwards starts the reflow as usual.
+With a packaged install the client is available as `gridsnap-ctl` (in the `.deb` and via
+`install.sh` — the command in `$PREFIX/bin`).
 
-### 5.2. Вкладки в зоне: несколько окон в одной зоне
+<!-- section: daemon-tabs -->
+### 5.2. Tabs inside a zone: several windows in one zone
 
-Когда в зону попадает второе окно, они не ложатся друг на друга со сдвигом: зона держит
-**вкладки**. Сверху зоны появляется полоса с заголовками её окон (высотой `[tabs] height`), окно
-занимает зону минус полосу, а вкладки переключаются кликом по полосе или клавишей:
+When a second window lands in a zone, the two are not stacked with an offset: the zone keeps
+**tabs**. A strip with the titles of its windows appears above the zone (`[tabs] height` tall), the
+window takes the zone minus the strip, and the tabs are switched by clicking the strip or with a
+key:
 
 ```bash
-python3 zone-tiler.py tabs-next   # поднять следующее окно стопки зоны активного окна
+python3 zone-tiler.py tabs-next   # raise the next window of the active window's zone stack
 ```
 
-- Окно становится вкладкой **само** — как только оказалось в зоне (правило `[rules]`, `apply`,
-  пикер, перетаскивание). Неактивные вкладки стоят на месте и ничего не прячут: переключение просто
-  поднимает нужное окно, поэтому в панели Cinnamon и в Alt+Tab видны все окна зоны.
-- **Полоса — от двух окон.** Пока окно в зоне одно, оно занимает всю зону; полоса появляется со
-  вторым окном, а когда предпоследняя вкладка уходит — оставшаяся снова получает зону целиком.
-- Полосу рисует отдельный оверлей `zone-tabstrip.py`, который запускает демон: она не берёт фокус и
-  не мешает перетаскивать окно за заголовок. В узкой зоне (полосе не хватает места) полосы нет, но
-  вкладки работают и переключаются клавишей.
-- Вкладки живут только при запущенном демоне: он один видит появление и закрытие окон. Без демона
-  `tabs-next` честно скажет, что переключать некому (код 1).
-- Состав вкладок нигде не хранится: он выводится из окон, которые стоят в зоне, поэтому перезапуск
-  демона ничего не теряет.
-- Клавишу переключения заводит `setup-hotkeys.py` из `[tabs] key` (см. §9.1).
+- A window becomes a tab **on its own** — as soon as it is in a zone (a `[rules]` rule, `apply`, the
+  picker, a drag). Inactive tabs stay in place and hide nothing: switching simply raises the right
+  window, so the Cinnamon panel and Alt+Tab list every window of the zone.
+- **The strip starts at two windows.** While a zone holds one window, it takes the whole zone; the
+  strip appears with the second window, and when the second-to-last tab leaves, the remaining one
+  gets the whole zone again.
+- The strip is drawn by a separate overlay, `zone-tabstrip.py`, which the daemon starts: it takes no
+  focus and does not get in the way of dragging a window by its title bar. In a narrow zone (no room
+  for the strip) there is no strip, but the tabs still work and switch with the key.
+- Tabs live only while the daemon runs: it alone sees windows appear and close. Without the daemon
+  `tabs-next` honestly says there is nothing to switch (code 1).
+- The tab set is not stored anywhere: it is derived from the windows standing in the zone, so a
+  daemon restart loses nothing.
+- The switching key is installed by `setup-hotkeys.py` from `[tabs] key` (see §9.1).
 
-### 5.3. Действия: своя команда на клавишу (`[action:<имя>]`)
+<!-- section: daemon-actions -->
+### 5.3. Actions: your own command on a key (`[action:<name>]`)
 
-Кроме готовых команд у GridSnap есть **действия**: запись в `zones.conf` связывает клавишу с тем, что
-должно произойти с окном и зоной. Действие бывает встроенным или твоей командой.
+Besides the ready-made commands Gridsnap has **actions**: a record in `zones.conf` ties a key to what
+should happen with a window and a zone. An action is either built in or your own command.
 
 ```ini
 [action:tidy]
-run = builtin:minimize-others      ; окно в зону и свернуть остальные (то же, что focus)
+run = builtin:minimize-others      ; the window into a zone and the rest minimized (the same as focus)
 key = <Super><Alt>d
 
 [action:main-window]
-run = builtin:show-window          ; поднять окно, стоящее в зоне main
+run = builtin:show-window          ; raise the window standing in the main zone
 zone = main
 key = <Super><Alt>m
 
 [action:term-main]
-run = builtin:terminal             ; терминал в зоне main
+run = builtin:terminal             ; a terminal in the main zone
 zone = main
-command = x-terminal-emulator      ; это умолчание, можно свой терминал
+command = x-terminal-emulator      ; this is the default, your own terminal will do
 
 [action:mirror]
-run = builtin:mirror               ; обмен с зеркальной зоной (axis = vertical — верх↔низ)
+run = builtin:mirror               ; swap with the mirrored zone (axis = vertical — top↔bottom)
 key = <Super><Alt>x
 
 [action:note]
-run = notify-send "зона {zone}: {title}"   ; своя команда с подстановками
+run = notify-send "zone {zone}: {title}"   ; your own command with substitutions
 ```
 
-Клавиши ставятся как обычно — `python3 setup-hotkeys.py` (в списке Cinnamon они видны как
-`zone-tiler: action <имя>`), а вручную действие запускается командой `python3 zone-tiler.py action <имя>`;
-полезен `--dry-run`: он покажет, что было бы, и ничего не сделает.
+The keys are installed as usual — `python3 setup-hotkeys.py` (in Cinnamon's list they show up as
+`zone-tiler: action <name>`), and an action can be run by hand with
+`python3 zone-tiler.py action <name>`; `--dry-run` is useful: it shows what would happen and does
+nothing.
 
-Что действие получает: окно, зону, её пиксельную рамку, монитор, рабочий стол, класс и заголовок окна —
-в переменных `GRIDSNAP_ZONE`, `GRIDSNAP_WINDOW` (hex), `GRIDSNAP_X/Y/W/H`, `GRIDSNAP_MONITOR`,
-`GRIDSNAP_WORKSPACE`, `GRIDSNAP_CLASS`, `GRIDSNAP_TITLE`, `GRIDSNAP_CONF` и в подстановках
-`{zone}`/`{window}`/`{x}`… Своя команда запускается **без оболочки** (конвейеры и `$VAR` не работают —
-кому надо, пишет `sh -c "…"` явно) и **без ожидания**: терминал живёт до закрытия окна, и вешать клавишу
-на него нельзя. Ошибки самой команды GridSnap не перехватывает — они идут в обычный вывод сессии.
+What an action receives: the window, the zone, its pixel frame, the monitor, the workspace, the
+window class and title — in the `GRIDSNAP_ZONE`, `GRIDSNAP_WINDOW` (hex), `GRIDSNAP_X/Y/W/H`,
+`GRIDSNAP_MONITOR`, `GRIDSNAP_WORKSPACE`, `GRIDSNAP_CLASS`, `GRIDSNAP_TITLE`, `GRIDSNAP_CONF`
+variables and in the `{zone}`/`{window}`/`{x}`… substitutions. Your own command is started
+**without a shell** (pipelines and `$VAR` do not work — whoever needs them writes
+`sh -c "…"` explicitly) and **without waiting**: a terminal lives until its window is closed, and a
+key cannot be hung on it. Gridsnap does not intercept errors of the command itself — they go to the
+session's normal output.
 
-Если в записи нет `zone`, предметом становится активное окно и зона, в которой оно стоит; `zone` задаёт
-зону заранее (тогда окно ищется в ней), а `--window`/`--monitor` — конкретное окно и экран. Встроенные
-действия работают без демона; `minimize-others` с запущенным демоном отдаёт режим ему — как клавиша
-`[focus]`. Запись с опечаткой — ошибка конфига (код 3), а не молча неработающая клавиша.
+If a record has no `zone`, the subject is the active window and the zone it stands in; `zone` sets
+the zone in advance (the window is then looked for in it), while `--window`/`--monitor` name a
+specific window and screen. The built-in actions work without the daemon; with the daemon running
+`minimize-others` hands the mode over to it — like the `[focus]` key. A record with a typo is a
+config error (code 3), not a silently dead key.
 
-Что именно делает каждое встроенное действие, как ищется зеркальная зона и почему действия не переезжают
-в профили — `docs/specs/actions.md`.
+What exactly each built-in action does, how the mirrored zone is found and why actions do not move
+into profiles — see `docs/specs/actions.md`.
 
-## 6. Горячие края: перетащил к сетке — окно в зоне
+<!-- section: hotcorners -->
+## 6. Hot corners: drag a window to the grid and it lands in a zone
 
-Тащишь окно за полосу заголовка — появляется сетка зон с подсветкой той, куда попал курсор; отпустил — окно
-встаёт в неё. Это отдельный процесс, он не нужен для обычной работы и не мешает демону:
+Drag a window by its title bar and the grid of zones appears with the one under the cursor
+highlighted; release and the window lands in it. This is a separate process, it is not needed for
+ordinary work and it does not get in the daemon's way:
 
 ```bash
-python3 zone-hotcorners.py            # слушать перетаскивания (Ctrl-C — выход)
-python3 zone-hotcorners.py --no-hud   # без подсветки: только вкладывать по отпусканию
-python3 zone-hotcorners.py --dry-run --verbose   # показать, что делал бы
+python3 zone-hotcorners.py            # watch drags (Ctrl-C to quit)
+python3 zone-hotcorners.py --no-hud   # no highlighting: place on release only
+python3 zone-hotcorners.py --dry-run --verbose   # show what it would do
 ```
 
-Как это устроено: X11 не сообщает «окно тащат», поэтому watcher слушает XI2 raw events (они приходят даже
-когда мышь захвачена оконным менеджером) и считает перетаскиванием нажатие кнопки в полосе заголовка. Пока
-показана сетка, родной «бросок к краю» Cinnamon (`edge-tiling`) гасится, чтобы окно не прыгнуло дважды, и
-возвращается сразу после — настройка не остаётся выключенной. Подробности — `docs/specs/zone-hotcorners.md`,
-`man gridsnap-hotcorners`.
+How it works: X11 does not report “a window is being dragged”, so the watcher listens to XI2 raw
+events (they arrive even when the mouse is grabbed by the window manager) and counts a button press
+in the title bar as a drag. While the grid is shown, Cinnamon's own “throw to the edge” is muted
+(`edge-tiling`) so that the window does not jump twice, and it is restored right after — the setting
+is not left off. The details are in `docs/specs/zone-hotcorners.md`, `man gridsnap-hotcorners`.
 
-## 7. Клавиши направлений: окно в соседнюю зону
+<!-- section: move -->
+## 7. Direction keys: send a window to the neighbouring zone
 
-`zone-tiler.py move left|right|up|down` перекладывает активное окно в соседнюю зону — без оверлея, по тем
-же правилам, что стрелки в пикере (на краю сетки ничего не делает и говорит об этом). Сочетания
-настраиваются секцией `[move]` в `zones.conf`, по умолчанию `Super+Left/Right/Up/Down`:
+`zone-tiler.py move left|right|up|down` moves the active window into the neighbouring zone — without
+an overlay, by the same rules as the arrows in the picker (on the edge of the grid it does nothing
+and says so). The shortcuts are configured by the `[move]` section in `zones.conf`,
+`Super+Left/Right/Up/Down` by default:
 
 ```ini
 [move]
@@ -556,166 +605,183 @@ up    = <Super>Up
 down  = <Super>Down
 ```
 
-Эти же сочетания в Cinnamon заняты родным тайлингом (`push-tile-*`). Наш `setup-hotkeys.py` регистрирует
-свои и предупреждает в stderr, если сочетание совпало; настройки Cinnamon при этом не меняются. Если
-срабатывает родной тайлинг вместо нашего — освободите `push-tile-*` в «Клавиатура → Горячие клавиши →
-Окна» или задайте в `[move]` другое сочетание.
+These very shortcuts are taken by Cinnamon's own tiling (`push-tile-*`). Our `setup-hotkeys.py`
+registers its own and warns on stderr if a shortcut collides; the Cinnamon settings are not changed
+by that. If the native tiling fires instead of ours, free `push-tile-*` in “Keyboard → Shortcuts →
+Windows” or set another shortcut in `[move]`.
 
-## 8. Визуальный выбор зоны: `Super+Z`
+<!-- section: picker -->
+## 8. Visual zone picker: `Super+Z`
 
-`zone-picker.py` показывает оверлей на всю рабочую область с зонами из `zones.conf`: зона под курсором
-и выделение подсвечиваются, **стрелки** двигают выделение, **`Enter`** вкладывает активное окно в
-выбранную зону, **`Esc`** отменяет (как gTile, но по вашей сетке). Монитор берётся по активному окну,
-его можно задать явно.
+`zone-picker.py` shows an overlay over the whole work area with the zones from `zones.conf`: the
+zone under the cursor and the selection are highlighted, **the arrows** move the selection,
+**`Enter`** places the active window into the selected zone, **`Esc`** cancels (like gTile, but with
+your own grid). The monitor is taken from the active window; it can also be set explicitly.
 
 ```bash
-python3 zone-picker.py                    # оверлей (запускается горячей клавишей)
-python3 zone-picker.py --dry-run          # выбрать зону, но окно не двигать
-python3 zone-picker.py --shot picker.png  # снимок оверлея и выход (без интерактива)
-python3 zone-picker.py --monitor 1        # оверлей на втором мониторе
-python3 zone-picker.py --select bottom    # начальное выделение по имени зоны
+python3 zone-picker.py                    # the overlay (started by a hotkey)
+python3 zone-picker.py --dry-run          # pick a zone but do not move the window
+python3 zone-picker.py --shot picker.png  # an overlay snapshot and exit (non-interactive)
+python3 zone-picker.py --monitor 1        # the overlay on the second monitor
+python3 zone-picker.py --select bottom    # initial selection by zone name
 ```
 
-Применение окна идёт через тот же раскладчик (`zone-tiler.apply_zone`/`Grid.rect`), поэтому рамка
-совпадает с зоной пиксель в пиксель и по `Enter` работает `undo`.
+The window is applied through the same tiler (`zone-tiler.apply_zone`/`Grid.rect`), so the frame
+matches the zone pixel for pixel and `undo` works after `Enter`.
 
-### Как завести `Super+Z` в Cinnamon
+<!-- section: picker-hotkey -->
+### How to bind `Super+Z` in Cinnamon
 
-Сочетание не создаётся автоматически (`setup-hotkeys.py` ставит только клавиши зон из `[keys]`) —
-заведите его один раз вручную: **Параметры → Клавиатура → Горячие клавиши → «Добавить
-пользовательское сочетание»** и заполните:
+The shortcut is not created automatically (`setup-hotkeys.py` installs only the zone keys from
+`[keys]`) — set it up once by hand: **Settings → Keyboard → Shortcuts → “Add custom shortcut”** and
+fill in:
 
-| Поле | Значение |
+| Field | Value |
 |---|---|
-| Имя | `GridSnap: выбор зоны` |
-| Команда | `python3 /путь/к/каталогу/zone-picker.py` (для пакета — просто `gridsnap-picker`) |
-| Сочетание | `Super+Z` |
+| Name | `GridSnap: zone picker` |
+| Command | `python3 /path/to/directory/zone-picker.py` (for a package — just `gridsnap-picker`) |
+| Shortcut | `Super+Z` |
 
-То же открывается командой `cinnamon-settings keyboard`. Сочетание `Super+Z` в Cinnamon по умолчанию
-свободно. После правки `zones.conf` путь к `zone-picker.py` менять не нужно — оверлей каждый раз читает
-актуальный конфиг сам.
+The same opens with `cinnamon-settings keyboard`. The `Super+Z` shortcut is free in Cinnamon by
+default. After editing `zones.conf` the path to `zone-picker.py` does not need changing — the
+overlay reads the current config itself every time.
 
-## 9. Горячие клавиши
+<!-- section: hotkeys -->
+## 9. Hotkeys
 
-Уже установлены в вашей сессии: `Super+Alt+1` main, `+2` top-right, `+3` top-far,
-`+4` bottom (видны в Параметры → Клавиатура → Горячие клавиши как «zone-tiler: …»).
-Правка: поменяйте `[keys]` в `zones.conf` и нажмите в редакторе «сочетания клавиш», либо:
+Already installed in your session: `Super+Alt+1` main, `+2` top-right, `+3` top-far, `+4` bottom
+(visible in Settings → Keyboard → Shortcuts as “zone-tiler: …”). To edit them: change `[keys]` in
+`zones.conf` and press “keybindings” in the editor, or:
 
 ```bash
-python3 setup-hotkeys.py --list     # что будет установлено
-python3 setup-hotkeys.py            # установить / обновить
-python3 setup-hotkeys.py --remove   # удалить все сочетания zone-tiler
+python3 setup-hotkeys.py --list     # what will be installed
+python3 setup-hotkeys.py            # install / update
+python3 setup-hotkeys.py --remove   # remove all zone-tiler shortcuts
 ```
 
-### 9.1. Режим «только эта зона» одной клавишей
+<!-- section: hotkeys-focus -->
+### 9.1. Focus mode on a single key
 
-В `zones.conf` есть необязательная секция `[focus]`:
+`zones.conf` has an optional `[focus]` section:
 
 ```ini
 [focus]
-key = <Super><Alt>F   ; сочетание режима (необязательно)
-zone = main           ; необязательно: в какую зону класть окно
+key = <Super><Alt>F   ; the mode's shortcut (optional)
+zone = main           ; optional: which zone to place the window into
 ```
 
-С `zone` клавиша кладёт активное окно в зону и сворачивает остальные окна этого стола и монитора;
-без `zone` — только сворачивает («только это окно»), ничего не двигая. Нажатие той же клавиши
-повторно выходит из режима. Секция необязательна: без неё `setup-hotkeys.py` ставит ровно те же
-сочетания, что и раньше. Сочетание регистрируется как `zone-tiler: focus`, поэтому `--remove`
-снимает его вместе с остальными. Подробности режима — в разделе 4.2.
+With `zone` the key places the active window into the zone and minimizes the other windows of that
+workspace and monitor; without `zone` it only minimizes (“only this window”) without moving
+anything. Pressing the same key again leaves the mode. The section is optional: without it
+`setup-hotkeys.py` installs exactly the same shortcuts as before. The shortcut is registered as
+`zone-tiler: focus`, so `--remove` removes it together with the others. The details of the mode are
+in section 4.2.
 
-Клавиша переключения вкладок заводится так же — секцией `[tabs]` (см. §5.2):
+The tab switching key is set up the same way — with the `[tabs]` section (see §5.2):
 
 ```ini
 [tabs]
-key = <Super><Alt>g   ; «следующее окно зоны активного окна»
+key = <Super><Alt>g   ; "the next window of the active window's zone"
 ```
 
-### 7.1. Профили раскладок одной клавишей
+<!-- section: hotkeys-profiles -->
+### 9.2. Layout profiles on a single key
 
-Свой профиль (например, «работа», «кино», «стрим») можно сохранить командой
-`zone-tiler.py profile save <имя>` или из меню «Профили» в редакторе. Чтобы переключать раскладку
-**одной клавишей**, заведите обычное пользовательское сочетание Cinnamon:
+Your own profile (say, “work”, “cinema”, “stream”) can be saved with
+`zone-tiler.py profile save <name>` or from the “Profiles” menu in the editor. To switch a layout
+**with a single key**, set up an ordinary Cinnamon custom shortcut:
 
-1. Параметры → Клавиатура → Горячие клавиши → «Добавить пользовательское сочетание».
-2. Имя — например, `Gridsnap: профиль work`.
-3. Команда — `python3 /путь/к/zone-tiler.py profile use work` (при необходимости добавьте
-   `--conf /путь/к/zones.conf`; чтобы не дёргать сочетания при каждом переключении — `--no-hotkeys`).
-4. Назначьте сочетание, например `Super+Alt+W`.
+1. Settings → Keyboard → Shortcuts → “Add custom shortcut”.
+2. Name — for example `Gridsnap: profile work`.
+3. Command — `python3 /path/to/zone-tiler.py profile use work` (add
+   `--conf /path/to/zones.conf` if needed; use `--no-hotkeys` to avoid touching the shortcuts on
+   every switch).
+4. Assign a shortcut, for example `Super+Alt+W`.
 
-Команда сама перепишет `[zones]`/`[rules]`/`[ignore]`/`[keys]` в вашем `zones.conf` из выбранного профиля. Если
-нужно, чтобы после переключения сразу работали новые клавиши зон, оставьте вызов `setup-hotkeys.py`
-(он идёт по умолчанию) или нажмите «сочетания клавиш» в редакторе.
-## 10. Апплет Cinnamon: доступ к GridSnap из панели
+The command itself rewrites `[zones]`/`[rules]`/`[ignore]`/`[keys]` in your `zones.conf` from the
+chosen profile. If the new zone keys should work right after the switch, keep the
+`setup-hotkeys.py` call (it is on by default) or press “keybindings” in the editor.
 
-В каталоге `contrib/applet/` лежит панельный апплет `gridsnap@metapeka`: иконка (и по желанию
-надпись) в панели, меню по левому и правому клику — открыть редактор, применить сочетания, список
-зон (клик кладёт активное окно в зону), сводка по рабочим областям, `arrange` и `undo`. Апплет —
-тонкая обёртка над теми же скриптами, своей логики раскладки в нём нет; каталог GridSnap задаётся
-в его настройках (по умолчанию `~/thinkrail/gridsnape`).
+<!-- section: applet -->
+## 10. The Cinnamon applet: GridSnap from the panel
 
-Установка:
+`contrib/applet/` holds a panel applet, `gridsnap@metapeka`: an icon (and, if you like, a label) in
+the panel, a menu on left and right click — open the editor, apply the keybindings, the list of zones
+(a click places the active window into a zone), a summary of the work areas, `arrange` and `undo`.
+The applet is a thin wrapper over the same scripts, it has no layout logic of its own; the GridSnap
+directory is set in its settings (by default `~/thinkrail/gridsnape`).
+
+Installing it:
 
 ```bash
 mkdir -p ~/.local/share/cinnamon/applets
 cp -r contrib/applet/gridsnap@metapeka ~/.local/share/cinnamon/applets/
-cinnamon-settings applets        # включить GridSnap в списке апплетов
+cinnamon-settings applets        # enable GridSnap in the applet list
 ```
 
-Что в меню, какие настройки и ограничения — в `contrib/applet/README.md`.
+What is in the menu, which settings exist and what the limits are — in `contrib/applet/README.md`.
 
-## 11. Если окно не встаёт на место
+<!-- section: troubleshooting -->
+## 11. If a window does not land where it should
 
-* приложение само задаёт размер (терминал с шагом символа) — возможна разница в пару пикселей;
-* зона с нулевой площадью не сохранится: минимальный размер 5 % экрана;
-* Wayland не поддерживается, но Cinnamon работает на X11;
-* после правки `zones.conf` руками перезапустите `setup-hotkeys.py`, иначе новые имена зон
-  не будут связаны с клавишами.
+* the application sets its own size (a terminal with a character step) — a difference of a couple of
+  pixels is possible;
+* a zone with zero area is not saved: the minimum size is 5% of the screen;
+* Wayland is not supported, but Cinnamon runs on X11;
+* after editing `zones.conf` by hand, re-run `setup-hotkeys.py`, otherwise the new zone names will
+  not be bound to keys.
 
-## 12. Проверки, которые прогонялись
+<!-- section: checks -->
+## 12. The checks that were run
 
-* юнит-тесты без X (парсер, правила, reflow, демон, IPC `zone_ipc`, конфиг-слой и привязки профилей
-  к экранам, arrange/undo, ядро вкладок `zone_tabs`, навигация полосы `zone_tabstrip_nav`, геометрия
-  редактора `zone_geom`, навигация выбора зоны `zone_picker_nav`, ядро действий `zone_actions` и разбор
-  `[action:<имя>]` с исполнением действия):
-  `python3 -m unittest discover -s tests -v`;
-* дымовой тест на своём Xvfb: `sh tests/smoke.sh` (окно встаёт в зону пиксель в пиксель);
-* дымовой тест arrange+undo: `sh tests/smoke-arrange.sh` (три окна раскладываются и возвращаются);
-* дымовой тест выбора зоны: `sh tests/smoke-picker.sh` (`Right` + `Enter` кладут окно в `top-right`
-  пиксель в пиксель, `Esc` отменяет);
-* дымовой тест исключений окон: `sh tests/smoke-ignore.sh` (исключённое окно не двигают `apply`,
-  `arrange`, демон и пикер, а окно, вынесенное из зоны, не возвращается даже после перезапуска демона);
-* дымовой тест режима «только эта зона»: `sh tests/smoke-focus.sh` (без демона `focus main` кладёт окно
-  в зону и сворачивает два других окна того же монитора, исключённое остаётся видимым, `--off` и toggle
-  разворачивают ровно своё; с демоном `gridsnap-ctl focus` сворачивает и окно, появившееся уже
-  в режиме);
-* дымовой тест вкладок в зоне: `sh tests/smoke-tabs.sh` (второе окно в зоне становится вкладкой и
-  переставляет первое, полоса вкладок появляется над зоной и исчезает с последней вкладкой, `tabs-next`
-  поднимает соседнюю вкладку, режим «только эта зона» не сворачивает вкладки зоны-цели — в том числе
-  окно, пришедшее в неё уже во время режима, — а `--offset` даёт код 2);
-* дымовой тест привязки профиля к экрану: `sh tests/smoke-monitor-profiles.sh` (два виртуальных
-  монитора: `profile use-monitors` раскладывает экраны по их профилям, `apply` без `--monitor` ищет зону
-  в профиле экрана окна, а после правки профиля и `reload` демон берёт новую геометрию, а не снимок из
-  конфига);
-* дымовой тест действий: `sh tests/smoke-actions.sh` (внешняя команда получает окно, зону и рамку
-  зоны обоими каналами, `terminal` ставит окно терминала в зону, `show-window` поднимает соседнюю
-  вкладку, `mirror` обменивает окна двух зон, `minimize-others` сворачивает чужое окно и возвращает
-  его повторным нажатием);
-* снимок оверлея без интерактива: `xvfb-run -a python3 zone-picker.py --shot /tmp/picker.png`;
-* CI (`.github/workflows/ci.yml`): компиляция, юнит-тесты, сборка пакетов и дымовые сценарии на Xvfb + muffin. Все job'ы — на `ubuntu-latest` у GitHub, не на своей машине; у каждого есть `timeout-minutes` (10/15/20/20), а дымовые шаги идут через `tests/run-smoke.sh` с одной повторной попыткой: в CI окно иногда не успевает получить геометрию от muffin, и проверка падает на тайминге, а не на коде;
-* слежение за CI без риска заснуть: `tools/ci-watch.sh --pr 14` (или `tools/ci-watch.sh <run-id>`).
-  Печатает смену статуса и всегда завершается сам: `0` — всё зелёное, `1` — упало,
-  `2` — зависло (статус не менялся дольше `--stall`, по умолчанию 3 минуты) или вышло
-  `--deadline` (15 минут). Отличается от `gh run watch` именно тем, что говорит «зависло»
-  вместо бесконечного ожидания;
-* конфиг: чтение из `~/.config/gridsnap/zones.conf` при его наличии, иначе рядом с кодом;
-* раскладка из терминала: рамка окна совпала с зоной (в т.ч. из развёрнутого состояния);
-* свободные прямоугольные зоны (`x,y,w,h`) — тоже точное совпадение;
-* мышь в редакторе: перемещение, resize за край, минимальный размер, прилипание к краю
-  экрана и к соседней зоне, двойной клик, `Delete`, шаблоны, сохранение и повторное чтение;
-* запуск ярлыка, поиск иконки темой GTK, `desktop-file-validate`;
-* пакеты: `make tarball` (распаковка и `./install.sh --prefix ...`) и `make deb`
-  (`dpkg-deb -I`, `dpkg-deb -c`, распаковка и `zone-tiler.py --version` из пакета); это же
-  прогоняется отдельной стадией CI (`.github/workflows/ci.yml`);
-* апплет Cinnamon: `python3 -m json.tool` для `metadata.json` и `settings-schema.json`,
-  `node --check applet.js`, загрузка в живом Cinnamon (headless `Xvfb` + приватный dbus) —
-  `Loaded applet gridsnap@metapeka`, на панели ровно он (`contrib/applet/check-cinnamon.sh`).
+* unit tests without X (parser, rules, reflow, daemon, the `zone_ipc` IPC, the config layer and the
+  bindings of profiles to screens, arrange/undo, the tab core `zone_tabs`, the strip navigation
+  `zone_tabstrip_nav`, the editor geometry `zone_geom`, the zone picker navigation
+  `zone_picker_nav`, the action core `zone_actions` and the parsing of `[action:<name>]` together
+  with running an action): `python3 -m unittest discover -s tests -v`;
+* a smoke test on its own Xvfb: `sh tests/smoke.sh` (the window goes into the zone pixel for pixel);
+* an arrange+undo smoke test: `sh tests/smoke-arrange.sh` (three windows are laid out and restored);
+* a zone picking smoke test: `sh tests/smoke-picker.sh` (`Right` + `Enter` put the window into
+  `top-right` pixel for pixel, `Esc` cancels);
+* a window exclusion smoke test: `sh tests/smoke-ignore.sh` (an excluded window is moved by neither
+  `apply`, nor `arrange`, nor the daemon, nor the picker, and a window carried out of a zone does not
+  come back even after a daemon restart);
+* a focus mode smoke test: `sh tests/smoke-focus.sh` (without the daemon `focus main` puts the window
+  into the zone and minimizes two other windows of the same monitor, an excluded one stays visible,
+  `--off` and the toggle restore exactly their own; with the daemon `gridsnap-ctl focus` also
+  minimizes a window that appeared while the mode was already on);
+* a zone tabs smoke test: `sh tests/smoke-tabs.sh` (the second window in a zone becomes a tab and
+  moves the first, the tab strip appears above the zone and disappears with the last tab, `tabs-next`
+  raises the neighbouring tab, focus mode does not minimize the tabs of the target zone — including a
+  window that arrived in it while the mode was already on — and `--offset` gives code 2);
+* a screen profile binding smoke test: `sh tests/smoke-monitor-profiles.sh` (two virtual monitors:
+  `profile use-monitors` lays the screens out by their profiles, `apply` without `--monitor` looks the
+  zone up in the window's screen profile, and after a profile edit and a `reload` the daemon takes
+  the new geometry rather than a snapshot from the config);
+* an actions smoke test: `sh tests/smoke-actions.sh` (an external command receives the window, the
+  zone and the zone frame through both channels, `terminal` puts a terminal window into the zone,
+  `show-window` raises the neighbouring tab, `mirror` swaps the windows of two zones,
+  `minimize-others` minimizes a foreign window and restores it on a second press);
+* an overlay snapshot without interactivity: `xvfb-run -a python3 zone-picker.py --shot /tmp/picker.png`;
+* CI (`.github/workflows/ci.yml`): compilation, unit tests, package builds and the smoke scenarios on
+  Xvfb + muffin. All jobs run on GitHub's `ubuntu-latest`, not on the author's machine; each has
+  `timeout-minutes` (10/15/20/20), and the smoke steps go through `tests/run-smoke.sh` with a single
+  retry: in CI a window sometimes does not get its geometry from muffin in time, and the check fails
+  on timing rather than on code;
+* watching CI without the risk of falling asleep: `tools/ci-watch.sh --pr 14` (or
+  `tools/ci-watch.sh <run-id>`). It prints status changes and always finishes on its own: `0` —
+  everything green, `1` — something failed, `2` — it hung (the status did not change for longer than
+  `--stall`, 3 minutes by default) or `--deadline` (15 minutes) expired. Its difference from
+  `gh run watch` is exactly that it says “hung” instead of waiting forever;
+* config: read from `~/.config/gridsnap/zones.conf` when present, otherwise next to the code;
+* tiling from the terminal: the window frame matched the zone (including from a maximized state);
+* free rectangular zones (`x,y,w,h`) — an exact match as well;
+* the mouse in the editor: move, edge resize, minimum size, snapping to the screen edge and to a
+  neighbouring zone, double click, `Delete`, templates, save and re-read;
+* launching the shortcut, icon lookup by the GTK theme, `desktop-file-validate`;
+* packages: `make tarball` (unpack and `./install.sh --prefix ...`) and `make deb` (`dpkg-deb -I`,
+  `dpkg-deb -c`, unpack and `zone-tiler.py --version` from the package); the same runs as a separate
+  CI stage (`.github/workflows/ci.yml`);
+* the Cinnamon applet: `python3 -m json.tool` for `metadata.json` and `settings-schema.json`,
+  `node --check applet.js`, loading into a live Cinnamon (a headless `Xvfb` + a private dbus) —
+  `Loaded applet gridsnap@metapeka`, and exactly it in the panel (`contrib/applet/check-cinnamon.sh`).

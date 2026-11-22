@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gridsnap — window zones for Cinnamon (X11)</title>
+<meta name="description" content="A visual zone editor and window tiler for Cinnamon on X11: draw your own grid, put windows into zones with a hotkey, tabs inside a zone, hot corners, actions.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav id="lang" aria-label="Language">
+<span class="current" aria-current="page">English</span>
+<a href="index.zh.html">简体中文</a>
+<a href="index.ru.html">Русский</a>
+</nav>
+<header id="top">
+<h1>Gridsnap</h1>
+<p class="tagline">A window grid for Cinnamon: draw your own zones, then put windows into them with a key.</p>
+<p><a class="button" href="#install">Install</a></p>
+</header>
+<section id="features">
+<h2>What it does</h2>
+<ul>
+<li><strong>Visual zone editor</strong> — drag zones right on a picture of your screen: any number of them, each with a name and a key; sizes are kept as fractions of the work area, so the grid survives a resolution change and leaves room for the panel.</li>
+<li><strong>A window into a zone by a key</strong> — the tiler places the active window pixel for pixel: it clears maximization and compensates the window frame (<code>_NET_FRAME_EXTENTS</code>) through muffin's EWMH messages.</li>
+<li><strong>Daemon and auto-tiling</strong> — windows that appear go into zones by rules from <code>zones.conf</code> (<code>[rules]</code>), windows you carried out stay out, and a freed zone can grow into its neighbour.</li>
+<li><strong>Tabs inside a zone</strong> — several windows in one zone do not pile up: a strip with their titles appears above the zone, and one key or a click switches between them.</li>
+<li><strong>“Only this zone” mode</strong> — one key puts the window into a zone and minimizes the other windows of that workspace and monitor; the same key brings them back.</li>
+<li><strong>Hot corners</strong> — drag a window by its title bar, the grid lights up under the cursor, and on release the window lands in that zone.</li>
+<li><strong>Zone picker on <code>Super+Z</code></strong> — an overlay with your zones, arrows to move the selection, <code>Enter</code> to place the window, <code>Esc</code> to cancel.</li>
+<li><strong>Actions</strong> — a key of your own: built-in ones (minimize the others, show the window of a zone, a terminal in a zone, swap two zones) or your command with the window, zone and frame handed over.</li>
+<li><strong>Several monitors</strong> — every screen has its own zones, a zone is looked up in the profile of the screen the window is on, and other screens are never touched.</li>
+<li><strong>Profiles per screen and per workspace</strong> — “monitor 2 — cinema”, workspace 1 — work: switch the layout with one key.</li>
+</ul>
+</section>
+<section id="screenshots">
+<h2>Screenshots</h2>
+<img class="shot" src="assets/editor.png" alt="Zone editor: the screen with zones, the list of zones on the right">
+<img class="shot" src="assets/demo.gif" alt="The editor placing a window into a zone">
+</section>
+<section id="install">
+<h2>Installation</h2>
+<p>Two independent paths: from the repository, for yourself, or as a package. Both install the same code; nothing beyond <code>python3</code>, PyGObject and <code>libX11</code> is required.</p>
+<p>From the repository:</p>
+<pre><code>./install-launcher.sh             # launcher in the menu + icons
+./install-launcher.sh --desktop   # also a shortcut on the desktop
+./install-daemon.sh               # autostart the auto-tiling daemon
+python3 setup-hotkeys.py          # keybindings in Cinnamon</code></pre>
+<p>As a package (a <code>.deb</code> for Debian/Ubuntu, an AUR recipe for Arch, a <code>.tar.gz</code> for any system):</p>
+<pre><code>make tarball      # dist/gridsnap-&lt;version&gt;.tar.gz
+make deb          # dist/gridsnap_&lt;version&gt;_all.deb
+make aur          # AUR recipe in dist/PKGBUILD
+
+sudo apt install ./dist/gridsnap_&lt;version&gt;_all.deb</code></pre>
+<p>The full instructions, the config format and every command are in the <a href="#docs">documentation</a>.</p>
+</section>
+<section id="docs">
+<h2>Documentation</h2>
+<ul>
+<li>README: <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.md">English</a>,
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.zh.md">简体中文</a>,
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.ru.md">Русский</a></li>
+<li>Specifications: <a href="https://github.com/metapeka/cinnamon-gridsnap/tree/main/docs/specs">docs/specs</a> —
+zones and the config, the tiler and focus mode, the daemon and IPC, tabs, actions, hot corners, the picker.</li>
+<li>Man pages in the package: <code>man gridsnap</code> (the commands, <code>zones.conf</code>, files, exit codes),
+<code>man gridsnap-tiler</code>, <code>man gridsnap-daemon</code>, <code>man gridsnap-editor</code>,
+<code>man gridsnap-picker</code>, <code>man gridsnap-ctl</code>, <code>man setup-hotkeys</code>.</li>
+<li>Sources and issues: <a href="https://github.com/metapeka/cinnamon-gridsnap">github.com/metapeka/cinnamon-gridsnap</a>.</li>
+</ul>
+</section>
+<footer>Gridsnap — a window grid for Cinnamon on X11. Tested on Debian 13, Cinnamon 6.4.10 (Muffin, X11).</footer>
+</body>
+</html>
