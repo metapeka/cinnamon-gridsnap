@@ -2569,6 +2569,10 @@ msgstr ""
 "- without it the tab bar cannot be drawn: {}"
 
 #: zone-tabstrip.py
+msgid "не удалось загрузить zone-tiler.py"
+msgstr "zone-tiler.py could not be loaded"
+
+#: zone-tabstrip.py
 msgid "демон не отвечает: {}"
 msgstr "the daemon does not answer: {}"
 

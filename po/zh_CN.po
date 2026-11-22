@@ -2478,6 +2478,10 @@ msgstr ""
 "画不出标签栏：{}"
 
 #: zone-tabstrip.py
+msgid "не удалось загрузить zone-tiler.py"
+msgstr "无法加载 zone-tiler.py"
+
+#: zone-tabstrip.py
 msgid "демон не отвечает: {}"
 msgstr "守护进程没有回应：{}"
 
