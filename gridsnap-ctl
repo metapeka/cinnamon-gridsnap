@@ -102,15 +102,15 @@ def watch(path, stream=None, notice=None, timeout=TIMEOUT):
         answer = zone_ipc.read_response(conn)
         if not answer.get("ok"):
             print(
-                _("gridsnap-ctl: демон отклонил подписку: {error}").format(
-                    error=answer.get("error", _("команда отклонена"))
+                _("gridsnap-ctl: the daemon rejected the subscription: {error}").format(
+                    error=answer.get("error", _("command rejected"))
                 ),
                 file=notice,
             )
             return EXIT_FAIL
         groups = ", ".join(str(g) for g in answer.get("subscribed") or [])
         print(
-            _("gridsnap-ctl: подписка принята ({groups}) — Ctrl-C для выхода").format(
+            _("gridsnap-ctl: subscribed ({groups}) — Ctrl-C to stop").format(
                 groups=groups
             ),
             file=notice,
@@ -132,15 +132,14 @@ def watch(path, stream=None, notice=None, timeout=TIMEOUT):
         return EXIT_OK
     except zone_ipc.ProtocolError as exc:
         print(
-            _("gridsnap-ctl: демон ответил непонятно: {error}").format(error=exc),
+            _("gridsnap-ctl: the daemon gave an unclear answer: {error}").format(error=exc),
             file=notice,
         )
         return EXIT_FAIL
     except OSError as exc:
         print(
             _(
-                "gridsnap-ctl: нет связи с демоном по сокету {path} ({error}). "
-                "Запущен ли zone-daemon.py?"
+                "gridsnap-ctl: no connection to the daemon over socket {path} ({error}). Is zone-daemon.py running?"
             ).format(path=path, error=exc),
             file=notice,
         )
@@ -160,7 +159,7 @@ def build_request(args):
     request = {"cmd": args.command}
     if args.command == "apply":
         if not args.zone:
-            print(_("gridsnap-ctl: для apply укажите зону, например: apply main"), file=sys.stderr)
+            print(_("gridsnap-ctl: specify a zone for apply, for example: apply main"), file=sys.stderr)
             raise SystemExit(EXIT_USAGE)
         request["zone"] = args.zone
         if args.window is not None:
@@ -172,13 +171,13 @@ def build_request(args):
             # Режим сворачивает окна того монитора, где лежит целевое окно:
             # чужой монитор в запросе ему не нужен.
             print(
-                _("gridsnap-ctl: у focus нет --monitor: режим берёт монитор целевого окна"),
+                _("gridsnap-ctl: focus takes no --monitor: the mode uses the target window's monitor"),
                 file=sys.stderr,
             )
             raise SystemExit(EXIT_USAGE)
         if args.off and args.zone:
             print(
-                _("gridsnap-ctl: у focus либо зона, либо --off, а не оба сразу"),
+                _("gridsnap-ctl: focus takes either a zone or --off, not both"),
                 file=sys.stderr,
             )
             raise SystemExit(EXIT_USAGE)
@@ -192,7 +191,7 @@ def build_request(args):
             request["window"] = args.window
     elif args.zone or args.window is not None or args.monitor is not None:
         print(
-            _("gridsnap-ctl: у команды {command} нет зоны/окна/монитора").format(
+            _("gridsnap-ctl: command {command} has no zone/window/monitor").format(
                 command=args.command
             ),
             file=sys.stderr,
@@ -203,43 +202,41 @@ def build_request(args):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description=_("Управление демоном GridSnap через локальный IPC-сокет"),
+        description=_("Control the GridSnap daemon over a local IPC socket"),
         epilog=_(
-            "Примеры: gridsnap-ctl status; gridsnap-ctl apply main; "
-            "gridsnap-ctl focus main; gridsnap-ctl focus --off; gridsnap-ctl quit"
+            "Examples: gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ctl focus main; gridsnap-ctl focus --off; gridsnap-ctl quit"
         ),
     )
     ap.add_argument(
         "command",
         choices=["status", "apply", "focus", "reload", "quit", "watch"],
         help=_(
-            "status — состояние; apply — вложить окно в зону; focus — режим «только эта "
-            "зона»; reload — перечитать конфиг; quit — выйти; watch — слушать события"
+            "status — state; apply — place the window in a zone; focus — \"this zone only\" mode; reload — re-read the config; quit — exit; watch — listen to events"
         ),
     )
     ap.add_argument(
         "zone",
         nargs="?",
-        help=_("имя зоны для apply и focus (у focus необязательна)"),
+        help=_("zone name for apply and focus (optional for focus)"),
     )
     ap.add_argument(
         "--window",
         type=lambda s: int(s, 0),
-        help=_("id окна для apply и focus (по умолчанию активное окно)"),
+        help=_("window id for apply and focus (the active window by default)"),
     )
-    ap.add_argument("--monitor", type=int, help=_("номер монитора для apply"))
+    ap.add_argument("--monitor", type=int, help=_("monitor index for apply"))
     ap.add_argument(
         "--off",
         action="store_true",
-        help=_("focus: выйти из режима «только эта зона»"),
+        help=_("focus: leave focus mode"),
     )
     ap.add_argument(
         "--socket",
         default=None,
-        help=_("путь UNIX-сокета (по умолчанию $XDG_RUNTIME_DIR/gridsnap/daemon.sock)"),
+        help=_("UNIX socket path ($XDG_RUNTIME_DIR/gridsnap/daemon.sock by default)"),
     )
-    ap.add_argument("--raw", action="store_true", help=_("печатать ответ одной строкой"))
-    ap.add_argument("--quiet", action="store_true", help=_("ничего не печатать при успехе"))
+    ap.add_argument("--raw", action="store_true", help=_("print the answer on one line"))
+    ap.add_argument("--quiet", action="store_true", help=_("print nothing on success"))
     ap.add_argument("--version", action="version", version=f"gridsnap-ctl {VERSION}")
     args = ap.parse_args(argv)
 
@@ -247,7 +244,7 @@ def main(argv=None):
     if args.command == "watch":
         if args.zone or args.window is not None or args.monitor is not None or args.off:
             print(
-                _("gridsnap-ctl: у watch нет зоны/окна/монитора"),
+                _("gridsnap-ctl: watch takes no zone/window/monitor"),
                 file=sys.stderr,
             )
             return EXIT_USAGE
@@ -260,13 +257,12 @@ def main(argv=None):
     try:
         response = send_command(request, path)
     except zone_ipc.ProtocolError as exc:
-        print(_("gridsnap-ctl: демон ответил непонятно: {error}").format(error=exc), file=sys.stderr)
+        print(_("gridsnap-ctl: the daemon gave an unclear answer: {error}").format(error=exc), file=sys.stderr)
         return EXIT_FAIL
     except OSError as exc:
         print(
             _(
-                "gridsnap-ctl: нет связи с демоном по сокету {path} ({error}). "
-                "Запущен ли zone-daemon.py?"
+                "gridsnap-ctl: no connection to the daemon over socket {path} ({error}). Is zone-daemon.py running?"
             ).format(path=path, error=exc),
             file=sys.stderr,
         )
@@ -275,7 +271,7 @@ def main(argv=None):
     if not response.get("ok"):
         print(
             _("gridsnap-ctl: {error}").format(
-                error=response.get("error", _("команда отклонена"))
+                error=response.get("error", _("command rejected"))
             ),
             file=sys.stderr,
         )

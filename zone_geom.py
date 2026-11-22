@@ -200,7 +200,7 @@ def _zone_fields(zone):
         )
     values = tuple(zone)
     if len(values) < 4:
-        raise ValueError(_("zone_geom: в наборе не зона, а {zone!r}").format(zone=zone))
+        raise ValueError(_("zone_geom: the item in the set is not a zone: {zone!r}").format(zone=zone))
     name = str(values[0]) if len(values) > 4 else ""
     x, y, w, h = values[-4], values[-3], values[-2], values[-1]
     return name, float(x), float(y), float(w), float(h), ""
@@ -240,13 +240,13 @@ def set_origin_text(monitor, own, shared=False, offline=False):
     иначе набор унаследован. Отключённый выход помечается отдельно.
     """
     if shared:
-        text = _("общий набор [zones] — его наследуют остальные мониторы")
+        text = _("default [zones] set - the other monitors inherit it")
     elif own:
-        text = _("свой набор [zones:{monitor}]").format(monitor=monitor)
+        text = _("own [zones:{monitor}] set").format(monitor=monitor)
     else:
-        text = _("наследует [zones]")
+        text = _("inherits [zones]")
     if offline:
-        return _("{text} · нет на экране").format(text=text)
+        return _("{text} · not on screen").format(text=text)
     return text
 
 

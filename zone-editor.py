@@ -109,7 +109,7 @@ def templates():
         return out
 
     return {
-        _("2 колонки"): mk([("left", 0, 0, 0.5, 1), ("right", 0.5, 0, 0.5, 1)]),
+        _("2 columns"): mk([("left", 0, 0, 0.5, 1), ("right", 0.5, 0, 0.5, 1)]),
         "1 + 2": mk([
             ("main", 0, 0, 0.5, 1), ("tr", 0.5, 0, 0.5, 0.5), ("br", 0.5, 0.5, 0.5, 0.5),
         ]),
@@ -117,14 +117,14 @@ def templates():
             (f"{Q}1", 0, 0, 0.5, 0.5), (f"{Q}2", 0.5, 0, 0.5, 0.5),
             (f"{Q}3", 0, 0.5, 0.5, 0.5), (f"{Q}4", 0.5, 0.5, 0.5, 0.5),
         ]),
-        _("3 колонки"): mk([
+        _("3 columns"): mk([
             ("left", 0, 0, 1 / 3, 1), ("mid", 1 / 3, 0, 1 / 3, 1), ("right", 2 / 3, 0, 1 / 3, 1),
         ]),
-        _("главное + стек"): mk([
+        _("main + stack"): mk([
             ("main", 0, 0, 0.66, 1), ("r1", 0.66, 0, 0.34, 1 / 3),
             ("r2", 0.66, 1 / 3, 0.34, 1 / 3), ("r3", 0.66, 2 / 3, 0.34, 1 / 3),
         ]),
-        _("чистый лист"): [],
+        _("blank slate"): [],
     }
 
 
@@ -139,12 +139,10 @@ def _dangling_rules_status(dangling):
     rest = len(dangling) - DANGLING_SHOWN
     if rest > 0:
         return _(
-            "не сохраняю: правила из [rules] ссылаются на отсутствующие зоны — "
-            "{shown} и ещё {rest}. Верните зоны или поправьте [rules] в zones.conf."
+            "not saving: rules from [rules] refer to missing zones - {shown} and {rest} more. Restore the zones or fix [rules] in zones.conf."
         ).format(shown=shown, rest=rest)
     return _(
-        "не сохраняю: правила из [rules] ссылаются на отсутствующие зоны — "
-        "{shown}. Верните зоны или поправьте [rules] в zones.conf."
+        "not saving: rules from [rules] refer to missing zones - {shown}. Restore the zones or fix [rules] in zones.conf."
     ).format(shown=shown)
 
 
@@ -254,8 +252,7 @@ class Canvas(Gtk.DrawingArea):
         cr.set_source_rgba(1, 1, 1, 0.45)
         lay = widget.create_pango_layout(
             _(
-                "рабочая область {}×{} px · "
-                "тащите зону мышью, тяните за край — размер, двойной клик — новая зона"
+                "work area {}×{} px · drag a zone with the mouse, drag the edge for size, double click for a new zone"
             ).format(self.editor.workarea()[2], self.editor.workarea()[3])
         )
         lay.set_font_description(Pango.FontDescription("Sans 9"))
@@ -414,7 +411,7 @@ class Canvas(Gtk.DrawingArea):
 
 class Editor(Gtk.Window):
     def __init__(self, conf_path):
-        super().__init__(title=_("Gridsnap — сетка окон"))
+        super().__init__(title=_("Gridsnap - window grid"))
         self.conf_path = conf_path
         self.set_icon_name("gridsnap")
         # Мониторы — по именам выходов: имя адресует набор зон `[zones:<выход>]`.
@@ -471,19 +468,19 @@ class Editor(Gtk.Window):
         bar = Gtk.Toolbar()
         bar.set_style(Gtk.ToolbarStyle.ICONS)
         defs = [
-            ("list-add-symbolic", _("Добавить зону"), self.on_add),
-            ("list-remove-symbolic", _("Удалить зону (Delete)"), self.on_remove),
-            ("edit-copy-symbolic", _("Дублировать зону"), self.on_duplicate),
-            ("edit-clear-all-symbolic", _("Очистить всё"), self.on_clear),
-            ("document-save-symbolic", _("Сохранить в zones.conf (Ctrl+S)"), self.on_save),
+            ("list-add-symbolic", _("Add zone"), self.on_add),
+            ("list-remove-symbolic", _("Delete zone (Delete)"), self.on_remove),
+            ("edit-copy-symbolic", _("Duplicate zone"), self.on_duplicate),
+            ("edit-clear-all-symbolic", _("Clear all"), self.on_clear),
+            ("document-save-symbolic", _("Save to zones.conf (Ctrl+S)"), self.on_save),
             (
                 "emblem-synchronizing-symbolic",
-                _("Применить сочетания клавиш в Cinnamon"),
+                _("Apply hotkeys in Cinnamon"),
                 self.on_hotkeys,
             ),
             (
                 "media-playback-start-symbolic",
-                _("Вложить активное окно в выделенную зону"),
+                _("Place the active window into the selected zone"),
                 self.on_test,
             ),
         ]
@@ -495,8 +492,8 @@ class Editor(Gtk.Window):
             bar.insert(btn, -1)
         bar.insert(Gtk.SeparatorToolItem(), -1)
         self.tpl_btn = Gtk.MenuButton()
-        self.tpl_btn.set_tooltip_text(_("Шаблоны раскладок"))
-        self.tpl_btn.set_label(_("Шаблоны"))
+        self.tpl_btn.set_tooltip_text(_("Layout templates"))
+        self.tpl_btn.set_label(_("Templates"))
         pop = Gtk.Popover()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         box.set_border_width(8)
@@ -512,8 +509,8 @@ class Editor(Gtk.Window):
         item.add(self.tpl_btn)
         bar.insert(item, -1)
         self.target_btn = Gtk.MenuButton()
-        self.target_btn.set_tooltip_text(_("Уложить активное окно в зону на другом мониторе"))
-        self.target_btn.set_label(_("На монитор…"))
+        self.target_btn.set_tooltip_text(_("Place the active window into a zone on another monitor"))
+        self.target_btn.set_label(_("To monitor…"))
         self.target_pop = Gtk.Popover()
         self.target_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.target_box.set_border_width(8)
@@ -524,8 +521,8 @@ class Editor(Gtk.Window):
         titem.add(self.target_btn)
         bar.insert(titem, -1)
         self.prof_btn = Gtk.MenuButton()
-        self.prof_btn.set_tooltip_text(_("Профили раскладок (зоны + правила + клавиши)"))
-        self.prof_btn.set_label(_("Профили"))
+        self.prof_btn.set_tooltip_text(_("Layout profiles (zones + rules + keys)"))
+        self.prof_btn.set_label(_("Profiles"))
         self.prof_pop = Gtk.Popover()
         self.prof_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.prof_box.set_border_width(8)
@@ -538,9 +535,9 @@ class Editor(Gtk.Window):
         # «Рядом с профилями»: галерея — тот же выбор готовой раскладки, но из
         # поставки, а не из сохранённых. Отдельная кнопка, а не пункт меню:
         # человеку без своих профилей меню «Профили» ещё не о чем говорить.
-        gal_btn = Gtk.Button(label=_("Из галереи…"))
+        gal_btn = Gtk.Button(label=_("From the gallery…"))
         gal_btn.set_tooltip_text(
-            _("Готовые раскладки: зоны, клавиши и правила для приложений")
+            _("Ready-made layouts: zones, hotkeys and application rules")
         )
         gal_btn.connect("clicked", lambda _b: self.gallery_dialog())
         gal_item = Gtk.ToolItem()
@@ -551,7 +548,7 @@ class Editor(Gtk.Window):
         body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         root.pack_start(body, True, True, 0)
 
-        frame = Gtk.Frame(label=_("Экран"))
+        frame = Gtk.Frame(label=_("Monitor"))
         frame.set_shadow_type(Gtk.ShadowType.IN)
         self.canvas = Canvas(self)
         self.canvas.connect("button-press-event", self.canvas.on_button_press)
@@ -566,7 +563,7 @@ class Editor(Gtk.Window):
         side.set_size_request(300, -1)
         body.pack_start(side, False, False, 0)
 
-        side.pack_start(Gtk.Label(label=_("Зоны"), xalign=0), False, False, 0)
+        side.pack_start(Gtk.Label(label=_("Zones"), xalign=0), False, False, 0)
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroller.set_min_content_height(220)
@@ -576,28 +573,28 @@ class Editor(Gtk.Window):
         scroller.add(self.listbox)
         side.pack_start(scroller, True, True, 0)
 
-        props = Gtk.Frame(label=_("Выделенная зона"))
+        props = Gtk.Frame(label=_("Selected zone"))
         pbox = Gtk.Grid(row_spacing=6, column_spacing=8, border_width=8)
         props.add(pbox)
 
-        pbox.attach(Gtk.Label(label=_("Имя"), xalign=0), 0, 0, 1, 1)
+        pbox.attach(Gtk.Label(label=_("Name"), xalign=0), 0, 0, 1, 1)
         self.name_entry = Gtk.Entry()
         self.name_entry.connect("changed", self.on_name_changed)
         pbox.attach(self.name_entry, 1, 0, 1, 1)
 
-        pbox.attach(Gtk.Label(label=_("Клавиши"), xalign=0), 0, 1, 1, 1)
+        pbox.attach(Gtk.Label(label=_("Keys"), xalign=0), 0, 1, 1, 1)
         self.key_entry = Gtk.Entry()
         self.key_entry.set_placeholder_text("<Super><Alt>5")
         self.key_entry.connect("changed", self.on_key_changed)
         pbox.attach(self.key_entry, 1, 1, 1, 1)
 
-        pbox.attach(Gtk.Label(label=_("Монитор"), xalign=0), 0, 2, 1, 1)
+        pbox.attach(Gtk.Label(label=_("Monitor"), xalign=0), 0, 2, 1, 1)
         self.mon_combo = Gtk.ComboBoxText()
         for name, rect in self.combo_entries:
             if rect is None:
                 # Секция [zones:<выход>] осталась от прежнего подключения — её
                 # можно посмотреть и поправить, но не удалить.
-                self.mon_combo.append_text(_("{} — нет на экране").format(name))
+                self.mon_combo.append_text(_("{} - not on screen").format(name))
             else:
                 self.mon_combo.append_text(f"{name} — {rect[2]}×{rect[3]}")
         self.mon_combo.set_active(0 if self.combo_entries else -1)
@@ -659,10 +656,10 @@ class Editor(Gtk.Window):
         tail = (
             ""
             if exists
-            else _(" (файла профиля нет — стол раскладывается общим набором)")
+            else _(" (no profile file - the workspace is laid out by the default set)")
         )
         return _(
-            "стол {} использует профиль «{}»{}; редактор правит общий zones.conf"
+            "workspace {} uses profile \"{}\"{}; the editor edits the shared zones.conf"
         ).format(number, profile, tail)
 
     def refresh_workspace_hint(self):
@@ -676,7 +673,7 @@ class Editor(Gtk.Window):
         """Свой набор, наследование или общий `[zones]` — по текущему монитору."""
         name = self.current_monitor
         if name is None:
-            return _("набор не выбран")
+            return _("no set selected")
         rect = dict(self.combo_entries).get(name)
         return geom.set_origin_text(
             name,
@@ -698,7 +695,7 @@ class Editor(Gtk.Window):
             # Правка унаследованного набора делает его своим: при сохранении у
             # монитора появится своя секция [zones:<выход>].
             self.edited.add(self.current_monitor)
-        self.set_title(("● " if val else "") + _("Gridsnap — сетка окон"))
+        self.set_title(("● " if val else "") + _("Gridsnap - window grid"))
         self.update_status()
 
     def show_monitor(self, name):
@@ -937,7 +934,7 @@ class Editor(Gtk.Window):
         self.set_dirty(True)
         self.canvas.queue_draw()
         self.set_status(
-            _("шаблон «{}»: {} зон (не забудьте сохранить)").format(name, len(self.zones))
+            _("template \"{}\": {} zones (don't forget to save)").format(name, len(self.zones))
         )
 
     # ---- профили
@@ -955,20 +952,20 @@ class Editor(Gtk.Window):
         if names:
             self.prof_box.pack_start(Gtk.Separator(), False, False, 2)
         desks_btn = Gtk.ModelButton()
-        desks_btn.set_label(_("Профили столов…"))
+        desks_btn.set_label(_("Workspace profiles…"))
         desks_btn.connect("clicked", lambda _w: self.workspace_profiles_dialog())
         self.prof_box.pack_start(desks_btn, False, False, 0)
         screens_btn = Gtk.ModelButton()
-        screens_btn.set_label(_("Профили экранов…"))
+        screens_btn.set_label(_("Monitor profiles…"))
         screens_btn.connect("clicked", lambda _w: self.monitor_profiles_dialog())
         self.prof_box.pack_start(screens_btn, False, False, 0)
         save_btn = Gtk.ModelButton()
-        save_btn.set_label(_("Сохранить текущую раскладку как профиль…"))
+        save_btn.set_label(_("Save the current layout as a profile…"))
         save_btn.connect("clicked", lambda _w: self.save_profile_dialog())
         self.prof_box.pack_start(save_btn, False, False, 0)
         if names:
             rm_btn = Gtk.ModelButton()
-            rm_btn.set_label(_("Удалить профиль…"))
+            rm_btn.set_label(_("Delete profile…"))
             rm_btn.connect("clicked", lambda _w: self.remove_profile_dialog())
             self.prof_box.pack_start(rm_btn, False, False, 0)
         self.prof_box.show_all()
@@ -986,22 +983,21 @@ class Editor(Gtk.Window):
         try:
             layouts = gallery_layouts()
         except (GalleryError, OSError) as exc:
-            self.set_status(_("галерея не прочитана: {}").format(exc))
+            self.set_status(_("gallery could not be read: {}").format(exc))
             return
         if not layouts:
-            self.set_status(_("в галерее нет ни одной раскладки"))
+            self.set_status(_("the gallery has no layouts"))
             return
-        dlg = Gtk.Dialog(title=_("Галерея раскладок"), transient_for=self, modal=True)
-        dlg.add_button(_("Отмена"), Gtk.ResponseType.CANCEL)
-        dlg.add_button(_("Добавить в профили"), Gtk.ResponseType.OK)
+        dlg = Gtk.Dialog(title=_("Layout gallery"), transient_for=self, modal=True)
+        dlg.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
+        dlg.add_button(_("Add to profiles"), Gtk.ResponseType.OK)
         dlg.set_default_response(Gtk.ResponseType.OK)
         box = dlg.get_content_area()
         box.set_border_width(10)
         box.add(
             Gtk.Label(
                 label=_(
-                    "Готовая раскладка — зоны, клавиши и правила для приложений. "
-                    "Выбор создаёт из неё профиль: дальше его правят как свой."
+                    "A ready-made layout is zones, hotkeys and application rules. Choosing it creates a profile; from then on you edit the profile as your own."
                 ),
                 xalign=0,
             )
@@ -1013,7 +1009,7 @@ class Editor(Gtk.Window):
             holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             holder.set_border_width(6)
             head = Gtk.Label(
-                label=_("{} — зон: {}").format(item["title"], len(item["zones"])),
+                label=_("{} — {} zones").format(item["title"], len(item["zones"])),
                 xalign=0,
             )
             # Название жирным (Pango напрямую, без разметки): в списке из
@@ -1043,7 +1039,7 @@ class Editor(Gtk.Window):
         if resp != Gtk.ResponseType.OK:
             return
         if index is None or index < 0:
-            self.set_status(_("раскладка не выбрана"))
+            self.set_status(_("no layout selected"))
             return
         self.install_gallery_dialog(layouts[index])
 
@@ -1051,26 +1047,26 @@ class Editor(Gtk.Window):
         """Создать профиль из раскладки галереи и предложить загрузить его."""
         gid = item["id"]
         name = self._ask_text(
-            _("Добавить раскладку в профили"),
-            _("Имя профиля для раскладки «{}»").format(item["title"]),
+            _("Add the layout to profiles"),
+            _("Profile name for the layout \"{}\"").format(item["title"]),
             gid,
         )
         if not name:
             return
         safe = sanitize_profile_name(name)
         if not safe:
-            self.set_status(_("пустое имя профиля"))
+            self.set_status(_("empty profile name"))
             return
         # Профиль уже есть — спрашиваем, а не перезаписываем молча: имя могло
         # быть занято своей раскладкой, и выбор из галереи не должен её стереть.
         force = os.path.exists(profile_path(safe, self.conf_path))
         if force and not self._ask_yes_no(
-            _("Профиль «{}» уже есть. Перезаписать его раскладкой «{}»?").format(
+            _("Profile \"{}\" already exists. Overwrite it with the layout \"{}\"?").format(
                 safe, item["title"]
             )
         ):
             self.set_status(
-                _("раскладка не добавлена: профиль «{}» уже есть").format(safe)
+                _("layout not added: profile \"{}\" already exists").format(safe)
             )
             return
         try:
@@ -1078,12 +1074,12 @@ class Editor(Gtk.Window):
                 gid, name=safe, conf_path=self.conf_path, force=force
             )
         except (GalleryError, OSError) as exc:
-            self.set_status(_("раскладка не добавлена: {}").format(exc))
+            self.set_status(_("layout not added: {}").format(exc))
             return
         self.set_status(
-            _("раскладка «{}» → профиль «{}»: {}").format(item["title"], safe, path)
+            _("layout \"{}\" → profile \"{}\": {}").format(item["title"], safe, path)
         )
-        if self._ask_yes_no(_("Загрузить раскладку «{}» в холст?").format(item["title"])):
+        if self._ask_yes_no(_("Load the layout \"{}\" into the canvas?").format(item["title"])):
             self.load_profile(safe)
 
     def _ask_yes_no(self, question):
@@ -1106,8 +1102,8 @@ class Editor(Gtk.Window):
 
     def _ask_text(self, title, label, initial=""):
         dlg = Gtk.Dialog(title=title, transient_for=self, modal=True)
-        dlg.add_button(_("Отмена"), Gtk.ResponseType.CANCEL)
-        dlg.add_button(_("Сохранить"), Gtk.ResponseType.OK)
+        dlg.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
+        dlg.add_button(_("Save"), Gtk.ResponseType.OK)
         dlg.set_default_response(Gtk.ResponseType.OK)
         box = dlg.get_content_area()
         box.set_border_width(10)
@@ -1124,8 +1120,8 @@ class Editor(Gtk.Window):
 
     def _ask_choice(self, title, label, options):
         dlg = Gtk.Dialog(title=title, transient_for=self, modal=True)
-        dlg.add_button(_("Отмена"), Gtk.ResponseType.CANCEL)
-        dlg.add_button(_("Удалить"), Gtk.ResponseType.OK)
+        dlg.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
+        dlg.add_button(_("Delete"), Gtk.ResponseType.OK)
         dlg.set_default_response(Gtk.ResponseType.OK)
         box = dlg.get_content_area()
         box.set_border_width(10)
@@ -1146,7 +1142,7 @@ class Editor(Gtk.Window):
         try:
             zones, rules, ignore = read_profile(name, self.conf_path)
         except (ValueError, OSError, SystemExit) as exc:
-            self.set_status(_("профиль не прочитан: {}").format(exc))
+            self.set_status(_("profile not read: {}").format(exc))
             return
         self.set_zones([z.copy() for z in zones])
         self.selected = 0 if self.zones else None
@@ -1162,28 +1158,28 @@ class Editor(Gtk.Window):
         self.set_dirty(True)
         self.canvas.queue_draw()
         self.set_status(
-            _("профиль «{}»: {} зон (не забудьте сохранить)").format(name, len(self.zones))
+            _("profile \"{}\": {} zones (don't forget to save)").format(name, len(self.zones))
         )
 
     def save_profile_dialog(self):
         if not self.zones:
-            self.set_status(_("нет зон — сохранять нечего"))
+            self.set_status(_("no zones - nothing to save"))
             return
-        name = self._ask_text(_("Сохранить профиль"), _("Имя профиля"))
+        name = self._ask_text(_("Save profile"), _("Profile name"))
         if not name:
             return
         safe = sanitize_profile_name(name)
         if not safe:
-            self.set_status(_("пустое имя профиля"))
+            self.set_status(_("empty profile name"))
             return
         rules = self.extra_sections.get("rules", [])
         ignore = self.extra_sections.get("ignore", [])
         try:
             path = save_profile(safe, self.zones, rules, self.conf_path, ignore=ignore)
         except (ValueError, OSError) as exc:
-            self.set_status(_("профиль не сохранён: {}").format(exc))
+            self.set_status(_("profile not saved: {}").format(exc))
             return
-        self.set_status(_("профиль «{}» сохранён: {}").format(safe, path))
+        self.set_status(_("profile \"{}\" saved: {}").format(safe, path))
 
     def workspace_profiles_dialog(self):
         """Диалог «Профили столов»: какой профиль использует каждый стол.
@@ -1198,18 +1194,18 @@ class Editor(Gtk.Window):
         try:
             mapping = load_workspace_map(self.conf_path)
         except (SystemExit, ValueError, OSError) as exc:
-            self.set_status(_("профили столов не прочитаны: {}").format(exc))
+            self.set_status(_("workspace profiles not read: {}").format(exc))
             return
         rows = workspace_dialog_rows(mapping, list_profiles(self.conf_path), desktops_count())
-        dlg = Gtk.Dialog(title=_("Профили столов"), transient_for=self, modal=True)
-        dlg.add_button(_("Отмена"), Gtk.ResponseType.CANCEL)
-        dlg.add_button(_("Сохранить"), Gtk.ResponseType.OK)
+        dlg = Gtk.Dialog(title=_("Workspace profiles"), transient_for=self, modal=True)
+        dlg.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
+        dlg.add_button(_("Save"), Gtk.ResponseType.OK)
         dlg.set_default_response(Gtk.ResponseType.OK)
         grid = Gtk.Grid(row_spacing=6, column_spacing=8, border_width=10)
         dlg.get_content_area().add(grid)
         hint = Gtk.Label(
             label=_(
-                "Профиль задаёт столу его сетку зон; «общий набор» — стол без профиля."
+                "A profile gives a workspace its zone grid; \"default set\" - a workspace without a profile."
             ),
             xalign=0,
         )
@@ -1218,7 +1214,7 @@ class Editor(Gtk.Window):
         combos = []
         line = 1
         for number, profile, options, warning in rows:
-            grid.attach(Gtk.Label(label=_("Стол {}").format(number), xalign=0), 0, line, 1, 1)
+            grid.attach(Gtk.Label(label=_("Workspace {}").format(number), xalign=0), 0, line, 1, 1)
             combo = Gtk.ComboBoxText()
             for option in options:
                 combo.append_text(option)
@@ -1246,12 +1242,12 @@ class Editor(Gtk.Window):
         try:
             save_workspace_map(self.conf_path, chosen)
         except (ValueError, OSError) as exc:
-            self.set_status(_("профили столов не сохранены: {}").format(exc))
+            self.set_status(_("workspace profiles not saved: {}").format(exc))
             return
         self.sync_workspace_extra()
         self.refresh_workspace_hint()
         self.set_status(
-            _("профили столов сохранены: {} — сопоставлений: {}").format(
+            _("workspace profiles saved: {} - bindings: {}").format(
                 self.conf_path, len(chosen)
             )
         )
@@ -1284,24 +1280,23 @@ class Editor(Gtk.Window):
         try:
             mapping = load_monitor_map(self.conf_path)
         except (SystemExit, ValueError, OSError) as exc:
-            self.set_status(_("профили экранов не прочитаны: {}").format(exc))
+            self.set_status(_("monitor profiles not read: {}").format(exc))
             return
         rows = monitor_dialog_rows(
             mapping, list_profiles(self.conf_path), self.monitor_names()
         )
         if not rows:
-            self.set_status(_("не вижу ни одного выхода — привязывать профиль не к чему"))
+            self.set_status(_("no monitor in sight - nothing to bind a profile to"))
             return
-        dlg = Gtk.Dialog(title=_("Профили экранов"), transient_for=self, modal=True)
-        dlg.add_button(_("Отмена"), Gtk.ResponseType.CANCEL)
-        dlg.add_button(_("Сохранить"), Gtk.ResponseType.OK)
+        dlg = Gtk.Dialog(title=_("Monitor profiles"), transient_for=self, modal=True)
+        dlg.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
+        dlg.add_button(_("Save"), Gtk.ResponseType.OK)
         dlg.set_default_response(Gtk.ResponseType.OK)
         grid = Gtk.Grid(row_spacing=6, column_spacing=8, border_width=10)
         dlg.get_content_area().add(grid)
         hint = Gtk.Label(
             label=_(
-                "Профиль задаёт экрану его сетку зон; «общий набор» — экран без "
-                "привязки. Верхний экран решает спор, если профили задают разное."
+                "A profile gives a monitor its zone grid; \"default set\" - a monitor without a binding. The topmost monitor settles a dispute if profiles differ."
             ),
             xalign=0,
         )
@@ -1341,11 +1336,11 @@ class Editor(Gtk.Window):
         try:
             save_monitor_map(self.conf_path, chosen)
         except (ValueError, OSError) as exc:
-            self.set_status(_("профили экранов не сохранены: {}").format(exc))
+            self.set_status(_("monitor profiles not saved: {}").format(exc))
             return
         self.sync_monitor_extra()
         self.set_status(
-            _("профили экранов сохранены: {} — привязок: {}").format(
+            _("monitor profiles saved: {} - bindings: {}").format(
                 self.conf_path, len(chosen)
             )
         )
@@ -1377,15 +1372,15 @@ class Editor(Gtk.Window):
         names = list_profiles(self.conf_path)
         if not names:
             return
-        name = self._ask_choice(_("Удалить профиль"), _("Профиль"), names)
+        name = self._ask_choice(_("Delete profile"), _("Profile"), names)
         if not name:
             return
         try:
             remove_profile(name, self.conf_path)
         except (ValueError, OSError) as exc:
-            self.set_status(_("профиль не удалён: {}").format(exc))
+            self.set_status(_("profile not deleted: {}").format(exc))
             return
-        self.set_status(_("профиль «{}» удалён").format(name))
+        self.set_status(_("profile \"{}\" deleted").format(name))
 
     def on_save(self):
         """Сохранить общий набор и секции мониторов.
@@ -1394,8 +1389,7 @@ class Editor(Gtk.Window):
         """
         if not self.default_zones:
             self.set_status(_(
-                "в общем наборе [zones] нет зон — добавьте зону на мониторе, "
-                "который его наследует (или в его секции)"
+                "the default set [zones] has no zones - add a zone on a monitor that inherits it (or in its sections)"
             ))
             return False
         dangling = missing_rule_targets(self.extra_sections, self._all_zone_names())
@@ -1412,7 +1406,7 @@ class Editor(Gtk.Window):
         try:
             geom.apply_save_plan(self.conf_path, self.default_zones, plan, self.extra_sections)
         except OSError as exc:
-            self.set_status(_("ошибка записи: {}").format(exc))
+            self.set_status(_("write error: {}").format(exc))
             return False
         write, drop = plan
         self.file_own = (self.file_own | set(write)) - set(drop)
@@ -1420,8 +1414,7 @@ class Editor(Gtk.Window):
         self.set_dirty(False)
         self.set_status(
             _(
-                "сохранено: {} — [zones]: {} зон, своих наборов: {}. "
-                "Клавиши применяются кнопкой «сочетания клавиш»."
+                "saved: {} - [zones]: {} zones, own sets: {}. Hotkeys are applied with the \"hotkeys\" button."
             ).format(self.conf_path, len(self.default_zones), len(write))
         )
         return True
@@ -1435,7 +1428,7 @@ class Editor(Gtk.Window):
             capture_output=True,
         )
         msg = (r.stdout or r.stderr).strip().splitlines()
-        self.set_status(_("сочетания: {}").format(msg[0] if msg else _("без вывода")))
+        self.set_status(_("shortcuts: {}").format(msg[0] if msg else _("without output")))
 
     def rebuild_target_menu(self):
         """Меню «На монитор…»: монитор → зоны его набора."""
@@ -1450,7 +1443,7 @@ class Editor(Gtk.Window):
             head.set_markup(f"<b>{name}</b> — {rect[2]}×{rect[3]}")
             self.target_box.pack_start(head, False, False, 0)
             if not zones:
-                empty = Gtk.Label(label=_("   нет зон"), xalign=0)
+                empty = Gtk.Label(label=_("   no zones"), xalign=0)
                 empty.get_style_context().add_class("dim-label")
                 self.target_box.pack_start(empty, False, False, 0)
             for z in zones:
@@ -1462,7 +1455,7 @@ class Editor(Gtk.Window):
                 self.target_box.pack_start(btn, False, False, 0)
             shown += 1
         if not shown:
-            self.target_box.pack_start(Gtk.Label(label=_("нет мониторов"), xalign=0), False, False, 0)
+            self.target_box.pack_start(Gtk.Label(label=_("no monitors"), xalign=0), False, False, 0)
         self.target_box.show_all()
 
     def apply_on_monitor(self, zone, monitor):
@@ -1486,14 +1479,14 @@ class Editor(Gtk.Window):
         r = subprocess.run(cmd, text=True, capture_output=True)
         out = (r.stdout or r.stderr).strip().replace("\n", " | ")
         if monitor:
-            self.set_status(_("проверка «{zone}» на {monitor}: {out}").format(
+            self.set_status(_("check \"{zone}\" on {monitor}: {out}").format(
                 zone=zone, monitor=monitor, out=out))
         else:
-            self.set_status(_("проверка «{zone}»: {out}").format(zone=zone, out=out))
+            self.set_status(_("check \"{zone}\": {out}").format(zone=zone, out=out))
 
     def on_test(self):
         if self.selected is None:
-            self.set_status(_("выберите зону"))
+            self.set_status(_("choose a zone"))
             return
         if not self.on_save():
             return
@@ -1505,11 +1498,11 @@ class Editor(Gtk.Window):
 
 def main():
     Gtk.Window.set_default_icon_name("gridsnap")
-    ap = argparse.ArgumentParser(description=_("Gridsnap — визуальный редактор сетки зон"))
+    ap = argparse.ArgumentParser(description=_("Gridsnap - visual zone grid editor"))
     ap.add_argument("--conf", default=CONF)
     ap.add_argument(
         "--shot",
-        help=_("сохранить снимок интерфейса в PNG и выйти (для проверки)"),
+        help=_("save an interface snapshot to PNG and exit (for checking)"),
     )
     ap.add_argument("--monitor", type=int, default=0)
     args = ap.parse_args()
@@ -1529,7 +1522,7 @@ def main():
                 Gtk.main_iteration()
         pixbuf = win.get_pixbuf()
         pixbuf.savev(args.shot, "png", [], [])
-        print(_("снимок сохранён: {}").format(args.shot))
+        print(_("snapshot saved: {}").format(args.shot))
         return
 
     ed = Editor(args.conf)

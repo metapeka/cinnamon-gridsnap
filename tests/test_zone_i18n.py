@@ -3,11 +3,12 @@
 """Тесты выбора языка и каталогов (`zone_i18n`) — без X, без GTK, без сборки.
 
 Покрыто: разбор значения локали, порядок выбора языка (`GRIDSNAP_LANG` важнее
-локали, локаль `ru*` — исходные строки, всё прочее — английский), переопределение
-`set_language`, поиск каталога (`.mo` важнее `.po`, нет каталога — не ошибка),
-разбор `.po` (многострочные строки, эскейпы, `#, fuzzy`, заголовок) и сам
-перевод. Ни `msgfmt`, ни `xgettext` тестам не нужны: `.mo` собирается тут же
-вручную — формат у него простой, а проверить приоритет `.mo` над `.po` нужно.
+локали, локаль `ru*` — русский каталог, `zh*` — китайский, всё прочее — английский,
+он же язык исходника), переопределение `set_language`, поиск каталога (`.mo` важнее
+`.po`, нет каталога — не ошибка), разбор `.po` (многострочные строки, эскейпы,
+`#, fuzzy`, заголовок) и сам перевод. Ни `msgfmt`, ни `xgettext` тестам не нужны:
+`.mo` собирается тут же вручную — формат у него простой, а проверить приоритет
+`.mo` над `.po` нужно.
 
 Запуск:
     python3 tests/test_zone_i18n.py
@@ -253,20 +254,20 @@ class CatalogCase(LanguageCase):
 class TestCatalog(CatalogCase):
     def test_missing_catalog_is_not_an_error(self):
         self.assertEqual(i18n.catalog("en"), {})
-        self.assertEqual(i18n.translate("зона пуста"), "зона пуста")
+        self.assertEqual(i18n.translate("zone is empty"), "zone is empty")
 
     def test_mo_is_used(self):
-        self.write_mo("en", {"зона пуста": "zone is empty"})
+        self.write_mo("ru", {"zone is empty": "зона пуста"})
         i18n.reset_cache()
-        i18n.set_language("en")
-        self.assertEqual(i18n.translate("зона пуста"), "zone is empty")
-        self.assertEqual(i18n._("зона пуста"), "zone is empty")
+        i18n.set_language("ru")
+        self.assertEqual(i18n.translate("zone is empty"), "зона пуста")
+        self.assertEqual(i18n._("zone is empty"), "зона пуста")
 
     def test_mo_wins_over_po(self):
-        self.write_mo("en", {"зона": "from mo"})
-        self.write_po("en.po", 'msgid "зона"\nmsgstr "from po"\n')
+        self.write_mo("ru", {"window": "from mo"})
+        self.write_po("ru.po", 'msgid "window"\nmsgstr "from po"\n')
         i18n.reset_cache()
-        self.assertEqual(i18n.catalog("en")["зона"], "from mo")
+        self.assertEqual(i18n.catalog("ru")["window"], "from mo")
 
     def test_po_is_used_when_no_mo(self):
         self.write_po("zh_CN.po", 'msgid "зона"\nmsgstr "区域"\n')
@@ -275,26 +276,27 @@ class TestCatalog(CatalogCase):
         self.assertEqual(i18n.translate("зона"), "区域")
 
     def test_missing_entry_returns_source(self):
-        self.write_mo("en", {"зона": "zone"})
+        self.write_mo("ru", {"зона": "区域"})
         i18n.reset_cache()
-        i18n.set_language("en")
-        self.assertEqual(i18n.translate("окно"), "окно")
+        i18n.set_language("ru")
+        self.assertEqual(i18n.translate("window"), "window")
+        self.assertEqual(i18n.translate("зона"), "区域")
 
     def test_broken_mo_falls_back_to_po(self):
-        path = os.path.join(self.root, "en", "LC_MESSAGES", "gridsnap.mo")
+        path = os.path.join(self.root, "ru", "LC_MESSAGES", "gridsnap.mo")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as handle:
             handle.write(b"not a mo file at all")
-        self.write_po("en.po", 'msgid "зона"\nmsgstr "from po"\n')
+        self.write_po("ru.po", 'msgid "window"\nmsgstr "окно"\n')
         i18n.reset_cache()
-        self.assertEqual(i18n.catalog("en")["зона"], "from po")
+        self.assertEqual(i18n.catalog("ru")["window"], "окно")
 
-    def test_russian_uses_source_ignoring_catalog(self):
-        self.write_mo("ru", {"зона": "не должно пригодиться"})
-        self.write_po("ru.po", 'msgid "зона"\nmsgstr "не должно пригодиться"\n')
+    def test_english_uses_source_ignoring_catalog(self):
+        self.write_mo("en", {"window": "не должно пригодиться"})
+        self.write_po("en.po", 'msgid "window"\nmsgstr "не должно пригодиться"\n')
         i18n.reset_cache()
-        i18n.set_language("ru")
-        self.assertEqual(i18n.translate("зона"), "зона")
+        i18n.set_language("en")
+        self.assertEqual(i18n.translate("window"), "window")
 
 
 class TestPaths(LanguageCase):

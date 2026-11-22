@@ -79,7 +79,7 @@ def _load_sibling(name, filename):
     path = os.path.join(HERE, filename)
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
-        raise ImportError(_("не удалось загрузить модуль {}").format(path))
+        raise ImportError(_("failed to load module {}").format(path))
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
     spec.loader.exec_module(mod)
@@ -370,7 +370,7 @@ class HudProcess:
             self.failed = True
             if self.verbose:
                 print(
-                    _("zone-hotcorners: HUD не запустился: {}").format(exc),
+                    _("zone-hotcorners: HUD failed to start: {}").format(exc),
                     file=sys.stderr,
                     flush=True,
                 )
@@ -510,10 +510,10 @@ class Hotcorners:
         try:
             return list(self.outputs())
         except SystemExit:  # tiler.fail: не удалось определить рабочую область
-            self.err(_("zone-hotcorners: не удалось прочитать рабочие области мониторов"))
+            self.err(_("zone-hotcorners: failed to read monitor work areas"))
             return []
         except Exception as exc:
-            self.err(_("zone-hotcorners: мониторы не прочитаны: {}").format(exc))
+            self.err(_("zone-hotcorners: monitors not read: {}").format(exc))
             return []
 
     def zones_for(self, index, name):
@@ -535,14 +535,14 @@ class Hotcorners:
             try:
                 win = self.active_window()
             except SystemExit:  # tiler.fail: в сессии нет активного окна
-                self.log(_("активного окна нет — это обычный клик"))
+                self.log(_("no active window - this is a normal click"))
                 win = None
             if win:
                 extents = self.frame_extents(win)
                 try:
                     frame = self.read_frame(win, extents)
                 except Exception as exc:  # xwininfo не прочитал геометрию
-                    self.log(_("рамка окна 0x{:x} не прочитана: {}").format(win, exc))
+                    self.log(_("frame of window 0x{:x} not read: {}").format(win, exc))
                     frame = None
                 if is_title_bar_press(point, frame, extents[2]):
                     return win, extents[2]
@@ -558,21 +558,20 @@ class Hotcorners:
         self.pressed = True
         found = self.arm_at(point)
         if found is None:
-            self.log(_("нажатие {} вне титлбара активного окна — обычный клик").format(point))
+            self.log(_("press {} outside the title bar of the active window - a normal click").format(point))
             return False
         self.drag_win, self.title_top = found
         self.armed = True
         try:
             self.grid = self.grid_for(self.drag_win)
         except SystemExit:  # tiler.fail: битый конфиг или нет конфига
-            self.err(_("zone-hotcorners: сетка зон не прочитана, перетаскивание брошено"))
+            self.err(_("zone-hotcorners: zone grid not read, dragging abandoned"))
             self.finish_drag()
             return False
         if self.is_excluded(self.drag_win, self.grid.ignore):
             self.log(
                 _(
-                    "окно 0x{:x} под исключением ([ignore]/служебный тип) — "
-                    "перетаскивание не отслеживаю"
+                    "window 0x{:x} is excluded ([ignore]/utility window type) - not tracking the drag"
                 ).format(self.drag_win)
             )
             self.finish_drag()
@@ -581,7 +580,7 @@ class Hotcorners:
         self.rects = {}
         self.last_point = None
         self.log(
-            _("arm: окно 0x{:x}, титлбар {} px, нажатие {}").format(
+            _("arm: window 0x{:x}, title bar {} px, press {}").format(
                 self.drag_win, title_band(self.title_top), point
             )
         )
@@ -599,7 +598,7 @@ class Hotcorners:
             return False
         name, _area = outputs[index]
         if self.hud.start(index, name):
-            self.log(_("HUD на мониторе {}: {}").format(index, name))
+            self.log(_("HUD on monitor {}: {}").format(index, name))
             self.disable_edge_tiling()
         return self.hud.feed(point)
 
@@ -640,7 +639,7 @@ class Hotcorners:
         try:
             found = zone_under(self.zones_for(index, name), area, point)
         except SystemExit:  # битая секция [zones:<выход>]
-            self.err(_("zone-hotcorners: зоны монитора {} не прочитаны").format(name))
+            self.err(_("zone-hotcorners: zones of monitor {} not read").format(name))
             return None
         if found is None:
             return None
@@ -665,19 +664,18 @@ class Hotcorners:
         # по своему правилу края уже после нашего move/resize.
         self.finish_drag()
         if rect is None:
-            self.log(_("отпущено в {} — мимо зон, окно не двигаем").format(point))
+            self.log(_("released in {} - off the zones, not moving the window").format(point))
             return False
         x, y, w, h = rect
         if self.dry_run:
             self.out(
                 _(
-                    "окно 0x{:x} -> зона '{}': x={} y={} {}x{} "
-                    "(монитор {}: {}) — dry-run, окно не двигаем"
+                    "window 0x{:x} -> zone '{}': x={} y={} {}x{} (monitor {}: {}) - dry-run, not moving the window"
                 ).format(win, zone, x, y, w, h, index, output)
             )
             return True
         self.log(
-            _("окно 0x{:x} -> зона '{}': x={} y={} {}x{}").format(win, zone, x, y, w, h)
+            _("window 0x{:x} -> zone '{}': x={} y={} {}x{}").format(win, zone, x, y, w, h)
         )
         try:
             self.apply(win, rect, zone)
@@ -685,8 +683,8 @@ class Hotcorners:
             # Долгоживущий watcher не должен умирать из-за одного окна или
             # пропавшего X-соединения: сообщаем и продолжаем слушать.
             self.err(
-                _("zone-hotcorners: окно 0x{:x} не вложено: {}").format(
-                    win, exc or _("сбой X")
+                _("zone-hotcorners: window 0x{:x} not placed: {}").format(
+                    win, exc or _("X failure")
                 )
             )
             return False
@@ -703,14 +701,14 @@ class Hotcorners:
         if self.hud is None or self.edge.touched:
             return False
         if self.dry_run:
-            self.log(_("dry-run: edge-tiling не трогаем"))
+            self.log(_("dry-run: leaving edge-tiling alone"))
             return False
         if self.edge.original is None:
             value = self.edge.read()
-            self.log(_("edge-tiling сейчас: {}").format(value or _("не прочитан")))
+            self.log(_("edge-tiling right now: {}").format(value or _("not read")))
         if self.edge.disable():
             self.log(
-                _("edge-tiling выключен на время HUD (было {})").format(
+                _("edge-tiling disabled for the HUD (was {})").format(
                     self.edge.restore_value
                 )
             )
@@ -727,9 +725,9 @@ class Hotcorners:
             self.hud.stop()
         if self.edge.touched:
             if self.edge.restore():
-                self.log(_("edge-tiling возвращён: {}").format(self.edge.restore_value))
+                self.log(_("edge-tiling restored: {}").format(self.edge.restore_value))
             else:
-                self.err(_("zone-hotcorners: не удалось вернуть edge-tiling в gsettings"))
+                self.err(_("zone-hotcorners: failed to restore edge-tiling in gsettings"))
         self.reset()
 
 
@@ -822,7 +820,7 @@ class XClient:
         shown = display if display is not None else os.environ.get("DISPLAY") or ""
         self.dpy = self.x.XOpenDisplay(shown.encode() or None)
         if not self.dpy:
-            raise RuntimeError(_("не удалось подключиться к X-серверу (DISPLAY)"))
+            raise RuntimeError(_("failed to connect to the X server (DISPLAY)"))
         self.x.XDefaultRootWindow.restype = ctypes.c_ulong
         self.x.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
         self.root = self.x.XDefaultRootWindow(self.dpy)
@@ -1110,34 +1108,32 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         prog="zone-hotcorners.py",
         description=_(
-            "Перетаскивание окна за титлбар вкладывает его в зону GridSnap (Cinnamon/X11)"
+            "Dragging a window by its title bar places it into a GridSnap zone (Cinnamon/X11)"
         ),
         epilog=_(
-            "Watcher слушает XInput2 raw events на root (grab'ов не делает), водит HUD "
-            "zone-picker --hud и вкладывает активное окно в зону под точкой отпускания. "
-            "Если XI2 недоступен — опрос XQueryPointer ~30 Гц."
+            "The watcher listens to XInput2 raw events on the root (it makes no grabs), drives the zone-picker --hud HUD and places the active window into the zone under the release point. If XI2 is unavailable - XQueryPointer polling at ~30 Hz."
         ),
     )
     ap.add_argument(
         "--conf",
         metavar="PATH",
         default=None,
-        help=_("путь к zones.conf (по умолчанию XDG/рядом с кодом)"),
+        help=_("path to zones.conf (XDG or next to the code by default)"),
     )
     ap.add_argument(
         "--dry-run",
         action="store_true",
-        help=_("не двигать окно и не менять настройки — только печатать, что сделал бы"),
+        help=_("do not move the window and do not change settings - only print what it would do"),
     )
     ap.add_argument(
         "--verbose",
         action="store_true",
-        help=_("печатать в stderr, что происходит (arm, HUD, edge-tiling, дроп)"),
+        help=_("print to stderr what is happening (arm, HUD, edge-tiling, drop)"),
     )
     ap.add_argument(
         "--no-hud",
         action="store_true",
-        help=_("без оверлея: только дроп по отпусканию (edge-tiling не трогается)"),
+        help=_("no overlay: only the drop on release (edge-tiling untouched)"),
     )
     ap.add_argument("--version", action="version", version=f"zone-hotcorners {VERSION}")
     return ap.parse_args(argv)
@@ -1147,7 +1143,7 @@ def main(argv=None):
     args = parse_args(argv)
     conf = args.conf or default_conf()
     if not os.path.exists(conf):
-        print(_("zone-hotcorners: не найден конфиг {}").format(conf), file=sys.stderr)
+        print(_("zone-hotcorners: config not found: {}").format(conf), file=sys.stderr)
         return EXIT_CONFIG
 
     stop = StopFlag()
@@ -1165,9 +1161,9 @@ def main(argv=None):
         if version:
             mode = f"XI2 raw events {version[0]}.{version[1]}"
         else:
-            mode = _("fallback: опрос XQueryPointer {:.0f} Гц").format(1.0 / POLL_INTERVAL)
+            mode = _("fallback: XQueryPointer polling at {:.0f} Hz").format(1.0 / POLL_INTERVAL)
         print(
-            _("zone-hotcorners: {}; конфиг {}").format(mode, conf),
+            _("zone-hotcorners: {}; config {}").format(mode, conf),
             file=sys.stderr,
             flush=True,
         )

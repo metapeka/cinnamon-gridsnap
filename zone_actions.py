@@ -169,8 +169,7 @@ def builtin_name(run):
     if name not in BUILTINS:
         raise ActionError(
             _(
-                "неизвестное встроенное действие 'builtin:{name}': "
-                "можно {builtins}"
+                "unknown built-in action 'builtin:{name}': available {builtins}"
             ).format(
                 name=name,
                 builtins=", ".join(f"builtin:{builtin}" for builtin in BUILTINS),
@@ -189,15 +188,15 @@ def expand_command(command, context, splitter=shlex.split):
     """
     text = str(command or "").strip()
     if not text:
-        raise ActionError(_("у действия пустая команда в run"))
+        raise ActionError(_("the action has an empty command in run"))
     try:
         tokens = splitter(text)
     except ValueError as exc:
         raise ActionError(
-            _("не разобрать команду действия: {error}").format(error=exc)
+            _("failed to parse the action command: {error}").format(error=exc)
         ) from None
     if not tokens:
-        raise ActionError(_("у действия пустая команда в run"))
+        raise ActionError(_("the action has an empty command in run"))
     values = context.values()
     return [_expand_token(token, values) for token in tokens]
 
@@ -210,8 +209,7 @@ def _expand_token(token, values):
         if name not in values:
             raise ActionError(
                 _(
-                    "в команде действия неизвестная подстановка '{{{name}}}': "
-                    "можно {known}"
+                    "unknown substitution '{{{name}}}' in the action command: available {known}"
                 ).format(
                     name=name,
                     known=", ".join("{" + known + "}" for known in PLACEHOLDERS),
@@ -242,7 +240,7 @@ def _mirror_axis(axis):
     name = str(axis or DEFAULT_MIRROR_AXIS).strip().lower()
     if name not in MIRROR_AXES:
         raise ActionError(
-            _("неизвестная ось зеркала '{axis}': можно {axes}").format(
+            _("unknown mirror axis '{axis}': available {axes}").format(
                 axis=name, axes=", ".join(MIRROR_AXES)
             )
         )
@@ -263,7 +261,7 @@ def find_mirror(zones, subject, axis=DEFAULT_MIRROR_AXIS):
     """
     if subject not in zones:
         raise ActionError(
-            _("зоны '{zone}' нет в сетке — зеркалить нечего").format(zone=subject)
+            _("no zone '{zone}' in the grid - nothing to mirror").format(zone=subject)
         )
     target = mirror_fractions(zones[subject], axis)
     tx, ty = _center(target)

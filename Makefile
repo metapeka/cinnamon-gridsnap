@@ -43,9 +43,9 @@ INSTALL_SH := install.sh install-launcher.sh install-daemon.sh
 # моменту, но так список версионируемых файлов растёт вместе с ними.
 VERSIONED = $(shell grep -l '^VERSION = ' $(MODULES) $(CLIENTS) 2>/dev/null | sort | tr '\n' ' ')
 
-# Локализация: каталоги переводов. Язык исходника — русский, поэтому `ru.po`
-# нет; `en` и `zh_CN` ложатся поверх русских строк.
-LANGS       := en zh_CN
+# Локализация: каталоги переводов. Язык исходника — английский, поэтому `en.po`
+# нет; `ru` и `zh_CN` ложатся поверх английских строк.
+LANGS       := ru zh_CN
 LOCALEDIR   := locale
 POT_FILES   := $(MODULES) $(CLIENTS)
 POT_DIR     ?= po
@@ -161,9 +161,9 @@ mo:
 
 # `make check-i18n` — то, что проверяет CI: каталоги собираются, шаблоны не
 # разошлись с кодом (сверяются наборы `msgid`, а не файлы целиком: дата сборки
-# в шапке меняется каждый раз), а каталога `ru` нет — русский это msgid как есть.
+# в шапке меняется каждый раз), а каталога `en` нет — английский это msgid как есть.
 check-i18n: mo
-	@test ! -e "po/ru.po" || { echo "make: po/ru.po не нужен: русский — исходные строки" >&2; exit 1; }
+	@test ! -e "po/en.po" || { echo "make: po/en.po не нужен: английский — исходные строки" >&2; exit 1; }
 	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
 		$(MAKE) --no-print-directory -s pot POT_DIR="$$tmp" >/dev/null; \
 		grep '^msgid ' "po/$(PKG).pot" > "$$tmp/a"; \

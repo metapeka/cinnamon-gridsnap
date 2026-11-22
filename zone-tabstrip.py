@@ -122,7 +122,7 @@ def tiler_module():
                 "gridsnap_tabstrip_tiler", os.path.join(HERE, "zone-tiler.py")
             )
             if spec is None or spec.loader is None:
-                raise ImportError(_("не удалось загрузить zone-tiler.py"))
+                raise ImportError(_("zone-tiler.py could not be loaded"))
             mod = importlib.util.module_from_spec(spec)
             sys.modules[spec.name] = mod
             spec.loader.exec_module(mod)
@@ -223,8 +223,7 @@ def load_gtk():
     except (ImportError, ValueError) as exc:
         fail(
             _(
-                "zone-tabstrip: нужен GTK 3 для python3 (python3-gi и gir1.2-gtk-3.0) "
-                "— без него полосу вкладок не нарисовать: {}"
+                "zone-tabstrip: GTK 3 for python3 is required (python3-gi and gir1.2-gtk-3.0) - without it the tab bar cannot be drawn: {}"
             ).format(exc),
             EXIT_FAIL,
         )
@@ -247,14 +246,14 @@ def send_request(request, path=None, timeout=DAEMON_TIMEOUT):
         conn.connect(path or zone_ipc.default_socket_path())
     except OSError as exc:
         conn.close()
-        return None, _("демон не отвечает: {}").format(exc)
+        return None, _("the daemon does not answer: {}").format(exc)
     try:
         conn.sendall(zone_ipc.encode_message(request))
         return zone_ipc.read_response(conn), None
     except OSError as exc:
-        return None, _("сокет демона отказал: {}").format(exc)
+        return None, _("the daemon socket refused: {}").format(exc)
     except zone_ipc.ProtocolError as exc:
-        return None, _("демон ответил непонятно: {}").format(exc)
+        return None, _("the daemon gave an unclear answer: {}").format(exc)
     finally:
         conn.close()
 
@@ -276,7 +275,7 @@ class Strip:
         self.rect = None
         self.scale = 1
         self.win = Gtk.Window(type=Gtk.WindowType.POPUP)
-        self.win.set_title(_("Gridsnap: вкладки зоны {}").format(zone))
+        self.win.set_title(_("Gridsnap: tabs of zone {}").format(zone))
         self.win.set_decorated(False)
         self.win.set_resizable(False)
         self.win.set_skip_taskbar_hint(True)
@@ -348,12 +347,12 @@ class Strip:
         response, error = send_request(request, self.owner.socket_path)
         if response is None:
             print(
-                _("zone-tabstrip: вкладка не переключена ({})").format(error),
+                _("zone-tabstrip: tab not switched ({})").format(error),
                 file=sys.stderr,
             )
         elif not response.get("ok", True):
-            reason = response.get("error") or _("причина не названа")
-            print(_("zone-tabstrip: демон отказал: {}").format(reason), file=sys.stderr)
+            reason = response.get("error") or _("reason not given")
+            print(_("zone-tabstrip: the daemon refused: {}").format(reason), file=sys.stderr)
         return True
 
     # ---- рисование
@@ -465,20 +464,19 @@ class Tabstrip:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description=_("Полоса вкладок поверх зоны (Cinnamon/X11)"),
+        description=_("Tab bar over a zone (Cinnamon/X11)"),
     )
     ap.add_argument(
         "--conf",
         default=None,
         help=_(
-            "путь к zones.conf: так полосу запускает демон; сама полоса конфиг не "
-            "читает — рамки и подписи приходят в снимке"
+            "path to zones.conf: this is how the daemon starts the bar; the bar itself does not read the config - frames and captions come in the snapshot"
         ),
     )
     ap.add_argument(
         "--socket",
         default=None,
-        help=_("путь сокета демона (по умолчанию — как у gridsnap-ctl)"),
+        help=_("daemon socket path (the same as gridsnap-ctl uses by default)"),
     )
     ap.add_argument("--version", action="version", version=f"zone-tabstrip {VERSION}")
     args = ap.parse_args(argv)
@@ -487,10 +485,10 @@ def main(argv=None):
     try:
         ready = Gtk.init_check()[0]
     except Exception as exc:  # GTK есть, но не поднялся (нет дисплея и т. п.)
-        fail(_("zone-tabstrip: GTK не запустился: {}").format(exc), EXIT_FAIL)
+        fail(_("zone-tabstrip: GTK failed to start: {}").format(exc), EXIT_FAIL)
     if not ready:
         fail(
-            _("zone-tabstrip: нет дисплея — полосе вкладок нужен X11 (DISPLAY)"),
+            _("zone-tabstrip: no display - the tab bar needs X11 (DISPLAY)"),
             EXIT_FAIL,
         )
 
@@ -500,7 +498,7 @@ def main(argv=None):
         try:
             chunk = os.read(fd, 65536)
         except OSError as exc:
-            print(_("zone-tabstrip: stdin не читается: {}").format(exc), file=sys.stderr)
+            print(_("zone-tabstrip: cannot read stdin: {}").format(exc), file=sys.stderr)
             chunk = b""
         if not chunk:  # EOF или HUP: демон закрыл поток, кормить больше некому
             strips.close()

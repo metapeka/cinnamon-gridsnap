@@ -92,7 +92,7 @@ package() {
     # Каталоги переводов (gettext в makedepends): два домена — Python-инстру-
     # менты и апплет Cinnamon. Язык исходника — русский, каталога ru нет.
     local lang
-    for lang in en zh_CN; do
+    for lang in ru zh_CN; do
         install -d "$pkgdir/usr/share/locale/$lang/LC_MESSAGES"
         msgfmt --check -o "$pkgdir/usr/share/locale/$lang/LC_MESSAGES/gridsnap.mo" \
             "po/$lang.po"

@@ -125,7 +125,7 @@ def main():
         make_png(os.path.join(ICONS, f"gridsnap-{size}.png"), size)
     with open(os.path.join(ICONS, "gridsnap.svg"), "w", encoding="utf-8") as fh:
         fh.write(SVG)
-    print(_("иконки Gridsnap: {sizes}").format(sizes=", ".join(str(s) for s in SIZES)))
+    print(_("Gridsnap icons: {sizes}").format(sizes=", ".join(str(s) for s in SIZES)))
 
 
 if __name__ == "__main__":

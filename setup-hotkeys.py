@@ -238,11 +238,7 @@ def warn_conflicts(items):
     for direction, binding in conflicts_with_push_tile(items):
         print(
             _(
-                "setup-hotkeys: внимание: {binding} для move {direction} "
-                "совпадает с родным {prefix}{direction} muffin — на этой клавише "
-                "сработает один из двух обработчиков. Родное сочетание не "
-                "выключаю: задайте своё в [move] или отключите push-tile "
-                "в настройках Cinnamon"
+                "setup-hotkeys: warning: {binding} for move {direction} matches muffin's native {prefix}{direction} - one of the two handlers will fire on this key. I am not disabling the native shortcut: set your own in [move] or turn off push-tile in Cinnamon settings"
             ).format(
                 binding=binding,
                 direction=direction,
@@ -318,14 +314,14 @@ def set_custom_list(ids):
 
 
 def main():
-    ap = argparse.ArgumentParser(description=_("Горячие клавиши зон для Cinnamon"))
-    ap.add_argument("--list", action="store_true", help=_("только показать план"))
+    ap = argparse.ArgumentParser(description=_("Zone hotkeys for Cinnamon"))
+    ap.add_argument("--list", action="store_true", help=_("only show the plan"))
     ap.add_argument(
-        "--remove", action="store_true", help=_("удалить сочетания zone-tiler")
+        "--remove", action="store_true", help=_("remove zone-tiler shortcuts")
     )
     ap.add_argument(
         "--conf",
-        help=_("путь к zones.conf (по умолчанию — как у zone-tiler.py)"),
+        help=_("path to zones.conf (the same as zone-tiler.py uses by default)"),
     )
     args = ap.parse_args()
 
@@ -334,13 +330,12 @@ def main():
         if left:
             print(
                 _(
-                    "setup-hotkeys: эти сочетания убрать не удалось: {ids} — "
-                    "уберите их вручную в настройках клавиш Cinnamon"
+                    "setup-hotkeys: these shortcuts could not be removed: {ids} — remove them by hand in Cinnamon's keyboard settings"
                 ).format(ids=", ".join(left)),
                 file=sys.stderr,
             )
             return EXIT_FAIL
-        print(_("setup-hotkeys: сочетания zone-tiler удалены"))
+        print(_("setup-hotkeys: zone-tiler shortcuts removed"))
         return 0
 
     pairs = planned(args.conf)
@@ -370,7 +365,7 @@ def main():
     set_custom_list(kept + ids)
 
     print(
-        _("setup-hotkeys: установлено сочетаний: {count}").format(count=len(pairs))
+        _("setup-hotkeys: shortcuts installed: {count}").format(count=len(pairs))
     )
     for name, binding, _command in pairs:
         print(f"  {binding:<22} {name}")
