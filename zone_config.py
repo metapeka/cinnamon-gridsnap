@@ -69,9 +69,22 @@ TABS_FIELDS = ("key", "height")
 # (с 1), значение — имя профиля из ``templates/<имя>.conf``.
 WORKSPACES_SECTION = "workspaces"
 
+# Экраны: ``[monitors]``, ключ — имя выхода (``HDMI-1``, ``eDP-1``), значение — имя
+# профиля. Секция машинная: в профиль не входит, ``profile use`` её не трогает
+# (переносится дословно, как ``[grid]``). Порядок строк значим: профиль первого
+# экрана решает спор при слиянии (``profile use-monitors``).
+MONITORS_SECTION = "monitors"
+
 # Подпись «стол без профиля» в диалоге «Профили столов». С настоящим именем
 # профиля не совпадёт: имена санируются, пробел в них превращается в дефис.
 WORKSPACE_SHARED = "общий набор"
+
+# Подпись «экран без привязки» в диалоге «Профили экранов» — та же строка, что
+# у столов: пустое значение убирает привязку.
+MONITOR_SHARED = WORKSPACE_SHARED
+
+# Как в диалоге помечен выход из `[monitors]`, которого сейчас нет на машине.
+MONITOR_OFFLINE_NOTE = "нет на экране"
 
 # Сколько столов показать в диалоге, если ``_NET_NUMBER_OF_DESKTOPS`` не прочитать.
 WORKSPACE_DESKTOPS_DEFAULT = 4
@@ -350,8 +363,8 @@ def _workspace_body(mapping):
     return lines
 
 
-def _workspace_spans(lines):
-    """``(начало, конец)`` всех секций ``[workspaces]``: заголовок и тело."""
+def _section_line_spans(lines, section):
+    """``(начало, конец)`` всех секций ``[section]``: заголовок и тело."""
     spans, start = [], None
     for index, line in enumerate(lines):
         match = _SECTION_RE.match(line)
@@ -360,11 +373,46 @@ def _workspace_spans(lines):
         if start is not None:
             spans.append((start, index))
             start = None
-        if match.group(1).strip().lower() == WORKSPACES_SECTION:
+        if match.group(1).strip().lower() == section:
             start = index
     if start is not None:
         spans.append((start, len(lines)))
     return spans
+
+
+def _workspace_spans(lines):
+    """``(начало, конец)`` всех секций ``[workspaces]``."""
+    return _section_line_spans(lines, WORKSPACES_SECTION)
+
+
+def _replace_section(lines, section, block):
+    """Заменить все секции ``[section]`` одним блоком ``block`` (заголовок + тело).
+
+    Блок встаёт на место первой секции, дубли (если их наплодили руками) уходят:
+    ``ConfigParser`` на повторе секции падает. Пустой ``block`` убирает секцию
+    совсем; нет её вообще — блок дописывается в конец. Пустые строки подчищаются.
+    """
+    spans = _section_line_spans(lines, section)
+    if spans:
+        insert_at = spans[0][0]
+        drop = set()
+        for start, end in spans:
+            drop.update(range(start, end))
+        result = []
+        for index, line in enumerate(lines):
+            if index == insert_at:
+                result.extend(block)
+            if index not in drop:
+                result.append(line)
+    else:
+        result = list(lines)
+        if block:
+            while result and not result[-1].strip():
+                result.pop()
+            if result:
+                result.append("")
+            result.extend(block)
+    return _tidy_blank(result)
 
 
 def _tidy_blank(lines):
@@ -396,35 +444,213 @@ def save_workspace_map(path, mapping):
     if path and os.path.exists(path):
         with open(path, encoding="utf-8") as fh:
             lines = fh.read().splitlines()
-    spans = _workspace_spans(lines)
-    if spans:
-        # Блок встаёт на место первой секции, дубли (если их наплодили руками)
-        # уходят: ConfigParser на повторе секции падает.
-        insert_at = spans[0][0]
-        drop = set()
-        for start, end in spans:
-            drop.update(range(start, end))
-        result = []
-        for index, line in enumerate(lines):
-            if index == insert_at:
-                result.extend(block)
-            if index not in drop:
-                result.append(line)
-    else:
-        result = list(lines)
-        if block:
-            while result and not result[-1].strip():
-                result.pop()
-            if result:
-                result.append("")
-            result.extend(block)
-    lines = _tidy_blank(result)
+    lines = _replace_section(lines, WORKSPACES_SECTION, block)
     directory = os.path.dirname(path)
     if directory:
         os.makedirs(directory, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n" if lines else "")
     return path
+
+
+def _monitor_body(mapping):
+    """Тело секции ``[monitors]``: ``выход = имя профиля`` в заданном порядке.
+
+    Порядок строк значим: профиль **первого** экрана решает спор при слиянии
+    (``profile use-monitors``), поэтому сортировки нет — как передали, так и
+    запишем. Имя выхода пишется как есть (обычно так его печатает
+    ``xrandr --listmonitors``), но сравнивать его надо без учёта регистра: в файле
+    может оказаться ``hdmi-1``, а ``ConfigParser`` вообще опускает регистр ключей.
+    Пустое имя выхода или пустое (после санирования) имя профиля — ``ValueError``:
+    писать заведомо нечитаемый конфиг незачем.
+    """
+    lines = []
+    for output, name in (mapping or {}).items():
+        output = str(output).strip()
+        if not output:
+            raise ValueError(f"пустое имя выхода: {output!r}")
+        profile = sanitize_profile_name(name)
+        if not profile:
+            raise ValueError(f"пустое имя профиля у выхода {output}: {name!r}")
+        lines.append(f"{output} = {profile}")
+    return lines
+
+
+def load_monitor_map(path):
+    """``{имя выхода: имя профиля}`` из секции ``[monitors]``; нет секции — ``{}``.
+
+    Ключ — имя выхода как его печатает ``xrandr --listmonitors`` (``HDMI-1``,
+    ``eDP-1``), значение — имя профиля (``templates/<имя>.conf``). Сравнивать имена
+    выходов надо **без учёта регистра**: ``ConfigParser`` опускает регистр ключей,
+    поэтому ``HDMI-1`` вернётся как ``hdmi-1`` — ровно так же терпимо сравнивает
+    наборы зон ``Grid.zones_for`` (см. :func:`resolve_profile`).
+
+    Порядок строк значим (профиль первого экрана решает спор при слиянии), поэтому
+    словарь в порядке файла, а не отсортированный. Существование файла профиля здесь
+    не проверяется: профиль могли переименовать, и это повод откатиться на следующий
+    уровень с предупреждением, а не ломать чтение конфига (как у ``[workspaces]``).
+    Пустое имя профиля — ошибка конфига (код 3): строка, которая ничего не значит.
+    """
+    cp = _read_conf(path, missing_ok=True)
+    if cp is None or not cp.has_section(MONITORS_SECTION):
+        return {}
+    mapping = {}
+    for key, value in cp.items(MONITORS_SECTION):
+        output = str(key).strip()
+        if not output:
+            zt.fail(
+                f"zone_config: в [{MONITORS_SECTION}] пустое имя выхода",
+                zt.EXIT_CONFIG,
+            )
+        profile = sanitize_profile_name(value)
+        if not profile:
+            zt.fail(
+                f"zone_config: в [{MONITORS_SECTION}] у выхода {output} пустое имя "
+                "профиля",
+                zt.EXIT_CONFIG,
+            )
+        mapping[output] = profile
+    return mapping
+
+
+def save_monitor_map(path, mapping):
+    """Записать секцию ``[monitors]``: имя выхода → имя профиля.
+
+    Правится только эта секция и текстом: ``[grid]``, наборы зон ``[zones]``/
+    ``[zones:<выход>]``, ``[workspaces]``, ``[keys]``, ``[rules]``, ``[daemon]`` и
+    прочие строки файла остаются дословно, как после ручной правки. Пустой
+    ``mapping`` убирает секцию совсем; порядок строк сохраняется как передали —
+    профиль первого экрана решает спор при слиянии. Имена профилей санируются,
+    поэтому ``{"HDMI-2": "my cinema"}`` станет ``HDMI-2 = my-cinema``.
+    Файла нет — он будет создан с одной этой секцией. Пустое имя выхода и пустое
+    имя профиля — ``ValueError``. Возвращает путь.
+    """
+    body = _monitor_body(mapping)
+    block = [f"[{MONITORS_SECTION}]"] + body if body else []
+    lines = []
+    if path and os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    lines = _replace_section(lines, MONITORS_SECTION, block)
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n" if lines else "")
+    return path
+
+
+def resolve_profile(monitor_map, workspace_map=None, output=None, workspace_code=None):
+    """Имя профиля для окна: привязка экрана важнее привязки стола.
+
+    Порядок разбора (решение владельца, 22.11.2026):
+
+    1. выход окна есть в ``[monitors]`` — профиль экрана;
+    2. иначе номер стола окна есть в ``[workspaces]`` — профиль стола;
+    3. иначе ``None`` — значит активный ``zones.conf``.
+
+    ``workspace_code`` — номер стола из EWMH (``_NET_CURRENT_DESKTOP``, с нуля), а
+    в ``[workspaces]`` номера записаны с 1, как в интерфейсе Cinnamon: перевод
+    делает эта функция, чтобы его не повторял каждый вызывающий.
+
+    Имя выхода сравнивается без учёта регистра — как наборы ``[zones:<выход>]``; в
+    словаре из :func:`load_monitor_map` регистр вообще опущен парсером.
+
+    Существование файла профиля не проверяется: профиль могли переименовать, и
+    тогда нужен откат на следующий уровень с предупреждением (это делает
+    вызывающий — :func:`read_profile_sets` бросит ``FileNotFoundError``).
+    """
+    if output:
+        name = str(output).strip()
+        for key, profile in (monitor_map or {}).items():
+            if str(key).strip().casefold() == name.casefold():
+                return profile
+    if workspace_code is not None:
+        try:
+            desk = int(workspace_code) + 1
+        except (TypeError, ValueError):
+            desk = None
+        if desk is not None:
+            # `load_workspace_map` отдаёт ключи-числа, но словарь могли собрать и
+            # руками (диалог редактора, тесты) — смотрим оба вида.
+            for key in (desk, str(desk)):
+                profile = (workspace_map or {}).get(key)
+                if profile:
+                    return profile
+    return None
+
+
+# Строки диалога «Профили экранов» (редактор) — рядом с профилями столов:
+# чистая функция без GTK и X, поэтому её проверяют обычные тесты.
+def _monitor_row(output, profile, names, on_screen=True):
+    """Одна строка диалога «Профили экранов»: варианты, предупреждение и признак."""
+    options = [MONITOR_SHARED] + names
+    notes = []
+    if profile is not None and profile not in names:
+        options.append(profile)
+        notes.append(f"профиля «{profile}» нет на диске: привязка пока не действует")
+    if not on_screen:
+        notes.append(f"выхода {output} сейчас {MONITOR_OFFLINE_NOTE}: привязка не "
+                     "действует, пока экран не подключён")
+    return (output, profile, options, "; ".join(notes), on_screen)
+
+
+def monitor_dialog_rows(mapping, profiles=None, outputs=None):
+    """Строки диалога «Профили экранов» — чистая функция без GTK и без X.
+
+    ``mapping`` — карта из :func:`zone_config.load_monitor_map`, ``profiles`` —
+    имена профилей на диске (:func:`zone_config.list_profiles`), ``outputs`` — имена
+    выходов в порядке ``xrandr --listmonitors``. Порядок значим: профиль первого
+    экрана решает спор при слиянии (``profile use-monitors``), и сохранение пишет
+    секцию ровно в порядке строк этого списка.
+
+    Строка — ``(выход, профиль, варианты, предупреждение, на_экране)``:
+
+    * ``выход`` — имя как его печатает xrandr; для выхода из ``[monitors]``, которого
+      сейчас нет на машине (отключён, переименован), — как записано в файле: строку
+      всё равно показываем, иначе её нельзя ни поправить, ни убрать;
+    * ``профиль`` — имя профиля экрана, ``None`` — общий набор (привязки нет);
+    * ``варианты`` — выпадающий список: :data:`MONITOR_SHARED`, затем имена профилей
+      с диска, и обязательно имя из сопоставления — профиль мог исчезнуть, но запись
+      показываем и не выбрасываем;
+    * ``предупреждение`` — пусто или текст про профиль, которого нет на диске, и про
+      выход, которого сейчас нет на экране;
+    * ``на_экране`` — ``False`` у строки выхода, которого сейчас нет.
+
+    Имена выходов сравниваются **без учёта регистра**: ``ConfigParser`` опускает
+    регистр ключей, поэтому из файла приходит ``hdmi-1``, а xrandr говорит
+    ``HDMI-1``. Строки идут в порядке xrandr, а записи про отсутствующие выходы —
+    следом, в порядке файла.
+    """
+    names = sorted({sanitize_profile_name(n) for n in (profiles or [])} - {""})
+    file_order = []
+    by_key = {}
+    for output, name in (mapping or {}).items():
+        output = str(output).strip()
+        if not output:
+            continue
+        key = output.casefold()
+        if key in by_key:
+            continue
+        # Имя профиля из файла уже санировано, но словарь могли собрать и руками.
+        file_order.append(output)
+        by_key[key] = (output, sanitize_profile_name(name) or None)
+    rows = []
+    seen = set()
+    for output in outputs or ():
+        name = str(output or "").strip()
+        if not name:
+            continue
+        key = name.casefold()
+        seen.add(key)
+        profile = by_key[key][1] if key in by_key else None
+        rows.append(_monitor_row(name, profile, names, on_screen=True))
+    for output in file_order:
+        key = output.casefold()
+        if key in seen:
+            continue
+        rows.append(_monitor_row(output, by_key[key][1], names, on_screen=False))
+    return rows
 
 
 def workspace_dialog_rows(mapping, profiles=None, desktops=None):

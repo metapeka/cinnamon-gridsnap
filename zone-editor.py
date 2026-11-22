@@ -10,6 +10,7 @@ zone-editor.py — визуальный редактор сетки зон дл�
   * шаблоны раскладок (2 колонки, 1+2, 2×2, 3 колонки, главное + стек);
   * набор зон на каждый монитор: свой (`[zones:<выход>]`) или общий `[zones]`;
   * сохранение в zones.conf и регистрация горячих клавиш Cinnamon;
+  * привязка профиля к экрану (`[monitors]`) и к столу (`[workspaces]`);
   * кнопка «Проверить на активном окне» — сразу вкладывает активное окно в зону.
 
 Запуск: zone-editor.py [--conf ПУТЬ] [--shot ФАЙЛ.png]
@@ -33,19 +34,25 @@ from gi.repository import Gdk, Gtk, Pango, PangoCairo  # noqa: E402  # type: ign
 
 import zone_geom as geom  # noqa: E402
 from zone_config import (  # noqa: E402
+    MONITORS_SECTION,
+    MONITOR_OFFLINE_NOTE,
+    MONITOR_SHARED,
     WORKSPACE_SHARED,
     WORKSPACES_SECTION,
     Zone,
     list_profiles,
     load_extra_sections,
+    load_monitor_map,
     load_workspace_map,
     load_zone_sets,
     missing_rule_targets,
+    monitor_dialog_rows,
     profile_path,
     read_profile,
     remove_profile,
     sanitize_name,
     sanitize_profile_name,
+    save_monitor_map,
     save_profile,
     save_workspace_map,
     unique_name,
@@ -911,6 +918,10 @@ class Editor(Gtk.Window):
         desks_btn.set_label("Профили столов…")
         desks_btn.connect("clicked", lambda _w: self.workspace_profiles_dialog())
         self.prof_box.pack_start(desks_btn, False, False, 0)
+        screens_btn = Gtk.ModelButton()
+        screens_btn.set_label("Профили экранов…")
+        screens_btn.connect("clicked", lambda _w: self.monitor_profiles_dialog())
+        self.prof_box.pack_start(screens_btn, False, False, 0)
         save_btn = Gtk.ModelButton()
         save_btn.set_label("Сохранить текущую раскладку как профиль…")
         save_btn.connect("clicked", lambda _w: self.save_profile_dialog())
@@ -1067,22 +1078,117 @@ class Editor(Gtk.Window):
         self.set_status(f"профили столов сохранены: {self.conf_path} — "
                         f"сопоставлений: {len(chosen)}")
 
+    def monitor_names(self):
+        """Имена выходов в порядке `xrandr --listmonitors` — порядок строк диалога.
+
+        Читаем заново при каждом открытии: экран могли подключить после запуска
+        редактора, а `self.outputs` — снимок на момент старта. Без X и без xrandr
+        остаётся снимок: диалог всё равно покажет записи из `[monitors]`.
+        """
+        try:
+            names = [name for name, _rect in zt.monitor_outputs()]
+        except (SystemExit, OSError):
+            names = []
+        return names or [name for name, _rect in self.outputs]
+
+    def monitor_profiles_dialog(self):
+        """Диалог «Профили экранов»: какой профиль использует каждый выход.
+
+        Строк столько, сколько выходов видит `xrandr --listmonitors`, плюс записи
+        из `[monitors]` про выходы, которых сейчас нет: их видно и можно поправить
+        или убрать. В выпадающем списке — сохранённые профили и «общий набор»
+        (привязки нет). Строки идут в порядке xrandr, и именно в нём пишется секция:
+        профиль первого экрана решает спор при слиянии (`profile use-monitors`).
+        Пишется только `[monitors]` через `save_monitor_map`; чужие секции файла
+        остаются на месте, а `extra_sections` перечитываются, чтобы следующий Ctrl+S
+        её не откатил. «Отмена» не пишет ничего.
+        """
+        try:
+            mapping = load_monitor_map(self.conf_path)
+        except (SystemExit, ValueError, OSError) as exc:
+            self.set_status(f"профили экранов не прочитаны: {exc}")
+            return
+        rows = monitor_dialog_rows(
+            mapping, list_profiles(self.conf_path), self.monitor_names()
+        )
+        if not rows:
+            self.set_status("не вижу ни одного выхода — привязывать профиль не к чему")
+            return
+        dlg = Gtk.Dialog(title="Профили экранов", transient_for=self, modal=True)
+        dlg.add_button("Отмена", Gtk.ResponseType.CANCEL)
+        dlg.add_button("Сохранить", Gtk.ResponseType.OK)
+        dlg.set_default_response(Gtk.ResponseType.OK)
+        grid = Gtk.Grid(row_spacing=6, column_spacing=8, border_width=10)
+        dlg.get_content_area().add(grid)
+        hint = Gtk.Label(
+            label="Профиль задаёт экрану его сетку зон; «общий набор» — экран без "
+                  "привязки. Верхний экран решает спор, если профили задают разное.",
+            xalign=0,
+        )
+        hint.set_line_wrap(True)
+        hint.set_max_width_chars(60)
+        hint.get_style_context().add_class("dim-label")
+        grid.attach(hint, 0, 0, 2, 1)
+        combos = []
+        line = 1
+        for output, profile, options, warning, on_screen in rows:
+            title = output if on_screen else f"{output} — {MONITOR_OFFLINE_NOTE}"
+            grid.attach(Gtk.Label(label=title, xalign=0), 0, line, 1, 1)
+            combo = Gtk.ComboBoxText()
+            for option in options:
+                combo.append_text(option)
+            combo.set_active(options.index(profile if profile is not None else MONITOR_SHARED))
+            grid.attach(combo, 1, line, 1, 1)
+            combos.append((output, combo))
+            line += 1
+            if warning:
+                note = Gtk.Label(label=warning, xalign=0)
+                note.set_line_wrap(True)
+                note.set_max_width_chars(60)
+                note.get_style_context().add_class("dim-label")
+                grid.attach(note, 1, line, 1, 1)
+                line += 1
+        dlg.show_all()
+        resp = dlg.run()
+        chosen = {}
+        for output, combo in combos:
+            text = combo.get_active_text() or MONITOR_SHARED
+            if text != MONITOR_SHARED:
+                chosen[output] = text
+        dlg.destroy()
+        if resp != Gtk.ResponseType.OK:
+            return
+        try:
+            save_monitor_map(self.conf_path, chosen)
+        except (ValueError, OSError) as exc:
+            self.set_status(f"профили экранов не сохранены: {exc}")
+            return
+        self.sync_monitor_extra()
+        self.set_status(f"профили экранов сохранены: {self.conf_path} — "
+                        f"привязок: {len(chosen)}")
+
     def sync_workspace_extra(self):
         """Перечитать `[workspaces]` в «чужие» секции — чтобы Ctrl+S её не откатил.
 
         Остальные секции в памяти не трогаем: в `[rules]` может лежать
         черновик, загруженный из профиля и ещё не сохранённый.
         """
+        self.sync_extra_section(WORKSPACES_SECTION)
+
+    def sync_monitor_extra(self):
+        """Перечитать `[monitors]` в «чужие» секции — чтобы Ctrl+S её не откатил."""
+        self.sync_extra_section(MONITORS_SECTION)
+
+    def sync_extra_section(self, section):
+        """Обновить одну чужую секцию в памяти по файлу, остальные не трогая."""
         try:
-            section = load_extra_sections(
-                self.conf_path, sections=[WORKSPACES_SECTION]
-            ).get(WORKSPACES_SECTION)
+            body = load_extra_sections(self.conf_path, sections=[section]).get(section)
         except OSError:
             return
-        if section:
-            self.extra_sections[WORKSPACES_SECTION] = section
+        if body:
+            self.extra_sections[section] = body
         else:
-            self.extra_sections.pop(WORKSPACES_SECTION, None)
+            self.extra_sections.pop(section, None)
 
     def remove_profile_dialog(self):
         names = list_profiles(self.conf_path)

@@ -18,9 +18,12 @@
 HUD не берёт фокус, не захватывает клавиатуру и прозрачен для ввода: во время
 перетаскивания ввод держит muffin, а мы только рисуем.
 
-Сетка берётся для своего рабочего стола так же, как у ``list``/``apply``
-(``zone-tiler.grid_for_workspace``): у стола может быть свой профиль из
-``[workspaces]``, у монитора — свой набор ``[zones:<выход>]``.
+Сетка берётся для экрана окна/курсора тем же резолвером, что у раскладчика
+(``zone-tiler.grid_for_output``): профиль из ``[monitors]`` → профиль
+``[workspaces]`` → активный ``zones.conf``. Так оверлей показывает ровно те зоны,
+которые положит демон/``apply``, а не набор активного конфига; внутри сетки
+монитор может сузить набор своим ``[zones:<выход>]``. Экран без привязки живёт
+сеткой своего стола, как раньше.
 
 Чистая логика навигации — в ``zone_picker_nav`` (без GTK и X), применение окна —
 через ``zone-tiler.apply_zone``/``Grid.rect``. GTK и cairo живут только здесь.
@@ -100,6 +103,30 @@ def zones_from_grid(grid, output=None):
     return zones
 
 
+def screen_grid(conf, output, workspace):
+    """Сетка экрана и профили, которые её дали: ``(Grid, экран, стол)``.
+
+    Порядок разбора не дублируется, а берётся у раскладчика
+    (:func:`zone-tiler.grid_for_output`): ``[monitors]`` → ``[workspaces]`` →
+    активный ``zones.conf``. Сетка стола (``grid_for_workspace``) идёт готовым
+    ``fallback``: экран без привязки живёт ею, как жил до привязки профилей к
+    экранам. Профиля экрана нет на диске — ``grid_for_output`` сам печатает
+    предупреждение в stderr и отдаёт сетку стола, то есть оверлей не отказывает.
+
+    ``screen`` — имя профиля экрана, если он реально дал сетку, иначе ``None``;
+    ``desk`` — профиль стола из ``[workspaces]``. По ним строятся подписи: без
+    разделения «экран …» и «стол …» подпись врала бы о происхождении сетки.
+    """
+    desk = zt.workspace_profile(conf, workspace)
+    grid, screen = zt.grid_for_output(
+        conf,
+        output,
+        fallback=zt.grid_for_workspace(conf, workspace),
+        workspace=workspace,
+    )
+    return grid, screen, desk
+
+
 def workspace_caption(workspace, profile):
     """Подпись к сетке: какой стол её дал и почему набор зон такой.
 
@@ -115,13 +142,27 @@ def workspace_caption(workspace, profile):
     return f"стол {workspace + 1} · общий набор"
 
 
-def hud_caption(profile):
-    """Подпись HUD: имя профиля стола из ``[workspaces]``, если он сопоставлен.
+def screen_caption(workspace, profile, output, screen_profile):
+    """Подпись к сетке: профиль экрана, если он дал сетку, иначе подпись стола.
+
+    Экран важнее стола (:func:`zone_config.resolve_profile`), поэтому и подпись
+    называет экран первым: по ней в ``--shot``/``--dry-run`` видно, что оверлей
+    нарисовал зоны того же профиля, что положит раскладчик на этом экране.
+    """
+    if screen_profile:
+        return f"экран {output} · профиль «{screen_profile}»"
+    return workspace_caption(workspace, profile)
+
+
+def hud_caption(profile, output=None, screen_profile=None):
+    """Подпись HUD: чей профиль дал сетку — экрана или стола.
 
     В HUD нет подсказки про клавиши (их он не слушает), поэтому в углу остаётся
     только ответ на вопрос «какая это сетка» — та же строка профиля, что и в
     интерактивном оверлее, но без номера стола: рисовать больше нечего.
     """
+    if screen_profile:
+        return f"экран {output} · профиль «{screen_profile}»"
     return f"профиль «{profile}»" if profile else ""
 
 
@@ -728,14 +769,12 @@ def main(argv=None):
     conf = args.conf or zt.default_conf()
     if not os.path.exists(conf):
         fail(f"zone-picker: не найден конфиг {conf}")
-    # Сетка своего стола — как у list/apply/arrange: `--workspace N`, иначе
-    # активный стол. Стол без профиля молча живёт в общем [zones] (та же
+    # Стол для разбора профилей: `--workspace N`, иначе активный. Сама сетка
+    # считается после выбора монитора — она зависит от экрана (grid_for_output),
+    # а не только от стола. Стол без профиля молча живёт в общем [zones] (та же
     # деградация, что в zone-tiler.grid_for_workspace), поэтому подпись стола
     # и показанная сетка не расходятся.
     workspace = zt.resolve_workspace(args.workspace)
-    profile = zt.workspace_profile(conf, workspace)
-    grid = zt.grid_for_workspace(conf, workspace)
-    caption = workspace_caption(workspace, profile)
 
     try:
         Gtk.init()
@@ -760,6 +799,11 @@ def main(argv=None):
         fail(f"zone-picker: монитора {mon_index} нет")
     wa = monitors[mon_index]
     output = outputs[mon_index][0]
+    # Сетка экрана — тем же резолвером, что у раскладчика: иначе оверлей показал
+    # бы зоны профиля стола, а демон положил бы окно в зоны профиля экрана.
+    grid, screen_profile, desk_profile = screen_grid(conf, output, workspace)
+    caption = screen_caption(workspace, desk_profile, output, screen_profile)
+    hud_heading = hud_caption(desk_profile, output, screen_profile)
     zones = zones_from_grid(grid, output)
     if not zones:
         fail(f"zone-picker: в конфиге нет ни одной зоны для монитора {output}")
@@ -775,7 +819,7 @@ def main(argv=None):
                 wa[3],
                 zones,
                 selected,
-                hud_caption(profile),
+                hud_heading,
                 hint="",
             )
             point = "мимо зон" if selected is None else zones[selected].name
@@ -793,7 +837,7 @@ def main(argv=None):
         return EXIT_OK
 
     if args.hud:
-        hud = Hud(zones, wa, hud_caption(profile))
+        hud = Hud(zones, wa, hud_heading)
         # Диагностика: единственное доказательство, что окно прозрачно для ввода.
         print(f"zone-picker: HUD не берёт ввод ({hud.input_mode})", file=sys.stderr)
         if args.at is not None:

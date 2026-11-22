@@ -11,6 +11,12 @@
 и отключённых мониторов и `[keys]` без дублей (повтор имени в двух наборах не
 даёт повтора в секции — это забота писателя, а не текстовой чистки).
 
+Отдельно — диалог «Профили экранов»: строки `zone_config.monitor_dialog_rows`
+(порядок выходов, пометка отсутствующего, «общий набор») и запись `[monitors]`
+по этим строкам через `zone_config.save_monitor_map`. Чистая функция переехала в
+`zone_config.py` (как её аналог для столов), поэтому эти тесты идут без GTK —
+в CI, где `python3-gi` нет, они больше не пропускаются.
+
 Запуск:
     python3 -m unittest discover -s tests -v
     python3 tests/test_editor_sets.py
@@ -439,6 +445,178 @@ class WorkspaceDialogRowsTest(unittest.TestCase):
     def test_profile_names_from_disk_are_sorted_and_unique(self):
         options = zc.workspace_dialog_rows({}, ["work", "cinema", "work"], 1)[0][2]
         self.assertEqual(options, [zc.WORKSPACE_SHARED, "cinema", "work"])
+
+
+# ----------------------------------------- «Профили экранов»: строки диалога
+
+
+class MonitorDialogRowsTest(unittest.TestCase):
+    """Строки диалога «Профили экранов» — чистая функция без окон.
+
+    Порядок строк значим: профиль первого экрана решает спор при слиянии
+    (`profile use-monitors`), поэтому строки идут в порядке `xrandr --listmonitors`,
+    а записи про отсутствующие выходы — следом, в порядке файла. Имя профиля из
+    `[monitors]` остаётся в списке, даже если файла профиля нет: иначе запись
+    нельзя было бы ни поправить, ни убрать.
+    """
+
+    def rows(self, mapping, profiles=(), outputs=()):
+        return zc.monitor_dialog_rows(mapping, list(profiles), list(outputs))
+
+    def test_shared_label_is_the_same_as_for_desktops(self):
+        self.assertEqual(zc.MONITOR_SHARED, zc.WORKSPACE_SHARED)
+
+    def test_row_per_screen_output_in_xrandr_order(self):
+        rows = self.rows({}, [], ["eDP-1", "HDMI-1"])
+        self.assertEqual([row[0] for row in rows], ["eDP-1", "HDMI-1"])
+        self.assertTrue(all(row[4] for row in rows))
+
+    def test_screen_order_beats_file_order(self):
+        # В файле HDMI-2 раньше HDMI-1, а на экране — наоборот: порядок задаёт xrandr.
+        rows = self.rows(
+            {"hdmi-2": "cinema", "hdmi-1": "work"}, ["cinema", "work"],
+            ["HDMI-1", "HDMI-2"],
+        )
+        self.assertEqual([row[0] for row in rows], ["HDMI-1", "HDMI-2"])
+        self.assertEqual([row[1] for row in rows], ["work", "cinema"])
+
+    def test_screen_name_is_taken_from_xrandr(self):
+        # Из файла ключ приходит в нижнем регистре (`ConfigParser`), на экране —
+        # `HDMI-1`: показываем и записываем имя выхода, а не ключ из файла, и не
+        # заводим вторую строку на тот же экран.
+        rows = self.rows({"hdmi-1": "work"}, ["work"], ["HDMI-1"])
+        self.assertEqual(len(rows), 1, rows)
+        output, profile, _options, warning, on_screen = rows[0]
+        self.assertEqual((output, profile, warning, on_screen), ("HDMI-1", "work", "", True))
+
+    def test_unmapped_screen_is_shared_set(self):
+        output, profile, options, warning, on_screen = self.rows(
+            {}, ["cinema", "work"], ["eDP-1"]
+        )[0]
+        self.assertEqual(output, "eDP-1")
+        self.assertIsNone(profile)
+        self.assertEqual(options, [zc.WORKSPACE_SHARED, "cinema", "work"])
+        self.assertEqual(warning, "")
+        self.assertTrue(on_screen)
+
+    def test_absent_output_is_shown_last_with_a_note(self):
+        rows = self.rows({"vga-1": "old"}, ["old"], ["HDMI-1"])
+        self.assertEqual([row[0] for row in rows], ["HDMI-1", "vga-1"])
+        output, profile, options, warning, on_screen = rows[1]
+        self.assertEqual((output, profile), ("vga-1", "old"))
+        self.assertFalse(on_screen)
+        self.assertIn("vga-1", warning)
+        self.assertIn("нет на экране", warning)
+        self.assertEqual(options, [zc.WORKSPACE_SHARED, "old"])
+
+    def test_absent_outputs_keep_file_order(self):
+        rows = self.rows({"vga-1": "old", "dvi-1": "work"}, ["old", "work"], [])
+        self.assertEqual([row[0] for row in rows], ["vga-1", "dvi-1"])
+        self.assertFalse(any(row[4] for row in rows))
+
+    def test_missing_profile_warns_but_keeps_the_mapping(self):
+        output, profile, options, warning, _on = self.rows(
+            {"hdmi-1": "cinema"}, ["work"], ["HDMI-1"]
+        )[0]
+        self.assertEqual(profile, "cinema")
+        self.assertIn("cinema", options)
+        self.assertIn("cinema", warning)
+        self.assertIn("нет на диске", warning)
+
+    def test_absent_output_with_missing_profile_has_both_notes(self):
+        warning = self.rows({"vga-1": "cinema"}, [], ["HDMI-1"])[1][3]
+        self.assertIn("нет на диске", warning)
+        self.assertIn("нет на экране", warning)
+
+    def test_profile_names_from_disk_are_sorted_and_unique(self):
+        options = self.rows({}, ["work", "cinema", "work"], ["eDP-1"])[0][2]
+        self.assertEqual(options, [zc.WORKSPACE_SHARED, "cinema", "work"])
+
+    def test_mapping_from_a_hand_built_dict_is_sanitized(self):
+        self.assertEqual(self.rows({"HDMI-1": "my cinema"}, [], ["HDMI-1"])[0][1],
+                         "my-cinema")
+
+    def test_no_outputs_and_no_mapping_gives_no_rows(self):
+        self.assertEqual(self.rows({}, ["work"], []), [])
+        self.assertEqual(self.rows({}, ["work"], [None, ""]), [])
+
+
+class MonitorMapSaveTest(ConfCase):
+    """Выбор в диалоге -> `save_monitor_map`: порядок строк и целые чужие секции."""
+
+    CONF = (
+        BASE
+        + "[zones]\nmain = 0, 0, 1, 1\n"
+        + "[workspaces]\n1 = work\n"
+        + "[monitors]\nHDMI-2 = cinema\nhdmi-1 = work\nvga-1 = old\n"
+        + "[rules]\nChrome = main\n"
+    )
+
+    def monitors_body(self):
+        """Строки секции `[monitors]` в файле — порядок в них и проверяем."""
+        body, inside = [], False
+        for line in self.read().splitlines():
+            stripped = line.strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                inside = stripped == "[monitors]"
+                continue
+            if inside and stripped:
+                body.append(stripped)
+        return body
+
+    def save_choices(self, picks, outputs=("HDMI-1", "HDMI-2"), profiles=("work", "cinema", "old")):
+        """Пройти те же шаги, что диалог: строки -> выбор -> `save_monitor_map`."""
+        rows = zc.monitor_dialog_rows(
+            zc.load_monitor_map(self.conf), list(profiles), list(outputs)
+        )
+        chosen = {}
+        for output, profile, _options, _warning, _on_screen in rows:
+            text = picks.get(output, profile if profile is not None else zc.MONITOR_SHARED)
+            if text != zc.MONITOR_SHARED:
+                chosen[output] = text
+        zc.save_monitor_map(self.conf, chosen)
+        return rows, chosen
+
+    def test_saved_in_screen_order_and_shared_removes_the_binding(self):
+        self.write(self.CONF)
+        # vga-1 «на экране» нет — его строку видно в диалоге; «общий набор» убирает запись.
+        rows, chosen = self.save_choices(
+            {"HDMI-1": "cinema", "HDMI-2": "work", "vga-1": zc.WORKSPACE_SHARED}
+        )
+        self.assertEqual([row[0] for row in rows], ["HDMI-1", "HDMI-2", "vga-1"])
+        self.assertEqual(list(chosen), ["HDMI-1", "HDMI-2"])
+        self.assertEqual(self.monitors_body(), ["HDMI-1 = cinema", "HDMI-2 = work"])
+        self.assertEqual(list(zc.load_monitor_map(self.conf)), ["hdmi-1", "hdmi-2"])
+        self.assertEqual(zc.load_monitor_map(self.conf)["hdmi-1"], "cinema")
+
+    def test_absent_output_is_not_lost_when_left_as_is(self):
+        # Отключённый выход не трогали — его запись остаётся, и не в начале секции.
+        self.write(self.CONF)
+        _rows, chosen = self.save_choices({})
+        self.assertEqual(list(chosen), ["HDMI-1", "HDMI-2", "vga-1"])
+        self.assertEqual(
+            self.monitors_body(),
+            ["HDMI-1 = work", "HDMI-2 = cinema", "vga-1 = old"],
+        )
+
+    def test_all_shared_removes_the_section(self):
+        self.write(self.CONF)
+        _rows, chosen = self.save_choices(
+            {"HDMI-1": zc.WORKSPACE_SHARED, "HDMI-2": zc.WORKSPACE_SHARED,
+             "vga-1": zc.WORKSPACE_SHARED}
+        )
+        self.assertEqual(chosen, {})
+        self.assertEqual(zc.load_monitor_map(self.conf), {})
+        self.assertNotIn("[monitors]", self.read())
+
+    def test_other_sections_survive_untouched(self):
+        self.write(self.CONF)
+        self.save_choices({"HDMI-1": "cinema", "HDMI-2": "work"})
+        text = self.read()
+        self.assertIn("[zones]\nmain = 0, 0, 1, 1\n", text)
+        self.assertIn("[workspaces]\n1 = work\n", text)
+        self.assertIn("[rules]\nChrome = main\n", text)
+        self.assertEqual([z.name for z in zc.load_zones(self.conf)], ["main"])
 
 
 if __name__ == "__main__":

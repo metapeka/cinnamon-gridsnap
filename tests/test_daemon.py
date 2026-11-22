@@ -34,6 +34,14 @@ reflow не переходят через стол, окна невидимых 
 снимает запись `filled` о покрытой зоне. Отказ запуска полосы (нет GTK — скрипт
 падает на импорте) даёт `failed`, а смерть уже работавшей полосы — перезапуск.
 
+Привязка профиля к экрану: окно кладётся по зонам профиля своего экрана
+(`[monitors]` важнее `[workspaces]`), правила и `[ignore]` — из того же
+профиля, откат при отсутствии привязки или файла профиля — на следующий
+уровень с записью в журнал; `status` считает зоны по разрешённым профилям.
+Отдельно проверяется автозапуск: `install-daemon.sh` пишет две записи —
+`gridsnap-daemon.desktop` и `gridsnap-monitors.desktop` (здесь —
+`profile use-monitors --quiet`), а `--list`/`--remove` видят обе.
+
 Запуск:
     python3 tests/test_daemon.py
 """
@@ -142,6 +150,8 @@ class DaemonTestCase(unittest.TestCase):
         self.metas = {}
         self.reads = []
         self.centers = {}
+        # Фактические рамки окон (для снимка вкладок): окно -> (x, y, w, h).
+        self.rects = {}
         self.current = None
         self.workspaces = {}
         # Инъекции режима «только эта зона»: что свернули/развернули и какой
@@ -195,16 +205,35 @@ class DaemonTestCase(unittest.TestCase):
             read_clients=lambda: self.clients,
         )
 
-    def multi_daemon(self, text=TWO_ZONES, reflow=None, monitors=(WA, WA1)):
-        """Демон с двумя мониторами; монитор окна — по self.centers."""
+    def multi_daemon(
+        self,
+        text=TWO_ZONES,
+        reflow=None,
+        monitors=(WA, WA1),
+        outputs=None,
+        directory=None,
+    ):
+        """Демон с двумя мониторами; монитор окна — по self.centers.
+
+        `outputs` — имена выходов (для `[monitors]`), `directory` — готовый
+        каталог GridSnap с `templates/` (иначе — временный `zones.conf`).
+        """
         if reflow is not None:
             text = text + f"[daemon]\nreflow = {reflow}\n"
+        if directory is None:
+            path = self.conf(text)
+        else:
+            path = self.write(os.path.join(directory, "zones.conf"), text)
         return zd.Daemon(
-            self.conf(text),
+            path,
             apply=self.apply,
             read_meta=self.read_meta,
             monitors=lambda: list(monitors),
+            monitor_outputs=lambda: list(outputs or []),
             window_center=lambda win: self.centers[win],
+            read_rect=lambda win: self.rects.get(win),
+            # Активное окно не читается из X: в тестах его нет.
+            active_window=lambda: None,
             current_workspace=lambda: self.current,
             window_workspace=lambda win: self.workspaces.get(win),
             iconify=self.iconify,
@@ -1150,6 +1179,286 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(
             filled,
             [{"workspace": 1, "monitor": list(WA), "zone": "left", "holder": "0x2"}],
+        )
+
+
+# --- привязка профиля к экрану --------------------------------------------
+
+# Конфиг с привязкой экранов: `[monitors]` важнее `[workspaces]`, а тот —
+# активного набора зон. Профили отличаются и зонами, и правилами — иначе не
+# видно, чей профиль сработал: у work окно firefox идёт в `main` на весь экран,
+# у cinema — в `video` на верхнюю половину, а активный `[rules]` говорит `video`.
+SCREEN_CONF = (
+    "[grid]\ncols = 1.0\nrows = 1.0\n"
+    "[zones]\n"
+    "main = 0, 0, 0.5, 1\n"
+    "video = 0.5, 0, 0.5, 1\n"
+    "[rules]\n"
+    "firefox* = video\n"
+    "[monitors]\n"
+    "HDMI-1 = work\n"
+    "HDMI-2 = cinema\n"
+    "[workspaces]\n"
+    "2 = work\n"
+)
+SCREEN_WORK_PROFILE = (
+    "[grid]\ncols = 1.0\nrows = 1.0\n"
+    "[zones]\n"
+    "main = 0, 0, 1, 1\n"
+    "[rules]\n"
+    "firefox* = main\n"
+)
+SCREEN_CINEMA_PROFILE = (
+    "[grid]\ncols = 1.0\nrows = 1.0\n"
+    "[zones]\n"
+    "video = 0, 0, 1, 0.5\n"
+    "[rules]\n"
+    "firefox* = video\n"
+)
+# Профиль второго экрана для reflow: две половины — соседи по вертикальному ребру.
+SCREEN_REFLOW_PROFILE = (
+    "[grid]\ncols = 1.0\nrows = 1.0\n"
+    "[zones]\n"
+    "left = 0, 0, 0.5, 1\n"
+    "right = 0.5, 0, 0.5, 1\n"
+    "[rules]\n"
+    "firefox* = left\n"
+    "chromium* = right\n"
+)
+# Имена выходов в том же порядке, что monitors=(WA, WA1).
+SCREEN_OUTPUTS = (("HDMI-1", WA), ("HDMI-2", WA1))
+
+
+class TestMonitorProfiles(DaemonTestCase):
+    """Привязка профиля к экрану: `[monitors]` важнее `[workspaces]`.
+
+    Профили живут в `templates/` рядом с `zones.conf` — как у стола; окно
+    кладётся по зонам профиля **своего экрана**, а не того стола, где оно стоит.
+    """
+
+    def screen_daemon(
+        self,
+        conf=SCREEN_CONF,
+        templates=None,
+        reflow=None,
+        outputs=SCREEN_OUTPUTS,
+    ):
+        """Демон с двумя экранами и профилями в `templates/`.
+
+        `templates=None` — оба профиля по умолчанию; иначе — словарь
+        `{имя: текст}`; значение `None` — профиля на диске нет.
+        """
+        if templates is None:
+            templates = {
+                "work": SCREEN_WORK_PROFILE,
+                "cinema": SCREEN_CINEMA_PROFILE,
+            }
+        directory = self.conf_dir()
+        for name, text in templates.items():
+            if text is not None:
+                self.write(os.path.join(directory, "templates", f"{name}.conf"), text)
+        self.current = 1
+        return self.multi_daemon(
+            conf, reflow=reflow, outputs=outputs, directory=directory
+        )
+
+    def open_window(self, win, wm_class, center, workspace=None):
+        """
+ Окно появилось: класс, центр (выбирает экран) и стол.
+
+        `center` в WA1 — второй экран (HDMI-2), в WA — первый (HDMI-1).
+        """
+        self.metas[win] = self.meta(wm_class)
+        self.centers[win] = center
+        self.workspaces[win] = workspace
+
+    # -- зона окна по экрану
+
+    def test_window_uses_zone_of_its_screen_profile(self):
+        # Стол 2 привязан к профилю work (firefox -> main на весь экран), но окно
+        # стоит на втором экране: решает профиль экрана cinema — video, 0..1 x
+        # 0..0.5 рабочей области WA1 (1000, 0, 800, 600).
+        self.open_window(0x1, "firefox-esr", (1400, 300), workspace=1)
+        d = self.screen_daemon()
+        d.on_map(0x1)
+        self.assertEqual(self.applied, [(0x1, (1000, 0, 800, 300), "video", True)])
+        self.assertEqual(d.win_monitor, {0x1: WA1})
+        self.assertEqual(d.win_workspace, {0x1: 1})
+
+    def test_rules_come_from_the_same_profile(self):
+        # Активный [rules] говорит firefox -> video, а профиль экрана HDMI-1
+        # (work) — firefox -> main: правило берётся из профиля окна.
+        self.open_window(0x1, "firefox-esr", (500, 500), workspace=0)
+        d = self.screen_daemon()
+        d.on_map(0x1)
+        self.assertEqual(self.applied, [(0x1, (0, 0, 1000, 1000), "main", True)])
+
+    def test_window_ignored_by_screen_profile_is_not_placed(self):
+        # В профиле экрана своё [ignore] — окно, которое активный конфиг трогает,
+        # на этом экране остаётся в покое.
+        templates = {
+            "work": SCREEN_WORK_PROFILE,
+            "cinema": SCREEN_CINEMA_PROFILE + "[ignore]\nfirefox* = своё окно\n",
+        }
+        self.open_window(0x1, "firefox-esr", (1400, 300), workspace=0)
+        d = self.screen_daemon(templates=templates)
+        d.on_map(0x1)
+        self.assertEqual(self.applied, [])
+        self.assertEqual(d.windows, {})
+
+    # -- откат, когда привязки нет или профиль пропал
+
+    def test_screen_without_binding_uses_desktop_profile(self):
+        # У HDMI-2 привязки нет: второй экран живёт по профилю стола (work), то
+        # есть firefox встаёт в main на весь экран, а не в video активного набора.
+        conf = SCREEN_CONF.replace("HDMI-2 = cinema\n", "")
+        self.open_window(0x1, "firefox-esr", (1400, 300), workspace=1)
+        d = self.screen_daemon(conf=conf)
+        d.on_map(0x1)
+        self.assertEqual(self.applied, [(0x1, (1000, 0, 800, 600), "main", True)])
+
+    def test_missing_screen_profile_falls_back_to_desktop_with_log(self):
+        # Привязка `HDMI-2 = cinema` есть, а файла cinema.conf нет: откат на
+        # профиль стола work с записью в журнал, демон жив и кладёт следующие окна.
+        templates = {"work": SCREEN_WORK_PROFILE, "cinema": None}
+        self.open_window(0x1, "firefox-esr", (1400, 300), workspace=1)
+        d = self.screen_daemon(templates=templates)
+        d.verbose = True
+        with mock.patch("builtins.print") as printed:
+            d.on_map(0x1)
+        lines = " ".join(str(call.args[0]) for call in printed.call_args_list)
+        self.assertIn("профиля «cinema» (экрана HDMI-2) нет на диске", lines)
+        self.assertIn("беру следующий уровень", lines)
+        self.assertEqual(self.applied, [(0x1, (1000, 0, 800, 600), "main", True)])
+        # Демон продолжает работать: окно на первом экране встаёт в work.
+        self.applied.clear()
+        self.open_window(0x2, "firefox-esr", (500, 500), workspace=0)
+        d.on_map(0x2)
+        self.assertEqual(self.applied, [(0x2, (0, 0, 1000, 1000), "main", True)])
+
+    def test_missing_desktop_profile_falls_back_to_active_conf(self):
+        # Ни экран (HDMI-2 без привязки), ни стол (профиль work пропал) не дали
+        # сетку — остаётся активный zones.conf, и окно кладётся по его правилам.
+        conf = SCREEN_CONF.replace("HDMI-2 = cinema\n", "")
+        self.open_window(0x1, "firefox-esr", (1400, 300), workspace=1)
+        d = self.screen_daemon(conf=conf, templates={"work": None})
+        d.on_map(0x1)
+        # Активный набор: video = 0.5, 0, 0.5, 1 на WA1.
+        self.assertEqual(self.applied, [(0x1, (1400, 0, 400, 600), "video", True)])
+
+    def test_unknown_output_name_keeps_working(self):
+        # Монитор не сопоставился с именем выхода (нет xrandr): окно живёт по
+        # профилю стола, как до волны, и раскладка не отваливается.
+        self.open_window(0x1, "firefox-esr", (1400, 300), workspace=1)
+        d = self.screen_daemon(outputs=())
+        d.on_map(0x1)
+        self.assertEqual(self.applied, [(0x1, (1000, 0, 800, 600), "main", True)])
+
+    def test_reload_picks_up_new_monitor_binding(self):
+        # Привязку добавили правкой конфига — reload подхватывает её без рестарта.
+        conf = SCREEN_CONF.replace("[monitors]\nHDMI-1 = work\nHDMI-2 = cinema\n", "")
+        self.open_window(0x1, "firefox-esr", (500, 500), workspace=0)
+        d = self.screen_daemon(conf=conf)
+        d.on_map(0x1)
+        # Без привязки экрана стол 1 живёт активным набором: firefox -> video.
+        self.assertEqual(self.applied, [(0x1, (500, 0, 500, 1000), "video", True)])
+        self.write(d.conf_path, SCREEN_CONF)
+        d.ipc_reload()
+        self.applied.clear()
+        self.open_window(0x2, "firefox-esr", (1400, 300), workspace=0)
+        d.on_map(0x2)
+        self.assertEqual(self.applied, [(0x2, (1000, 0, 800, 300), "video", True)])
+
+    # -- reflow и вкладки — на сетке того же профиля
+
+    def test_reflow_uses_screen_profile_geometry(self):
+        # Окно в левой половине экрана закрылось: сосед справа расширяется по
+        # долям профиля экрана. В активном наборе зон left/right нет вовсе.
+        templates = {"work": SCREEN_WORK_PROFILE, "cinema": SCREEN_REFLOW_PROFILE}
+        self.open_window(0x1, "firefox-esr", (1200, 500), workspace=1)
+        self.open_window(0x2, "chromium", (1600, 500), workspace=1)
+        d = self.screen_daemon(templates=templates, reflow="neighbors")
+        d.on_map(0x1)
+        d.on_map(0x2)
+        self.assertEqual(
+            self.applied,
+            [
+                (0x1, (1000, 0, 400, 600), "left", True),
+                (0x2, (1400, 0, 400, 600), "right", True),
+            ],
+        )
+        self.applied.clear()
+        d.on_destroy(0x1)
+        self.assertEqual(self.applied, [(0x2, (1000, 0, 800, 600), "right", True)])
+        self.assertEqual(d.filled, {filled_key(WA1, "left", 1): 0x2})
+
+    def test_tabs_snapshot_uses_screen_profile_zones(self):
+        # Две вкладки на втором экране: снимок полосы считает зону по профилю
+        # cinema (video — верхняя половина экрана), а не по активному набору
+        # (там video — правая половина другого монитора).
+        self.open_window(0x1, "firefox-esr", (1200, 100), workspace=1)
+        self.open_window(0x2, "firefox-esr", (1300, 120), workspace=1)
+        d = self.screen_daemon()
+        d.on_map(0x1)
+        d.on_map(0x2)
+        # Обе стоят на общей рамке вкладок: зона cinema минус полоса 22 px.
+        self.rects = {0x1: (1000, 22, 800, 278), 0x2: (1000, 22, 800, 278)}
+        records = d.tabs_picture()
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["zone"], "video")
+        self.assertEqual(records[0]["rect"], [1000, 0, 800, 22])
+        self.assertEqual([tab["window"] for tab in records[0]["tabs"]], [0x1, 0x2])
+
+    def test_collapsed_tab_uses_screen_profile_zone(self):
+        # Из стопки ушла одна вкладка: оставшаяся занимает зону целиком по
+        # геометрии профиля экрана (cinema: video — верхняя половина), а не по
+        # сетке стола.
+        self.open_window(0x1, "firefox-esr", (1200, 100), workspace=1)
+        self.open_window(0x2, "firefox-esr", (1300, 120), workspace=1)
+        d = self.screen_daemon()
+        d.on_map(0x1)
+        d.on_map(0x2)
+        self.applied.clear()
+        d.on_destroy(0x2)
+        self.assertEqual(self.applied, [(0x1, (1000, 0, 800, 300), "video", True)])
+
+    # -- status — по разрешённым профилям
+
+    def test_status_reports_zones_of_resolved_profiles(self):
+        self.open_window(0x1, "firefox-esr", (1400, 300), workspace=0)
+        d = self.screen_daemon()
+        d.on_map(0x1)
+        status = d.ipc_status()
+        # Форма прежняя: zones — доли, zones_px — рамки на каждый монитор.
+        self.assertEqual(status["monitors"], [list(WA), list(WA1)])
+        self.assertEqual(
+            status["zones"],
+            {"main": [0, 0, 1, 1], "video": [0, 0, 1, 0.5]},
+        )
+        self.assertEqual(
+            status["zones_px"],
+            {"main": [[0, 0, 1000, 1000], None], "video": [None, [1000, 0, 800, 300]]},
+        )
+        self.assertEqual(
+            status["windows"],
+            [
+                {
+                    "window": "0x1",
+                    "zone": "video",
+                    "monitor": list(WA1),
+                    "workspace": 0,
+                }
+            ],
+        )
+
+    def test_status_without_monitor_bindings_is_unchanged(self):
+        # Привязок экранов нет: status считает по активному конфигу, как раньше
+        # (в том числе зона на каждом мониторе).
+        d = self.multi_daemon(TWO_ZONES)
+        status = d.ipc_status()
+        self.assertEqual(sorted(status["zones"]), ["left", "right"])
+        self.assertEqual(
+            status["zones_px"]["left"], [[0, 0, 500, 1000], [1000, 0, 400, 600]]
         )
 
 
@@ -2984,6 +3293,64 @@ class TestServeLoop(unittest.TestCase):
         dae.x11 = None
         zd._restore_focus_on_exit(dae)
         self.assertIsNone(dae.focus)
+
+
+INSTALL_DAEMON = os.path.join(ROOT, "install-daemon.sh")
+
+
+class TestAutostart(unittest.TestCase):
+    """Автозапуск: `install-daemon.sh` кладёт демон и привязку профилей к экранам.
+
+    `.desktop` в пакете нет: его пишет скрипт установки в
+    `$XDG_CONFIG_HOME/autostart` (как у демона), поэтому проверяется поведение
+    скрипта, а не файл в репозитории.
+    """
+
+    def run_script(self, home, *args):
+        env = dict(os.environ, XDG_CONFIG_HOME=home)
+        return subprocess.run(
+            ["bash", INSTALL_DAEMON, *args], text=True, capture_output=True, env=env
+        )
+
+    def test_install_writes_daemon_and_monitors_entries(self):
+        with tempfile.TemporaryDirectory() as home:
+            r = self.run_script(home)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            daemon_entry = os.path.join(home, "autostart", "gridsnap-daemon.desktop")
+            monitors_entry = os.path.join(
+                home, "autostart", "gridsnap-monitors.desktop"
+            )
+            self.assertTrue(os.path.exists(daemon_entry))
+            self.assertTrue(os.path.exists(monitors_entry))
+            with open(monitors_entry, encoding="utf-8") as fh:
+                text = fh.read()
+            self.assertIn("[Desktop Entry]", text)
+            # Exec — тот же каталог, что у скрипта, и зафиксированные флаги команды.
+            self.assertIn(
+                f"Exec=python3 {ROOT}/zone-tiler.py profile use-monitors --quiet", text
+            )
+            self.assertIn("X-GNOME-Autostart-enabled=true", text)
+
+    def test_list_and_remove_cover_both_entries(self):
+        with tempfile.TemporaryDirectory() as home:
+            self.assertEqual(self.run_script(home).returncode, 0)
+            listed = self.run_script(home, "--list")
+            self.assertEqual(listed.returncode, 0)
+            self.assertIn("gridsnap-daemon.desktop", listed.stdout)
+            self.assertIn("gridsnap-monitors.desktop", listed.stdout)
+            self.assertIn("profile use-monitors --quiet", listed.stdout)
+            removed = self.run_script(home, "--remove")
+            self.assertEqual(removed.returncode, 0)
+            for name in ("gridsnap-daemon.desktop", "gridsnap-monitors.desktop"):
+                self.assertFalse(
+                    os.path.exists(os.path.join(home, "autostart", name)), name
+                )
+
+    def test_unknown_flag_is_argument_error(self):
+        with tempfile.TemporaryDirectory() as home:
+            r = self.run_script(home, "--nope")
+            self.assertEqual(r.returncode, 2)
+            self.assertIn("неизвестный флаг", r.stderr)
 
 
 class TestCli(unittest.TestCase):
