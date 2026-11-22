@@ -757,7 +757,12 @@ What is in the menu, which settings exist and what the limits are — in `contri
 * a zone with zero area is not saved: the minimum size is 5% of the screen;
 * Wayland is not supported, but Cinnamon runs on X11;
 * after editing `zones.conf` by hand, re-run `setup-hotkeys.py`, otherwise the new zone names will
-  not be bound to keys.
+  not be bound to keys;
+* on HiDPI (`GDK_SCALE` above 1) a zone is still a fraction, but of the **physical** work area X
+  sees, so the grid matches what is on screen — the editor, the picker and the tiler all give the
+  same frame. Verified on `Xvfb` with `GDK_SCALE=2` (`tests/smoke-dpi.sh`), but not on a real HiDPI
+  monitor and not with Cinnamon's fractional scaling (that one stretches the output, where X and GTK
+  are in the same pixels anyway).
 
 <!-- section: checks -->
 ## 12. The checks that were run
@@ -765,12 +770,16 @@ What is in the menu, which settings exist and what the limits are — in `contri
 * unit tests without X (parser, rules, reflow, daemon, the `zone_ipc` IPC, the config layer and the
   bindings of profiles to screens, arrange/undo, the tab core `zone_tabs`, the strip navigation
   `zone_tabstrip_nav`, the editor geometry `zone_geom`, the zone picker navigation
-  `zone_picker_nav`, the action core `zone_actions` and the parsing of `[action:<name>]` together
-  with running an action): `python3 -m unittest discover -s tests -v`;
+  `zone_picker_nav`, the unit conversion `zone_units`, the action core `zone_actions` and the parsing
+  of `[action:<name>]` together with running an action):
+  `python3 -m unittest discover -s tests -v`;
 * a smoke test on its own Xvfb: `sh tests/smoke.sh` (the window goes into the zone pixel for pixel);
 * an arrange+undo smoke test: `sh tests/smoke-arrange.sh` (three windows are laid out and restored);
 * a zone picking smoke test: `sh tests/smoke-picker.sh` (`Right` + `Enter` put the window into
   `top-right` pixel for pixel, `Esc` cancels);
+* a HiDPI smoke test: `sh tests/smoke-dpi.sh` raises its own Xvfb with `GDK_SCALE=2` and checks that
+  the tiler, the picker overlay, the HUD and the overlay window all count from the physical work area
+  (`_NET_WORKAREA`), not from the logical one GTK reports;
 * a window exclusion smoke test: `sh tests/smoke-ignore.sh` (an excluded window is moved by neither
   `apply`, nor `arrange`, nor the daemon, nor the picker, and a window carried out of a zone does not
   come back even after a daemon restart);
