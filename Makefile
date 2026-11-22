@@ -49,6 +49,25 @@ APPLET_SRC  := contrib/applet/gridsnap@metapeka/applet.js
 APPLET_NAME := gridsnap@metapeka
 APPLET_DIR  := po/$(APPLET_NAME)
 
+# Man-страницы — не gettext-домен, а локализованные страницы: po4a делает .po из
+# roff, а собранные страницы ставятся в /usr/share/man/<язык>/man1/ (man-db сам
+# выбирает по локали). Язык-источник — русский, как и у строк: каталога `ru.po`
+# нет, русская страница кладётся копией источника. `po4a-translate` переливает
+# roff (абзацы, `.B x` → `\fBx\fP`), поэтому пересобирать ею рукописную
+# русскую страницу нельзя — она бы перестала быть тем, что вычитывали.
+MAN_BUILD      := man/build
+MAN_SOURCE     := man/gridsnap.1
+MAN_ALIASES    := gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
+                  gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1
+MAN_DEFAULT    := en
+MAN_TRANSLATED := en zh_CN
+MAN_LANGS      := $(MAN_TRANSLATED) ru
+MAN_PO_DIR     := po/man
+MAN_PO4A_CONF  := man/po4a.conf
+MAN_POT        := $(MAN_PO_DIR)/gridsnap.1.pot
+MAN_PO         := $(foreach l,$(MAN_TRANSLATED),$(MAN_PO_DIR)/$(l).po)
+MAN_PAGES      := $(MAN_SOURCE) $(addprefix man/,$(MAN_ALIASES))
+
 RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.md Makefile PKGBUILD
 # `locale/` — сборка (`make mo`), но в tar.gz она обязательна: иначе install.sh
 # из архива нечего ставить. Поэтому tarball зависит от mo.
@@ -57,7 +76,10 @@ MANPAGES := gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
             gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1
 ICON_SIZES := 16 22 24 32 48 64 128 256 512
 ICON_RECIPES := $(foreach s,$(ICON_SIZES),install -Dm0644 "icons/gridsnap-$(s).png" "$(DEBROOT)/usr/share/icons/hicolor/$(s)x$(s)/apps/gridsnap.png";)
-MAN_RECIPES := $(foreach p,$(MANPAGES),install -Dm0644 "man/$(p)" "$(DEBROOT)/usr/share/man/man1/$(p)";)
+MAN_RECIPES := $(foreach p,$(MANPAGES),\
+                 install -Dm0644 "$(MAN_BUILD)/$(MAN_DEFAULT)/man1/$(p)" "$(DEBROOT)/usr/share/man/man1/$(p)";\
+                 install -Dm0644 "$(MAN_BUILD)/ru/man1/$(p)" "$(DEBROOT)/usr/share/man/ru/man1/$(p)";\
+                 install -Dm0644 "$(MAN_BUILD)/zh_CN/man1/$(p)" "$(DEBROOT)/usr/share/man/zh_CN/man1/$(p)";)
 # Каталоги переводов: по домену на язык (`make mo` собирает их из .po).
 MO_RECIPES := $(foreach l,$(LANGS),\
                 install -Dm0644 "$(LOCALEDIR)/$(l)/LC_MESSAGES/$(PKG).mo" \
@@ -65,7 +87,8 @@ MO_RECIPES := $(foreach l,$(LANGS),\
                 install -Dm0644 "$(LOCALEDIR)/$(l)/LC_MESSAGES/$(APPLET_NAME).mo" \
                   "$(DEBROOT)/usr/share/locale/$(l)/LC_MESSAGES/$(APPLET_NAME).mo";)
 
-.PHONY: all tarball deb aur version clean check-version pot mo check-i18n
+.PHONY: all tarball deb aur version clean check-version pot mo check-i18n \
+        man-pot man check-man-i18n
 
 all: tarball deb
 
@@ -136,9 +159,52 @@ check-i18n: mo
 			echo "make: $(APPLET_DIR)/$(APPLET_NAME).pot разошёлся с кодом — запустите make pot" >&2; exit 1; }
 	@echo "каталоги в порядке"
 
+# ------------------------------------------------------ локализация man
+
+# `make man-pot` — пересобрать шаблон po4a из исходной страницы. Заодно po4a
+# подтягивает новые `msgid` в существующие каталоги (`msgmerge`), поэтому после
+# правки `man/gridsnap.1` сначала он, потом перевод.
+man-pot:
+	@command -v po4a >/dev/null 2>&1 || { \
+		echo "make: нужен po4a (Debian: apt install po4a)" >&2; exit 1; }
+	po4a --no-translations "$(MAN_PO4A_CONF)"
+	@echo "обновлён $(MAN_POT)"
+
+# `make man` — собрать страницы в man/build/<язык>/man1/: en и zh_CN через
+# po4a, ru — копией источника, шесть `.so`-псевдонимов — копией во все три
+# языка (man-db резолвит `.so man1/gridsnap.1` внутри языка — проверено).
+# `--keep 0` — писать страницу и при неполном каталоге: полноту проверяет
+# `check-man-i18n`, а не молчаливое отсутствие файла.
+man:
+	@command -v po4a >/dev/null 2>&1 || { \
+		echo "make: нужен po4a (Debian: apt install po4a)" >&2; exit 1; }
+	po4a --no-update --keep 0 "$(MAN_PO4A_CONF)"
+	@mkdir -p $(foreach l,$(MAN_LANGS),"$(MAN_BUILD)/$(l)/man1")
+	cp "$(MAN_SOURCE)" "$(MAN_BUILD)/ru/man1/gridsnap.1"
+	@for lang in $(MAN_LANGS); do \
+		for page in $(MAN_ALIASES); do \
+			cp "man/$$page" "$(MAN_BUILD)/$$lang/man1/$$page"; \
+		done; \
+	done
+	@echo "собраны страницы в $(MAN_BUILD)/"
+
+# `check-man-i18n` — то, что гоняет CI: каталоги полны (тест на Python, без
+# gettext), страницы собираются, man-db не ругается ни на одну из трёх, а
+# русская страница байт-в-байт равна источнику.
+check-man-i18n: man
+	@$(PYTHON) tests/test_man_i18n.py
+	@for lang in $(MAN_LANGS); do \
+		page="$(MAN_BUILD)/$$lang/man1/gridsnap.1"; \
+		man --warnings -E UTF-8 -l "$$page" >/dev/null 2>&1 || { \
+			echo "make: man --warnings ругается на $$page" >&2; exit 1; }; \
+	done
+	@cmp -s "$(MAN_SOURCE)" "$(MAN_BUILD)/ru/man1/gridsnap.1" || { \
+		echo "make: русская страница разошлась с $(MAN_SOURCE)" >&2; exit 1; }
+	@echo "man-страницы в порядке"
+
 # --------------------------------------------------------------- tar.gz
 
-tarball: check-version mo
+tarball: check-version mo man
 	@rm -rf "$(TARDIR)"
 	@mkdir -p "$(TARDIR)" "$(DIST)"
 	@cp -a $(RELEASE_FILES) "$(TARDIR)/"
@@ -159,7 +225,7 @@ endef
 
 # man-страницы: в debian/ их сжимает dh_compress, а здесь debhelper нет, поэтому
 # gzip -9n из обязательного пакета gzip (в .deb страницы лежат .gz).
-deb: check-version mo
+deb: check-version mo man
 	@rm -rf "$(DEBROOT)"
 	@mkdir -p "$(DEBROOT)/DEBIAN" "$(DEBROOT)$(DATADIR)" \
 	          "$(DEBROOT)$(BINDIR)" "$(DEBROOT)/usr/share/applications" \
@@ -173,7 +239,7 @@ deb: check-version mo
 	@install -m 0644 README.md SPEC.md "$(DEBROOT)/usr/share/doc/$(PKG)/"
 
 	@$(MAN_RECIPES)
-	@cd "$(DEBROOT)/usr/share/man/man1" && gzip -9n *.1
+	@find "$(DEBROOT)/usr/share/man" -name '*.1' -exec gzip -9n {} +
 
 	@$(MO_RECIPES)
 
@@ -233,5 +299,5 @@ aur: check-version
 	@echo "рецепт AUR: $(DIST)/PKGBUILD (pkgver=$(AUR_VERSION), pkgrel из файла)"
 
 clean:
-	@rm -rf "$(BUILD)" "$(DIST)"
-	@echo "удалены $(BUILD)/ и $(DIST)/"
+	@rm -rf "$(BUILD)" "$(DIST)" "$(MAN_BUILD)"
+	@echo "удалены $(BUILD)/, $(DIST)/ и $(MAN_BUILD)/"
