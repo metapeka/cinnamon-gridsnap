@@ -47,6 +47,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402  # typ
 
 import zone_config as zc  # noqa: E402
 import zone_picker_nav as nav  # noqa: E402
+from zone_i18n import _  # noqa: E402  (там же: строки интерфейса и их перевод)
 
 zt = zc.zt  # zone-tiler.py, загруженный zone_config (парсер конфига и раскладка)
 
@@ -57,7 +58,7 @@ PALETTE = [
 ]
 ACCENT = (1.0, 0.71, 0.33)
 BACKDROP = (0.07, 0.08, 0.10)
-HINT = "стрелки — выбор · Enter — вложить · Esc — отмена"
+HINT = _("стрелки — выбор · Enter — вложить · Esc — отмена")
 # Подложка HUD и пауза однократной отрисовки: сетку видно, рабочий стол — тоже,
 # а сам процесс после кадра не висит.
 HUD_ALPHA = 0.25
@@ -134,12 +135,12 @@ def workspace_caption(workspace, profile):
     общий ``[zones]``, и подписывать нечего.
     """
     if workspace == zt.WORKSPACE_CONF:
-        return "zones.conf, без профилей столов"
+        return _("zones.conf, без профилей столов")
     if not isinstance(workspace, int):
         return ""
     if profile:
-        return f"стол {workspace + 1} · профиль «{profile}»"
-    return f"стол {workspace + 1} · общий набор"
+        return _("стол {} · профиль «{}»").format(workspace + 1, profile)
+    return _("стол {} · общий набор").format(workspace + 1)
 
 
 def screen_caption(workspace, profile, output, screen_profile):
@@ -150,7 +151,7 @@ def screen_caption(workspace, profile, output, screen_profile):
     нарисовал зоны того же профиля, что положит раскладчик на этом экране.
     """
     if screen_profile:
-        return f"экран {output} · профиль «{screen_profile}»"
+        return _("экран {} · профиль «{}»").format(output, screen_profile)
     return workspace_caption(workspace, profile)
 
 
@@ -162,8 +163,8 @@ def hud_caption(profile, output=None, screen_profile=None):
     интерактивном оверлее, но без номера стола: рисовать больше нечего.
     """
     if screen_profile:
-        return f"экран {output} · профиль «{screen_profile}»"
-    return f"профиль «{profile}»" if profile else ""
+        return _("экран {} · профиль «{}»").format(output, screen_profile)
+    return _("профиль «{}»").format(profile) if profile else ""
 
 
 def describe_grid(zones, caption):
@@ -172,8 +173,10 @@ def describe_grid(zones, caption):
     Нужна ``--dry-run`` и ``--shot``: по ней видно, какая сетка нарисована, не
     разглядывая оверлей (это и проверяет ``tests/smoke-picker-workspace.sh``).
     """
-    head = f"{caption} · " if caption else ""
-    return head + f"зон {len(zones)}: " + ", ".join(z.name for z in zones)
+    head = _("{} · ").format(caption) if caption else ""
+    return _("{}зон {}: {}").format(
+        head, len(zones), ", ".join(z.name for z in zones)
+    )
 
 
 # ------------------------------------------------------------------- рисование
@@ -335,7 +338,7 @@ class Picker:
         self._grab_tries = 0
 
         self.win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
-        title = "Gridsnap — выбор зоны"
+        title = _("Gridsnap — выбор зоны")
         if caption:
             title += f" ({caption})"
         self.win.set_title(title)
@@ -392,7 +395,7 @@ class Picker:
                 return False
         except Exception as exc:  # окно могло быть не готово — пробуем ещё раз
             if self._grab_tries >= 10:
-                print(f"zone-picker: клавиатуру взять не удалось: {exc}", file=sys.stderr)
+                print(_("zone-picker: клавиатуру взять не удалось: {}").format(exc), file=sys.stderr)
         return self._grab_tries < 10
 
     def release_grab(self):
@@ -400,7 +403,7 @@ class Picker:
             if self._seat is not None:
                 self._seat.ungrab()
         except Exception as exc:
-            print(f"zone-picker: не удалось отпустить клавиатуру: {exc}", file=sys.stderr)
+            print(_("zone-picker: не удалось отпустить клавиатуру: {}").format(exc), file=sys.stderr)
         self._seat = None
 
     def on_key(self, _widget, ev):
@@ -462,17 +465,23 @@ class Picker:
         rect = self.grid.rect(name, self.wa, self.output)
         x, y, w, h = rect
         if self.args.dry_run:
-            print(f"{name}: x={x} y={y} {w}x{h} (монитор {self.mon_index})")
+            print(
+                _("{}: x={} y={} {}x{} (монитор {})").format(
+                    name, x, y, w, h, self.mon_index
+                )
+            )
             return
         win = self.win_id if self.win_id is not None else active_window_quiet()
         if win is None:
-            print("zone-picker: нет активного окна", file=sys.stderr)
+            print(_("zone-picker: нет активного окна"), file=sys.stderr)
             self.exit_code = EXIT_FAIL
             return
         if zt.window_is_excluded(win, self.grid.ignore):
             print(
-                f"zone-picker: окно 0x{win:x} под исключением "
-                "([ignore]/служебный тип) — не двигаю",
+                _(
+                    "zone-picker: окно 0x{:x} под исключением "
+                    "([ignore]/служебный тип) — не двигаю"
+                ).format(win),
                 file=sys.stderr,
             )
             self.exit_code = EXIT_FAIL
@@ -521,7 +530,9 @@ def point_spec(text):
     """``--at X,Y``: точка или понятная ошибка аргументов (код 2)."""
     point = parse_point(text)
     if point is None:
-        raise argparse.ArgumentTypeError(f"нужны экранные координаты X,Y, а не {text!r}")
+        raise argparse.ArgumentTypeError(
+            _("нужны экранные координаты X,Y, а не {!r}").format(text)
+        )
     return point
 
 
@@ -541,11 +552,11 @@ class Hud:
         self.caption = caption
         self.selected = None
         self._buf = ""
-        self.input_mode = "нет"
+        self.input_mode = _("нет")
 
         width, height = wa[2], wa[3]
         self.win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
-        title = "Gridsnap — сетка"
+        title = _("Gridsnap — сетка")
         if caption:
             title += f" ({caption})"
         self.win.set_title(title)
@@ -590,20 +601,20 @@ class Hud:
         """
         gdk_win = self.win.get_window()
         if gdk_win is None:
-            print("zone-picker: у HUD нет Gdk-окна — ввод не отключить", file=sys.stderr)
-            return "нет окна"
+            print(_("zone-picker: у HUD нет Gdk-окна — ввод не отключить"), file=sys.stderr)
+            return _("нет окна")
         used = []
         try:
             gdk_win.input_shape_combine_region(cairo.Region(), 0, 0)
             used.append("input_shape_combine_region")
         except Exception as exc:  # X-сервер без SHAPE
-            print(f"zone-picker: input shape не поставить: {exc}", file=sys.stderr)
+            print(_("zone-picker: input shape не поставить: {}").format(exc), file=sys.stderr)
         try:
             gdk_win.set_pass_through(True)
             used.append("set_pass_through")
         except Exception as exc:  # старый GTK
-            print(f"zone-picker: set_pass_through не сработал: {exc}", file=sys.stderr)
-        return " + ".join(used) if used else "нет"
+            print(_("zone-picker: set_pass_through не сработал: {}").format(exc), file=sys.stderr)
+        return " + ".join(used) if used else _("нет")
 
     # ---- точка снаружи
 
@@ -622,7 +633,7 @@ class Hud:
         и точка дошла, не разглядывая окно.
         """
         index = self.set_point(point)
-        name = self.zones[index].name if index is not None else "мимо зон"
+        name = self.zones[index].name if index is not None else _("мимо зон")
         print(f"zone-picker: {point[0]},{point[1]} -> {name}", flush=True)
         return index
 
@@ -667,7 +678,7 @@ def follow_stdin(hud):
         try:
             chunk = os.read(fd, 4096)
         except OSError as exc:
-            print(f"zone-picker: stdin не читается: {exc}", file=sys.stderr)
+            print(_("zone-picker: stdin не читается: {}").format(exc), file=sys.stderr)
             chunk = b""
         if not chunk:  # EOF или HUP: кормить больше некому
             Gtk.main_quit()
@@ -693,41 +704,75 @@ def follow_stdin(hud):
 def parse_args(argv):
     ap = argparse.ArgumentParser(
         prog="zone-picker.py",
-        description="Оверлей визуального выбора зоны: стрелки, Enter — вложить, Esc — отмена.",
+        description=_(
+            "Оверлей визуального выбора зоны: стрелки, Enter — вложить, Esc — отмена."
+        ),
     )
-    ap.add_argument("--conf", metavar="PATH", help="конфиг зон (по умолчанию ~/.config/gridsnap/zones.conf)")
-    ap.add_argument("--shot", metavar="FILE.png", help="отрисовать оверлей в PNG и выйти (без интерактива)")
-    ap.add_argument("--dry-run", action="store_true", help="не двигать окно, только показать выбранную зону")
-    ap.add_argument("--window", type=lambda s: int(s, 0), metavar="XID", help="окно для вложения (по умолчанию активное)")
-    ap.add_argument("--monitor", type=int, metavar="N", help="монитор (по умолчанию — монитор активного окна)")
-    ap.add_argument("--select", metavar="ЗОНА", help="начальное выделение по имени зоны")
+    ap.add_argument(
+        "--conf",
+        metavar="PATH",
+        help=_("конфиг зон (по умолчанию ~/.config/gridsnap/zones.conf)"),
+    )
+    ap.add_argument(
+        "--shot",
+        metavar="FILE.png",
+        help=_("отрисовать оверлей в PNG и выйти (без интерактива)"),
+    )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=_("не двигать окно, только показать выбранную зону"),
+    )
+    ap.add_argument(
+        "--window",
+        type=lambda s: int(s, 0),
+        metavar="XID",
+        help=_("окно для вложения (по умолчанию активное)"),
+    )
+    ap.add_argument(
+        "--monitor",
+        type=int,
+        metavar="N",
+        help=_("монитор (по умолчанию — монитор активного окна)"),
+    )
+    ap.add_argument(
+        "--select", metavar=_("ЗОНА"), help=_("начальное выделение по имени зоны")
+    )
     ap.add_argument(
         "--workspace",
         metavar="N|current|conf",
         default=None,
         type=zt.workspace_spec,
-        help=(
+        help=_(
             "рабочий стол для сетки: номер (EWMH, с нуля), current (сетка активного "
             "стола — по умолчанию) или conf (всегда zones.conf, без профилей столов)"
         ),
     )
-    ap.add_argument("--verify", action="store_true", help="сверить рамку окна после вложения")
-    ap.add_argument("--quiet", action="store_true", help="не печатать строку о вложении")
+    ap.add_argument(
+        "--verify", action="store_true", help=_("сверить рамку окна после вложения")
+    )
+    ap.add_argument(
+        "--quiet", action="store_true", help=_("не печатать строку о вложении")
+    )
     ap.add_argument(
         "--hud",
         action="store_true",
-        help="пассивная сетка с подсветкой зоны под точкой (для перетаскивания: без фокуса и ввода)",
+        help=_(
+            "пассивная сетка с подсветкой зоны под точкой (для перетаскивания: без фокуса и ввода)"
+        ),
     )
     ap.add_argument(
         "--at",
         metavar="X,Y",
         type=point_spec,
-        help="--hud: точка подсветки в экранных координатах (один кадр и выход)",
+        help=_("--hud: точка подсветки в экранных координатах (один кадр и выход)"),
     )
     ap.add_argument(
         "--follow",
         action="store_true",
-        help="--hud: читать точки «X Y» из stdin и перерисовывать подсветку (EOF/SIGTERM — выход)",
+        help=_(
+            "--hud: читать точки «X Y» из stdin и перерисовывать подсветку (EOF/SIGTERM — выход)"
+        ),
     )
     ap.add_argument("--version", action="version", version=f"zone-picker {zt.VERSION}")
     args = ap.parse_args(argv)
@@ -750,25 +795,38 @@ def validate_args(ap, args):
     """
     if not args.hud:
         if args.at is not None or args.follow:
-            ap.error("zone-picker: --at и --follow работают только вместе с --hud")
+            ap.error(_("zone-picker: --at и --follow работают только вместе с --hud"))
         return
     bad = [name for name in HUD_INCOMPATIBLE if getattr(args, name)]
     if bad:
         flags = ", ".join("--" + name.replace("_", "-") for name in bad)
-        ap.error(f"zone-picker: --hud несовместим с {flags}: HUD только рисует сетку")
+        ap.error(
+            _("zone-picker: --hud несовместим с {}: HUD только рисует сетку").format(
+                flags
+            )
+        )
     if args.at is not None and args.follow:
-        ap.error("zone-picker: --at и --follow взаимоисключающие: --at — один кадр, --follow — поток")
+        ap.error(
+            _(
+                "zone-picker: --at и --follow взаимоисключающие: --at — один кадр, "
+                "--follow — поток"
+            )
+        )
     if args.at is None and not args.follow:
-        ap.error("zone-picker: для --hud нужен источник точки: --at X,Y или --follow")
+        ap.error(_("zone-picker: для --hud нужен источник точки: --at X,Y или --follow"))
     if args.follow and args.shot:
-        ap.error("zone-picker: --shot не работает с --follow: снимок — это один кадр (--at)")
+        ap.error(
+            _(
+                "zone-picker: --shot не работает с --follow: снимок — это один кадр (--at)"
+            )
+        )
 
 
 def main(argv=None):
     args = parse_args(argv)
     conf = args.conf or zt.default_conf()
     if not os.path.exists(conf):
-        fail(f"zone-picker: не найден конфиг {conf}")
+        fail(_("zone-picker: не найден конфиг {}").format(conf))
     # Стол для разбора профилей: `--workspace N`, иначе активный. Сама сетка
     # считается после выбора монитора — она зависит от экрана (grid_for_output),
     # а не только от стола. Стол без профиля молча живёт в общем [zones] (та же
@@ -779,13 +837,13 @@ def main(argv=None):
     try:
         Gtk.init()
     except Exception as exc:
-        fail(f"zone-picker: не удалось открыть дисплей: {exc}")
+        fail(_("zone-picker: не удалось открыть дисплей: {}").format(exc))
     # Имена выходов нужны для набора зон монитора `[zones:<выход>]`; порядок
     # областей тот же, что у zt.monitors(), — по нему и нумеруется `--monitor`.
     outputs = zt.monitor_outputs()
-    monitors = [wa for _, wa in outputs]
+    monitors = [wa for _unused, wa in outputs]
     if not monitors:
-        fail("zone-picker: не удалось получить рабочие области мониторов")
+        fail(_("zone-picker: не удалось получить рабочие области мониторов"))
     win_id = args.window
     if win_id is None and not args.shot and not args.hud:
         win_id = active_window_quiet()
@@ -796,7 +854,7 @@ def main(argv=None):
     else:
         mon_index = pick_monitor(monitors, win_id, args)
     if not 0 <= mon_index < len(monitors):
-        fail(f"zone-picker: монитора {mon_index} нет")
+        fail(_("zone-picker: монитора {} нет").format(mon_index))
     wa = monitors[mon_index]
     output = outputs[mon_index][0]
     # Сетка экрана — тем же резолвером, что у раскладчика: иначе оверлей показал
@@ -806,7 +864,7 @@ def main(argv=None):
     hud_heading = hud_caption(desk_profile, output, screen_profile)
     zones = zones_from_grid(grid, output)
     if not zones:
-        fail(f"zone-picker: в конфиге нет ни одной зоны для монитора {output}")
+        fail(_("zone-picker: в конфиге нет ни одной зоны для монитора {}").format(output))
 
     if args.shot:
         if args.hud:
@@ -822,24 +880,38 @@ def main(argv=None):
                 hud_heading,
                 hint="",
             )
-            point = "мимо зон" if selected is None else zones[selected].name
+            point = _("мимо зон") if selected is None else zones[selected].name
             print(
-                f"zone-picker: снимок HUD записан в {args.shot} ({wa[2]}x{wa[3]}), "
-                f"точка {args.at[0]},{args.at[1]} -> {point} — {describe_grid(zones, caption)}"
+                _(
+                    "zone-picker: снимок HUD записан в {} ({}x{}), "
+                    "точка {},{} -> {} — {}"
+                ).format(
+                    args.shot,
+                    wa[2],
+                    wa[3],
+                    args.at[0],
+                    args.at[1],
+                    point,
+                    describe_grid(zones, caption),
+                )
             )
             return EXIT_OK
         selected = select_by_name(zones, args.select)
         write_shot(args.shot, wa[2], wa[3], zones, selected, caption)
         print(
-            f"zone-picker: снимок оверлея записан в {args.shot} "
-            f"({wa[2]}x{wa[3]}) — {describe_grid(zones, caption)}"
+            _("zone-picker: снимок оверлея записан в {} ({}x{}) — {}").format(
+                args.shot, wa[2], wa[3], describe_grid(zones, caption)
+            )
         )
         return EXIT_OK
 
     if args.hud:
         hud = Hud(zones, wa, hud_heading)
         # Диагностика: единственное доказательство, что окно прозрачно для ввода.
-        print(f"zone-picker: HUD не берёт ввод ({hud.input_mode})", file=sys.stderr)
+        print(
+            _("zone-picker: HUD не берёт ввод ({})").format(hud.input_mode),
+            file=sys.stderr,
+        )
         if args.at is not None:
             hud.apply_point(args.at)
         if args.follow:
@@ -851,7 +923,7 @@ def main(argv=None):
         return EXIT_OK
 
     if args.dry_run:
-        print(f"zone-picker: сетка {describe_grid(zones, caption)}")
+        print(_("zone-picker: сетка {}").format(describe_grid(zones, caption)))
 
     picker = Picker(zones, grid, wa, output, mon_index, args, win_id, caption)
     Gtk.main()
