@@ -23,10 +23,6 @@ Suggests: python3-cairo
 Description: window tiling into zones for Cinnamon/X11
  GridSnap is a visual editor for workspace zones and a window tiler for
  Cinnamon on X11. The active window is snapped into a zone with a hotkey;
- the optional gridsnap-daemon places new windows automatically according
- to the rules. It works on top of muffin through EWMH, and the window
- frame matches the zone.
- .
- Built as a regular Debian package (debhelper): the code lives in
- /usr/lib/gridsnap, the launchers in /usr/bin, the desktop entry and the
- icons in /usr/share.
+ the optional gridsnap-daemon places new windows automatically according to
+ the rules. It works on top of muffin through EWMH, and the window frame
+ matches the zone.

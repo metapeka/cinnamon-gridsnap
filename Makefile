@@ -122,6 +122,11 @@ check-version:
 	@test "$(MAN_VERSION)" = "$(VERSION)" || { \
 		echo "make: man/gridsnap.1: версия $(MAN_VERSION) не совпадает с VERSION=$(VERSION)" >&2; \
 		exit 1; }
+	@v=$$(sed -n '1s/^[^(]*(*\([^-]*\)-.*/\1/p' debian/changelog); \
+		test -n "$$v" || { echo "make: в debian/changelog нет версии" >&2; exit 1; }; \
+		test "$$v" = "$(VERSION)" || { \
+			echo "make: debian/changelog: версия $$v не совпадает с VERSION=$(VERSION)" >&2; \
+			exit 1; }
 
 version:
 	@echo "$(VERSION)"
@@ -276,11 +281,14 @@ deb: check-version mo man
 	@echo 'Homepage: https://github.com/metapeka/cinnamon-gridsnap'                               >> "$(DEBROOT)/DEBIAN/control"
 	@echo 'Depends: python3, python3-gi, gir1.2-gtk-3.0, libx11-6, x11-utils'                     >> "$(DEBROOT)/DEBIAN/control"
 	@echo 'Suggests: python3-cairo'                                                               >> "$(DEBROOT)/DEBIAN/control"
-	@echo 'Description: раскладка окон по зонам для Cinnamon/X11'                                 >> "$(DEBROOT)/DEBIAN/control"
-	@echo ' GridSnap — визуальный редактор зон рабочей области и раскладчик окон'                  >> "$(DEBROOT)/DEBIAN/control"
-	@echo ' для Cinnamon на X11. Активное окно вкладывается в зону горячей клавишей;'             >> "$(DEBROOT)/DEBIAN/control"
-	@echo ' необязательный демон (gridsnap-daemon) автоматически укладывает новые окна'           >> "$(DEBROOT)/DEBIAN/control"
-	@echo ' по правилам. Работает поверх muffin через EWMH, рамка окна совпадает с зоной.'        >> "$(DEBROOT)/DEBIAN/control"
+	# Поля control: описание — дословно то же, что в debian/control (это текст для
+	# пользователя, а не про сборку): расхождение ловит tests/test_packaging_metadata.py.
+	@echo 'Description: window tiling into zones for Cinnamon/X11'                                >> "$(DEBROOT)/DEBIAN/control"
+	@echo ' GridSnap is a visual editor for workspace zones and a window tiler for'               >> "$(DEBROOT)/DEBIAN/control"
+	@echo ' Cinnamon on X11. The active window is snapped into a zone with a hotkey;'             >> "$(DEBROOT)/DEBIAN/control"
+	@echo ' the optional gridsnap-daemon places new windows automatically according to'           >> "$(DEBROOT)/DEBIAN/control"
+	@echo ' the rules. It works on top of muffin through EWMH, and the window frame'              >> "$(DEBROOT)/DEBIAN/control"
+	@echo ' matches the zone.'                                                                    >> "$(DEBROOT)/DEBIAN/control"
 
 	@printf '%s\n' '#!/bin/sh' 'set -e' \
 		'if [ -x /usr/bin/update-desktop-database ]; then update-desktop-database -q /usr/share/applications || true; fi' \
