@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 09:09+0300\n"
+"POT-Creation-Date: 2026-11-22 20:52+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -36,12 +36,8 @@ msgid "zone-tiler: в секции [{section}] нет ни одной зоны"
 msgstr "zone-tiler: section [{section}] has no zones"
 
 #: zone-tiler.py
-msgid ""
-"zone-tiler: есть только секции [zones:<выход>], а обязательной [zones] нет; "
-"[zones] задаёт набор зон по умолчанию"
-msgstr ""
-"zone-tiler: only [zones:<output>] sections exist, but the required [zones] "
-"is missing; [zones] defines the default zone set"
+msgid "zone-tiler: есть только секции [zones:<выход>], а обязательной [zones] нет; [zones] задаёт набор зон по умолчанию"
+msgstr "zone-tiler: only [zones:<output>] sections exist, but the required [zones] is missing; [zones] defines the default zone set"
 
 #: zone-tiler.py
 msgid "zone-tiler: в zones.conf нет ни одной зоны в секции [zones]"
@@ -54,10 +50,8 @@ msgstr "zone-tiler: rule '{selector}' refers to unknown zone '{zone}'"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: зоны '{zone}' нет ни в наборе монитора '{monitor}', ни в [zones]"
-msgstr ""
-"zone-tiler: zone '{zone}' is in neither monitor set '{monitor}' nor [zones]"
+msgid "zone-tiler: зоны '{zone}' нет ни в наборе монитора '{monitor}', ни в [zones]"
+msgstr "zone-tiler: zone '{zone}' is in neither monitor set '{monitor}' nor [zones]"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -79,11 +73,8 @@ msgstr "zone-tiler: zone '{name}' must be 'c0:c1, r0:r1' or 'x,y,w,h'"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: зона '{name}' выходит за сетку ({ncols} колонок, {nrows} строк)"
-msgstr ""
-"zone-tiler: zone '{name}' goes beyond the grid ({ncols} columns, {nrows} "
-"rows)"
+msgid "zone-tiler: зона '{name}' выходит за сетку ({ncols} колонок, {nrows} строк)"
+msgstr "zone-tiler: zone '{name}' goes beyond the grid ({ncols} columns, {nrows} rows)"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -92,65 +83,38 @@ msgstr "zone-tiler: zone '{name}' goes beyond the screen (fractions 0..1)"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: не удалось прочитать рамку окна 0x{window:x}: {error} — беру "
-"первый экран"
-msgstr ""
-"zone-tiler: failed to read the frame of window 0x{window:x}: {error} - using "
-"the first monitor"
+msgid "zone-tiler: не удалось прочитать рамку окна 0x{window:x}: {error} — беру первый экран"
+msgstr "zone-tiler: failed to read the frame of window 0x{window:x}: {error} - using the first monitor"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"неверный рабочий стол '{text}': нужен номер стола (0, 1, …), {current} или "
-"{conf}"
-msgstr ""
-"invalid workspace '{text}': a workspace number (0, 1, ...), {current} or "
-"{conf} is required"
+msgid "неверный рабочий стол '{text}': нужен номер стола (0, 1, …), {current} или {conf}"
+msgstr "invalid workspace '{text}': a workspace number (0, 1, ...), {current} or {conf} is required"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: профиля «{profile}» нет на диске: экран {output} раскладывается "
-"без него: беру набор стола или общий"
-msgstr ""
-"zone-tiler: profile \"{profile}\" is not on disk: monitor {output} is laid "
-"out without it: using the workspace set or the default one"
+msgid "zone-tiler: профиля «{profile}» нет на диске: экран {output} раскладывается без него: беру набор стола или общий"
+msgstr "zone-tiler: profile \"{profile}\" is not on disk: monitor {output} is laid out without it: using the workspace set or the default one"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: профиля «{profile}» нет на диске: экран окна раскладывается без "
-"него: беру набор стола или общий"
-msgstr ""
-"zone-tiler: profile \"{profile}\" is not on disk: the window's monitor is "
-"laid out without it: using the workspace set or the default one"
+msgid "zone-tiler: профиля «{profile}» нет на диске: экран окна раскладывается без него: беру набор стола или общий"
+msgstr "zone-tiler: profile \"{profile}\" is not on disk: the window's monitor is laid out without it: using the workspace set or the default one"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: нет зоны '{zone}' в сетке экрана {output} (профиль «{profile}»). "
-"Есть: {known}"
-msgstr ""
-"zone-tiler: no zone '{zone}' in the grid of monitor {output} (profile "
-"\"{profile}\"). Known: {known}"
+msgid "zone-tiler: нет зоны '{zone}' в сетке экрана {output} (профиль «{profile}»). Есть: {known}"
+msgstr "zone-tiler: no zone '{zone}' in the grid of monitor {output} (profile \"{profile}\"). Known: {known}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: нет зоны '{zone}' в сетке стола {workspace} (профиль "
-"«{profile}»). Есть: {known}"
-msgstr ""
-"zone-tiler: no zone '{zone}' in the grid of workspace {workspace} (profile "
-"\"{profile}\"). Known: {known}"
+msgid "zone-tiler: нет зоны '{zone}' в сетке стола {workspace} (профиль «{profile}»). Есть: {known}"
+msgstr "zone-tiler: no zone '{zone}' in the grid of workspace {workspace} (profile \"{profile}\"). Known: {known}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: нет зоны '{zone}' в сетке профиля «{profile}». Есть: {known}"
-msgstr ""
-"zone-tiler: no zone '{zone}' in the grid of profile \"{profile}\". Known: "
-"{known}"
+msgid "zone-tiler: нет зоны '{zone}' в сетке профиля «{profile}». Есть: {known}"
+msgstr "zone-tiler: no zone '{zone}' in the grid of profile \"{profile}\". Known: {known}"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -194,8 +158,7 @@ msgstr "zone-tiler: failed to save history: {error}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"рабочая область монитора {index}: {x},{y} {w}x{h}  (профиль «{profile}»)"
+msgid "рабочая область монитора {index}: {x},{y} {w}x{h}  (профиль «{profile}»)"
 msgstr "monitor {index} work area: {x},{y} {w}x{h}  (profile \"{profile}\")"
 
 #: zone-tiler.py
@@ -205,12 +168,8 @@ msgstr "monitor {index} work area: {x},{y} {w}x{h}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"рабочая область монитора {index}: {x},{y} {w}x{h}  (выход {output})  "
-"(профиль «{profile}»)"
-msgstr ""
-"monitor {index} work area: {x},{y} {w}x{h}  (output {output})  (profile "
-"\"{profile}\")"
+msgid "рабочая область монитора {index}: {x},{y} {w}x{h}  (выход {output})  (профиль «{profile}»)"
+msgstr "monitor {index} work area: {x},{y} {w}x{h}  (output {output})  (profile \"{profile}\")"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -249,21 +208,13 @@ msgstr "{zone}: x={x} y={y} {w}x{h} (monitor {index}: {output})"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: окно 0x{window:x} под исключением ([ignore]/служебный тип) — не "
-"двигаю"
-msgstr ""
-"zone-tiler: window 0x{window:x} is excluded ([ignore]/utility window type) - "
-"not moving it"
+msgid "zone-tiler: окно 0x{window:x} под исключением ([ignore]/служебный тип) — не двигаю"
+msgstr "zone-tiler: window 0x{window:x} is excluded ([ignore]/utility window type) - not moving it"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: демон не ответил за {timeout:g} с — режим не переключаю "
-"(работающего демона нельзя обойти снаружи)"
-msgstr ""
-"zone-tiler: the daemon did not answer within {timeout:g} s - not switching "
-"the mode (a running daemon cannot be bypassed from outside)"
+msgid "zone-tiler: демон не ответил за {timeout:g} с — режим не переключаю (работающего демона нельзя обойти снаружи)"
+msgstr "zone-tiler: the daemon did not answer within {timeout:g} s - not switching the mode (a running daemon cannot be bypassed from outside)"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -271,12 +222,8 @@ msgid "zone-tiler: демон ответил непонятно: {error}"
 msgstr "zone-tiler: the daemon gave an unclear answer: {error}"
 
 #: zone-tiler.py
-msgid ""
-"zone-tiler: демон не запущен — вкладки в зоне переключает он (запустите "
-"gridsnap-daemon)"
-msgstr ""
-"zone-tiler: the daemon is not running - it switches tabs in a zone (start "
-"gridsnap-daemon)"
+msgid "zone-tiler: демон не запущен — вкладки в зоне переключает он (запустите gridsnap-daemon)"
+msgstr "zone-tiler: the daemon is not running - it switches tabs in a zone (start gridsnap-daemon)"
 
 #: zone-tiler.py zone-tabstrip.py
 msgid "причина не названа"
@@ -289,9 +236,7 @@ msgstr "zone-tiler: the daemon refused: {reason}"
 
 #: zone-tiler.py
 msgid "zone-tiler: переключать нечего — в зоне активного окна одно окно"
-msgstr ""
-"zone-tiler: nothing to switch - the zone of the active window has a single "
-"window"
+msgstr "zone-tiler: nothing to switch - the zone of the active window has a single window"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -299,12 +244,8 @@ msgid "zone-tiler: следующее окно зоны — {window}"
 msgstr "zone-tiler: next window of the zone - {window}"
 
 #: zone-tiler.py
-msgid ""
-"zone-tiler: action — укажите имя действия, например: zone-tiler.py action "
-"mirror"
-msgstr ""
-"zone-tiler: action - specify an action name, for example: zone-tiler.py "
-"action mirror"
+msgid "zone-tiler: action — укажите имя действия, например: zone-tiler.py action mirror"
+msgstr "zone-tiler: action - specify an action name, for example: zone-tiler.py action mirror"
 
 #: zone-tiler.py
 msgid "ни одного"
@@ -343,12 +284,8 @@ msgstr "unknown"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"действие '{name}' ({run}): {window} -> {where} (монитор {screen}, стол "
-"{desk})"
-msgstr ""
-"action '{name}' ({run}): {window} -> {where} (monitor {screen}, workspace "
-"{desk})"
+msgid "действие '{name}' ({run}): {window} -> {where} (монитор {screen}, стол {desk})"
+msgstr "action '{name}' ({run}): {window} -> {where} (monitor {screen}, workspace {desk})"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -372,21 +309,13 @@ msgstr "zone-tiler: action '{name}' started: {command}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"план: окно {window} -> зону '{zone}', остальные окна стола и монитора — "
-"свёрнуты (повторное нажатие вернёт)"
-msgstr ""
-"plan: window {window} -> zone '{zone}', the other windows of the workspace "
-"and monitor are minimized (a second press brings them back)"
+msgid "план: окно {window} -> зону '{zone}', остальные окна стола и монитора — свёрнуты (повторное нажатие вернёт)"
+msgstr "plan: window {window} -> zone '{zone}', the other windows of the workspace and monitor are minimized (a second press brings them back)"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"план: окно {window} -> на месте, остальные окна стола и монитора — свёрнуты "
-"(повторное нажатие вернёт)"
-msgstr ""
-"plan: window {window} -> stays in place, the other windows of the workspace "
-"and monitor are minimized (a second press brings them back)"
+msgid "план: окно {window} -> на месте, остальные окна стола и монитора — свёрнуты (повторное нажатие вернёт)"
+msgstr "plan: window {window} -> stays in place, the other windows of the workspace and monitor are minimized (a second press brings them back)"
 
 #: zone-tiler.py
 msgid "окно вне зон — показывать нечего"
@@ -423,22 +352,13 @@ msgstr "zones '{zone}' and '{partner}' are empty - nothing to swap"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"план: обмен зон '{zone}' и '{partner}' ({axis}): {here} -> '{partner}', "
-"{there} -> '{zone}'; рамки x={hx} y={hy} {hw}x{hh} и x={tx} y={ty} {tw}x{th}"
-msgstr ""
-"plan: swap zones '{zone}' and '{partner}' ({axis}): {here} -> '{partner}', "
-"{there} -> '{zone}'; frames x={hx} y={hy} {hw}x{hh} and x={tx} y={ty} {tw}"
-"x{th}"
+msgid "план: обмен зон '{zone}' и '{partner}' ({axis}): {here} -> '{partner}', {there} -> '{zone}'; рамки x={hx} y={hy} {hw}x{hh} и x={tx} y={ty} {tw}x{th}"
+msgstr "plan: swap zones '{zone}' and '{partner}' ({axis}): {here} -> '{partner}', {there} -> '{zone}'; frames x={hx} y={hy} {hw}x{hh} and x={tx} y={ty} {tw}x{th}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: окна зон '{zone}' и '{partner}' обменяны (окон в зонах: {here} и "
-"{there})"
-msgstr ""
-"zone-tiler: windows of zones '{zone}' and '{partner}' swapped (windows in "
-"zones: {here} and {there})"
+msgid "zone-tiler: окна зон '{zone}' и '{partner}' обменяны (окон в зонах: {here} и {there})"
+msgstr "zone-tiler: windows of zones '{zone}' and '{partner}' swapped (windows in zones: {here} and {there})"
 
 #: zone-tiler.py
 msgid "пустая зона"
@@ -446,27 +366,18 @@ msgstr "empty zone"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: у действия '{name}' нет зоны — задайте zone в [action:{name}]"
+msgid "zone-tiler: у действия '{name}' нет зоны — задайте zone в [action:{name}]"
 msgstr "zone-tiler: action '{name}' has no zone - set zone in [action:{name}]"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"план: запустить {argv} и положить его окно в зону '{zone}': x={x} y={y} {w}"
-"x{h} (окон в зоне: {count} + 1)"
-msgstr ""
-"plan: run {argv} and put its window in zone '{zone}': x={x} y={y} {w}x{h} "
-"(windows in the zone: {count} + 1)"
+msgid "план: запустить {argv} и положить его окно в зону '{zone}': x={x} y={y} {w}x{h} (окон в зоне: {count} + 1)"
+msgstr "plan: run {argv} and put its window in zone '{zone}': x={x} y={y} {w}x{h} (windows in the zone: {count} + 1)"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: терминал в зоне '{zone}' не появился за {seconds:g} с — окно не "
-"найдено"
-msgstr ""
-"zone-tiler: the terminal in zone '{zone}' did not appear within {seconds:g} "
-"s - window not found"
+msgid "zone-tiler: терминал в зоне '{zone}' не появился за {seconds:g} с — окно не найдено"
+msgstr "zone-tiler: the terminal in zone '{zone}' did not appear within {seconds:g} s - window not found"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -475,12 +386,8 @@ msgstr "zone-tiler: terminal in zone '{zone}': window 0x{window:x}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: {count} окон развернуть не удалось — запись режима сохранена, "
-"повторите focus --off"
-msgstr ""
-"zone-tiler: failed to unminimize {count} windows - the mode record is kept, "
-"repeat focus --off"
+msgid "zone-tiler: {count} окон развернуть не удалось — запись режима сохранена, повторите focus --off"
+msgstr "zone-tiler: failed to unminimize {count} windows - the mode record is kept, repeat focus --off"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -498,12 +405,8 @@ msgstr "focus mode off: windows unminimized - {count}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"режим «только эта зона»: держит демон (зона '{zone}', цель {window}, "
-"свёрнуто {count}) — выключился бы"
-msgstr ""
-"focus mode: held by the daemon (zone '{zone}', target {window}, minimized "
-"{count}) - would turn off"
+msgid "режим «только эта зона»: держит демон (зона '{zone}', цель {window}, свёрнуто {count}) — выключился бы"
+msgstr "focus mode: held by the daemon (zone '{zone}', target {window}, minimized {count}) - would turn off"
 
 #: zone-tiler.py zone-daemon.py
 msgid "без зоны"
@@ -521,30 +424,18 @@ msgstr "zone-tiler: failed to determine the monitor of window 0x{window:x}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"режим «только эта зона»: окно 0x{window:x} -> зона '{zone}' x={x} y={y} {w}"
-"x{h}, свернулось бы окон — {count}"
-msgstr ""
-"focus mode: window 0x{window:x} -> zone '{zone}' x={x} y={y} {w}x{h}, "
-"windows to minimize - {count}"
+msgid "режим «только эта зона»: окно 0x{window:x} -> зона '{zone}' x={x} y={y} {w}x{h}, свернулось бы окон — {count}"
+msgstr "focus mode: window 0x{window:x} -> zone '{zone}' x={x} y={y} {w}x{h}, windows to minimize - {count}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"режим «только эта зона»: окно 0x{window:x} -> остаётся на месте, свернулось "
-"бы окон — {count}"
-msgstr ""
-"focus mode: window 0x{window:x} -> stays in place, windows to minimize - "
-"{count}"
+msgid "режим «только эта зона»: окно 0x{window:x} -> остаётся на месте, свернулось бы окон — {count}"
+msgstr "focus mode: window 0x{window:x} -> stays in place, windows to minimize - {count}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: окно 0x{window:x} под исключением ([ignore]/служебный тип) — "
-"режим не включаю"
-msgstr ""
-"zone-tiler: window 0x{window:x} is excluded ([ignore]/utility window type) - "
-"not enabling the mode"
+msgid "zone-tiler: окно 0x{window:x} под исключением ([ignore]/служебный тип) — режим не включаю"
+msgstr "zone-tiler: window 0x{window:x} is excluded ([ignore]/utility window type) - not enabling the mode"
 
 #: zone-tiler.py
 msgid "zone-tiler: не удалось определить активный рабочий стол"
@@ -557,11 +448,8 @@ msgstr "zone-tiler: failed to write the mode state: {error}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"режим «только эта зона»: окно 0x{window:x} -> зона '{zone}', свёрнуто окон — "
-"{count}"
-msgstr ""
-"focus mode: window 0x{window:x} -> zone '{zone}', windows minimized - {count}"
+msgid "режим «только эта зона»: окно 0x{window:x} -> зона '{zone}', свёрнуто окон — {count}"
+msgstr "focus mode: window 0x{window:x} -> zone '{zone}', windows minimized - {count}"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -575,11 +463,8 @@ msgstr "zone-tiler: failed to rewrite the mode record: {error}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"режим «только эта зона»: окно {window} -> зона '{zone}', свёрнуто окон — "
-"{count}"
-msgstr ""
-"focus mode: window {window} -> zone '{zone}', windows minimized - {count}"
+msgid "режим «только эта зона»: окно {window} -> зона '{zone}', свёрнуто окон — {count}"
+msgstr "focus mode: window {window} -> zone '{zone}', windows minimized - {count}"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -599,24 +484,16 @@ msgstr "zone-tiler: monitor {index} ({output}) has no zones"
 #: zone-tiler.py
 #, python-brace-format
 msgid "zone-tiler: у зоны '{zone}' соседа {direction} нет — окно не двигаю"
-msgstr ""
-"zone-tiler: zone '{zone}' has no neighbour to the {direction} - not moving "
-"the window"
+msgstr "zone-tiler: zone '{zone}' has no neighbour to the {direction} - not moving the window"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"окно 0x{window:x}: зона '{here}' -> '{zone}': x={x} y={y} {w}x{h} (монитор "
-"{index}: {output})"
-msgstr ""
-"window 0x{window:x}: zone '{here}' -> '{zone}': x={x} y={y} {w}x{h} (monitor "
-"{index}: {output})"
+msgid "окно 0x{window:x}: зона '{here}' -> '{zone}': x={x} y={y} {w}x{h} (монитор {index}: {output})"
+msgstr "window 0x{window:x}: zone '{here}' -> '{zone}': x={x} y={y} {w}x{h} (monitor {index}: {output})"
 
 #: zone-tiler.py
-msgid ""
-"zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)"
-msgstr ""
-"zone-tiler: failed to read _NET_CLIENT_LIST (DISPLAY and xprop are required)"
+msgid "zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)"
+msgstr "zone-tiler: failed to read _NET_CLIENT_LIST (DISPLAY and xprop are required)"
 
 #: zone-tiler.py
 msgid "zone-tiler: не удалось определить монитор ни для одного окна"
@@ -637,12 +514,8 @@ msgstr "zone-tiler: no windows for tabs"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"окно 0x{window:x} -> зона '{zone}' (вкладка {tab} из {total}): x={x} y={y} "
-"{w}x{h}"
-msgstr ""
-"window 0x{window:x} -> zone '{zone}' (tab {tab} of {total}): x={x} y={y} {w}"
-"x{h}"
+msgid "окно 0x{window:x} -> зона '{zone}' (вкладка {tab} из {total}): x={x} y={y} {w}x{h}"
+msgstr "window 0x{window:x} -> zone '{zone}' (tab {tab} of {total}): x={x} y={y} {w}x{h}"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -656,8 +529,7 @@ msgstr "zone-tiler: layout history is empty"
 #: zone-tiler.py
 #, python-brace-format
 msgid "окно 0x{window:x}: класс не совпал ({actual} ≠ {expected}) — пропускаю"
-msgstr ""
-"window 0x{window:x}: class mismatch ({actual} != {expected}) - skipping"
+msgstr "window 0x{window:x}: class mismatch ({actual} != {expected}) - skipping"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -667,8 +539,7 @@ msgstr "window 0x{window:x}: no longer exists - skipping"
 #: zone-tiler.py
 #, python-brace-format
 msgid "окно 0x{window:x}: под исключением ([ignore]/служебный тип) — пропускаю"
-msgstr ""
-"window 0x{window:x}: excluded ([ignore]/utility window type) - skipping"
+msgstr "window 0x{window:x}: excluded ([ignore]/utility window type) - skipping"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -692,11 +563,8 @@ msgstr "zone-tiler: windows restored: {restored}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: в [keys] зона '{zone}' отсутствует в [zones] и в [zones:<выход>]"
-msgstr ""
-"zone-tiler: in [keys] zone '{zone}' is missing from [zones] and [zones:"
-"<output>]"
+msgid "zone-tiler: в [keys] зона '{zone}' отсутствует в [zones] и в [zones:<выход>]"
+msgstr "zone-tiler: in [keys] zone '{zone}' is missing from [zones] and [zones:<output>]"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -733,74 +601,40 @@ msgstr "zone-tiler: profile \"{profile}\" imported: {path} ({zones} zones)"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"клавиша зоны «{zone}»: «{first_key}» (профиль «{first_profile}», экран "
-"{first_output}) вместо «{key}» (профиль «{profile}», экран {output}) — "
-"оставлена первая"
-msgstr ""
-"zone key \"{zone}\": \"{first_key}\" (profile \"{first_profile}\", monitor "
-"{first_output}) kept instead of \"{key}\" (profile \"{profile}\", monitor "
-"{output}) - the first one wins"
+msgid "клавиша зоны «{zone}»: «{first_key}» (профиль «{first_profile}», экран {first_output}) вместо «{key}» (профиль «{profile}», экран {output}) — оставлена первая"
+msgstr "zone key \"{zone}\": \"{first_key}\" (profile \"{first_profile}\", monitor {first_output}) kept instead of \"{key}\" (profile \"{profile}\", monitor {output}) - the first one wins"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"правило для «{selector}»: зона «{first_zone}» (профиль «{first_profile}», "
-"экран {first_output}) вместо «{zone}» (профиль «{profile}», экран {output}) "
-"— оставлено первое"
-msgstr ""
-"rule for \"{selector}\": zone \"{first_zone}\" (profile \"{first_profile}\", "
-"monitor {first_output}) kept instead of \"{zone}\" (profile \"{profile}\", "
-"monitor {output}) - the first one wins"
+msgid "правило для «{selector}»: зона «{first_zone}» (профиль «{first_profile}», экран {first_output}) вместо «{zone}» (профиль «{profile}», экран {output}) — оставлено первое"
+msgstr "rule for \"{selector}\": zone \"{first_zone}\" (profile \"{first_profile}\", monitor {first_output}) kept instead of \"{zone}\" (profile \"{profile}\", monitor {output}) - the first one wins"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"исключение «{selector}»: заметка «{first_note}» (профиль «{first_profile}», "
-"экран {first_output}) вместо «{note}» (профиль «{profile}», экран {output}) "
-"— оставлена первая"
-msgstr ""
-"exclusion \"{selector}\": note \"{first_note}\" (profile \"{first_profile}"
-"\", monitor {first_output}) kept instead of \"{note}\" (profile \"{profile}"
-"\", monitor {output}) - the first one wins"
+msgid "исключение «{selector}»: заметка «{first_note}» (профиль «{first_profile}», экран {first_output}) вместо «{note}» (профиль «{profile}», экран {output}) — оставлена первая"
+msgstr "exclusion \"{selector}\": note \"{first_note}\" (profile \"{first_profile}\", monitor {first_output}) kept instead of \"{note}\" (profile \"{profile}\", monitor {output}) - the first one wins"
 
 #: zone-tiler.py
-msgid ""
-"zone-tiler: profile use-monitors не берёт имени профиля: экраны и профили "
-"задаёт секция [monitors]"
-msgstr ""
-"zone-tiler: profile use-monitors takes no profile name: monitors and "
-"profiles are set by the [monitors] section"
+msgid "zone-tiler: profile use-monitors не берёт имени профиля: экраны и профили задаёт секция [monitors]"
+msgstr "zone-tiler: profile use-monitors takes no profile name: monitors and profiles are set by the [monitors] section"
 
 #: zone-tiler.py
-msgid ""
-"zone-tiler: в [monitors] нет ни одного экрана — активный конфиг не меняю"
-msgstr ""
-"zone-tiler: [monitors] has no monitors - not changing the active config"
+msgid "zone-tiler: в [monitors] нет ни одного экрана — активный конфиг не меняю"
+msgstr "zone-tiler: [monitors] has no monitors - not changing the active config"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: профиля «{profile}» нет на диске: экран {output} пропущен, "
-"строка [monitors] остаётся и заработает, когда профиль вернут"
-msgstr ""
-"zone-tiler: profile \"{profile}\" is not on disk: monitor {output} skipped, "
-"the [monitors] line stays and will work once the profile is back"
+msgid "zone-tiler: профиля «{profile}» нет на диске: экран {output} пропущен, строка [monitors] остаётся и заработает, когда профиль вернут"
+msgstr "zone-tiler: profile \"{profile}\" is not on disk: monitor {output} skipped, the [monitors] line stays and will work once the profile is back"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: в профиле «{profile}» нет ни одной зоны: экран {output} пропущен"
-msgstr ""
-"zone-tiler: profile \"{profile}\" has no zones: monitor {output} skipped"
+msgid "zone-tiler: в профиле «{profile}» нет ни одной зоны: экран {output} пропущен"
+msgstr "zone-tiler: profile \"{profile}\" has no zones: monitor {output} skipped"
 
 #: zone-tiler.py
-msgid ""
-"zone-tiler: ни один экран из [monitors] не нашёл своего профиля — активный "
-"конфиг не меняю"
-msgstr ""
-"zone-tiler: no monitor from [monitors] found its profile - not changing the "
-"active config"
+msgid "zone-tiler: ни один экран из [monitors] не нашёл своего профиля — активный конфиг не меняю"
+msgstr "zone-tiler: no monitor from [monitors] found its profile - not changing the active config"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -809,12 +643,8 @@ msgstr "zone-tiler: overridden: {message}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: правило «{selector} = {zone}» пропущено: зоны '{zone}' нет в "
-"итоговом наборе — иначе конфиг стал бы невалидным"
-msgstr ""
-"zone-tiler: rule \"{selector} = {zone}\" skipped: zone '{zone}' is not in "
-"the resulting set - otherwise the config would become invalid"
+msgid "zone-tiler: правило «{selector} = {zone}» пропущено: зоны '{zone}' нет в итоговом наборе — иначе конфиг стал бы невалидным"
+msgstr "zone-tiler: rule \"{selector} = {zone}\" skipped: zone '{zone}' is not in the resulting set - otherwise the config would become invalid"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -823,22 +653,41 @@ msgstr "zone-tiler: monitor {output} - profile \"{profile}\": {zones} zones"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid ""
-"zone-tiler: активный конфиг обновлён: экранов {screens}, правил {rules}, "
-"исключений {ignore}"
-msgstr ""
-"zone-tiler: active config updated: monitors {screens}, rules {rules}, "
-"exclusions {ignore}"
+msgid "zone-tiler: активный конфиг обновлён: экранов {screens}, правил {rules}, исключений {ignore}"
+msgstr "zone-tiler: active config updated: monitors {screens}, rules {rules}, exclusions {ignore}"
 
 #: zone-tiler.py
-msgid ""
-"zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use "
-"<имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import "
-"<файл> [--name <имя>]"
-msgstr ""
-"zone-tiler: profile - specify an action: list | show <name> | save <name> | "
-"use <name> | use-monitors | rm <name> | export <name> [file | --json] | "
-"import <file> [--name <name>]"
+msgid "zone-tiler: галерея раскладок пуста"
+msgstr "zone-tiler: the layout gallery is empty"
+ "zone-tiler: layout history is empty"
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "{id}\t{title}\tзон: {count}\t{description}"
+msgstr "{id}	{title}	zones: {count}	{description}"
+ ""
+
+#: zone-tiler.py
+msgid "zone-tiler: profile from-gallery — укажите id раскладки (см. profile gallery)"
+msgstr "zone-tiler: profile from-gallery - name the layout id (see profile gallery)"
+ ""
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "профиль «{name}» создан из готовой раскладки «{id}»: {path}"
+msgstr "profile '{name}' created from the gallery layout '{id}': {path}"
+ "Profile \"{}\" already exists. Overwrite it with the layout \"{}\"?"
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "применить: zone-tiler.py profile use {name}"
+msgstr "apply it with: zone-tiler.py profile use {name}"
+ ""
+
+#: zone-tiler.py
+msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>] [--force]"
+msgstr "zone-tiler: profile - name an action: list | show <name> | save <name> | use <name> | use-monitors | rm <name> | export <name> [file | --json] | import <file> [--name <name>] | gallery | from-gallery <id> [--name <name>] [--force]"
+ "zone-tiler: profile - specify an action: list | show <name> | save <name> | use <name> | use-monitors | rm <name> | export <name> [file | --json] | import <file> [--name <name>]"
 
 #: zone-tiler.py
 msgid "файл JSON-профиля"
@@ -873,32 +722,12 @@ msgid "Раскладка окон по зонам сетки (Cinnamon/X11)"
 msgstr "Window layout across grid zones (Cinnamon/X11)"
 
 #: zone-tiler.py
-msgid ""
-"Примеры: zone-tiler.py arrange --by order; zone-tiler.py stack main; zone-"
-"tiler.py tabs-next; zone-tiler.py undo --all; zone-tiler.py action mirror; "
-"zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
-msgstr ""
-"Examples: zone-tiler.py arrange --by order; zone-tiler.py stack main; zone-"
-"tiler.py tabs-next; zone-tiler.py undo --all; zone-tiler.py action mirror; "
-"zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
+msgid "Примеры: zone-tiler.py arrange --by order; zone-tiler.py stack main; zone-tiler.py tabs-next; zone-tiler.py undo --all; zone-tiler.py action mirror; zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
+msgstr "Examples: zone-tiler.py arrange --by order; zone-tiler.py stack main; zone-tiler.py tabs-next; zone-tiler.py undo --all; zone-tiler.py action mirror; zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
 
 #: zone-tiler.py
-msgid ""
-"list/apply/keys — как раньше; move — перебросить окно в соседнюю зону; focus "
-"— режим «только эта зона» (окно в зону, остальные свёрнуты; повторно — "
-"выход); action — выполнить действие из [action:<имя>] (встроенное или своя "
-"команда); arrange — разложить окна по зонам; stack — собрать окна в зону "
-"вкладками; tabs-next — поднять следующую вкладку зоны (клавиша [tabs]); undo "
-"— вернуть рамки из истории; profile — свои профили раскладок (зоны + правила "
-"+ клавиши)"
-msgstr ""
-"list/apply/keys - as before; move - throw the window into the neighbouring "
-"zone; focus - focus mode (window into a zone, the rest minimized; repeat to "
-"leave); action - run an action from [action:<name>] (built-in or a custom "
-"command); arrange - lay windows out across zones; stack - gather windows "
-"into a zone as tabs; tabs-next - raise the next tab of the zone ([tabs] "
-"key); undo - restore frames from history; profile - your own layout profiles "
-"(zones + rules + keys)"
+msgid "list/apply/keys — как раньше; move — перебросить окно в соседнюю зону; focus — режим «только эта зона» (окно в зону, остальные свёрнуты; повторно — выход); action — выполнить действие из [action:<имя>] (встроенное или своя команда); arrange — разложить окна по зонам; stack — собрать окна в зону вкладками; tabs-next — поднять следующую вкладку зоны (клавиша [tabs]); undo — вернуть рамки из истории; profile — свои профили раскладок (зоны + правила + клавиши)"
+msgstr "list/apply/keys - as before; move - throw the window into the neighbouring zone; focus - focus mode (window into a zone, the rest minimized; repeat to leave); action - run an action from [action:<name>] (built-in or a custom command); arrange - lay windows out across zones; stack - gather windows into a zone as tabs; tabs-next - raise the next tab of the zone ([tabs] key); undo - restore frames from history; profile - your own layout profiles (zones + rules + keys)"
 
 #: zone-tiler.py
 msgid "имя зоны для apply/stack, направление для move или действие profile"
@@ -913,42 +742,27 @@ msgid "profile export: файл для JSON (без него и без --json �
 msgstr "profile export: file for JSON (without it and without --json - stdout)"
 
 #: zone-tiler.py
-msgid ""
-"монитор для list/apply/stack/move: имя выхода (HDMI-1) или номер (без флага "
-"— экран окна у apply/stack/move, первый у list)"
-msgstr ""
-"monitor for list/apply/stack/move: output name (HDMI-1) or index (without "
-"the flag - the window's monitor for apply/stack/move, the first one for list)"
+msgid "монитор для list/apply/stack/move: имя выхода (HDMI-1) или номер (без флага — экран окна у apply/stack/move, первый у list)"
+msgstr "monitor for list/apply/stack/move: output name (HDMI-1) or index (without the flag - the window's monitor for apply/stack/move, the first one for list)"
 
 #: zone-tiler.py
-msgid ""
-"рабочий стол для list/apply/move/arrange/stack: номер (EWMH, с нуля), "
-"current (сетка активного стола — по умолчанию) или conf (всегда сетка "
-"zones.conf, без профилей столов)"
-msgstr ""
-"workspace for list/apply/move/arrange/stack: number (EWMH, zero-based), "
-"current (the active workspace's grid - default) or conf (always the "
-"zones.conf grid, without workspace profiles)"
+msgid "рабочий стол для list/apply/move/arrange/stack: номер (EWMH, с нуля), current (сетка активного стола — по умолчанию) или conf (всегда сетка zones.conf, без профилей столов)"
+msgstr "workspace for list/apply/move/arrange/stack: number (EWMH, zero-based), current (the active workspace's grid - default) or conf (always the zones.conf grid, without workspace profiles)"
 
 #: zone-tiler.py
 msgid "id окна (по умолчанию активное)"
 msgstr "window id (the active one by default)"
 
 #: zone-tiler.py
-msgid ""
-"arrange: выбор окон — правила и остаток (auto), только правила, или по "
-"порядку"
-msgstr ""
-"arrange: window selection - rules and the rest (auto), rules only, or by "
-"order"
+msgid "arrange: выбор окон — правила и остаток (auto), только правила, или по порядку"
+msgstr "arrange: window selection - rules and the rest (auto), rules only, or by order"
 
 #: zone-tiler.py
 msgid "undo: откатить всю историю, а не последнюю операцию"
 msgstr "undo: roll back the whole history, not just the last operation"
 
 #: zone-tiler.py
-msgid ""
-"profile use/use-monitors: не регистрировать сочетания клавиш после активации"
+msgid "profile use/use-monitors: не регистрировать сочетания клавиш после активации"
 msgstr "profile use/use-monitors: do not register hotkeys after activation"
 
 #: zone-tiler.py
@@ -960,39 +774,34 @@ msgid "ИМЯ"
 msgstr "NAME"
 
 #: zone-tiler.py
-msgid "profile import: имя профиля (по умолчанию — из JSON)"
-msgstr "profile import: profile name (from the JSON by default)"
+msgid "profile import/from-gallery: имя профиля (import — по умолчанию из JSON)"
+msgstr "profile import/from-gallery: profile name (import defaults to the JSON one)"
+ "profile import: profile name (from the JSON by default)"
 
 #: zone-tiler.py
-msgid ""
-"только посчитать рамку (у profile use-monitors — показать конфиг), ничего не "
-"меняя"
-msgstr ""
-"only compute the frame (for profile use-monitors - show the config), "
-"changing nothing"
+msgid "profile from-gallery: перезаписать существующий профиль"
+msgstr "profile from-gallery: overwrite an existing profile"
+ ""
 
 #: zone-tiler.py
-msgid ""
-"focus: явно выйти из режима «только эта зона» (развернуть свёрнутое режимом)"
-msgstr ""
-"focus: explicitly leave focus mode (unminimize what the mode minimized)"
+msgid "только посчитать рамку (у profile use-monitors — показать конфиг), ничего не меняя"
+msgstr "only compute the frame (for profile use-monitors - show the config), changing nothing"
+
+#: zone-tiler.py
+msgid "focus: явно выйти из режима «только эта зона» (развернуть свёрнутое режимом)"
+msgstr "focus: explicitly leave focus mode (unminimize what the mode minimized)"
 
 #: zone-tiler.py
 msgid "keys: сочетания перемещения в соседнюю зону из секции [move]"
-msgstr ""
-"keys: shortcuts for moving to the neighbouring zone from the [move] section"
+msgstr "keys: shortcuts for moving to the neighbouring zone from the [move] section"
 
 #: zone-tiler.py
 msgid "перечитать реальную геометрию"
 msgstr "re-read the real geometry"
 
 #: zone-tiler.py
-msgid ""
-"--offset удалён: окна одной зоны больше не сдвигаются каскадом, а стоят "
-"вкладками на общей рамке (переключение — tabs-next)"
-msgstr ""
-"--offset removed: windows of one zone are no longer cascaded, they sit as "
-"tabs on a shared frame (switching - tabs-next)"
+msgid "--offset удалён: окна одной зоны больше не сдвигаются каскадом, а стоят вкладками на общей рамке (переключение — tabs-next)"
+msgstr "--offset removed: windows of one zone are no longer cascaded, they sit as tabs on a shared frame (switching - tabs-next)"
 
 #: zone-tiler.py
 msgid "zone-tiler: укажите зону, например: zone-tiler.py apply left"
@@ -1035,12 +844,8 @@ msgstr "failed to determine the workspace of window 0x{win:x}: {exc}"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid ""
-"не удалось взять сетку профиля ({desk}, экран {output}): {exc} — беру общий "
-"набор"
-msgstr ""
-"failed to take the profile grid ({desk}, monitor {output}): {exc} - using "
-"the default set"
+msgid "не удалось взять сетку профиля ({desk}, экран {output}): {exc} — беру общий набор"
+msgstr "failed to take the profile grid ({desk}, monitor {output}): {exc} - using the default set"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1055,16 +860,12 @@ msgstr "of workspace {desk}"
 #: zone-daemon.py
 #, python-brace-format
 msgid "плохое имя профиля «{name}» ({where}): {exc} — беру следующий уровень"
-msgstr ""
-"bad profile name \"{name}\" ({where}): {exc} - falling back to the next level"
+msgstr "bad profile name \"{name}\" ({where}): {exc} - falling back to the next level"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid ""
-"профиля «{name}» ({where}) нет на диске: {path} — беру следующий уровень"
-msgstr ""
-"profile \"{name}\" ({where}) is not on disk: {path} - falling back to the "
-"next level"
+msgid "профиля «{name}» ({where}) нет на диске: {path} — беру следующий уровень"
+msgstr "profile \"{name}\" ({where}) is not on disk: {path} - falling back to the next level"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1082,13 +883,13 @@ msgid "не удалось сопоставить выходы мониторо�
 msgstr "failed to match monitor outputs: {exc}"
 
 #: zone-daemon.py
-msgid "масштаб экрана изменился — перечитываю рабочие области"
-msgstr "screen scale changed — re-reading work areas"
-
-#: zone-daemon.py
 #, python-brace-format
 msgid "не удалось получить рабочую область: {exc}"
 msgstr "failed to get the work area: {exc}"
+
+#: zone-daemon.py
+msgid "масштаб экрана изменился — перечитываю рабочие области"
+msgstr "screen scale changed — re-reading work areas"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1133,8 +934,7 @@ msgstr "failed to read metadata of 0x{win:x}: {exc}"
 #: zone-daemon.py
 #, python-brace-format
 msgid "окно 0x{win:x} стоит не в своей зоне '{zone}' — укладываю по правилу"
-msgstr ""
-"window 0x{win:x} is not in its zone '{zone}' - laying it out by the rule"
+msgstr "window 0x{win:x} is not in its zone '{zone}' - laying it out by the rule"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1168,8 +968,7 @@ msgstr "tabs: window 0x{win:x} took the shared frame of zone '{zone}'"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid ""
-"в зоне '{zone}' осталась одна вкладка — окно 0x{win:x} занимает зону целиком"
+msgid "в зоне '{zone}' осталась одна вкладка — окно 0x{win:x} занимает зону целиком"
 msgstr "zone '{zone}' has a single tab left - window 0x{win:x} fills the zone"
 
 #: zone-daemon.py
@@ -1224,9 +1023,7 @@ msgstr "failed to determine the monitor of window 0x{window:x}"
 #: zone-daemon.py
 #, python-brace-format
 msgid "окно 0x{window:x} под исключением ([ignore]/служебный тип) — не двигаю"
-msgstr ""
-"window 0x{window:x} is excluded ([ignore]/utility window type) - not moving "
-"it"
+msgstr "window 0x{window:x} is excluded ([ignore]/utility window type) - not moving it"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1317,19 +1114,13 @@ msgstr "failed to unminimize the mode's windows: {exc}"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid ""
-"режим «только эта зона» выключен (зона '{zone}'): развёрнуто {restored} из "
-"{total}"
+msgid "режим «только эта зона» выключен (зона '{zone}'): развёрнуто {restored} из {total}"
 msgstr "focus mode off (zone '{zone}'): restored {restored} of {total}"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid ""
-"{count} окон режима развернуть не удалось, но файла состояния нет — "
-"разверните их вручную"
-msgstr ""
-"{count} mode windows could not be unminimized, but there is no state file - "
-"unminimize them manually"
+msgid "{count} окон режима развернуть не удалось, но файла состояния нет — разверните их вручную"
+msgstr "{count} mode windows could not be unminimized, but there is no state file - unminimize them manually"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1338,38 +1129,22 @@ msgstr "failed to save the rest of the mode: {exc}"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid ""
-"{count} окон режима остались свёрнутыми — запись в {path}: развернуть "
-"командой focus --off"
-msgstr ""
-"{count} mode windows stayed minimized - record in {path}: unminimize with "
-"focus --off"
+msgid "{count} окон режима остались свёрнутыми — запись в {path}: развернуть командой focus --off"
+msgstr "{count} mode windows stayed minimized - record in {path}: unminimize with focus --off"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid ""
-"окно 0x{window:x} под исключением ([ignore]/служебный тип) — режим «только "
-"эта зона» не включаю"
-msgstr ""
-"window 0x{window:x} is excluded ([ignore]/utility window type) - not "
-"enabling focus mode"
+msgid "окно 0x{window:x} под исключением ([ignore]/служебный тип) — режим «только эта зона» не включаю"
+msgstr "window 0x{window:x} is excluded ([ignore]/utility window type) - not enabling focus mode"
 
 #: zone-daemon.py
-msgid ""
-"активный стол не прочитан — режим «только эта зона» не включаю: сворачивать "
-"окна чужих столов вслепую хуже, чем не включать"
-msgstr ""
-"the active workspace is not read - not enabling focus mode: minimizing "
-"windows of other workspaces blindly is worse than not enabling it"
+msgid "активный стол не прочитан — режим «только эта зона» не включаю: сворачивать окна чужих столов вслепую хуже, чем не включать"
+msgstr "the active workspace is not read - not enabling focus mode: minimizing windows of other workspaces blindly is worse than not enabling it"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid ""
-"не удалось определить монитор окна 0x{window:x} — режим «только эта зона» не "
-"включаю: его область зависит от монитора цели"
-msgstr ""
-"failed to determine the monitor of window 0x{window:x} - not enabling focus "
-"mode: its area depends on the target's monitor"
+msgid "не удалось определить монитор окна 0x{window:x} — режим «только эта зона» не включаю: его область зависит от монитора цели"
+msgstr "failed to determine the monitor of window 0x{window:x} - not enabling focus mode: its area depends on the target's monitor"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1408,18 +1183,12 @@ msgstr "focus mode lives on workspace {desk} - leaving it in place"
 #: zone-daemon.py
 #, python-brace-format
 msgid "окно 0x{win:x} под исключением ([ignore]/служебный тип) — не трогаю"
-msgstr ""
-"window 0x{win:x} is excluded ([ignore]/utility window type) - leaving it "
-"alone"
+msgstr "window 0x{win:x} is excluded ([ignore]/utility window type) - leaving it alone"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid ""
-"зоны '{zone}' нет в наборе (стол {desk}, экран {output}) — окно 0x{win:x} не "
-"укладываю"
-msgstr ""
-"no zone '{zone}' in the set (workspace {desk}, monitor {output}) - not "
-"placing window 0x{win:x}"
+msgid "зоны '{zone}' нет в наборе (стол {desk}, экран {output}) — окно 0x{win:x} не укладываю"
+msgstr "no zone '{zone}' in the set (workspace {desk}, monitor {output}) - not placing window 0x{win:x}"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1439,8 +1208,7 @@ msgstr "window 0x{win:x} left zone '{zone}'"
 #: zone-daemon.py
 #, python-brace-format
 msgid "стол {desk} не виден (сейчас {current}) — reflow не делаю"
-msgstr ""
-"workspace {desk} is not visible (currently {current}) - not doing reflow"
+msgstr "workspace {desk} is not visible (currently {current}) - not doing reflow"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1507,10 +1275,8 @@ msgid "обработать одно изменение _NET_CLIENT_LIST и вы
 msgstr "handle one _NET_CLIENT_LIST change and exit"
 
 #: zone-daemon.py
-msgid ""
-"путь UNIX-сокета IPC (по умолчанию $XDG_RUNTIME_DIR/gridsnap/daemon.sock)"
-msgstr ""
-"UNIX IPC socket path ($XDG_RUNTIME_DIR/gridsnap/daemon.sock by default)"
+msgid "путь UNIX-сокета IPC (по умолчанию $XDG_RUNTIME_DIR/gridsnap/daemon.sock)"
+msgstr "UNIX IPC socket path ($XDG_RUNTIME_DIR/gridsnap/daemon.sock by default)"
 
 #: zone-daemon.py
 msgid "не поднимать IPC-сокет"
@@ -1539,29 +1305,17 @@ msgstr "blank slate"
 
 #: zone-editor.py
 #, python-brace-format
-msgid ""
-"не сохраняю: правила из [rules] ссылаются на отсутствующие зоны — {shown} и "
-"ещё {rest}. Верните зоны или поправьте [rules] в zones.conf."
-msgstr ""
-"not saving: rules from [rules] refer to missing zones - {shown} and {rest} "
-"more. Restore the zones or fix [rules] in zones.conf."
+msgid "не сохраняю: правила из [rules] ссылаются на отсутствующие зоны — {shown} и ещё {rest}. Верните зоны или поправьте [rules] в zones.conf."
+msgstr "not saving: rules from [rules] refer to missing zones - {shown} and {rest} more. Restore the zones or fix [rules] in zones.conf."
 
 #: zone-editor.py
 #, python-brace-format
-msgid ""
-"не сохраняю: правила из [rules] ссылаются на отсутствующие зоны — {shown}. "
-"Верните зоны или поправьте [rules] в zones.conf."
-msgstr ""
-"not saving: rules from [rules] refer to missing zones - {shown}. Restore the "
-"zones or fix [rules] in zones.conf."
+msgid "не сохраняю: правила из [rules] ссылаются на отсутствующие зоны — {shown}. Верните зоны или поправьте [rules] в zones.conf."
+msgstr "not saving: rules from [rules] refer to missing zones - {shown}. Restore the zones or fix [rules] in zones.conf."
 
 #: zone-editor.py
-msgid ""
-"рабочая область {}×{} px · тащите зону мышью, тяните за край — размер, "
-"двойной клик — новая зона"
-msgstr ""
-"work area {}×{} px · drag a zone with the mouse, drag the edge for size, "
-"double click for a new zone"
+msgid "рабочая область {}×{} px · тащите зону мышью, тяните за край — размер, двойной клик — новая зона"
+msgstr "work area {}×{} px · drag a zone with the mouse, drag the edge for size, double click for a new zone"
 
 #: zone-editor.py
 msgid "Gridsnap — сетка окон"
@@ -1620,6 +1374,14 @@ msgid "Профили"
 msgstr "Profiles"
 
 #: zone-editor.py
+msgid "Из галереи…"
+msgstr "From the gallery…"
+
+#: zone-editor.py
+msgid "Готовые раскладки: зоны, клавиши и правила для приложений"
+msgstr "Ready-made layouts: zones, hotkeys and application rules"
+
+#: zone-editor.py
 msgid "Экран"
 msgstr "Monitor"
 
@@ -1653,8 +1415,7 @@ msgstr " (no profile file - the workspace is laid out by the default set)"
 
 #: zone-editor.py
 msgid "стол {} использует профиль «{}»{}; редактор правит общий zones.conf"
-msgstr ""
-"workspace {} uses profile \"{}\"{}; the editor edits the shared zones.conf"
+msgstr "workspace {} uses profile \"{}\"{}; the editor edits the shared zones.conf"
 
 #: zone-editor.py
 msgid "набор не выбран"
@@ -1681,8 +1442,68 @@ msgid "Удалить профиль…"
 msgstr "Delete profile…"
 
 #: zone-editor.py
+msgid "галерея не прочитана: {}"
+msgstr "gallery could not be read: {}"
+
+#: zone-editor.py
+msgid "в галерее нет ни одной раскладки"
+msgstr "the gallery has no layouts"
+
+#: zone-editor.py
+msgid "Галерея раскладок"
+msgstr "Layout gallery"
+
+#: zone-editor.py
 msgid "Отмена"
 msgstr "Cancel"
+
+#: zone-editor.py
+msgid "Добавить в профили"
+msgstr "Add to profiles"
+
+#: zone-editor.py
+msgid "Готовая раскладка — зоны, клавиши и правила для приложений. Выбор создаёт из неё профиль: дальше его правят как свой."
+msgstr "A ready-made layout is zones, hotkeys and application rules. Choosing it creates a profile; from then on you edit the profile as your own."
+
+#: zone-editor.py
+msgid "{} — зон: {}"
+msgstr "{} — {} zones"
+
+#: zone-editor.py
+msgid "раскладка не выбрана"
+msgstr "no layout selected"
+
+#: zone-editor.py
+msgid "Добавить раскладку в профили"
+msgstr "Add the layout to profiles"
+
+#: zone-editor.py
+msgid "Имя профиля для раскладки «{}»"
+msgstr "Profile name for the layout \"{}\""
+
+#: zone-editor.py
+msgid "пустое имя профиля"
+msgstr "empty profile name"
+
+#: zone-editor.py
+msgid "Профиль «{}» уже есть. Перезаписать его раскладкой «{}»?"
+msgstr "Profile \"{}\" already exists. Overwrite it with the layout \"{}\"?"
+
+#: zone-editor.py
+msgid "раскладка не добавлена: профиль «{}» уже есть"
+msgstr "layout not added: profile \"{}\" already exists"
+
+#: zone-editor.py
+msgid "раскладка не добавлена: {}"
+msgstr "layout not added: {}"
+
+#: zone-editor.py
+msgid "раскладка «{}» → профиль «{}»: {}"
+msgstr "layout \"{}\" → profile \"{}\": {}"
+
+#: zone-editor.py
+msgid "Загрузить раскладку «{}» в холст?"
+msgstr "Load the layout \"{}\" into the canvas?"
 
 #: zone-editor.py
 msgid "Сохранить"
@@ -1713,10 +1534,6 @@ msgid "Имя профиля"
 msgstr "Profile name"
 
 #: zone-editor.py
-msgid "пустое имя профиля"
-msgstr "empty profile name"
-
-#: zone-editor.py
 msgid "профиль не сохранён: {}"
 msgstr "profile not saved: {}"
 
@@ -1734,9 +1551,7 @@ msgstr "Workspace profiles"
 
 #: zone-editor.py
 msgid "Профиль задаёт столу его сетку зон; «общий набор» — стол без профиля."
-msgstr ""
-"A profile gives a workspace its zone grid; \"default set\" - a workspace "
-"without a profile."
+msgstr "A profile gives a workspace its zone grid; \"default set\" - a workspace without a profile."
 
 #: zone-editor.py
 msgid "Стол {}"
@@ -1763,12 +1578,8 @@ msgid "Профили экранов"
 msgstr "Monitor profiles"
 
 #: zone-editor.py
-msgid ""
-"Профиль задаёт экрану его сетку зон; «общий набор» — экран без привязки. "
-"Верхний экран решает спор, если профили задают разное."
-msgstr ""
-"A profile gives a monitor its zone grid; \"default set\" - a monitor without "
-"a binding. The topmost monitor settles a dispute if profiles differ."
+msgid "Профиль задаёт экрану его сетку зон; «общий набор» — экран без привязки. Верхний экран решает спор, если профили задают разное."
+msgstr "A profile gives a monitor its zone grid; \"default set\" - a monitor without a binding. The topmost monitor settles a dispute if profiles differ."
 
 #: zone-editor.py
 msgid "профили экранов не сохранены: {}"
@@ -1795,24 +1606,16 @@ msgid "профиль «{}» удалён"
 msgstr "profile \"{}\" deleted"
 
 #: zone-editor.py
-msgid ""
-"в общем наборе [zones] нет зон — добавьте зону на мониторе, который его "
-"наследует (или в его секции)"
-msgstr ""
-"the default set [zones] has no zones - add a zone on a monitor that inherits "
-"it (or in its sections)"
+msgid "в общем наборе [zones] нет зон — добавьте зону на мониторе, который его наследует (или в его секции)"
+msgstr "the default set [zones] has no zones - add a zone on a monitor that inherits it (or in its sections)"
 
 #: zone-editor.py
 msgid "ошибка записи: {}"
 msgstr "write error: {}"
 
 #: zone-editor.py
-msgid ""
-"сохранено: {} — [zones]: {} зон, своих наборов: {}. Клавиши применяются "
-"кнопкой «сочетания клавиш»."
-msgstr ""
-"saved: {} - [zones]: {} zones, own sets: {}. Hotkeys are applied with the "
-"\"hotkeys\" button."
+msgid "сохранено: {} — [zones]: {} зон, своих наборов: {}. Клавиши применяются кнопкой «сочетания клавиш»."
+msgstr "saved: {} - [zones]: {} zones, own sets: {}. Hotkeys are applied with the \"hotkeys\" button."
 
 #: zone-editor.py
 msgid "сочетания: {}"
@@ -1876,32 +1679,23 @@ msgstr "zone-tiler: no zone '{zone}' in the set"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: в [{section}] номер стола должен быть целым с 1, а не '{number}'"
-msgstr ""
-"zone_config: in [{section}] workspace number must be an integer from 1, not "
-"'{number}'"
+msgid "zone_config: в [{section}] номер стола должен быть целым с 1, а не '{number}'"
+msgstr "zone_config: in [{section}] workspace number must be an integer from 1, not '{number}'"
 
 #: zone_config.py
 #, python-brace-format
 msgid "zone_config: в [{section}] у стола {number} пустое имя профиля"
-msgstr ""
-"zone_config: in [{section}] workspace {number} has an empty profile name"
+msgstr "zone_config: in [{section}] workspace {number} has an empty profile name"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: в [{section}] неизвестное направление '{direction}': можно "
-"{directions}"
-msgstr ""
-"zone_config: in [{section}] unknown direction '{direction}': available "
-"{directions}"
+msgid "zone_config: в [{section}] неизвестное направление '{direction}': можно {directions}"
+msgstr "zone_config: in [{section}] unknown direction '{direction}': available {directions}"
 
 #: zone_config.py
 #, python-brace-format
 msgid "zone_config: в [{section}] у направления '{direction}' пустое сочетание"
-msgstr ""
-"zone_config: in [{section}] direction '{direction}' has an empty shortcut"
+msgstr "zone_config: in [{section}] direction '{direction}' has an empty shortcut"
 
 #: zone_config.py
 #, python-brace-format
@@ -1920,56 +1714,33 @@ msgstr "zone_config: in [{section}] unknown key '{field}': available {fields}"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: в [{section}] height — целое число пикселей больше нуля, а не "
-"'{text}'"
-msgstr ""
-"zone_config: in [{section}] height must be an integer number of pixels "
-"greater than zero, not '{text}'"
+msgid "zone_config: в [{section}] height — целое число пикселей больше нуля, а не '{text}'"
+msgstr "zone_config: in [{section}] height must be an integer number of pixels greater than zero, not '{text}'"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: действие '{name}' задано дважды: [{first}] и [{second}] — имена "
-"действий сравниваются без учёта регистра"
-msgstr ""
-"zone_config: action '{name}' is defined twice: [{first}] and [{second}] - "
-"action names are compared case-insensitively"
+msgid "zone_config: действие '{name}' задано дважды: [{first}] и [{second}] — имена действий сравниваются без учёта регистра"
+msgstr "zone_config: action '{name}' is defined twice: [{first}] and [{second}] - action names are compared case-insensitively"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: пустое имя действия в секции [{section}]: пишите [action:"
-"<имя>], например [action:term-main]"
-msgstr ""
-"zone_config: empty action name in section [{section}]: write [action:"
-"<name>], for example [action:term-main]"
+msgid "zone_config: пустое имя действия в секции [{section}]: пишите [action:<имя>], например [action:term-main]"
+msgstr "zone_config: empty action name in section [{section}]: write [action:<name>], for example [action:term-main]"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: имя действия '{name}' из секции [{section}]: можно строчные "
-"латинские буквы, цифры, дефис и подчёркивание — имя попадает в командную "
-"строку клавиши"
-msgstr ""
-"zone_config: action name '{name}' in section [{section}]: only lowercase "
-"Latin letters, digits, dash and underscore are allowed - the name ends up in "
-"the key's command line"
+msgid "zone_config: имя действия '{name}' из секции [{section}]: можно строчные латинские буквы, цифры, дефис и подчёркивание — имя попадает в командную строку клавиши"
+msgstr "zone_config: action name '{name}' in section [{section}]: only lowercase Latin letters, digits, dash and underscore are allowed - the name ends up in the key's command line"
 
 #: zone_config.py
 #, python-brace-format
 msgid "zone_config: в [{section}] неизвестное поле '{field}': можно {fields}"
-msgstr ""
-"zone_config: in [{section}] unknown field '{field}': available {fields}"
+msgstr "zone_config: in [{section}] unknown field '{field}': available {fields}"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: в [{section}] пустое обязательное поле run: нужно builtin:<имя> "
-"или внешняя команда"
-msgstr ""
-"zone_config: in [{section}] required field run is empty: builtin:<name> or "
-"an external command is required"
+msgid "zone_config: в [{section}] пустое обязательное поле run: нужно builtin:<имя> или внешняя команда"
+msgstr "zone_config: in [{section}] required field run is empty: builtin:<name> or an external command is required"
 
 #: zone_config.py
 #, python-brace-format
@@ -1983,38 +1754,23 @@ msgstr "zone_config: in [{section}] empty value of {field}"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: в [{section}] поле command бывает только у builtin:{builtin}, а "
-"run = '{run}'"
-msgstr ""
-"zone_config: in [{section}] the command field exists only for builtin:"
-"{builtin}, but run = '{run}'"
+msgid "zone_config: в [{section}] поле command бывает только у builtin:{builtin}, а run = '{run}'"
+msgstr "zone_config: in [{section}] the command field exists only for builtin:{builtin}, but run = '{run}'"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: в [{section}] пустое значение command: чем запускать терминал"
-msgstr ""
-"zone_config: in [{section}] empty command value: what to launch the terminal "
-"with"
+msgid "zone_config: в [{section}] пустое значение command: чем запускать терминал"
+msgstr "zone_config: in [{section}] empty command value: what to launch the terminal with"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: в [{section}] поле axis бывает только у builtin:{builtin}, а "
-"run = '{run}'"
-msgstr ""
-"zone_config: in [{section}] the axis field exists only for builtin:"
-"{builtin}, but run = '{run}'"
+msgid "zone_config: в [{section}] поле axis бывает только у builtin:{builtin}, а run = '{run}'"
+msgstr "zone_config: in [{section}] the axis field exists only for builtin:{builtin}, but run = '{run}'"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: в [{section}] неизвестная ось зеркала axis = '{axis}': можно "
-"{axes}"
-msgstr ""
-"zone_config: in [{section}] unknown mirror axis axis = '{axis}': available "
-"{axes}"
+msgid "zone_config: в [{section}] неизвестная ось зеркала axis = '{axis}': можно {axes}"
+msgstr "zone_config: in [{section}] unknown mirror axis axis = '{axis}': available {axes}"
 
 #: zone_config.py
 msgid "номер стола должен быть целым: {value!r}"
@@ -2054,29 +1810,18 @@ msgstr "profile \"{profile}\" is not on disk: the binding does not apply yet"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"выхода {output} сейчас {note}: привязка не действует, пока экран не подключён"
-msgstr ""
-"output {output} is currently {note}: the binding does not apply until the "
-"monitor is connected"
+msgid "выхода {output} сейчас {note}: привязка не действует, пока экран не подключён"
+msgstr "output {output} is currently {note}: the binding does not apply until the monitor is connected"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"профиля «{profile}» нет на диске: стол {number} пока раскладывается общим "
-"набором"
-msgstr ""
-"profile \"{profile}\" is not on disk: workspace {number} is laid out by the "
-"default set for now"
+msgid "профиля «{profile}» нет на диске: стол {number} пока раскладывается общим набором"
+msgstr "profile \"{profile}\" is not on disk: workspace {number} is laid out by the default set for now"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: пустое имя монитора в секции [{section}]: пишите [zones:<имя "
-"выхода>], например [zones:HDMI-1]"
-msgstr ""
-"zone_config: empty monitor name in section [{section}]: write [zones:<output "
-"name>], for example [zones:HDMI-1]"
+msgid "zone_config: пустое имя монитора в секции [{section}]: пишите [zones:<имя выхода>], например [zones:HDMI-1]"
+msgstr "zone_config: empty monitor name in section [{section}]: write [zones:<output name>], for example [zones:HDMI-1]"
 
 #: zone_config.py
 #, python-brace-format
@@ -2100,12 +1845,8 @@ msgstr "zone_config: section [{name}] is defined twice: keep only one"
 
 #: zone_config.py
 #, python-brace-format
-msgid ""
-"zone_config: секции [{first}] и [{second}] отличаются только регистром: "
-"склеенная секция перестанет читаться — оставьте одну"
-msgstr ""
-"zone_config: sections [{first}] and [{second}] differ only in case: "
-"a merged section would no longer be readable — keep only one"
+msgid "zone_config: секции [{first}] и [{second}] отличаются только регистром: склеенная секция перестанет читаться — оставьте одну"
+msgstr "zone_config: sections [{first}] and [{second}] differ only in case: a merged section would no longer be readable — keep only one"
 
 #: zone_config.py
 msgid "плохое имя профиля: {name!r}"
@@ -2124,6 +1865,44 @@ msgstr "a profile without zones has nothing to save"
 #, python-brace-format
 msgid "не удалось записать профиль «{name}»: {error}"
 msgstr "failed to write profile \"{name}\": {error}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "нет раскладки «{id}» в галерее"
+msgstr "no layout \"{id}\" in the gallery"
+
+#: zone_config.py
+#, python-brace-format
+msgid "не разобрать раскладку галереи {path}: {error}"
+msgstr "cannot parse gallery layout {path}: {error}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "не прочитать раскладку галереи {path}: {error}"
+msgstr "cannot read gallery layout {path}: {error}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "не прочитать раскладку галереи {path}"
+msgstr "cannot read gallery layout {path}"
+
+#: zone_config.py
+msgid "в раскладке «{id}» order в [gallery] должен быть числом, а не {value!r}"
+msgstr "layout \"{id}\": order in [gallery] must be a number, not {value!r}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "в раскладке «{id}» нет секции [zones]"
+msgstr "layout \"{id}\" has no [zones] section"
+
+#: zone_config.py
+msgid "плохое имя профиля для раскладки «{id}»: {name!r}"
+msgstr "bad profile name for layout \"{id}\": {name!r}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "профиль «{name}» уже есть: выберите другое имя или перезапишите его"
+msgstr "profile \"{name}\" already exists: choose another name or overwrite it"
 
 #: zone_config.py
 #, python-brace-format
@@ -2176,14 +1955,11 @@ msgstr "in JSON profile {key} must be {version}, not {value!r}"
 
 #: zone_config.py
 msgid "плохое имя профиля: укажите --name, в JSON имя {name!r} не годится"
-msgstr ""
-"bad profile name: specify --name, the name {name!r} in JSON will not do"
+msgstr "bad profile name: specify --name, the name {name!r} in JSON will not do"
 
 #: zone_config.py
-msgid ""
-"в JSON-профиле monitors должен быть объектом {выход: {зона: [x, y, w, h]}}"
-msgstr ""
-"in JSON profile monitors must be an object {output: {zone: [x, y, w, h]}}"
+msgid "в JSON-профиле monitors должен быть объектом {выход: {зона: [x, y, w, h]}}"
+msgstr "in JSON profile monitors must be an object {output: {zone: [x, y, w, h]}}"
 
 #: zone_config.py
 msgid "в JSON-профиле пустое имя монитора в monitors"
@@ -2295,11 +2071,8 @@ msgid "zone-picker: нет активного окна"
 msgstr "zone-picker: no active window"
 
 #: zone-picker.py
-msgid ""
-"zone-picker: окно 0x{:x} под исключением ([ignore]/служебный тип) — не двигаю"
-msgstr ""
-"zone-picker: window 0x{:x} is excluded ([ignore]/utility window type) - not "
-"moving it"
+msgid "zone-picker: окно 0x{:x} под исключением ([ignore]/служебный тип) — не двигаю"
+msgstr "zone-picker: window 0x{:x} is excluded ([ignore]/utility window type) - not moving it"
 
 #: zone-picker.py
 msgid "нужны экранные координаты X,Y, а не {!r}"
@@ -2334,8 +2107,7 @@ msgid "zone-picker: stdin не читается: {}"
 msgstr "zone-picker: cannot read stdin: {}"
 
 #: zone-picker.py
-msgid ""
-"Оверлей визуального выбора зоны: стрелки, Enter — вложить, Esc — отмена."
+msgid "Оверлей визуального выбора зоны: стрелки, Enter — вложить, Esc — отмена."
 msgstr "Visual zone picker overlay: arrows, Enter - place, Esc - cancel."
 
 #: zone-picker.py
@@ -2367,13 +2139,8 @@ msgid "начальное выделение по имени зоны"
 msgstr "initial selection by zone name"
 
 #: zone-picker.py
-msgid ""
-"рабочий стол для сетки: номер (EWMH, с нуля), current (сетка активного стола "
-"— по умолчанию) или conf (всегда zones.conf, без профилей столов)"
-msgstr ""
-"workspace for the grid: number (EWMH, zero-based), current (the active "
-"workspace's grid - default) or conf (always zones.conf, without workspace "
-"profiles)"
+msgid "рабочий стол для сетки: номер (EWMH, с нуля), current (сетка активного стола — по умолчанию) или conf (всегда zones.conf, без профилей столов)"
+msgstr "workspace for the grid: number (EWMH, zero-based), current (the active workspace's grid - default) or conf (always zones.conf, without workspace profiles)"
 
 #: zone-picker.py
 msgid "сверить рамку окна после вложения"
@@ -2384,24 +2151,16 @@ msgid "не печатать строку о вложении"
 msgstr "do not print the placement line"
 
 #: zone-picker.py
-msgid ""
-"пассивная сетка с подсветкой зоны под точкой (для перетаскивания: без фокуса "
-"и ввода)"
-msgstr ""
-"passive grid with the zone under the pointer highlighted (for dragging: no "
-"focus or input)"
+msgid "пассивная сетка с подсветкой зоны под точкой (для перетаскивания: без фокуса и ввода)"
+msgstr "passive grid with the zone under the pointer highlighted (for dragging: no focus or input)"
 
 #: zone-picker.py
 msgid "--hud: точка подсветки в экранных координатах (один кадр и выход)"
 msgstr "--hud: highlight point in screen coordinates (one frame and exit)"
 
 #: zone-picker.py
-msgid ""
-"--hud: читать точки «X Y» из stdin и перерисовывать подсветку (EOF/SIGTERM — "
-"выход)"
-msgstr ""
-"--hud: read \"X Y\" points from stdin and redraw the highlight (EOF/SIGTERM "
-"- exit)"
+msgid "--hud: читать точки «X Y» из stdin и перерисовывать подсветку (EOF/SIGTERM — выход)"
+msgstr "--hud: read \"X Y\" points from stdin and redraw the highlight (EOF/SIGTERM - exit)"
 
 #: zone-picker.py
 msgid "zone-picker: --at и --follow работают только вместе с --hud"
@@ -2409,27 +2168,19 @@ msgstr "zone-picker: --at and --follow only work together with --hud"
 
 #: zone-picker.py
 msgid "zone-picker: --hud несовместим с {}: HUD только рисует сетку"
-msgstr ""
-"zone-picker: --hud is incompatible with {}: the HUD only draws the grid"
+msgstr "zone-picker: --hud is incompatible with {}: the HUD only draws the grid"
 
 #: zone-picker.py
-msgid ""
-"zone-picker: --at и --follow взаимоисключающие: --at — один кадр, --follow — "
-"поток"
-msgstr ""
-"zone-picker: --at and --follow are mutually exclusive: --at - one frame, --"
-"follow - a stream"
+msgid "zone-picker: --at и --follow взаимоисключающие: --at — один кадр, --follow — поток"
+msgstr "zone-picker: --at and --follow are mutually exclusive: --at - one frame, --follow - a stream"
 
 #: zone-picker.py
 msgid "zone-picker: для --hud нужен источник точки: --at X,Y или --follow"
 msgstr "zone-picker: --hud needs a point source: --at X,Y or --follow"
 
 #: zone-picker.py
-msgid ""
-"zone-picker: --shot не работает с --follow: снимок — это один кадр (--at)"
-msgstr ""
-"zone-picker: --shot does not work with --follow: a snapshot is one frame (--"
-"at)"
+msgid "zone-picker: --shot не работает с --follow: снимок — это один кадр (--at)"
+msgstr "zone-picker: --shot does not work with --follow: a snapshot is one frame (--at)"
 
 #: zone-picker.py
 msgid "zone-picker: не найден конфиг {}"
@@ -2453,8 +2204,7 @@ msgstr "zone-picker: the config has no zones for monitor {}"
 
 #: zone-picker.py
 msgid "zone-picker: снимок HUD записан в {} ({}x{}), точка {},{} -> {} — {}"
-msgstr ""
-"zone-picker: HUD snapshot written to {} ({}x{}), point {},{} -> {} - {}"
+msgstr "zone-picker: HUD snapshot written to {} ({}x{}), point {},{} -> {} - {}"
 
 #: zone-picker.py
 msgid "zone-picker: снимок оверлея записан в {} ({}x{}) — {}"
@@ -2547,8 +2297,7 @@ msgstr "failed to parse the action command: {error}"
 #: zone_actions.py
 #, python-brace-format
 msgid "в команде действия неизвестная подстановка '{{{name}}}': можно {known}"
-msgstr ""
-"unknown substitution '{{{name}}}' in the action command: available {known}"
+msgstr "unknown substitution '{{{name}}}' in the action command: available {known}"
 
 #: zone_actions.py
 #, python-brace-format
@@ -2561,16 +2310,12 @@ msgid "зоны '{zone}' нет в сетке — зеркалить нечег�
 msgstr "no zone '{zone}' in the grid - nothing to mirror"
 
 #: zone-tabstrip.py
-msgid ""
-"zone-tabstrip: нужен GTK 3 для python3 (python3-gi и gir1.2-gtk-3.0) — без "
-"него полосу вкладок не нарисовать: {}"
-msgstr ""
-"zone-tabstrip: GTK 3 for python3 is required (python3-gi and gir1.2-gtk-3.0) "
-"- without it the tab bar cannot be drawn: {}"
-
-#: zone-tabstrip.py
 msgid "не удалось загрузить zone-tiler.py"
 msgstr "zone-tiler.py could not be loaded"
+
+#: zone-tabstrip.py
+msgid "zone-tabstrip: нужен GTK 3 для python3 (python3-gi и gir1.2-gtk-3.0) — без него полосу вкладок не нарисовать: {}"
+msgstr "zone-tabstrip: GTK 3 for python3 is required (python3-gi and gir1.2-gtk-3.0) - without it the tab bar cannot be drawn: {}"
 
 #: zone-tabstrip.py
 msgid "демон не отвечает: {}"
@@ -2601,12 +2346,8 @@ msgid "Полоса вкладок поверх зоны (Cinnamon/X11)"
 msgstr "Tab bar over a zone (Cinnamon/X11)"
 
 #: zone-tabstrip.py
-msgid ""
-"путь к zones.conf: так полосу запускает демон; сама полоса конфиг не читает "
-"— рамки и подписи приходят в снимке"
-msgstr ""
-"path to zones.conf: this is how the daemon starts the bar; the bar itself "
-"does not read the config - frames and captions come in the snapshot"
+msgid "путь к zones.conf: так полосу запускает демон; сама полоса конфиг не читает — рамки и подписи приходят в снимке"
+msgstr "path to zones.conf: this is how the daemon starts the bar; the bar itself does not read the config - frames and captions come in the snapshot"
 
 #: zone-tabstrip.py
 msgid "путь сокета демона (по умолчанию — как у gridsnap-ctl)"
@@ -2657,12 +2398,8 @@ msgid "zone-hotcorners: сетка зон не прочитана, перета�
 msgstr "zone-hotcorners: zone grid not read, dragging abandoned"
 
 #: zone-hotcorners.py
-msgid ""
-"окно 0x{:x} под исключением ([ignore]/служебный тип) — перетаскивание не "
-"отслеживаю"
-msgstr ""
-"window 0x{:x} is excluded ([ignore]/utility window type) - not tracking the "
-"drag"
+msgid "окно 0x{:x} под исключением ([ignore]/служебный тип) — перетаскивание не отслеживаю"
+msgstr "window 0x{:x} is excluded ([ignore]/utility window type) - not tracking the drag"
 
 #: zone-hotcorners.py
 msgid "arm: окно 0x{:x}, титлбар {} px, нажатие {}"
@@ -2681,12 +2418,8 @@ msgid "отпущено в {} — мимо зон, окно не двигаем"
 msgstr "released in {} - off the zones, not moving the window"
 
 #: zone-hotcorners.py
-msgid ""
-"окно 0x{:x} -> зона '{}': x={} y={} {}x{} (монитор {}: {}) — dry-run, окно "
-"не двигаем"
-msgstr ""
-"window 0x{:x} -> zone '{}': x={} y={} {}x{} (monitor {}: {}) - dry-run, not "
-"moving the window"
+msgid "окно 0x{:x} -> зона '{}': x={} y={} {}x{} (монитор {}: {}) — dry-run, окно не двигаем"
+msgstr "window 0x{:x} -> zone '{}': x={} y={} {}x{} (monitor {}: {}) - dry-run, not moving the window"
 
 #: zone-hotcorners.py
 msgid "окно 0x{:x} -> зона '{}': x={} y={} {}x{}"
@@ -2729,28 +2462,16 @@ msgid "не удалось подключиться к X-серверу (DISPLAY
 msgstr "failed to connect to the X server (DISPLAY)"
 
 #: zone-hotcorners.py
-msgid ""
-"Перетаскивание окна за титлбар вкладывает его в зону GridSnap (Cinnamon/X11)"
-msgstr ""
-"Dragging a window by its title bar places it into a GridSnap zone (Cinnamon/"
-"X11)"
+msgid "Перетаскивание окна за титлбар вкладывает его в зону GridSnap (Cinnamon/X11)"
+msgstr "Dragging a window by its title bar places it into a GridSnap zone (Cinnamon/X11)"
 
 #: zone-hotcorners.py
-msgid ""
-"Watcher слушает XInput2 raw events на root (grab'ов не делает), водит HUD "
-"zone-picker --hud и вкладывает активное окно в зону под точкой отпускания. "
-"Если XI2 недоступен — опрос XQueryPointer ~30 Гц."
-msgstr ""
-"The watcher listens to XInput2 raw events on the root (it makes no grabs), "
-"drives the zone-picker --hud HUD and places the active window into the zone "
-"under the release point. If XI2 is unavailable - XQueryPointer polling at "
-"~30 Hz."
+msgid "Watcher слушает XInput2 raw events на root (grab'ов не делает), водит HUD zone-picker --hud и вкладывает активное окно в зону под точкой отпускания. Если XI2 недоступен — опрос XQueryPointer ~30 Гц."
+msgstr "The watcher listens to XInput2 raw events on the root (it makes no grabs), drives the zone-picker --hud HUD and places the active window into the zone under the release point. If XI2 is unavailable - XQueryPointer polling at ~30 Hz."
 
 #: zone-hotcorners.py
 msgid "не двигать окно и не менять настройки — только печатать, что сделал бы"
-msgstr ""
-"do not move the window and do not change settings - only print what it would "
-"do"
+msgstr "do not move the window and do not change settings - only print what it would do"
 
 #: zone-hotcorners.py
 msgid "печатать в stderr, что происходит (arm, HUD, edge-tiling, дроп)"
@@ -2774,16 +2495,8 @@ msgstr "zone-hotcorners: {}; config {}"
 
 #: setup-hotkeys.py
 #, python-brace-format
-msgid ""
-"setup-hotkeys: внимание: {binding} для move {direction} совпадает с родным "
-"{prefix}{direction} muffin — на этой клавише сработает один из двух "
-"обработчиков. Родное сочетание не выключаю: задайте своё в [move] или "
-"отключите push-tile в настройках Cinnamon"
-msgstr ""
-"setup-hotkeys: warning: {binding} for move {direction} matches muffin's "
-"native {prefix}{direction} - one of the two handlers will fire on this key. "
-"I am not disabling the native shortcut: set your own in [move] or turn off "
-"push-tile in Cinnamon settings"
+msgid "setup-hotkeys: внимание: {binding} для move {direction} совпадает с родным {prefix}{direction} muffin — на этой клавише сработает один из двух обработчиков. Родное сочетание не выключаю: задайте своё в [move] или отключите push-tile в настройках Cinnamon"
+msgstr "setup-hotkeys: warning: {binding} for move {direction} matches muffin's native {prefix}{direction} - one of the two handlers will fire on this key. I am not disabling the native shortcut: set your own in [move] or turn off push-tile in Cinnamon settings"
 
 #: setup-hotkeys.py
 msgid "Горячие клавиши зон для Cinnamon"
@@ -2821,9 +2534,7 @@ msgstr "gridsnap-ctl: specify a zone for apply, for example: apply main"
 
 #: gridsnap-ctl
 msgid "gridsnap-ctl: у focus нет --monitor: режим берёт монитор целевого окна"
-msgstr ""
-"gridsnap-ctl: focus takes no --monitor: the mode uses the target window's "
-"monitor"
+msgstr "gridsnap-ctl: focus takes no --monitor: the mode uses the target window's monitor"
 
 #: gridsnap-ctl
 msgid "gridsnap-ctl: у focus либо зона, либо --off, а не оба сразу"
@@ -2839,20 +2550,12 @@ msgid "Управление демоном GridSnap через локальны�
 msgstr "Control the GridSnap daemon over a local IPC socket"
 
 #: gridsnap-ctl
-msgid ""
-"Примеры: gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ctl focus "
-"main; gridsnap-ctl focus --off; gridsnap-ctl quit"
-msgstr ""
-"Examples: gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ctl focus "
-"main; gridsnap-ctl focus --off; gridsnap-ctl quit"
+msgid "Примеры: gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ctl focus main; gridsnap-ctl focus --off; gridsnap-ctl quit"
+msgstr "Examples: gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ctl focus main; gridsnap-ctl focus --off; gridsnap-ctl quit"
 
 #: gridsnap-ctl
-msgid ""
-"status — состояние; apply — вложить окно в зону; focus — режим «только эта "
-"зона»; reload — перечитать конфиг; quit — выйти"
-msgstr ""
-"status - state; apply - place the window in a zone; focus - focus mode; "
-"reload - re-read the config; quit - exit"
+msgid "status — состояние; apply — вложить окно в зону; focus — режим «только эта зона»; reload — перечитать конфиг; quit — выйти"
+msgstr "status - state; apply - place the window in a zone; focus - focus mode; reload - re-read the config; quit - exit"
 
 #: gridsnap-ctl
 msgid "имя зоны для apply и focus (у focus необязательна)"
@@ -2889,12 +2592,8 @@ msgstr "gridsnap-ctl: the daemon gave an unclear answer: {error}"
 
 #: gridsnap-ctl
 #, python-brace-format
-msgid ""
-"gridsnap-ctl: нет связи с демоном по сокету {path} ({error}). Запущен ли "
-"zone-daemon.py?"
-msgstr ""
-"gridsnap-ctl: no connection to the daemon over socket {path} ({error}). Is "
-"zone-daemon.py running?"
+msgid "gridsnap-ctl: нет связи с демоном по сокету {path} ({error}). Запущен ли zone-daemon.py?"
+msgstr "gridsnap-ctl: no connection to the daemon over socket {path} ({error}). Is zone-daemon.py running?"
 
 #: gridsnap-ctl
 #, python-brace-format
@@ -2904,105 +2603,3 @@ msgstr "gridsnap-ctl: {error}"
 #: gridsnap-ctl
 msgid "команда отклонена"
 msgstr "command rejected"
-
-#: zone-editor.py
-msgid "Из галереи…"
-msgstr "From the gallery…"
-
-#: zone-editor.py
-msgid "Готовые раскладки: зоны, клавиши и правила для приложений"
-msgstr "Ready-made layouts: zones, hotkeys and application rules"
-
-#: zone-editor.py
-msgid "галерея не прочитана: {}"
-msgstr "gallery could not be read: {}"
-
-#: zone-editor.py
-msgid "в галерее нет ни одной раскладки"
-msgstr "the gallery has no layouts"
-
-#: zone-editor.py
-msgid "Галерея раскладок"
-msgstr "Layout gallery"
-
-#: zone-editor.py
-msgid "Добавить в профили"
-msgstr "Add to profiles"
-
-#: zone-editor.py
-msgid "Готовая раскладка — зоны, клавиши и правила для приложений. Выбор создаёт из неё профиль: дальше его правят как свой."
-msgstr "A ready-made layout is zones, hotkeys and application rules. Choosing it creates a profile; from then on you edit the profile as your own."
-
-#: zone-editor.py
-msgid "{} — зон: {}"
-msgstr "{} — {} zones"
-
-#: zone-editor.py
-msgid "раскладка не выбрана"
-msgstr "no layout selected"
-
-#: zone-editor.py
-msgid "Добавить раскладку в профили"
-msgstr "Add the layout to profiles"
-
-#: zone-editor.py
-msgid "Имя профиля для раскладки «{}»"
-msgstr "Profile name for the layout \"{}\""
-
-#: zone-editor.py
-msgid "Профиль «{}» уже есть. Перезаписать его раскладкой «{}»?"
-msgstr "Profile \"{}\" already exists. Overwrite it with the layout \"{}\"?"
-
-#: zone-editor.py
-msgid "раскладка не добавлена: профиль «{}» уже есть"
-msgstr "layout not added: profile \"{}\" already exists"
-
-#: zone-editor.py
-msgid "раскладка не добавлена: {}"
-msgstr "layout not added: {}"
-
-#: zone-editor.py
-msgid "раскладка «{}» → профиль «{}»: {}"
-msgstr "layout \"{}\" → profile \"{}\": {}"
-
-#: zone-editor.py
-msgid "Загрузить раскладку «{}» в холст?"
-msgstr "Load the layout \"{}\" into the canvas?"
-
-#: zone_config.py
-#, python-brace-format
-msgid "нет раскладки «{id}» в галерее"
-msgstr "no layout \"{id}\" in the gallery"
-
-#: zone_config.py
-#, python-brace-format
-msgid "не разобрать раскладку галереи {path}: {error}"
-msgstr "cannot parse gallery layout {path}: {error}"
-
-#: zone_config.py
-#, python-brace-format
-msgid "не прочитать раскладку галереи {path}: {error}"
-msgstr "cannot read gallery layout {path}: {error}"
-
-#: zone_config.py
-#, python-brace-format
-msgid "не прочитать раскладку галереи {path}"
-msgstr "cannot read gallery layout {path}"
-
-#: zone_config.py
-msgid "в раскладке «{id}» order в [gallery] должен быть числом, а не {value!r}"
-msgstr "layout \"{id}\": order in [gallery] must be a number, not {value!r}"
-
-#: zone_config.py
-#, python-brace-format
-msgid "в раскладке «{id}» нет секции [zones]"
-msgstr "layout \"{id}\" has no [zones] section"
-
-#: zone_config.py
-msgid "плохое имя профиля для раскладки «{id}»: {name!r}"
-msgstr "bad profile name for layout \"{id}\": {name!r}"
-
-#: zone_config.py
-#, python-brace-format
-msgid "профиль «{name}» уже есть: выберите другое имя или перезапишите его"
-msgstr "profile \"{name}\" already exists: choose another name or overwrite it"

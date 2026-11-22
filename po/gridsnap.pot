@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.2.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 20:47+0300\n"
+"POT-Creation-Date: 2026-11-22 20:52+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -659,7 +659,30 @@ msgid "zone-tiler: активный конфиг обновлён: экрано�
 msgstr ""
 
 #: zone-tiler.py
-msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>]"
+msgid "zone-tiler: галерея раскладок пуста"
+msgstr ""
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "{id}\t{title}\tзон: {count}\t{description}"
+msgstr ""
+
+#: zone-tiler.py
+msgid "zone-tiler: profile from-gallery — укажите id раскладки (см. profile gallery)"
+msgstr ""
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "профиль «{name}» создан из готовой раскладки «{id}»: {path}"
+msgstr ""
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "применить: zone-tiler.py profile use {name}"
+msgstr ""
+
+#: zone-tiler.py
+msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>] [--force]"
 msgstr ""
 
 #: zone-tiler.py
@@ -747,7 +770,11 @@ msgid "ИМЯ"
 msgstr ""
 
 #: zone-tiler.py
-msgid "profile import: имя профиля (по умолчанию — из JSON)"
+msgid "profile import/from-gallery: имя профиля (import — по умолчанию из JSON)"
+msgstr ""
+
+#: zone-tiler.py
+msgid "profile from-gallery: перезаписать существующий профиль"
 msgstr ""
 
 #: zone-tiler.py
