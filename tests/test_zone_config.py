@@ -18,6 +18,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 try:
     import i18n_env  # noqa: F401  (тесты идут на исходном языке)
@@ -677,6 +678,53 @@ class TestSaveWorkspaceMap(ConfMixin, unittest.TestCase):
         self.assertEqual(extra.get("workspaces"), ["2 = cinema"])
         zc.save_zone_sets(path, [zc.Zone("main", 0, 0, 1, 1)], extra=extra)
         self.assertEqual(zc.load_workspace_map(path), {2: "cinema"})
+
+
+class GalleryDirTest(unittest.TestCase):
+    """Где искать каталог готовых раскладок — тот же порядок, что у установки.
+
+    `zone_config.gallery_dir` — единственное место, где галерея зависит от того,
+    как поставлен GridSnap: в чекауте она рядом с кодом, в установке — в
+    `<префикс>/share/gridsnap/gallery` (код при этом в `<префикс>/lib/gridsnap`).
+    Ошибка здесь не падает тестами из чекаута, а видна только пользователю:
+    меню «Из галереи…» пустое.
+    """
+
+    def test_env_override_wins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {zc.GALLERY_ENV: tmp}):
+                self.assertEqual(zc.gallery_dir(), tmp)
+
+    def test_checkout_gallery_next_to_code(self):
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, "gallery"))
+            with mock.patch.object(zc, "HERE", root), mock.patch.object(
+                zc, "GALLERY_ENV", "GRIDSNAP_GALLERY_TEST_ABSENT"
+            ):
+                self.assertEqual(zc.gallery_dir(), os.path.join(root, "gallery"))
+
+    def test_installed_gallery_in_share_prefix(self):
+        # Код в <префикс>/lib/gridsnap, данные — в <префикс>/share/gridsnap/gallery.
+        with tempfile.TemporaryDirectory() as prefix:
+            lib = os.path.join(prefix, "lib", "gridsnap")
+            share = os.path.join(prefix, "share", "gridsnap", "gallery")
+            os.makedirs(lib)
+            os.makedirs(share)
+            with mock.patch.object(zc, "HERE", lib), mock.patch.object(
+                zc, "GALLERY_ENV", "GRIDSNAP_GALLERY_TEST_ABSENT"
+            ):
+                self.assertEqual(zc.gallery_dir(), share)
+                self.assertEqual(zc.gallery_ids(), [])
+
+    def test_shipped_layouts_are_profiles_with_meta(self):
+        # Каждый файл поставки читается той же дорогой, что профиль: зоны,
+        # клавиши, правила. Кривой файл не должен доехать до пользователя.
+        self.assertGreaterEqual(len(zc.gallery_ids()), 6)
+        for gid in zc.gallery_ids():
+            layout = zc.load_gallery_layout(gid)
+            self.assertTrue(layout["zones"], gid)
+            self.assertTrue(layout["title"].strip(), gid)
+            self.assertTrue(layout["description"].strip(), gid)
 
 
 if __name__ == "__main__":

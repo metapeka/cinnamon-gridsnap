@@ -80,7 +80,9 @@ MAN_PAGES      := $(MAN_SOURCE) $(addprefix man/,$(MAN_ALIASES))
 RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.md LICENSE Makefile PKGBUILD
 # `locale/` — сборка (`make mo`), но в tar.gz она обязательна: иначе install.sh
 # из архива нечего ставить. Поэтому tarball зависит от mo.
-RELEASE_DIRS := icons docs contrib man $(LOCALEDIR)
+# `gallery/` — готовые раскладки (зон + клавиши + правила): `zone_config` ищет их
+# рядом с кодом в чекауте и в `<префикс>/share/gridsnap/gallery` после установки.
+RELEASE_DIRS := icons docs contrib man gallery $(LOCALEDIR)
 MANPAGES := gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
             gridsnap-picker.1 gridsnap-hotcorners.1 gridsnap-ctl.1 setup-hotkeys.1
 ICON_SIZES := 16 22 24 32 48 64 128 256 512
@@ -243,12 +245,14 @@ deb: check-version mo man
 	@rm -rf "$(DEBROOT)"
 	@mkdir -p "$(DEBROOT)/DEBIAN" "$(DEBROOT)$(DATADIR)" \
 	          "$(DEBROOT)$(BINDIR)" "$(DEBROOT)/usr/share/applications" \
+	          "$(DEBROOT)/usr/share/gridsnap/gallery" \
 	          "$(DEBROOT)/usr/share/doc/$(PKG)"
 	@install -m 0644 $(MODULES) "$(DEBROOT)$(DATADIR)/"
 	@install -m 0644 $(CLIENTS) "$(DEBROOT)$(DATADIR)/"
 	@install -m 0644 zones.conf "$(DEBROOT)$(DATADIR)/zones.conf"
 	@install -m 0755 install-launcher.sh install-daemon.sh "$(DEBROOT)$(DATADIR)/"
 	@cp -a icons "$(DEBROOT)$(DATADIR)/icons"
+	@install -m 0644 gallery/*.conf "$(DEBROOT)/usr/share/gridsnap/gallery/"
 	@cp -a docs "$(DEBROOT)/usr/share/doc/$(PKG)/docs"
 	@install -m 0644 README.md SPEC.md LICENSE "$(DEBROOT)/usr/share/doc/$(PKG)/"
 

@@ -731,6 +731,32 @@ The command itself rewrites `[zones]`/`[rules]`/`[ignore]`/`[keys]` in your `zon
 chosen profile. If the new zone keys should work right after the switch, keep the
 `setup-hotkeys.py` call (it is on by default) or press “keybindings” in the editor.
 
+### 9.3. Ready-made layouts: the gallery
+
+You do not have to draw a grid from scratch: the package ships ready-made layouts in
+`gallery/*.conf` — a set of zones **plus** `[keys]` **plus** `[rules]` for applications, that is a
+whole scenario rather than geometry. There are the classics (“Two columns”, “Main + stack”,
+“2×2 grid”, “Three columns”) and the scenarios: “Work” (mail and chat on the left, the editor in the
+centre, the terminal below; Firefox, Thunderbird and terminals land where they belong), “Cinema”
+(the player takes the whole work area), “Stream” (scene, chat, preview) and “Development”
+(terminal, editor, docs).
+
+In the editor press “From the gallery…” next to “Profiles”: pick a layout and it is **copied** into
+your profile (`templates/<name>.conf`); from then on you edit it as your own — the gallery itself is
+never changed. The same from the command line:
+
+```bash
+python3 zone-tiler.py profile gallery                  # what is in the gallery
+python3 zone-tiler.py profile from-gallery work        # profile “work” from the layout
+python3 zone-tiler.py profile from-gallery work mine   # under your own name
+python3 zone-tiler.py profile use mine                 # and switch to it
+```
+
+An existing profile is not overwritten silently: `from-gallery` refuses until you pass `--force`.
+Your own layouts can be put next to the shipped ones in `<prefix>/share/gridsnap/gallery/` (or
+pointed at with the `GRIDSNAP_GALLERY` variable); files are ordinary `.conf` with an extra `[gallery]`
+section — `title`, `description` and an optional `order` for the menu.
+
 <!-- section: applet -->
 ## 10. The Cinnamon applet: GridSnap from the panel
 

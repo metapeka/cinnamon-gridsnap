@@ -51,6 +51,11 @@ package() {
     install -m 0755 install-launcher.sh install-daemon.sh "$pkgdir/usr/lib/gridsnap/"
     cp -a icons "$pkgdir/usr/lib/gridsnap/icons"
 
+    # Готовые раскладки: zone_config ищет их в /usr/share/gridsnap/gallery
+    # (там же, где их оставляет make deb).
+    install -d "$pkgdir/usr/share/gridsnap/gallery"
+    install -m 0644 gallery/*.conf "$pkgdir/usr/share/gridsnap/gallery/"
+
     install -d "$pkgdir/usr/bin"
     local m c
     for m in "zone-tiler.py:gridsnap-tiler" \

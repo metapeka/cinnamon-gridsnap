@@ -2803,3 +2803,105 @@ msgstr "gridsnap-ctl: {error}"
 #: gridsnap-ctl
 msgid "команда отклонена"
 msgstr "命令被拒绝"
+
+#: zone-editor.py
+msgid "Из галереи…"
+msgstr "从模板库…"
+
+#: zone-editor.py
+msgid "Готовые раскладки: зоны, клавиши и правила для приложений"
+msgstr "现成布局：区域、快捷键和应用规则"
+
+#: zone-editor.py
+msgid "галерея не прочитана: {}"
+msgstr "无法读取模板库：{}"
+
+#: zone-editor.py
+msgid "в галерее нет ни одной раскладки"
+msgstr "模板库中没有任何布局"
+
+#: zone-editor.py
+msgid "Галерея раскладок"
+msgstr "布局模板库"
+
+#: zone-editor.py
+msgid "Добавить в профили"
+msgstr "添加到方案"
+
+#: zone-editor.py
+msgid "Готовая раскладка — зоны, клавиши и правила для приложений. Выбор создаёт из неё профиль: дальше его правят как свой."
+msgstr "现成布局包含区域、快捷键和应用规则。选择后会据此创建方案，之后即可像自己的方案一样编辑。"
+
+#: zone-editor.py
+msgid "{} — зон: {}"
+msgstr "{} — 区域：{}"
+
+#: zone-editor.py
+msgid "раскладка не выбрана"
+msgstr "未选择布局"
+
+#: zone-editor.py
+msgid "Добавить раскладку в профили"
+msgstr "将布局添加到方案"
+
+#: zone-editor.py
+msgid "Имя профиля для раскладки «{}»"
+msgstr "布局「{}」的方案名称"
+
+#: zone-editor.py
+msgid "Профиль «{}» уже есть. Перезаписать его раскладкой «{}»?"
+msgstr "方案「{}」已存在。要用布局「{}」覆盖它吗？"
+
+#: zone-editor.py
+msgid "раскладка не добавлена: профиль «{}» уже есть"
+msgstr "未添加布局：方案「{}」已存在"
+
+#: zone-editor.py
+msgid "раскладка не добавлена: {}"
+msgstr "未添加布局：{}"
+
+#: zone-editor.py
+msgid "раскладка «{}» → профиль «{}»: {}"
+msgstr "布局「{}」→ 方案「{}」：{}"
+
+#: zone-editor.py
+msgid "Загрузить раскладку «{}» в холст?"
+msgstr "将布局「{}」加载到画布？"
+
+#: zone_config.py
+#, python-brace-format
+msgid "нет раскладки «{id}» в галерее"
+msgstr "模板库中没有布局「{id}」"
+
+#: zone_config.py
+#, python-brace-format
+msgid "не разобрать раскладку галереи {path}: {error}"
+msgstr "无法解析模板库布局 {path}：{error}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "не прочитать раскладку галереи {path}: {error}"
+msgstr "无法读取模板库布局 {path}：{error}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "не прочитать раскладку галереи {path}"
+msgstr "无法读取模板库布局 {path}"
+
+#: zone_config.py
+msgid "в раскладке «{id}» order в [gallery] должен быть числом, а не {value!r}"
+msgstr "布局「{id}」：[gallery] 中的 order 必须是数字，而不是 {value!r}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "в раскладке «{id}» нет секции [zones]"
+msgstr "布局「{id}」没有 [zones] 段"
+
+#: zone_config.py
+msgid "плохое имя профиля для раскладки «{id}»: {name!r}"
+msgstr "为布局「{id}」指定的方案名称无效：{name!r}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "профиль «{name}» уже есть: выберите другое имя или перезапишите его"
+msgstr "方案「{name}」已存在：请换一个名称或覆盖它"

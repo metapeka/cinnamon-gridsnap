@@ -2904,3 +2904,105 @@ msgstr "gridsnap-ctl: {error}"
 #: gridsnap-ctl
 msgid "команда отклонена"
 msgstr "command rejected"
+
+#: zone-editor.py
+msgid "Из галереи…"
+msgstr "From the gallery…"
+
+#: zone-editor.py
+msgid "Готовые раскладки: зоны, клавиши и правила для приложений"
+msgstr "Ready-made layouts: zones, hotkeys and application rules"
+
+#: zone-editor.py
+msgid "галерея не прочитана: {}"
+msgstr "gallery could not be read: {}"
+
+#: zone-editor.py
+msgid "в галерее нет ни одной раскладки"
+msgstr "the gallery has no layouts"
+
+#: zone-editor.py
+msgid "Галерея раскладок"
+msgstr "Layout gallery"
+
+#: zone-editor.py
+msgid "Добавить в профили"
+msgstr "Add to profiles"
+
+#: zone-editor.py
+msgid "Готовая раскладка — зоны, клавиши и правила для приложений. Выбор создаёт из неё профиль: дальше его правят как свой."
+msgstr "A ready-made layout is zones, hotkeys and application rules. Choosing it creates a profile; from then on you edit the profile as your own."
+
+#: zone-editor.py
+msgid "{} — зон: {}"
+msgstr "{} — {} zones"
+
+#: zone-editor.py
+msgid "раскладка не выбрана"
+msgstr "no layout selected"
+
+#: zone-editor.py
+msgid "Добавить раскладку в профили"
+msgstr "Add the layout to profiles"
+
+#: zone-editor.py
+msgid "Имя профиля для раскладки «{}»"
+msgstr "Profile name for the layout \"{}\""
+
+#: zone-editor.py
+msgid "Профиль «{}» уже есть. Перезаписать его раскладкой «{}»?"
+msgstr "Profile \"{}\" already exists. Overwrite it with the layout \"{}\"?"
+
+#: zone-editor.py
+msgid "раскладка не добавлена: профиль «{}» уже есть"
+msgstr "layout not added: profile \"{}\" already exists"
+
+#: zone-editor.py
+msgid "раскладка не добавлена: {}"
+msgstr "layout not added: {}"
+
+#: zone-editor.py
+msgid "раскладка «{}» → профиль «{}»: {}"
+msgstr "layout \"{}\" → profile \"{}\": {}"
+
+#: zone-editor.py
+msgid "Загрузить раскладку «{}» в холст?"
+msgstr "Load the layout \"{}\" into the canvas?"
+
+#: zone_config.py
+#, python-brace-format
+msgid "нет раскладки «{id}» в галерее"
+msgstr "no layout \"{id}\" in the gallery"
+
+#: zone_config.py
+#, python-brace-format
+msgid "не разобрать раскладку галереи {path}: {error}"
+msgstr "cannot parse gallery layout {path}: {error}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "не прочитать раскладку галереи {path}: {error}"
+msgstr "cannot read gallery layout {path}: {error}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "не прочитать раскладку галереи {path}"
+msgstr "cannot read gallery layout {path}"
+
+#: zone_config.py
+msgid "в раскладке «{id}» order в [gallery] должен быть числом, а не {value!r}"
+msgstr "layout \"{id}\": order in [gallery] must be a number, not {value!r}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "в раскладке «{id}» нет секции [zones]"
+msgstr "layout \"{id}\" has no [zones] section"
+
+#: zone_config.py
+msgid "плохое имя профиля для раскладки «{id}»: {name!r}"
+msgstr "bad profile name for layout \"{id}\": {name!r}"
+
+#: zone_config.py
+#, python-brace-format
+msgid "профиль «{name}» уже есть: выберите другое имя или перезапишите его"
+msgstr "profile \"{name}\" already exists: choose another name or overwrite it"
