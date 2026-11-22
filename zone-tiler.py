@@ -3989,7 +3989,9 @@ def _main(argv=None):
     ap.add_argument(
         "--json",
         action="store_true",
-        help=_("profile export: печатать JSON в stdout, а не писать файл"),
+        help=_(
+            "profile export/gallery: печатать JSON (у export — в stdout, а не в файл)"
+        ),
     )
     ap.add_argument(
         "--name",
