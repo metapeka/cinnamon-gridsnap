@@ -22,7 +22,9 @@ setup-hotkeys.py — регистрирует в Cinnamon горячие кла�
 перемещения по зонам лучше выбрать в `[move]` свободные сочетания.
 
 Путь к zones.conf можно задать флагом ``--conf``: он передаётся и в
-``zone-tiler.py keys``, и в устанавливаемую команду сочетания.
+``zone-tiler.py keys``, и в устанавливаемую команду сочетания — в команду
+**абсолютным** путём, потому что Cinnamon запускает её не из каталога запуска и
+относительный путь дал бы молча неработающую клавишу.
 """
 
 import argparse
@@ -95,8 +97,15 @@ def zone_pairs(conf=None, *flags):
 
 
 def with_conf(command, conf=None):
-    """Команда сочетания с тем же `--conf`, что у самого скрипта."""
-    return command + (f" --conf {conf}" if conf else "")
+    """Команда сочетания с тем же `--conf`, что у самого скрипта.
+
+    Путь приводится к абсолютному: сочетание Cinnamon запускает не из каталога
+    запуска, и относительный `--conf zones.conf` превратился бы в «не найден
+    конфиг» (код 3) — то есть в молча неработающую клавишу (проверено живьём).
+    """
+    if not conf:
+        return command
+    return command + f" --conf {os.path.abspath(conf)}"
 
 
 def planned(conf=None):
@@ -214,6 +223,11 @@ def next_ids(kept, count):
     return ids
 
 
+def set_custom_list(ids):
+    """Записать `custom-list` Cinnamon (порядок id для нас не значим)."""
+    gs(LIST_SCHEMA, "custom-list", "[" + ", ".join(gvariant_str(i) for i in ids) + "]")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Горячие клавиши зон для Cinnamon")
     ap.add_argument("--list", action="store_true", help="только показать план")
@@ -237,8 +251,15 @@ def main():
         gs(path, "binding", "[" + gvariant_str(binding) + "]")
         gs(path, "command", gvariant_str(command))
 
-    new_list = kept + ids
-    gs(LIST_SCHEMA, "custom-list", "[" + ", ".join(gvariant_str(i) for i in new_list) + "]")
+    # Список пишется в два приёма: Cinnamon (`keybindings.js`) перечитывает записи
+    # только по сигналу `changed::custom-list`. Когда id переиспользуются — а это
+    # обычный случай, — новый список совпадает со старым, сигнала нет, и Cinnamon
+    # остаётся со старыми командами: правка пути или конфига не доезжает до клавиши
+    # (проверено живьём: нажатие звало прежний путь и падало с кодом 3).
+    # Поэтому сначала список без наших id, затем с ними: второй сигнал регистрирует
+    # уже новые команды.
+    set_custom_list(kept)
+    set_custom_list(kept + ids)
 
     if args.remove:
         print("setup-hotkeys: сочетания zone-tiler удалены")
