@@ -24,7 +24,10 @@ if ROOT not in sys.path:
 
 import zone_tabs as tabs  # noqa: E402
 
-import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+try:
+    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    from tests import i18n_env  # noqa: F401
 
 # Зона на весь левый монитор и та же зона, которой полосы уже не хватает.
 ZONE = (0, 0, 960, 1080)

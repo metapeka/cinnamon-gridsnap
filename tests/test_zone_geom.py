@@ -22,7 +22,10 @@ if ROOT not in sys.path:
 
 import zone_geom as geom  # noqa: E402
 
-import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+try:
+    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    from tests import i18n_env  # noqa: F401
 
 Rect = collections.namedtuple("Rect", "x y w h")
 
