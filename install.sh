@@ -22,7 +22,7 @@ ACTION="install"
 
 SIZES="16 22 24 32 48 64 128 256 512"
 MANPAGES="gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1
-           gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1"
+           gridsnap-picker.1 gridsnap-hotcorners.1 gridsnap-ctl.1 setup-hotkeys.1"
 # Man-страницы — не gettext-домен: man-db выбирает их по каталогу языка, а не
 # по каталогу перевода. Собирает их `make man` в man/build/<язык>/man1/;
 # английская — язык по умолчанию, поэтому ложится в man1/ без языкового

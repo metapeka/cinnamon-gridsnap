@@ -35,7 +35,7 @@ icons usr/lib/gridsnap
 contrib/gridsnap.desktop => /usr/share/applications/gridsnap.desktop
 
 # --- man-страницы (собирает `make man` в debian/rules, сжимает dh_compress) ---
-# Семь файлов на язык: полная страница gridsnap.1 и шесть псевдонимов
+# Восемь файлов на язык: полная страница gridsnap.1 и семь псевдонимов
 # (.so man1/gridsnap.1 — man-db резолвит их внутри языка). Английская —
 # язык по умолчанию, поэтому лежит в man1/ без языкового каталога: её получает
 # LANG=C и любая локаль без перевода. Русская и китайская — в man/ru/man1/
@@ -46,6 +46,7 @@ man/build/en/man1/gridsnap-tiler.1 => /usr/share/man/man1/gridsnap-tiler.1
 man/build/en/man1/gridsnap-daemon.1 => /usr/share/man/man1/gridsnap-daemon.1
 man/build/en/man1/gridsnap-editor.1 => /usr/share/man/man1/gridsnap-editor.1
 man/build/en/man1/gridsnap-picker.1 => /usr/share/man/man1/gridsnap-picker.1
+man/build/en/man1/gridsnap-hotcorners.1 => /usr/share/man/man1/gridsnap-hotcorners.1
 man/build/en/man1/gridsnap-ctl.1 => /usr/share/man/man1/gridsnap-ctl.1
 man/build/en/man1/setup-hotkeys.1 => /usr/share/man/man1/setup-hotkeys.1
 man/build/ru/man1/gridsnap.1 => /usr/share/man/ru/man1/gridsnap.1
@@ -53,6 +54,7 @@ man/build/ru/man1/gridsnap-tiler.1 => /usr/share/man/ru/man1/gridsnap-tiler.1
 man/build/ru/man1/gridsnap-daemon.1 => /usr/share/man/ru/man1/gridsnap-daemon.1
 man/build/ru/man1/gridsnap-editor.1 => /usr/share/man/ru/man1/gridsnap-editor.1
 man/build/ru/man1/gridsnap-picker.1 => /usr/share/man/ru/man1/gridsnap-picker.1
+man/build/ru/man1/gridsnap-hotcorners.1 => /usr/share/man/ru/man1/gridsnap-hotcorners.1
 man/build/ru/man1/gridsnap-ctl.1 => /usr/share/man/ru/man1/gridsnap-ctl.1
 man/build/ru/man1/setup-hotkeys.1 => /usr/share/man/ru/man1/setup-hotkeys.1
 man/build/zh_CN/man1/gridsnap.1 => /usr/share/man/zh_CN/man1/gridsnap.1
@@ -60,6 +62,7 @@ man/build/zh_CN/man1/gridsnap-tiler.1 => /usr/share/man/zh_CN/man1/gridsnap-tile
 man/build/zh_CN/man1/gridsnap-daemon.1 => /usr/share/man/zh_CN/man1/gridsnap-daemon.1
 man/build/zh_CN/man1/gridsnap-editor.1 => /usr/share/man/zh_CN/man1/gridsnap-editor.1
 man/build/zh_CN/man1/gridsnap-picker.1 => /usr/share/man/zh_CN/man1/gridsnap-picker.1
+man/build/zh_CN/man1/gridsnap-hotcorners.1 => /usr/share/man/zh_CN/man1/gridsnap-hotcorners.1
 man/build/zh_CN/man1/gridsnap-ctl.1 => /usr/share/man/zh_CN/man1/gridsnap-ctl.1
 man/build/zh_CN/man1/setup-hotkeys.1 => /usr/share/man/zh_CN/man1/setup-hotkeys.1
 

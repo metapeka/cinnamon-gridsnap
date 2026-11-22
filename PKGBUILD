@@ -10,7 +10,7 @@
 pkgname=gridsnap
 pkgver=0.2.0
 pkgrel=1
-pkgdesc="Раскладка окон по зонам для Cinnamon/X11"
+pkgdesc="window tiling into zones for Cinnamon/X11"
 arch=('any')
 url="https://github.com/metapeka/cinnamon-gridsnap"
 license=('MIT')
@@ -20,6 +20,13 @@ makedepends=('gettext' 'po4a')
 optdepends=('python-cairo: перерисовка иконок (make-icon.py)')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
+# Контрольная сумма здесь не выдумана: source ссылается на архив тега
+# v$pkgver, а такой архив на GitHub существует только после пуша тега. Тег
+# v0.2.0 ставится после слияния PR и публикации релиза, поэтому заранее
+# посчитать сумму не по чему. После публикации она считается одной командой:
+#   curl -L .../archive/refs/tags/v0.2.0.tar.gz | sha256sum
+# и вписывается отдельным коммитом. До этого 'SKIP' — осознанная заглушка:
+# makepkg соберёт пакет, но скачанный архив не сверит.
 
 # Архив с GitHub (`archive/refs/tags/...`) собранного man/build не содержит:
 # каталог в .gitignore, в репозитории лежат только источник и каталоги po4a.
@@ -103,7 +110,8 @@ package() {
         esac
         install -d "$pkgdir/usr/share/man/$mdir"
         for page in gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 \
-                    gridsnap-editor.1 gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1; do
+                    gridsnap-editor.1 gridsnap-picker.1 gridsnap-hotcorners.1 \
+                    gridsnap-ctl.1 setup-hotkeys.1; do
             gzip -9n -c "man/build/$lang/man1/$page" > "$pkgdir/usr/share/man/$mdir/$page.gz"
             chmod 0644 "$pkgdir/usr/share/man/$mdir/$page.gz"
         done
