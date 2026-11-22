@@ -211,6 +211,10 @@ jobs:
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-actions.sh
       - name: Дымовой тест привязки профиля к экрану
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-monitor-profiles.sh
+      # Снимок оверлея (`--shot`) по столам: единственный сценарий, кроме smoke-dpi,
+      # который трогает снимок, поэтому он же держит зависимость python3-gi-cairo.
+      - name: Дымовой тест сетки стола в пикере
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-picker-workspace.sh
       # HiDPI: сценарий сам выставляет GDK_SCALE=2, поэтому HiDPI-железо не нужно —
       # хватает Xvfb, а расхождение логических и физических пикселей видно и там.
       - name: Дымовой тест HiDPI-масштаба
