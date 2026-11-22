@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 07:47+0300\n"
+"POT-Creation-Date: 2026-11-22 09:09+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,6 +16,11 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "zone-tiler: не разобрать конфиг {path}: {error}"
+msgstr ""
 
 #: zone-tiler.py
 #, python-brace-format
@@ -1719,12 +1724,27 @@ msgstr ""
 
 #: zone_config.py
 #, python-brace-format
+msgid "zone_config: не разобрать конфиг {path}: {error}"
+msgstr ""
+
+#: zone_config.py
+#, python-brace-format
 msgid "zone_config: не найден конфиг {path}"
 msgstr ""
 
 #: zone_config.py
 #, python-brace-format
 msgid "zone_config: в секции [{section}] нет ни одной зоны"
+msgstr ""
+
+#: zone_config.py
+#, python-brace-format
+msgid "zone_config: секция [{name}] задана дважды: оставьте одну"
+msgstr ""
+
+#: zone_config.py
+#, python-brace-format
+msgid "zone_config: секции [{first}] и [{second}] отличаются только регистром: склеенная секция перестанет читаться — оставьте одну"
 msgstr ""
 
 #: zone_config.py

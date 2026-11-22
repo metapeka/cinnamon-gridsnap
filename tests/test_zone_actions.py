@@ -172,14 +172,24 @@ class ExpandCommandTest(unittest.TestCase):
         self.assertIn("{wndow}", str(caught.exception))
         self.assertIn("{window}", str(caught.exception))
 
-    def test_cyrillic_braces_are_not_placeholders(self):
-        # `_PLACEHOLDER_RE` знает только `[a-z_]+`, поэтому `{зона}` проходит
-        # в команду дословно: ни подстановки, ни ошибки. Так ядро устроено
-        # сейчас (докстринг говорит «неизвестное `{что-то}` — ActionError»);
-        # тест фиксирует фактическое поведение и сторожит его изменение.
-        self.assertEqual(
-            za.expand_command("echo {зона}", self.context()), ["echo", "{зона}"]
-        )
+    def test_cyrillic_placeholder_is_action_error(self):
+        # Имя подстановки — слово из букв (кириллица тоже): `{зона}` и
+        # `{что-то}` — такие же опечатки, как `{zon}`, и дают ActionError со
+        # списком известных имён, а не уходят в команду дословно.
+        for text in ("echo {зона}", "notify-send {что-то}"):
+            with self.assertRaises(za.ActionError) as caught:
+                za.expand_command(text, self.context())
+            self.assertIn("неизвестная подстановка", str(caught.exception))
+
+    def test_shell_and_awk_braces_stay_literal(self):
+        # Не подстановки: `${HOME}` — переменная оболочки, `{}` из find,
+        # `{print $1}` у awk. Расширенный шаблон их не задевает.
+        for text, expected in (
+            ("sh -c 'echo ${HOME}'", ["sh", "-c", "echo ${HOME}"]),
+            ("find . -exec ls {} +", ["find", ".", "-exec", "ls", "{}", "+"]),
+            ("awk '{print $1}'", ["awk", "{print $1}"]),
+        ):
+            self.assertEqual(za.expand_command(text, self.context()), expected)
 
     def test_empty_command_is_action_error(self):
         for text in ("", "   ", None):

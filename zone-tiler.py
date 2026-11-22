@@ -404,7 +404,17 @@ class Grid:
             inline_comment_prefixes=("#", ";"),
             delimiters=("=",),  # ключ `re:<regex>` содержит ':', разделитель только '='
         )
-        if not cp.read(path, encoding="utf-8"):
+        try:
+            read = cp.read(path, encoding="utf-8")
+        except configparser.Error as exc:
+            # Повтор секции или ключа: код 3 с именем файла, а не трассировка.
+            fail(
+                _(
+                    "zone-tiler: не разобрать конфиг {path}: {error}"
+                ).format(path=path, error=exc),
+                EXIT_CONFIG,
+            )
+        if not read:
             fail(_("zone-tiler: не найден конфиг {path}").format(path=path), EXIT_CONFIG)
         # Путь нужен там, где секции читает не сам Grid: `keys --move` берёт
         # `[move]` через `zone_config.load_move_keys`, а `[move]` в профилях
