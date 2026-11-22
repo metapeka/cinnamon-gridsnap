@@ -203,22 +203,22 @@ class ManMatchesCliTest(unittest.TestCase):
     def setUpClass(cls):
         cls.help_texts, cls.skipped = built_help()
 
-    def test_man_options_exist_in_cli(self):
-        man = option_names(source_body())
-        real = set()
-        for text in self.help_texts.values():
-            real |= option_names(text)
-        self.assertTrue(real, "ни одна команда не ответила на --help")
-        self.assertEqual(sorted(man - real), [],
-                         "в man-странице есть ключи, которых нет у команд")
+    def test_options_match_cli_both_ways(self):
+        """Ключи страницы и ключи `--help` — одно и то же множество.
 
-    def test_cli_options_are_documented(self):
-        man = option_names(source_body())
-        real = set()
-        for text in self.help_texts.values():
-            real |= option_names(text)
+        Сверка двусторонняя, поэтому командам с GTK нужен `python3-gi`: без
+        него (юнит-job CI) обе стороны множества неполны и тест пропускается,
+        а полный прогон делает `make check-man-i18n`.
+        """
         if self.skipped:
             self.skipTest(f"без GTK не запускаются: {', '.join(self.skipped)}")
+        man = option_names(source_body())
+        real = set()
+        for text in self.help_texts.values():
+            real |= option_names(text)
+        self.assertGreater(len(real), 20, "ни одна команда не ответила на --help")
+        self.assertEqual(sorted(man - real), [],
+                         "в man-странице есть ключи, которых нет у команд")
         self.assertEqual(sorted(real - man), [],
                          "у команд есть ключи, не описанные в man-странице")
 
