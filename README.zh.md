@@ -12,6 +12,26 @@
 
 ![区域编辑器运行中](site/assets/demo.gif)
 
+<!-- section: languages -->
+## 界面语言
+
+界面支持**英语**、**简体中文**和**俄语**。源码中的字符串是俄语——这就是源语言，而英语是所有其他区域的默认语言：
+
+- `ru*`（`ru`、`ru_RU.UTF-8`）——俄语，即源码字符串本身，不需要翻译文件；
+- `zh*`（`zh_CN`、`zh_CN.UTF-8`、`zh-Hans`）——简体中文；
+- 其他所有情况（`en`、`de`、`C`、未设置）——英语。
+
+语言依次取自 `GRIDSNAP_LANG`、`LC_ALL`、`LC_MESSAGES`、`LANG`，因此可以只为一条命令切换：
+
+```bash
+GRIDSNAP_LANG=en gridsnap-tiler list
+```
+
+从代码仓库直接运行无需构建：没有编译好的翻译文件时，工具会直接读取仓库里的 `po/<语言>.po`
+（`make mo` 负责编译，安装脚本把编译好的 `.mo` 放进 `share/locale`）。Cinnamon 小程序按 xlet
+的惯例跟随会话区域设置，不看 `GRIDSNAP_LANG`。译文由机器生成，尚未经母语者校对。
+man 手册目前只有俄语。
+
 <!-- section: install -->
 ## 安装
 
