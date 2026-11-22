@@ -25,6 +25,7 @@ jobs:
           python3 -m compileall -q \
             zone-tiler.py zone-editor.py zone_reflow.py zone_config.py \
             zone_geom.py zone_units.py zone-picker.py zone_picker_nav.py zone_i18n.py \
+            window_backend.py \
             zone_actions.py zone_tabs.py zone-tabstrip.py zone_tabstrip_nav.py \
             zone-daemon.py zone_ipc.py gridsnap-ctl setup-hotkeys.py \
             make-icon.py tools tests
@@ -211,6 +212,10 @@ jobs:
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-actions.sh
       - name: Дымовой тест привязки профиля к экрану
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-monitor-profiles.sh
+      # Снимок оверлея (`--shot`) по столам: единственный сценарий, кроме smoke-dpi,
+      # который трогает снимок, поэтому он же держит зависимость python3-gi-cairo.
+      - name: Дымовой тест сетки стола в пикере
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-picker-workspace.sh
       # HiDPI: сценарий сам выставляет GDK_SCALE=2, поэтому HiDPI-железо не нужно —
       # хватает Xvfb, а расхождение логических и физических пикселей видно и там.
       - name: Дымовой тест HiDPI-масштаба

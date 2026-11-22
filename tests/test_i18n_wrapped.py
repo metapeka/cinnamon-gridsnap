@@ -36,6 +36,7 @@ if ROOT not in sys.path:
 # русской только на русском (так и случилось с `zone_geom.set_origin_text`,
 # который видно в статусе редактора и на демонстрации).
 SOURCES = (
+    "window_backend.py",
     "zone-editor.py",
     "zone-picker.py",
     "zone-tabstrip.py",
