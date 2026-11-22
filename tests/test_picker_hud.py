@@ -245,6 +245,14 @@ class PickerHudArgsCase(unittest.TestCase):
         self.assertEqual(caption(None), "")
         self.assertEqual(caption(""), "")
 
+    def test_hud_caption_names_screen_when_its_profile_gave_grid(self):
+        """Профиль экрана важнее стола и в подписи HUD, а не только в оверлее."""
+        caption = self.picker.hud_caption
+        self.assertEqual(caption("cinema", "HDMI-1", "studio"),
+                         "экран HDMI-1 · профиль «studio»")
+        self.assertEqual(caption("cinema", "HDMI-1", None), "профиль «cinema»")
+        self.assertEqual(caption(None, "HDMI-1", None), "")
+
     # ---- HUD рисуется без подсказки про клавиши
 
     def test_draw_zones_without_hint_differs_from_hint(self):
