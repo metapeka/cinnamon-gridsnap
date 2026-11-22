@@ -40,7 +40,7 @@ EXIT_OK = 0
 EXIT_FAIL = 1
 EXIT_USAGE = 2
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 # Сколько ждать ответа демона, секунд.
 TIMEOUT = 5.0

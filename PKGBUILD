@@ -8,7 +8,7 @@
 # Сборка:
 #   makepkg -si
 pkgname=gridsnap
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Раскладка окон по зонам для Cinnamon/X11"
 arch=('any')

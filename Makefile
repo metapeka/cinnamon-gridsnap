@@ -8,16 +8,15 @@
 #   make clean
 #
 # Никаких новых зависимостей: make, tar, dpkg-deb (пакет dpkg), gzip, sh.
-# Версия берётся из VERSION в zone-tiler.py; zone-daemon.py обязан совпадать,
-# как и версия в .TH man/gridsnap.1 (это проверяет `make check-version`).
+# Версия берётся из VERSION в zone-tiler.py; все файлы, где она объявлена, обязаны
+# совпадать, как и версия в .TH man/gridsnap.1 и pkgver в PKGBUILD — это проверяет
+# `make check-version`.
 
 SHELL  := /bin/sh
 PYTHON ?= python3
 
 PKG     := gridsnap
 VERSION := $(shell sed -n 's/^VERSION = "\([^"]*\)"/\1/p' zone-tiler.py | head -n1)
-DAEMON_VERSION := $(shell sed -n 's/^VERSION = "\([^"]*\)"/\1/p' zone-daemon.py | head -n1)
-CTL_VERSION := $(shell sed -n 's/^VERSION = "\([^"]*\)"/\1/p' gridsnap-ctl | head -n1)
 AUR_VERSION := $(shell sed -n 's/^pkgver=//p' PKGBUILD | head -n1)
 MAN_VERSION := $(shell sed -n 's/^\.TH GRIDSNAP 1 "[^"]*" "gridsnap \([^"]*\)".*/\1/p' man/gridsnap.1 | head -n1)
 
@@ -36,6 +35,13 @@ MODULES := zone-tiler.py zone-daemon.py zone-editor.py zone_config.py \
            zone_i18n.py
 CLIENTS := gridsnap-ctl
 INSTALL_SH := install.sh install-launcher.sh install-daemon.sh
+
+# Все файлы из поставки, где объявлена версия: `check-version` сверяет их
+# поголовно, а не только те, что помнил список. Иначе `VERSION` тихо разъезжается
+# по модулям — так чуть не вышло с zone-hotcorners и zone-tabstrip.
+# Переменная ленивая (`=`): списки MODULES и CLIENTS определяются выше к этому
+# моменту, но так список версионируемых файлов растёт вместе с ними.
+VERSIONED = $(shell grep -l '^VERSION = ' $(MODULES) $(CLIENTS) 2>/dev/null | sort | tr '\n' ' ')
 
 # Локализация: каталоги переводов. Язык исходника — русский, поэтому `ru.po`
 # нет; `en` и `zh_CN` ложатся поверх русских строк.
@@ -58,7 +64,7 @@ APPLET_DIR  := po/$(APPLET_NAME)
 MAN_BUILD      := man/build
 MAN_SOURCE     := man/gridsnap.1
 MAN_ALIASES    := gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
-                  gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1
+                  gridsnap-picker.1 gridsnap-hotcorners.1 gridsnap-ctl.1 setup-hotkeys.1
 MAN_DEFAULT    := en
 MAN_TRANSLATED := en zh_CN
 MAN_LANGS      := $(MAN_TRANSLATED) ru
@@ -76,7 +82,7 @@ RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.m
 # из архива нечего ставить. Поэтому tarball зависит от mo.
 RELEASE_DIRS := icons docs contrib man $(LOCALEDIR)
 MANPAGES := gridsnap.1 gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
-            gridsnap-picker.1 gridsnap-ctl.1 setup-hotkeys.1
+            gridsnap-picker.1 gridsnap-hotcorners.1 gridsnap-ctl.1 setup-hotkeys.1
 ICON_SIZES := 16 22 24 32 48 64 128 256 512
 ICON_RECIPES := $(foreach s,$(ICON_SIZES),install -Dm0644 "icons/gridsnap-$(s).png" "$(DEBROOT)/usr/share/icons/hicolor/$(s)x$(s)/apps/gridsnap.png";)
 MAN_RECIPES := $(foreach p,$(MANPAGES),\
@@ -99,12 +105,13 @@ all: tarball deb
 
 check-version:
 	@test -n "$(VERSION)" || { echo "make: не нашёл VERSION в zone-tiler.py" >&2; exit 1; }
-	@test "$(VERSION)" = "$(DAEMON_VERSION)" || { \
-		echo "make: VERSION расходится: zone-tiler.py=$(VERSION), zone-daemon.py=$(DAEMON_VERSION)" >&2; \
-		exit 1; }
-	@test "$(VERSION)" = "$(CTL_VERSION)" || { \
-		echo "make: VERSION расходится: zone-tiler.py=$(VERSION), gridsnap-ctl=$(CTL_VERSION)" >&2; \
-		exit 1; }
+	@test -n "$(VERSIONED)" || { echo "make: не нашёл файлов с VERSION" >&2; exit 1; }
+	@for f in $(VERSIONED); do \
+		v=$$(sed -n 's/^VERSION = "\([^"]*\)"/\1/p' "$$f" | head -n1); \
+		test "$$v" = "$(VERSION)" || { \
+			echo "make: VERSION расходится: $$f=$$v, ожидается $(VERSION)" >&2; \
+			exit 1; }; \
+	done
 	@test -n "$(AUR_VERSION)" || { echo "make: в PKGBUILD нет pkgver" >&2; exit 1; }
 	@test "$(AUR_VERSION)" = "$(VERSION)" || { \
 		echo "make: PKGBUILD pkgver=$(AUR_VERSION) не совпадает с VERSION=$(VERSION)" >&2; \
