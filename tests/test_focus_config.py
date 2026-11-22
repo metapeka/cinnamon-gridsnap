@@ -28,6 +28,11 @@ import tempfile
 import unittest
 from unittest import mock
 
+try:
+    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    from tests import i18n_env  # noqa: F401
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 CTL = os.path.join(ROOT, "gridsnap-ctl")
@@ -37,10 +42,6 @@ if ROOT not in sys.path:
 
 import zone_config as zc  # noqa: E402
 
-try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
-    from tests import i18n_env  # noqa: F401
 
 
 def load_ctl():

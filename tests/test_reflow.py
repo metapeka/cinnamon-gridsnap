@@ -14,6 +14,11 @@ import os
 import sys
 import unittest
 
+try:
+    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    from tests import i18n_env  # noqa: F401
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
@@ -21,10 +26,6 @@ if ROOT not in sys.path:
 
 import zone_reflow  # noqa: E402
 
-try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
-    from tests import i18n_env  # noqa: F401
 
 
 class TestReflow(unittest.TestCase):

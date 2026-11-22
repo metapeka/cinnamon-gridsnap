@@ -29,6 +29,7 @@ import sys
 import tempfile
 import unittest
 
+
 try:
     import i18n_env  # noqa: F401  (тесты идут на исходном языке)
 except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`

@@ -22,6 +22,7 @@ import os
 import unittest
 from urllib.parse import urlparse
 
+
 try:
     import i18n_env  # noqa: F401  (тесты идут на исходном языке)
 except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
