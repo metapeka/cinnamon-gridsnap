@@ -8,33 +8,66 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<nav id="lang" aria-label="Language">
+<nav id="lang" aria-label="Язык">
 <a href="index.html">English</a>
 <a href="index.zh.html">简体中文</a>
 <span class="current" aria-current="page">Русский</span>
 </nav>
 <header id="top">
 <h1>Gridsnap</h1>
-<p class="tagline"><!-- translate --></p>
-<p><a class="button" href="#install"><!-- translate --></a></p>
+<p class="tagline">Сетка окон для Cinnamon: нарисуйте свои зоны и кладите окна в них одной клавишей.</p>
+<p><a class="button" href="#install">Установить</a></p>
 </header>
 <section id="features">
-<h2><!-- translate --></h2>
-<!-- translate -->
+<h2>Что умеет</h2>
+<ul>
+<li><strong>Визуальный редактор зон</strong> — зоны перетаскиваются прямо по картинке экрана: сколько угодно, у каждой имя и клавиша; размеры хранятся долями рабочей области, поэтому сетка не ломается при смене разрешения и оставляет место панели.</li>
+<li><strong>Окно в зону по клавише</strong> — раскладчик ставит активное окно пиксель в пиксель: снимает максимизацию и компенсирует рамку окна (<code>_NET_FRAME_EXTENTS</code>) через EWMH-сообщения muffin.</li>
+<li><strong>Демон и автоукладка</strong> — появившиеся окна встают в зоны по правилам из <code>zones.conf</code> (<code>[rules]</code>), вынесенное вручную окно остаётся где поставили, а освободившаяся зона может расшириться в соседнюю.</li>
+<li><strong>Вкладки в зоне</strong> — несколько окон одной зоны не громоздятся друг на друга: сверху зоны появляется полоса с их заголовками, а переключает их клавиша или клик.</li>
+<li><strong>Режим «только эта зона»</strong> — одна клавиша кладёт окно в зону и сворачивает остальные окна этого стола и монитора; та же клавиша возвращает их на место.</li>
+<li><strong>Горячие края</strong> — тащите окно за заголовок: сетка подсвечивает зону под курсором, и на отпускании окно встаёт в неё.</li>
+<li><strong>Выбор зоны по <code>Super+Z</code></strong> — оверлей с вашими зонами: стрелки двигают выделение, <code>Enter</code> кладёт окно, <code>Esc</code> отменяет.</li>
+<li><strong>Действия</strong> — своя клавиша: встроенные (свернуть остальные, показать окно зоны, терминал в зоне, обмен двух зон) или ваша команда, которой передаются окно, зона и её рамка.</li>
+<li><strong>Несколько мониторов</strong> — у каждого экрана своя сетка, зона ищется в профиле того экрана, где окно, а другие экраны не трогаются.</li>
+<li><strong>Профили на экран и на стол</strong> — «монитор 2 — кино», стол 1 — работа: раскладка переключается одной клавишей.</li>
+</ul>
 </section>
 <section id="screenshots">
-<h2><!-- translate --></h2>
-<img class="shot" src="assets/editor.png" alt="Редактор сетки">
+<h2>Снимки</h2>
+<img class="shot" src="assets/editor.png" alt="Редактор зон: экран с зонами и список зон справа">
 <img class="shot" src="assets/demo.gif" alt="Редактор ставит окно в зону">
 </section>
 <section id="install">
-<h2><!-- translate --></h2>
-<!-- translate -->
+<h2>Установка</h2>
+<p>Два независимых пути: из репозитория, для себя, или пакетом. Ставится один и тот же код; кроме <code>python3</code>, PyGObject и <code>libX11</code> ничего не нужно.</p>
+<p>Из репозитория:</p>
+<pre><code>./install-launcher.sh             # ярлык в меню + иконки
+./install-launcher.sh --desktop   # ещё и ярлык на рабочем столе
+./install-daemon.sh               # автозапуск демона автоукладки
+python3 setup-hotkeys.py          # сочетания клавиш в Cinnamon</code></pre>
+<p>Пакетом (<code>.deb</code> для Debian/Ubuntu, AUR-рецепт для Arch, <code>.tar.gz</code> для любой системы):</p>
+<pre><code>make tarball      # dist/gridsnap-&lt;версия&gt;.tar.gz
+make deb          # dist/gridsnap_&lt;версия&gt;_all.deb
+make aur          # AUR-рецепт в dist/PKGBUILD
+
+sudo apt install ./dist/gridsnap_&lt;версия&gt;_all.deb</code></pre>
+<p>Полная инструкция, формат конфига и все команды — в <a href="#docs">документации</a>.</p>
 </section>
 <section id="docs">
-<h2><!-- translate --></h2>
-<!-- translate -->
+<h2>Документация</h2>
+<ul>
+<li>README: <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.md">English</a>,
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.zh.md">简体中文</a>,
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.ru.md">Русский</a></li>
+<li>Спеки: <a href="https://github.com/metapeka/cinnamon-gridsnap/tree/main/docs/specs">docs/specs</a> —
+зоны и конфиг, раскладчик и режим «только эта зона», демон и IPC, вкладки, действия, горячие края, пикер.</li>
+<li>Man-страницы в пакете: <code>man gridsnap</code> (команды, <code>zones.conf</code>, файлы, коды возврата),
+<code>man gridsnap-tiler</code>, <code>man gridsnap-daemon</code>, <code>man gridsnap-editor</code>,
+<code>man gridsnap-picker</code>, <code>man gridsnap-ctl</code>, <code>man setup-hotkeys</code>.</li>
+<li>Исходники и замечания: <a href="https://github.com/metapeka/cinnamon-gridsnap">github.com/metapeka/cinnamon-gridsnap</a>.</li>
+</ul>
 </section>
-<footer><!-- translate --></footer>
+<footer>Gridsnap — сетка окон для Cinnamon на X11. Проверено на Debian 13, Cinnamon 6.4.10 (Muffin, X11).</footer>
 </body>
 </html>
