@@ -152,7 +152,7 @@ cinnamon-settings keyboard   # 系统设置 → 键盘 → 快捷键 →「平�
 * `zone-picker.py` —— 按 `Super+Z` **可视化选择区域**（覆盖层、方向键、`Enter`）。
 
 依赖：`python3`、`python3-gi`（GTK 3）、`libX11`、`xprop` —— Debian 里已经装好。
-重绘图标、以及给区域选择覆盖层拍快照，需要 `python3-cairo`。
+重绘图标、以及给区域选择覆盖层拍快照，需要 `python3-cairo` 和 `python3-gi-cairo`（在 Debian 上，PyGObject 的 cairo 集成是单独的包）。
 
 <!-- section: zones-run -->
 ### 3.1. 启动编辑器

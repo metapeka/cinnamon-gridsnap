@@ -162,7 +162,8 @@ Three tool files in this directory:
 * `zone-picker.py` — the **visual zone picker** on `Super+Z` (an overlay, arrows, `Enter`).
 
 Dependencies: `python3`, `python3-gi` (GTK 3), `libX11`, `xprop` — already present in Debian.
-`python3-cairo` is needed to redraw the icon and for the picker overlay snapshot.
+`python3-cairo` and `python3-gi-cairo` are needed to redraw the icon and for the picker overlay
+snapshot (Debian splits the cairo integration for PyGObject into its own package).
 
 <!-- section: zones-run -->
 ### 3.1. Starting the editor

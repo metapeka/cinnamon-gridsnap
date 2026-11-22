@@ -155,7 +155,8 @@ cinnamon-settings keyboard   # Параметры → Клавиатура → �
 * `zone-picker.py` — **визуальный выбор зоны** по `Super+Z` (оверлей, стрелки, `Enter`).
 
 Зависимости: `python3`, `python3-gi` (GTK 3), `libX11`, `xprop` — в Debian уже стоят.
-`python3-cairo` нужен для перерисовки иконки и для снимка оверлея выбора зоны.
+`python3-cairo` и `python3-gi-cairo` нужны для перерисовки иконки и для снимка оверлея выбора зоны
+(в Debian связка cairo для PyGObject — отдельный пакет).
 
 <!-- section: zones-run -->
 ### 3.1. Запуск редактора
