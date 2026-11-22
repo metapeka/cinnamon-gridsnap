@@ -808,3 +808,10 @@ What is in the menu, which settings exist and what the limits are — in `contri
 * the Cinnamon applet: `python3 -m json.tool` for `metadata.json` and `settings-schema.json`,
   `node --check applet.js`, loading into a live Cinnamon (a headless `Xvfb` + a private dbus) —
   `Loaded applet gridsnap@metapeka`, and exactly it in the panel (`contrib/applet/check-cinnamon.sh`).
+
+## 13. License
+
+<!-- section: license -->
+
+MIT — see [`LICENSE`](LICENSE). Copyright (c) 2026 metapeka
+<188594035+metapeka@users.noreply.github.com>.

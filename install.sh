@@ -143,7 +143,7 @@ install -m 0755 "$SRC/install-launcher.sh" "$SRC/install-daemon.sh" "$LIB/"
 rm -rf "$LIB/icons" "$LIB/docs"
 cp -a "$SRC/icons" "$LIB/icons"
 cp -a "$SRC/docs" "$DOC/docs"
-install -m 0644 "$SRC/README.md" "$SRC/SPEC.md" "$DOC/"
+install -m 0644 "$SRC/README.md" "$SRC/SPEC.md" "$SRC/LICENSE" "$DOC/"
 
 # --- man-страницы ----------------------------------------------------------
 # Документация, а не часть ярлыка: ставится и при --no-launcher.

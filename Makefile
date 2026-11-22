@@ -68,7 +68,7 @@ MAN_POT        := $(MAN_PO_DIR)/gridsnap.1.pot
 MAN_PO         := $(foreach l,$(MAN_TRANSLATED),$(MAN_PO_DIR)/$(l).po)
 MAN_PAGES      := $(MAN_SOURCE) $(addprefix man/,$(MAN_ALIASES))
 
-RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.md Makefile PKGBUILD
+RELEASE_FILES := $(MODULES) $(CLIENTS) $(INSTALL_SH) zones.conf README.md SPEC.md LICENSE Makefile PKGBUILD
 # `locale/` — сборка (`make mo`), но в tar.gz она обязательна: иначе install.sh
 # из архива нечего ставить. Поэтому tarball зависит от mo.
 RELEASE_DIRS := icons docs contrib man $(LOCALEDIR)
@@ -236,7 +236,7 @@ deb: check-version mo man
 	@install -m 0755 install-launcher.sh install-daemon.sh "$(DEBROOT)$(DATADIR)/"
 	@cp -a icons "$(DEBROOT)$(DATADIR)/icons"
 	@cp -a docs "$(DEBROOT)/usr/share/doc/$(PKG)/docs"
-	@install -m 0644 README.md SPEC.md "$(DEBROOT)/usr/share/doc/$(PKG)/"
+	@install -m 0644 README.md SPEC.md LICENSE "$(DEBROOT)/usr/share/doc/$(PKG)/"
 
 	@$(MAN_RECIPES)
 	@find "$(DEBROOT)/usr/share/man" -name '*.1' -exec gzip -9n {} +

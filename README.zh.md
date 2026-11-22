@@ -755,3 +755,10 @@ cinnamon-settings applets        # 在小程序列表里启用 GridSnap
 * Cinnamon 小程序：对 `metadata.json` 和 `settings-schema.json` 跑
   `python3 -m json.tool`，`node --check applet.js`，并在活的 Cinnamon 里加载（无头 `Xvfb` + 私有 dbus）——
   `Loaded applet gridsnap@metapeka`，面板上正是它（`contrib/applet/check-cinnamon.sh`）。
+
+## 13. 许可证
+
+<!-- section: license -->
+
+MIT —— 见 [`LICENSE`](LICENSE)。版权所有 (c) 2026 metapeka
+<188594035+metapeka@users.noreply.github.com>。

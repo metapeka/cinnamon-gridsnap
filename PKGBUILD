@@ -14,7 +14,7 @@ pkgrel=1
 pkgdesc="Раскладка окон по зонам для Cinnamon/X11"
 arch=('any')
 url="https://github.com/metapeka/cinnamon-gridsnap"
-license=('custom')  # лицензия в репозитории не объявлена
+license=('MIT')
 depends=('python' 'python-gobject' 'gtk3' 'libx11' 'xorg-xprop' 'xorg-xwininfo')
 makedepends=('gettext')  # msgfmt: каталоги переводов собираются в package()
 optdepends=('python-cairo: перерисовка иконок (make-icon.py)')
@@ -66,6 +66,7 @@ package() {
     install -d "$pkgdir/usr/share/doc/$pkgname"
     install -m 0644 README.md SPEC.md "$pkgdir/usr/share/doc/$pkgname/"
     cp -a docs "$pkgdir/usr/share/doc/$pkgname/docs"
+    install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 
     # Каталоги переводов (gettext в makedepends): два домена — Python-инстру-
     # менты и апплет Cinnamon. Язык исходника — русский, каталога ru нет.

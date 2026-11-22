@@ -768,3 +768,10 @@ cinnamon-settings applets        # включить GridSnap в списке а�
 * апплет Cinnamon: `python3 -m json.tool` для `metadata.json` и `settings-schema.json`,
   `node --check applet.js`, загрузка в живом Cinnamon (headless `Xvfb` + приватный dbus) —
   `Loaded applet gridsnap@metapeka`, на панели ровно он (`contrib/applet/check-cinnamon.sh`).
+
+## 13. Лицензия
+
+<!-- section: license -->
+
+MIT — см. [`LICENSE`](LICENSE). Copyright (c) 2026 metapeka
+<188594035+metapeka@users.noreply.github.com>.
