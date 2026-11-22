@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 21:26+0300\n"
+"POT-Creation-Date: 2026-11-22 21:48+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -492,6 +492,15 @@ msgid "окно 0x{window:x}: зона '{here}' -> '{zone}': x={x} y={y} {w}x{h}
 msgstr "窗口 0x{window:x}：区域 '{here}' -> '{zone}'：x={x} y={y} {w}x{h}（显示器 {index}：{output}）"
 
 #: zone-tiler.py
+msgid "демон отклонил arrange"
+msgstr "守护进程拒绝了 arrange"
+
+#: zone-tiler.py
+#, python-brace-format
+msgid "окно {window}: демон не переставил его ({error})"
+msgstr "窗口 {window}：守护进程没有重新摆放它（{error}）"
+
+#: zone-tiler.py
 msgid "zone-tiler: не удалось прочитать _NET_CLIENT_LIST (нужен DISPLAY и xprop)"
 msgstr "zone-tiler: 无法读取 _NET_CLIENT_LIST（需要 DISPLAY 和 xprop）"
 
@@ -822,6 +831,11 @@ msgstr "标签栏已启动：{script}"
 
 #: zone-daemon.py
 #, python-brace-format
+msgid "не удалось разослать событие '{kind}': {exc}"
+msgstr "无法广播事件 '{kind}'：{exc}"
+
+#: zone-daemon.py
+#, python-brace-format
 msgid "не удалось определить активный стол: {exc}"
 msgstr "无法确定活动桌面：{exc}"
 
@@ -995,18 +1009,36 @@ msgstr "窗口 0x{win:x} 已升起"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "монитора {index} нет (всего {total})"
-msgstr "没有显示器 {index}（总共 {total}）"
+msgid "подписка на события: {groups}"
+msgstr "事件订阅：{groups}"
+
+#: zone-daemon.py
+msgid "команда arrange: нужен непустой список 'placements'"
+msgstr "arrange 命令：需要非空的 'placements' 列表"
+
+#: zone-daemon.py
+msgid "запись раскладки должна быть объектом"
+msgstr "布局记录必须是对象"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "нет зоны '{zone}'. Есть: {known}"
-msgstr "没有区域 '{zone}'。已有：{known}"
+msgid "не понять окно '{raw}'"
+msgstr "无法识别窗口 '{raw}'"
 
 #: zone-daemon.py
 #, python-brace-format
 msgid "не удалось определить монитор окна 0x{window:x}"
 msgstr "无法确定窗口 0x{window:x} 的显示器"
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "нет зоны '{zone}'"
+msgstr "没有区域 '{zone}'"
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "не прочитать окно 0x{window:x}: {exc}"
+msgstr "无法读取窗口 0x{window:x}：{exc}"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1017,6 +1049,16 @@ msgstr "窗口 0x{window:x} 属于例外（[ignore]/工具类窗口）— 不移
 #, python-brace-format
 msgid "не удалось вложить окно 0x{window:x} в зону '{zone}'"
 msgstr "无法把窗口 0x{window:x} 放进区域 '{zone}'"
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "монитора {index} нет (всего {total})"
+msgstr "没有显示器 {index}（总共 {total}）"
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "нет зоны '{zone}'. Есть: {known}"
+msgstr "没有区域 '{zone}'。已有：{known}"
 
 #: zone-daemon.py
 msgid "активное окно не прочитано — переключать нечего"
@@ -2532,6 +2574,30 @@ msgid "иконки Gridsnap: {sizes}"
 msgstr "Gridsnap 图标：{sizes}"
 
 #: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: демон отклонил подписку: {error}"
+msgstr "gridsnap-ctl：守护进程拒绝了订阅：{error}"
+
+#: gridsnap-ctl
+msgid "команда отклонена"
+msgstr "命令被拒绝"
+
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: подписка принята ({groups}) — Ctrl-C для выхода"
+msgstr "gridsnap-ctl：已订阅（{groups}）— 按 Ctrl-C 退出"
+
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: демон ответил непонятно: {error}"
+msgstr "gridsnap-ctl: 守护进程的回应无法理解：{error}"
+
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: нет связи с демоном по сокету {path} ({error}). Запущен ли zone-daemon.py?"
+msgstr "gridsnap-ctl: 无法通过套接字 {path} 连接守护进程（{error}）。zone-daemon.py 在运行吗？"
+
+#: gridsnap-ctl
 msgid "gridsnap-ctl: для apply укажите зону, например: apply main"
 msgstr "gridsnap-ctl: apply 需要指定区域，例如：apply main"
 
@@ -2557,8 +2623,8 @@ msgid "Примеры: gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ct
 msgstr "示例：gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ctl focus main; gridsnap-ctl focus --off; gridsnap-ctl quit"
 
 #: gridsnap-ctl
-msgid "status — состояние; apply — вложить окно в зону; focus — режим «только эта зона»; reload — перечитать конфиг; quit — выйти"
-msgstr "status — 状态；apply — 把窗口放进区域；focus — 「只留这个区域」模式；reload — 重新读取配置；quit — 退出"
+msgid "status — состояние; apply — вложить окно в зону; focus — режим «только эта зона»; reload — перечитать конфиг; quit — выйти; watch — слушать события"
+msgstr "status — 状态；apply — 把窗口放进区域；focus — 「只留这个区域」模式；reload — 重新读取配置；quit — 退出；watch — 监听事件"
 
 #: gridsnap-ctl
 msgid "имя зоны для apply и focus (у focus необязательна)"
@@ -2589,23 +2655,13 @@ msgid "ничего не печатать при успехе"
 msgstr "成功时不打印任何内容"
 
 #: gridsnap-ctl
-#, python-brace-format
-msgid "gridsnap-ctl: демон ответил непонятно: {error}"
-msgstr "gridsnap-ctl: 守护进程的回应无法理解：{error}"
-
-#: gridsnap-ctl
-#, python-brace-format
-msgid "gridsnap-ctl: нет связи с демоном по сокету {path} ({error}). Запущен ли zone-daemon.py?"
-msgstr "gridsnap-ctl: 无法通过套接字 {path} 连接守护进程（{error}）。zone-daemon.py 在运行吗？"
+msgid "gridsnap-ctl: у watch нет зоны/окна/монитора"
+msgstr "gridsnap-ctl：watch 没有区域/窗口/显示器"
 
 #: gridsnap-ctl
 #, python-brace-format
 msgid "gridsnap-ctl: {error}"
 msgstr "gridsnap-ctl: {error}"
-
-#: gridsnap-ctl
-msgid "команда отклонена"
-msgstr "命令被拒绝"
 
 #~ msgid "profile from-gallery: перезаписать существующий профиль"
 #~ msgstr "profile from-gallery：覆盖已存在的方案"
