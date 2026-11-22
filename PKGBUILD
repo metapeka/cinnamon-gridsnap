@@ -19,14 +19,12 @@ depends=('python' 'python-gobject' 'gtk3' 'libx11' 'xorg-xprop' 'xorg-xwininfo')
 makedepends=('gettext' 'po4a')
 optdepends=('python-cairo: перерисовка иконок (make-icon.py)')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
-# Контрольная сумма здесь не выдумана: source ссылается на архив тега
-# v$pkgver, а такой архив на GitHub существует только после пуша тега. Тег
-# v0.2.0 ставится после слияния PR и публикации релиза, поэтому заранее
-# посчитать сумму не по чему. После публикации она считается одной командой:
-#   curl -L .../archive/refs/tags/v0.2.0.tar.gz | sha256sum
-# и вписывается отдельным коммитом. До этого 'SKIP' — осознанная заглушка:
-# makepkg соберёт пакет, но скачанный архив не сверит.
+sha256sums=('116e8fc306771fd534d21b333c1aa5f51b278b0cb7421d99b5628c170a98763c')
+# Сумма архива тега v$pkgver — того, на который ссылается source. При выпуске
+# следующей версии её надо обновить: архив тега на GitHub появляется только
+# после пуша тега, поэтому посчитать заранее нечего — только после релиза:
+#   curl -sL "$url/archive/refs/tags/v$pkgver.tar.gz" | sha256sum
+# (на Arch то же самое делает `updpkgsums`).
 
 # Архив с GitHub (`archive/refs/tags/...`) собранного man/build не содержит:
 # каталог в .gitignore, в репозитории лежат только источник и каталоги po4a.
