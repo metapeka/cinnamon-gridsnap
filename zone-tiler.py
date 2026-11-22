@@ -65,6 +65,8 @@ zone-tiler — раскладывает активное окно по зона�
   zone-tiler.py arrange --by order        # разложить окна по зонам по порядку списка
   zone-tiler.py stack main                # собрать окна в зону main вкладками
   zone-tiler.py tabs-next                 # поднять следующее окно зоны (клавиша)
+  zone-tiler.py action mirror              # выполнить действие из [action:<имя>]
+  zone-tiler.py action term-main --dry-run # что действие сделало бы, ничего не делая
   zone-tiler.py undo                      # вернуть окна из последней операции
   zone-tiler.py undo --all                # откатить всю историю раскладок
 
@@ -99,6 +101,13 @@ zone-tiler — раскладывает активное окно по зона�
 
 JSON-профиль — переносимый обмен между машинами (``gridsnap_profile``: 1);
 основным остаётся ``.conf``, JSON только для выгрузки и загрузки.
+
+Действие — запись `[action:<имя>]` в `zones.conf`: `run = builtin:<имя>` либо
+своя команда, необязательные `zone` (зона-предмет) и `key` (сочетание, его
+ставит `setup-hotkeys.py`). Действие получает окно и зону: переменными
+`GRIDSNAP_*` и подстановками `{zone}`/`{window}`/`{x}`… Своя команда
+запускается без оболочки и без ожидания; встроенные — `minimize-others`,
+`show-window`, `mirror`, `terminal` (подробности — в --help команды `action`).
 
 История раскладок — JSON в XDG-состоянии (`~/.local/state/gridsnap/history.json`),
 её читает и пишет каждая команда отдельным процессом (подробности — в --help и в
@@ -1972,6 +1981,515 @@ def cmd_tabs_next(args):
     print(f"zone-tiler: следующее окно зоны — {window}")
 
 
+def cmd_action(grid, args):
+    """Выполнить действие из `[action:<имя>]` — то, что висит на клавише.
+
+    Имя действия приходит первым позиционным аргументом (как у `profile`: у
+    команды `action` в `args.zone` лежит имя, а не зона). Запись читает
+    `zone_config.load_actions`.
+
+    **Что действие получает** (`zone_actions.ActionContext`): окно, зону, её
+    пиксельную рамку, монитор, стол, класс и заголовок окна, путь к конфигу —
+    переменными окружения `GRIDSNAP_*` и подстановками `{zone}`/`{window}`/`{x}`…
+    Внешняя команда разбирается `shlex` и запускается **без оболочки** и без
+    ожидания (`start_new_session`): клавишу нельзя вешать на `gnome-terminal`,
+    который живёт до закрытия окна.
+
+    **Предмет** — зона из записи (`zone = main`), а окно ищется в ней; без зоны —
+    активное окно и зона, в которой оно стоит. `--window` задаёт окно явно,
+    `--monitor` — экран для поиска зоны (без него: экран окна, затем активного
+    окна, затем первый).
+
+    **Встроенные** (`run = builtin:<имя>`): `minimize-others` — тот же режим, что
+    `focus` (делегирует демону, если он жив); `show-window` — поднять/развернуть
+    окно зоны (вкладки — следующая от активного); `mirror` — обмен с зеркальной
+    зоной; `terminal` — запустить терминал и положить его окно в зону.
+
+    `--dry-run` печатает разобранный контекст и план (встроенное) или готовый
+    argv (команда), ничего не делая. Коды: 3 — ошибка конфига (нет такого
+    действия, битое поле, неизвестная подстановка), 1 — отказ по состоянию, 0 —
+    успех **и** честный no-op («показывать нечего», «зеркальная зона — та же
+    зона») с сообщением в stderr.
+
+    У `terminal` последнее слово — за действием: окно могло уже попасть под
+    `[rules]` демона и встать по правилу, но раскладка действия важнее, поэтому
+    рамка зоны ставится ещё раз. `show-window` на пустой зоне — no-op с кодом 0:
+    клавиша не должна ругаться на то, что показывать нечего (как `tabs-next`).
+    """
+    za = actions_module()
+    name = (args.zone or "").strip()
+    if not name:
+        fail(
+            "zone-tiler: action — укажите имя действия, например: "
+            "zone-tiler.py action mirror",
+            EXIT_CONFIG,
+        )
+    actions = load_actions(args.conf)
+    if name not in actions:
+        known = ", ".join(actions) or "ни одного"
+        fail(f"zone-tiler: нет действия '{name}'. Есть: {known}", EXIT_CONFIG)
+    record = actions[name]
+    run = (record.get("run") or "").strip()
+    try:
+        builtin = za.builtin_name(run)
+    except za.ActionError as exc:
+        fail(f"zone-tiler: {exc}", EXIT_CONFIG)
+
+    # Экран — адресат действия: явный `--monitor`, иначе экран окна, иначе первый.
+    # Окно-кандидат для выбора экрана — `--window` или активное: зону-предмет из
+    # записи ещё надо посчитать в пикселях, а для этого нужна сетка экрана.
+    outputs = monitor_outputs()
+    if args.monitor is not None:
+        index, output = resolve_monitor(args.monitor, outputs)
+    else:
+        index, output, _wa = window_output(outputs, args.window or active_window_quiet())
+    wa = outputs[index][1]
+    workspace = resolve_workspace(getattr(args, "workspace", None))
+    grid, profile = grid_for_output(
+        args.conf, output, fallback=grid, workspace=workspace, quiet=args.quiet
+    )
+
+    window, zone = _action_subject(
+        grid, args, record, output, wa, workspace=workspace, profile=profile
+    )
+    ctx = _action_context(grid, args, window, zone, output, wa)
+
+    if builtin is None:
+        _action_command(args, name, run, ctx, za)
+        return
+    handlers = {
+        za.MINIMIZE_OTHERS: _action_minimize_others,
+        za.SHOW_WINDOW: _action_show_window,
+        za.MIRROR: _action_mirror,
+        za.TERMINAL: _action_terminal,
+    }
+    handlers[builtin](grid, args, name, record, ctx, wa)
+
+
+def actions_module():
+    """Модуль `zone_actions`: контекст, подстановки и зеркало живут только там."""
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import zone_actions  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+
+    return zone_actions
+
+
+def zone_config_module():
+    """Модуль `zone_config`: разбор `[action:<имя>]` живёт только там."""
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import zone_config  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+
+    return zone_config
+
+
+def load_actions(conf):
+    """Действия конфига через `zone_config.load_actions` (битый конфиг — код 3)."""
+    return zone_config_module().load_actions(conf)
+
+
+# Сколько ждать окна терминала: 50 попыток по 0.1 с — около 5 секунд. Терминал
+# на холодную (загрузка профиля, первый запуск) легко не успевает за меньшее.
+ACTION_WAIT_TRIES = 50
+ACTION_WAIT_DELAY = 0.1
+
+
+def _action_subject(grid, args, record, output, wa, workspace=None, profile=None):
+    """Окно и зона действия — «предмет», который получает контекст.
+
+    Зона из записи задаёт предмет сама: окно — активное (`--window`), если оно
+    стоит в этой зоне, иначе верхнее по `_NET_CLIENT_LIST` (список идёт снизу
+    вверх, поэтому «верхнее» — последнее); пустая зона — окна нет. Без зоны в
+    записи окно — `--window` или активное, а зона — та, в чью рамку (или рамку
+    вкладки) встала его рамка (`zone_actions.zone_of_frame`); вне зон — `None`.
+
+    Зона из записи ищется в объединении наборов сетки (`require_zone`, код 3),
+    как у `apply`: имя из чужого профиля — ошибка конфига, а не «пустая зона».
+    """
+    client_ids = read_client_list() or []
+    height = tabs_height(grid)
+    preferred = args.window or active_window_quiet()
+    zone = record.get("zone")
+    if zone:
+        require_zone(grid, zone, workspace=workspace, profile=profile, output=output)
+        rect = grid.rect(zone, wa, monitor_name=output)
+        return _action_window_in_zone(rect, client_ids, height, preferred), zone
+    zones_px = {
+        name: grid.rect(name, wa, monitor_name=output)
+        for name in grid.zones_for(output)
+    }
+    frame = _action_frame(preferred)
+    return preferred, actions_module().zone_of_frame(frame, zones_px, height)
+
+
+def _action_frame(window):
+    """Рамка окна с компенсацией `_NET_FRAME_EXTENTS`; не прочитать — `None`."""
+    if window is None:
+        return None
+    try:
+        return read_frame(window, frame_extents(window))
+    except Exception:
+        return None
+
+
+def _action_frames(client_ids):
+    """`{окно: рамка}` для клиентов `_NET_CLIENT_LIST` (не прочиталась — `None`).
+
+    Рамки читаются один раз на действие: и `show-window`, и `mirror` смотрят на
+    окна двух зон, и второй проход `xwininfo` по тем же окнам ничего не добавил
+    бы, а окно могло бы за это время исчезнуть.
+    """
+    return {win: _action_frame(win) for win in client_ids}
+
+
+def _action_windows_in_zone(zone_rect, frames, height):
+    """Окна зоны по её пиксельной рамке — правило ядра `zone_actions.zone_windows`.
+
+    Окно в зоне, если его рамка совпала с рамкой зоны целиком или с рамкой
+    вкладки (зона минус полоса `[tabs] height`); сравнение — с допуском ядра.
+    """
+    tab_rect = in_zone_rect(zone_rect, 2, height)
+    return actions_module().zone_windows(frames, zone_rect, tab_rect)
+
+
+def _action_window_in_zone(zone_rect, client_ids, height, preferred=None):
+    """Верхнее окно зоны, а если `preferred` уже в ней — само `preferred`.
+
+    «Верхнее» — последнее в `_NET_CLIENT_LIST`: список идёт снизу вверх. Пустая
+    зона — `None` (действие решает, no-op это или отказ).
+    """
+    frames = _action_frames(client_ids)
+    if preferred is not None and _action_windows_in_zone(
+        zone_rect, {preferred: frames.get(preferred)}, height
+    ):
+        return preferred
+    found = _action_windows_in_zone(zone_rect, frames, height)
+    return found[-1] if found else None
+
+
+def _action_context(grid, args, window, zone, output, wa):
+    """Собрать `zone_actions.ActionContext` для окна и зоны действия.
+
+    `rect` — пиксельная рамка зоны на её мониторе (её и ждёт чужая команда),
+    `conf` — **абсолютный** путь: действие запускает не CLI, а чужой процесс, и
+    относительный `--conf zones.conf` в нём означал бы другой файл или никакого.
+    Стол — стол окна, у липкого окна и окна без стола — активный.
+    """
+    rect = grid.rect(zone, wa, monitor_name=output) if zone else None
+    meta = read_window_meta(window) if window is not None else None
+    workspace = window_workspace_for_zones(window) if window is not None else None
+    if workspace is None:
+        workspace = current_workspace()
+    return actions_module().ActionContext(
+        window=window,
+        zone=zone,
+        rect=rect,
+        monitor=output,
+        workspace=workspace,
+        wm_class=meta.wm_class if meta is not None else "",
+        wm_title=meta.wm_title if meta is not None else "",
+        conf=os.path.abspath(args.conf),
+    )
+
+
+def _action_plan_line(name, run, ctx):
+    """Первая строка `--dry-run`: что действие получило (окно, зона, рамка, экран)."""
+    window = "окна нет" if ctx.window is None else f"окно 0x{ctx.window:x}"
+    where = "вне зон" if not ctx.zone else f"зона '{ctx.zone}'"
+    if ctx.rect:
+        where += ": x={} y={} {}x{}".format(*ctx.rect)
+    screen = ctx.monitor or "экран не определён"
+    desk = "неизвестен" if ctx.workspace is None else str(ctx.workspace + 1)
+    print(
+        f"действие '{name}' ({run or '?'}): {window} -> {where} "
+        f"(монитор {screen}, стол {desk})"
+    )
+
+
+def _action_noop(args, message):
+    """Честный no-op: сообщение в stderr (если не `--quiet`) и код 0.
+
+    Клавиша не должна ругаться на то, что показывать или обменивать нечего:
+    так же ведёт себя `tabs-next` в зоне с одним окном.
+    """
+    if not args.quiet:
+        print(f"zone-tiler: {message}", file=sys.stderr)
+
+
+def _action_dry_run_noop(args, name, record, ctx, message):
+    """Пустой предмет действия: no-op, а под `--dry-run` — контекст и план.
+
+    `--dry-run` обещан любому действию, поэтому даже «показывать нечего» он
+    печатает разобранный контекст и объясняет план в stdout, а не молчит: иначе
+    по пустому выводу не отличить «зона пуста» от «действие не нашлось».
+    """
+    if not args.dry_run:
+        _action_noop(args, message)
+        return
+    _action_plan_line(name, record.get("run"), ctx)
+    print(f"план: {message} — ничего не делаю")
+
+
+def _spawn(argv, ctx):
+    """Запустить команду действия отсоединённо: без оболочки и без ожидания.
+
+    `start_new_session` — чтобы терминал пережил нажатие клавиши (и чтобы
+    сигнал нашей группы процессу не дошёл); `stdin` — `/dev/null`, иначе
+    запущенный из клавиши процесс делил бы с ней ввод. Возвращает `Popen`.
+    """
+    try:
+        return subprocess.Popen(
+            argv,
+            env={**os.environ, **ctx.env()},
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        fail(f"zone-tiler: не удалось запустить действие: {exc}", EXIT_FAIL)
+
+
+def _action_command(args, name, run, ctx, za):
+    """Внешняя команда действия: `argv` из конфига, запуск без оболочки.
+
+    Неизвестная подстановка и пустая команда — `ActionError` ядра, то есть
+    ошибка конфига (код 3), а не «команда не запустилась»: опечатку в `{что-то}`
+    человек увидит сразу, а не как пустой аргумент у чужого скрипта.
+    """
+    try:
+        argv = za.expand_command(run, ctx)
+    except za.ActionError as exc:
+        fail(f"zone-tiler: {exc}", EXIT_CONFIG)
+    if args.dry_run:
+        _action_plan_line(name, run, ctx)
+        print(f"план: argv = {argv}")
+        return
+    _spawn(argv, ctx)
+    if not args.quiet:
+        print(f"zone-tiler: действие '{name}' запущено: {argv[0]}")
+
+
+def _action_minimize_others(grid, args, name, record, ctx, wa):
+    """`builtin:minimize-others` — режим «только эта зона», то же, что `focus`.
+
+    Своей копии у режима нет: собираем `cmd_focus` его аргументы, и он делает
+    всё остальное — в том числе отдаёт работу живому демону, который один умеет
+    доворачивать окна, появившиеся уже в режиме. Зона — из записи (нет её —
+    «только это окно»), окно — предмет действия, иначе `--window`.
+    """
+    zone = record.get("zone")
+    window = ctx.window if ctx.window is not None else args.window
+    if args.dry_run:
+        where = f"зону '{zone}'" if zone else "на месте"
+        _action_plan_line(name, record.get("run"), ctx)
+        print(
+            f"план: окно {window if window is None else hex(window)} -> {where}, "
+            "остальные окна стола и монитора — свёрнуты (повторное нажатие вернёт)"
+        )
+        return
+    cmd_focus(
+        grid,
+        argparse.Namespace(
+            zone=zone, off=False, window=window, dry_run=False, quiet=args.quiet
+        ),
+    )
+
+
+def _action_show_window(grid, args, name, record, ctx, wa):
+    """`builtin:show-window` — поднять окно зоны (у стопки — сосед по кольцу).
+
+    Окна зоны — `zone_actions.zone_windows` по рамкам клиентов и рамке вкладки;
+    цель — `zone_tabs.next_tab` от активного окна (одно окно или активное вне
+    стопки — первое в порядке списка). `deiconify` — это `_NET_ACTIVE_WINDOW`:
+    развернуть, поднять, сфокусировать. Зоны нет или она пуста — no-op (код 0).
+    """
+    if not ctx.zone:
+        _action_dry_run_noop(args, name, record, ctx, "окно вне зон — показывать нечего")
+        return
+    base = grid.rect(ctx.zone, wa, monitor_name=ctx.monitor)
+    height = tabs_height(grid)
+    frames = _action_frames(read_client_list() or [])
+    stack = _action_windows_in_zone(base, frames, height)
+    if not stack:
+        _action_dry_run_noop(
+            args, name, record, ctx, f"зона '{ctx.zone}' пуста — показывать нечего"
+        )
+        return
+    target = zone_tabs_module().next_tab(stack, active_window_quiet()) or stack[0]
+    if args.dry_run:
+        ring = ", ".join(f"0x{win:x}" for win in stack)
+        _action_plan_line(name, record.get("run"), ctx)
+        print(f"план: поднять окно 0x{target:x} зоны '{ctx.zone}' (вкладки: {ring})")
+        return
+    deiconify(target)
+    if not args.quiet:
+        print(f"zone-tiler: окно зоны '{ctx.zone}' — 0x{target:x}")
+
+
+def _action_mirror(grid, args, name, record, ctx, wa):
+    """`builtin:mirror` — обмен окнами с зеркальной зоной.
+
+    Зеркало ищется по геометрии (`zone_actions.find_mirror` по долям зон экрана),
+    а не по имени: имена зон человек придумывает сам. Окно-предмет идёт в
+    зеркальную зону, окно зеркальной — в предмет; пустая зона вырождает обмен в
+    переезд одного окна, обе пусты — no-op (код 0). После обмена **каждой** зоне
+    выставляется рамка по числу оказавшихся в ней окон, и она применяется ко всем
+    окнам зоны: иначе вкладки разъедутся (у стопки из двух окно стоит на рамке
+    вкладки, а не на всей зоне).
+    """
+    za = actions_module()
+    zone = ctx.zone
+    if not zone:
+        fail("zone-tiler: окно вне зон — зеркалить нечего", EXIT_FAIL)
+    axis = record.get("axis") or za.DEFAULT_MIRROR_AXIS
+    fractions = {
+        name_: grid.fractions(name_, monitor_name=ctx.monitor)
+        for name_ in grid.zones_for(ctx.monitor)
+    }
+    try:
+        partner = za.find_mirror(fractions, zone, axis)
+    except za.ActionError as exc:
+        fail(f"zone-tiler: {exc}", EXIT_CONFIG)
+    if partner is None:
+        fail(f"zone-tiler: в этой сетке нет зеркальной зоны для '{zone}'", EXIT_FAIL)
+
+    height = tabs_height(grid)
+    client_ids = read_client_list() or []
+    frames = _action_frames(client_ids)
+    rect = grid.rect(zone, wa, monitor_name=ctx.monitor)
+    mirror_rect = grid.rect(partner, wa, monitor_name=ctx.monitor)
+    here = _action_windows_in_zone(rect, frames, height)
+    there = _action_windows_in_zone(mirror_rect, frames, height)
+    # Переезжает предмет действия (окно, которое получил контекст), а если его в
+    # зоне уже нет — верхнее окно зоны: «верхнее» и есть видимое.
+    window = ctx.window if ctx.window in here else (here[-1] if here else None)
+    other = there[-1] if there else None
+    if window is None and other is None:
+        _action_dry_run_noop(
+            args, name, record, ctx,
+            f"зоны '{zone}' и '{partner}' пусты — обменивать нечего",
+        )
+        return
+    final_here = [win for win in here if win != window]
+    final_there = [win for win in there if win != other]
+    if other is not None:
+        final_here.append(other)
+    if window is not None:
+        final_there.append(window)
+    here_frame = in_zone_rect(rect, len(final_here), height)
+    there_frame = in_zone_rect(mirror_rect, len(final_there), height)
+
+    if args.dry_run:
+        _action_plan_line(name, record.get("run"), ctx)
+        print(
+            f"план: обмен зон '{zone}' и '{partner}' ({axis}): "
+            f"{_action_hex(window)} -> '{partner}', {_action_hex(other)} -> '{zone}'; "
+            f"рамки x={here_frame[0]} y={here_frame[1]} {here_frame[2]}x{here_frame[3]} "
+            f"и x={there_frame[0]} y={there_frame[1]} {there_frame[2]}x{there_frame[3]}"
+        )
+        return
+
+    # Прежние рамки — в историю, чтобы `undo` вернул окна. Снимок берётся до
+    # первого движения: после него геометрия уже чужая.
+    records = []
+    for win, target_zone in ((window, partner), (other, zone)):
+        if win is None:
+            continue
+        try:
+            records.append(snapshot_window(win, zone=target_zone))
+        except Exception:
+            continue  # геометрию не прочитать — окно всё равно двигаем
+    x11 = X11()
+    try:
+        for win in final_here:
+            apply_zone(win, here_frame, label=zone, x11=x11, quiet=True)
+        for win in final_there:
+            apply_zone(win, there_frame, label=partner, x11=x11, quiet=True)
+    finally:
+        x11.close()
+    remember("mirror", records, quiet=args.quiet)
+    if not args.quiet:
+        print(
+            f"zone-tiler: окна зон '{zone}' и '{partner}' обменяны "
+            f"(окон в зонах: {len(final_here)} и {len(final_there)})"
+        )
+
+
+def _action_hex(window):
+    """Окно для печати: `0x…` или «пустая зона» — в плане `--dry-run`."""
+    return "пустая зона" if window is None else f"окно 0x{window:x}"
+
+
+def _action_terminal(grid, args, name, record, ctx, wa):
+    """`builtin:terminal` — терминал в зоне (своё окно встаёт на рамку зоны).
+
+    Команда — `command` записи или `zone_actions.DEFAULT_TERMINAL`, разбор и
+    подстановки — `zone_actions.expand_command`. Запуск отсоединённый: терминал
+    живёт до закрытия окна, и ждать его нельзя. Новое окно ищется в
+    `_NET_CLIENT_LIST` до ~5 с (окна под `[ignore]`/служебные типы не берутся) и
+    ставится рамкой по числу окон зоны плюс одно — то есть при занятой зоне на
+    рамку вкладки. Если окно не появилось — код 1 с понятным сообщением.
+    """
+    za = actions_module()
+    if not ctx.zone:
+        fail(
+            f"zone-tiler: у действия '{name}' нет зоны — задайте zone в "
+            f"[action:{name}]",
+            EXIT_FAIL,
+        )
+    base = grid.rect(ctx.zone, wa, monitor_name=ctx.monitor)
+    height = tabs_height(grid)
+    client_ids = read_client_list() or []
+    count = len(_action_windows_in_zone(base, _action_frames(client_ids), height))
+    rect = in_zone_rect(base, count + 1, height)
+    command = record.get("command") or za.DEFAULT_TERMINAL
+    try:
+        argv = za.expand_command(command, ctx)
+    except za.ActionError as exc:
+        fail(f"zone-tiler: {exc}", EXIT_CONFIG)
+    if args.dry_run:
+        _action_plan_line(name, record.get("run"), ctx)
+        print(
+            f"план: запустить {argv} и положить его окно в зону '{ctx.zone}': "
+            f"x={rect[0]} y={rect[1]} {rect[2]}x{rect[3]} (окон в зоне: {count} + 1)"
+        )
+        return
+
+    before = set(client_ids)
+    _spawn(argv, ctx)
+    window = _wait_new_window(before, grid)
+    if window is None:
+        fail(
+            f"zone-tiler: терминал в зоне '{ctx.zone}' не появился за "
+            f"{ACTION_WAIT_TRIES * ACTION_WAIT_DELAY:g} с — окно не найдено",
+            EXIT_FAIL,
+        )
+    # Последнее слово за действием: окно могло уже попасть под `[rules]` демона и
+    # встать по правилу; рамка зоны действия важнее, поэтому ставится ещё раз.
+    apply_zone(window, rect, label=ctx.zone, quiet=args.quiet)
+    if not args.quiet:
+        print(f"zone-tiler: терминал в зоне '{ctx.zone}': окно 0x{window:x}")
+
+
+def _wait_new_window(before, grid, tries=ACTION_WAIT_TRIES, delay=ACTION_WAIT_DELAY):
+    """Новое окно `_NET_CLIENT_LIST` (не исключённое) или `None` по таймауту.
+
+    `before` — окна до запуска команды. Окно под `[ignore]`/служебного типа не
+    берётся: это не терминал, а splash или диалог, и двигать его нельзя.
+    Первая проверка — сразу: быстрый терминал успевает появиться до паузы.
+    """
+    for attempt in range(max(1, int(tries))):
+        if attempt:
+            time.sleep(delay)
+        for win in read_client_list() or []:
+            if win in before:
+                continue
+            if window_is_excluded(win, grid.ignore):
+                continue
+            return win
+    return None
+
+
 def cmd_focus(grid, args):
     """Режим «только эта зона»: окно в зону, остальные окна монитора — свёрнуты.
 
@@ -3084,6 +3602,7 @@ def main(argv=None):
         epilog=(
             "Примеры: zone-tiler.py arrange --by order; zone-tiler.py stack main; "
             "zone-tiler.py tabs-next; zone-tiler.py undo --all; "
+            "zone-tiler.py action mirror; "
             "zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
         ),
     )
@@ -3094,6 +3613,7 @@ def main(argv=None):
             "apply",
             "move",
             "focus",
+            "action",
             "keys",
             "arrange",
             "stack",
@@ -3104,7 +3624,9 @@ def main(argv=None):
         help=(
             "list/apply/keys — как раньше; move — перебросить окно в соседнюю зону; "
             "focus — режим «только эта зона» (окно в зону, остальные свёрнуты; "
-            "повторно — выход); arrange — разложить окна по зонам; stack — собрать "
+            "повторно — выход); action — выполнить действие из [action:<имя>] "
+            "(встроенное или своя команда); arrange — разложить окна по зонам; "
+            "stack — собрать "
             "окна в зону вкладками; tabs-next — поднять следующую вкладку зоны "
             "(клавиша [tabs]); undo — вернуть рамки из истории; profile — свои "
             "профили раскладок (зоны + правила + клавиши)"
@@ -3239,6 +3761,11 @@ def main(argv=None):
         return EXIT_OK
     if args.command == "focus":
         cmd_focus(grid, args)
+        return EXIT_OK
+    # `action` — как `focus`: ни зоны ни окна от CLI не требует (зона бывает в
+    # записи действия, а действие бывает и вовсе без зоны).
+    if args.command == "action":
+        cmd_action(grid, args)
         return EXIT_OK
     if not args.zone:
         fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)

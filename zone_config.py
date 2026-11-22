@@ -19,6 +19,7 @@ import json
 import os
 import re
 
+import zone_actions
 import zone_tabs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -64,6 +65,16 @@ FOCUS_SECTION = "focus"
 # отрицательной высоты не рисуется, и вкладки молча стали бы невидимыми.
 TABS_SECTION = "tabs"
 TABS_FIELDS = ("key", "height")
+
+# Действия: одна секция — один экземпляр действия, ``[action:<имя>]`` (как
+# ``[zones:<выход>]`` — один набор на экран). В :data:`RESERVED_SECTIONS` секция
+# не входит: редактор её не правит, а переносит дословно, как
+# ``[focus]``/``[tabs]``. Имя действия — из ``[a-z0-9_-]``: оно уже приведено
+# ``ConfigParser`` к нижнему регистру и попадает в командную строку клавиши
+# (``zone-tiler.py action <имя>``), поэтому пробелы и кавычки в нём недопустимы.
+ACTION_SECTION_PREFIX = "action:"
+ACTION_FIELDS = ("run", "zone", "key", "command", "axis")
+ACTION_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 # Рабочие столы: ``[workspaces]``, ключ — номер стола как в интерфейсе Cinnamon
 # (с 1), значение — имя профиля из ``templates/<имя>.conf``.
@@ -328,6 +339,160 @@ def _tabs_height(text):
             zt.EXIT_CONFIG,
         )
     return height
+
+
+def load_actions(path):
+    """Действия из секций ``[action:<имя>]``: ``{имя: запись}``.
+
+    Запись — словарь с полями :data:`ACTION_FIELDS`:
+
+    * ``run`` — обязательный: ``builtin:<имя>`` из ``zone_actions.BUILTINS`` либо
+      внешняя команда (её разбирает ``zone_actions.expand_command``);
+    * ``zone`` — необязательное имя зоны-предмета; без неё предметом становится
+      активное окно и зона, где оно стоит;
+    * ``key`` — необязательное сочетание Cinnamon для ``setup-hotkeys.py``;
+    * ``command`` — только у ``builtin:terminal``: чем запускать терминал
+      (умолчание — ``zone_actions.DEFAULT_TERMINAL``);
+    * ``axis`` — только у ``builtin:mirror``: ось из ``zone_actions.MIRROR_AXES``
+      (умолчание — ``zone_actions.DEFAULT_MIRROR_AXIS``).
+
+    Отсутствующие необязательные поля — ``None``; нет файла или нет ни одной
+    секции — пустой словарь (действий нет, и это не ошибка).
+
+    Ошибка конфига (код 3): пустой ``run``/``zone``/``key``/``command``,
+    неизвестное имя встроенного действия, неизвестное поле секции, ``command``
+    или ``axis`` не у своего действия, ось не из :data:`zone_actions.MIRROR_AXES`,
+    имя секции не из ``[a-z0-9_-]``. Всё это — опечатки, из-за которых человек
+    остался бы без действия или без клавиши и не понял почему.
+
+    Имя секции и имя действия сравниваются без учёта регистра (как ключи
+    ``ConfigParser``): ``[action:Main]`` и ``[action:main]`` — не два действия с
+    одним именем, а опечатка, поэтому это тоже код 3. Порядок результата — как
+    секции в файле.
+    """
+    cp = _read_conf(path, missing_ok=True)
+    if cp is None:
+        return {}
+    actions, sections = {}, {}
+    for section in cp.sections():
+        name = _action_section_name(section)
+        if name is None:
+            continue
+        if name in sections:
+            zt.fail(
+                f"zone_config: действие '{name}' задано дважды: "
+                f"[{sections[name]}] и [{section}] — имена действий сравниваются "
+                "без учёта регистра",
+                zt.EXIT_CONFIG,
+            )
+        actions[name] = _action_entry(section, cp.items(section))
+        sections[name] = section
+    return actions
+
+
+def _action_section_name(section):
+    """Имя действия из имени секции ``[action:<имя>]``; не наша секция — ``None``.
+
+    Имя приводится к нижнему регистру: оно попадает в командную строку клавиши
+    (``zone-tiler.py action <имя>``), поэтому пробелы, точки и кавычки в нём
+    недопустимы (:data:`ACTION_NAME_RE`), а пустое ``[action:]`` — опечатка, а
+    не действие без имени.
+    """
+    name = str(section)
+    if name[: len(ACTION_SECTION_PREFIX)].lower() != ACTION_SECTION_PREFIX:
+        return None
+    short = name[len(ACTION_SECTION_PREFIX):].strip().lower()
+    if not short:
+        zt.fail(
+            f"zone_config: пустое имя действия в секции [{name}]: пишите "
+            "[action:<имя>], например [action:term-main]",
+            zt.EXIT_CONFIG,
+        )
+    if not ACTION_NAME_RE.match(short):
+        zt.fail(
+            f"zone_config: имя действия '{short}' из секции [{name}]: можно "
+            "строчные латинские буквы, цифры, дефис и подчёркивание — имя "
+            "попадает в командную строку клавиши",
+            zt.EXIT_CONFIG,
+        )
+    return short
+
+
+def _action_entry(section, items):
+    """Запись действия из пар секции; всё не по контракту — код 3.
+
+    Поля читаются все сразу, а проверяются после: ``command``/``axis`` зависят от
+    того, какое встроенное действие стоит в ``run``, а порядок строк в секции
+    произвольный. ``run`` хранится как в файле (внешняя команда
+    регистрозависима), ``axis`` — приведённой к нижнему регистру, как её
+    разбирает ``zone_actions.mirror_fractions``.
+    """
+    where = f"zone_config: в [{section}]"
+    raw = {}
+    for field, value in items:
+        # ConfigParser приводит ключи к нижнему регистру, так что ``Run`` в файле
+        # тоже сойдёт за поле.
+        field = str(field).strip().lower()
+        if field not in ACTION_FIELDS:
+            zt.fail(
+                f"{where} неизвестное поле '{field}': можно "
+                + ", ".join(ACTION_FIELDS),
+                zt.EXIT_CONFIG,
+            )
+        raw[field] = str(value).strip()
+
+    run = raw.get("run", "")
+    if not run:
+        zt.fail(
+            f"{where} пустое обязательное поле run: нужно builtin:<имя> или "
+            "внешняя команда",
+            zt.EXIT_CONFIG,
+        )
+    try:
+        builtin = zone_actions.builtin_name(run)
+    except zone_actions.ActionError as exc:
+        # Имя встроенного действия проверяет ядро: список известных и сообщение
+        # об опечатке должны быть одни и те же в конфиге и в раскладчике.
+        zt.fail(f"{where} {exc}", zt.EXIT_CONFIG)
+
+    entry = {"run": run, "zone": None, "key": None, "command": None, "axis": None}
+    for field in ("zone", "key"):
+        if field not in raw:
+            continue
+        if not raw[field]:
+            zt.fail(f"{where} пустое значение {field}", zt.EXIT_CONFIG)
+        entry[field] = raw[field]
+
+    if "command" in raw:
+        if builtin != zone_actions.TERMINAL:
+            zt.fail(
+                f"{where} поле command бывает только у builtin:"
+                f"{zone_actions.TERMINAL}, а run = '{run}'",
+                zt.EXIT_CONFIG,
+            )
+        if not raw["command"]:
+            zt.fail(
+                f"{where} пустое значение command: чем запускать терминал",
+                zt.EXIT_CONFIG,
+            )
+        entry["command"] = raw["command"]
+
+    if "axis" in raw:
+        if builtin != zone_actions.MIRROR:
+            zt.fail(
+                f"{where} поле axis бывает только у builtin:"
+                f"{zone_actions.MIRROR}, а run = '{run}'",
+                zt.EXIT_CONFIG,
+            )
+        axis = raw["axis"].lower()
+        if axis not in zone_actions.MIRROR_AXES:
+            zt.fail(
+                f"{where} неизвестная ось зеркала axis = '{raw['axis']}': можно "
+                + ", ".join(zone_actions.MIRROR_AXES),
+                zt.EXIT_CONFIG,
+            )
+        entry["axis"] = axis
+    return entry
 
 
 def _workspace_number(value):
