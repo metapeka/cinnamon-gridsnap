@@ -20,7 +20,11 @@ roff, собранные страницы ставятся в `/usr/share/man/<�
 
 Про `man путь/zh_CN/man1/gridsnap.1`: так проверять нельзя — man-db ведёт себя
 иначе, когда ему дают файл из каталога локали, и замер врёт (на этом уже ловили
-ложную тревогу). Поэтому временный `MANPATH` и локаль, как в жизни.
+ложную тревогу). Поэтому временный `MANPATH` и локаль, как в жизни, причём путь
+берётся вида `<tmp>/usr/share/man`, а не короткий `<tmp>`: man-db включает
+языковые макросы groff только для такой раскладки. Разница измеримая и решает
+всё: без точек переноса страница даёт 254 колонки под коротким путём и 193 под
+настоящим, а с точками — 79 в обоих.
 
 Локаль `zh_CN.UTF-8` нужна, чтобы страница легла в колонку: без неё groff
 считает иероглиф одной колонкой вместо двух. Если локали в системе нет, языковые
@@ -315,7 +319,12 @@ class BuiltPagesTest(unittest.TestCase):
     def setUpClass(cls):
         cls.built = os.path.isdir(BUILD)
         if cls.built:
-            cls.manpath = tempfile.mkdtemp(prefix="gridsnap-man-")
+            # Путь именно `<tmp>/usr/share/man`: под коротким `<tmp>` man-db не
+            # включает языковые макросы groff и страница форматируется иначе,
+            # чем у пользователя (проверено: без точек переноса 254 колонки
+            # против 193 под настоящим путём).
+            cls.root = tempfile.mkdtemp(prefix="gridsnap-man-")
+            cls.manpath = os.path.join(cls.root, "usr", "share", "man")
             for lang in BUILT_LANGS:
                 sub = "" if lang == "en" else os.path.join(lang, "")
                 target = os.path.join(cls.manpath, sub, "man1")
@@ -328,8 +337,8 @@ class BuiltPagesTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.manpath:
-            shutil.rmtree(cls.manpath, ignore_errors=True)
+        if cls.root:
+            shutil.rmtree(cls.root, ignore_errors=True)
 
     def page(self, lang, name="gridsnap.1"):
         return os.path.join(BUILD, lang, "man1", name)
