@@ -16,11 +16,13 @@ zone-daemon — долгоживущий демон GridSnap: сам вклад�
 Сворачивание окна из `_NET_CLIENT_LIST` не убирает — поэтому reflow не
 срабатывает, и это желаемое поведение.
 
-Рабочие столы: демон помнит активный стол (`_NET_CURRENT_DESKTOP`) и стол
-каждого уложенного окна (`_NET_WM_DESKTOP`). Сетка зон берётся для стола окна
-через `zone-tiler.grid_for_workspace()` (профиль из `[workspaces]`, иначе общий
-`[zones]`); «липкое» окно (`0xFFFFFFFF`) живёт в общем наборе. Окна невидимых
-столов не двигаются никогда: reflow работает только на текущем столе.
+Рабочие столы и экраны: демон помнит активный стол (`_NET_CURRENT_DESKTOP`) и
+стол каждого уложенного окна (`_NET_WM_DESKTOP`). Сетка зон окна берётся по
+его экрану: `[monitors]` важнее `[workspaces]`, `[workspaces]` — важнее общего
+`[zones]` (`zone_config.resolve_profile`); профиль стола — это
+`templates/<имя>.conf` из `[workspaces]`. «Липкое» окно (`0xFFFFFFFF`) живёт в
+общем наборе. Окна невидимых столов не двигаются никогда: reflow работает
+только на текущем столе.
 
 Конфиг — тот же `zones.conf` (по умолчанию путь как у раскладчика,
 `zone-tiler.default_conf()`):
@@ -117,6 +119,22 @@ tiler = _load_sibling("gridsnap_zone_tiler", "zone-tiler.py")
 zone_reflow = _load_sibling("gridsnap_zone_reflow", "zone_reflow.py")
 zone_ipc = _load_sibling("gridsnap_zone_ipc", "zone_ipc.py")
 zone_tabs = _load_sibling("gridsnap_zone_tabs", "zone_tabs.py")
+
+# `zone_config` — чистое ядро профилей (`[monitors]`, `[workspaces]`,
+# `resolve_profile`). Демону оно нужно только когда привязки есть, поэтому
+# грузится лениво: старт демона не должен зависеть от лишнего модуля.
+_zone_config = None
+
+
+def zone_config_module():
+    """Лениво загрузить `zone_config` (ядро разбора профилей) рядом с демоном."""
+    global _zone_config
+    if _zone_config is None:
+        if HERE not in sys.path:
+            sys.path.insert(0, HERE)
+        import zone_config as module  # noqa: PLC0415 — ленивый импорт, как у раскладчика
+        _zone_config = module
+    return _zone_config
 
 # Полоса вкладок — отдельный GTK-процесс рядом с демоном (как `--hud` у
 # горячих краёв): GTK в демон не добавляется, а полосе для снимка вкладок
@@ -596,6 +614,7 @@ class Daemon:
         read_clients=None,
         active_window=None,
         strip=None,
+        monitor_outputs=None,
         verbose=False,
     ):
         self.conf_path = conf_path or tiler.default_conf()
@@ -605,6 +624,10 @@ class Daemon:
         self.read_meta = read_meta or read_window_meta
         self.workarea = workarea
         self.monitors = monitors if monitors is not None else tiler.monitors
+        # [(имя выхода, рабочая область)] — имя адресует профиль в `[monitors]`.
+        self.monitor_outputs = (
+            monitor_outputs if monitor_outputs is not None else tiler.monitor_outputs
+        )
         self.window_center = window_center or read_window_center
         self.read_current_workspace = current_workspace or tiler.current_workspace
         self.read_window_workspace = window_workspace or tiler.window_workspace_for_zones
@@ -673,6 +696,13 @@ class Daemon:
         self.focus = None
         self._wa_cache = None
         self._mons_cache = None
+        # [(имя выхода, рабочая область)] из `xrandr --listmonitors`: имя выхода
+        # адресует профиль экрана в `[monitors]`. Кэш на время жизни конфига.
+        self._outputs_cache = None
+        # `[monitors]`/`[workspaces]` активного конфига: разбираются один раз за
+        # reload — привязки меняются только правкой файла.
+        self._monitor_map_cache = None
+        self._workspace_map_cache = None
         # Команда `quit` по сокету: цикл `serve` проверяет флаг и выходит.
         self.stop_requested = False
 
@@ -716,30 +746,142 @@ class Daemon:
             return True
         return workspace == self.workspace
 
-    def _grid_for(self, workspace=None):
-        """Сетка рабочего стола: профиль из `[workspaces]` или общий набор зон.
+    def _grid_for(self, workspace=None, output=None):
+        """Сетка окна: профиль экрана, стола или общий набор `zones.conf`.
 
-        `workspace=None` (липкое/неопознанное окно) — обычный `Grid(conf_path)`:
-        общий набор зон, как зафиксировано контрактом `grid_for_workspace`.
-        Сетки кэшируются по столу, чтобы не перечитывать конфиг и профиль на
-        каждое окно; `reload` сбрасывает кэш. Битый `[workspaces]` или профиль
-        (в т.ч. `SystemExit` из `fail()`) не роняют демон: берётся общий набор.
+        `output` — имя выхода монитора окна (`HDMI-2`), `workspace` — стол окна
+        из EWMH (с нуля). `None`/`None` (липкое или неопознанное окно) — обычный
+        `Grid(conf_path)`: общий набор зон, как зафиксировано контрактом
+        `grid_for_workspace`. Привязки разбираются в порядке `[monitors]` →
+        `[workspaces]` → активный конфиг (`zone_config.resolve_profile`), откат
+        на следующий уровень — в `_profile_grid`.
+
+        Сетки кэшируются по паре (стол, выход), чтобы не перечитывать конфиг и
+        профиль на каждое окно; `reload` сбрасывает кэш. Битый конфиг, профиль
+        или привязки (в т.ч. `SystemExit` из `fail()`) не роняют демон: берётся
+        общий набор.
         """
-        if workspace is None:
+        if workspace is None and output is None:
             return self.grid
-        cached = self._grids.get(workspace)
+        key = (workspace, output)
+        cached = self._grids.get(key)
         if cached is not None:
             return cached
         try:
-            grid = tiler.grid_for_workspace(self.conf_path, workspace)
+            grid = self._profile_grid(workspace, output)
         except (Exception, SystemExit) as exc:
             self.log(
-                f"не удалось взять сетку стола {workspace_label(workspace)}: {exc} — "
-                "беру общий набор"
+                f"не удалось взять сетку профиля ({workspace_label(workspace)}, "
+                f"экран {output or 'неизвестен'}): {exc} — беру общий набор"
             )
             grid = self.grid
-        self._grids[workspace] = grid
+        self._grids[key] = grid
         return grid
+
+    def _profile_grid(self, workspace, output):
+        """Сетка по привязкам: экран важнее стола, стол — важнее активного конфига.
+
+        Профиль экрана ищется в `[monitors]`, профиль стола — в `[workspaces]`;
+        порядок разбора один на всех — `zone_config.resolve_profile` (номер стола
+        EWMH он же переводит в нумерацию конфига с 1). Профиля нет на диске —
+        **откат на следующий уровень** с записью в журнал: раскладка на экране
+        без профиля всё равно нужна, отказ работы хуже общего набора зон.
+        """
+        zc = zone_config_module()
+        monitor_map = self._monitor_map()
+        workspace_map = self._workspace_map()
+        levels = []
+        if output:
+            levels.append((output, workspace, f"экрана {output}"))
+        if workspace is not None:
+            levels.append((None, workspace, f"стола {workspace_label(workspace)}"))
+        tried = set()
+        for monitor, desk, where in levels:
+            name = zc.resolve_profile(monitor_map, workspace_map, monitor, desk)
+            if not name or name in tried:
+                continue
+            tried.add(name)
+            try:
+                path = zc.profile_path(name, self.conf_path)
+            except ValueError as exc:
+                self.log(
+                    f"плохое имя профиля «{name}» ({where}): {exc} — "
+                    "беру следующий уровень"
+                )
+                continue
+            if not os.path.exists(path):
+                self.log(
+                    f"профиля «{name}» ({where}) нет на диске: {path} — "
+                    "беру следующий уровень"
+                )
+                continue
+            return tiler.Grid(path)
+        return self.grid
+
+    def _monitor_map(self):
+        """`[monitors]` активного конфига (выход → профиль); кэш на reload."""
+        if self._monitor_map_cache is None:
+            try:
+                self._monitor_map_cache = dict(
+                    zone_config_module().load_monitor_map(self.conf_path)
+                )
+            except (Exception, SystemExit) as exc:
+                self.log(
+                    f"не удалось прочитать [monitors]: {exc} — экраны не привязаны"
+                )
+                self._monitor_map_cache = {}
+        return self._monitor_map_cache
+
+    def _workspace_map(self):
+        """`[workspaces]` активного конфига (стол с 1 → профиль); кэш на reload."""
+        if self._workspace_map_cache is None:
+            try:
+                self._workspace_map_cache = dict(
+                    zone_config_module().load_workspace_map(self.conf_path)
+                )
+            except (Exception, SystemExit) as exc:
+                self.log(
+                    f"не удалось прочитать [workspaces]: {exc} — беру общий набор"
+                )
+                self._workspace_map_cache = {}
+        return self._workspace_map_cache
+
+    def _outputs(self):
+        """[(имя выхода, рабочая область)] с кэшем; отказ — пустой список.
+
+        Имя выхода (`HDMI-1`) адресует профиль в `[monitors]`, а рабочая область
+        — то, что демон и так знает про монитор окна. `monitor_outputs` через
+        `fail()` бросает `SystemExit` при отказе X-сервера (не подкласс
+        `Exception`), поэтому ловятся оба; неудачу не кэсим.
+        """
+        if self._outputs_cache is None:
+            try:
+                pairs = self.monitor_outputs()
+                self._outputs_cache = [
+                    (str(name), tuple(int(v) for v in area)) for name, area in pairs
+                ]
+            except (Exception, SystemExit) as exc:
+                self.log(f"не удалось сопоставить выходы мониторов: {exc}")
+                return []
+        return self._outputs_cache
+
+    def _output_for(self, wa):
+        """Имя выхода монитора с рабочей областью `wa` (`HDMI-1`); нет — `None`.
+
+        `None` — экран не привязан (`[monitors]` пуст) или выход не сопоставился
+        с рабочей областью. Тогда `xrandr` вовсе не зовётся, а разбор профиля
+        идёт следующим уровнем (стол/активный конфиг).
+        """
+        if wa is None or not self._monitor_map():
+            return None
+        try:
+            rect = tuple(int(v) for v in wa)
+        except (TypeError, ValueError):
+            return None
+        for name, area in self._outputs():
+            if area == rect:
+                return name
+        return None
 
     def _forced_workarea(self):
         """Принудительная одна рабочая область; `None`, если её не получить."""
@@ -954,7 +1096,7 @@ class Daemon:
         if wa is None:
             return None
         try:
-            grid = self._grid_for(record.get("workspace"))
+            grid = self._grid_for(record.get("workspace"), self._output_for(wa))
             return grid.rect(record["zone"], wa)
         except (Exception, SystemExit) as exc:
             self.log(
@@ -1080,14 +1222,15 @@ class Daemon:
         if holder is None:
             return
         holder_zone = self.windows.get(holder)
-        grid = self._grid_for(self.win_workspace.get(holder))
+        holder_workspace = self.win_workspace.get(holder)
+        # Профиль — того экрана, где стоит окно-держатель (reflow живёт на `wa`).
+        grid = self._grid_for(holder_workspace, self._output_for(wa))
         if holder_zone is None or holder_zone not in grid.all_zone_names():
             # Держателя нет или его зоны больше нет в наборе — покрытие снимаем.
             del self.filled[key]
             return
-        # Рамка возврата — по числу вкладок стопки: окно-вкладка возвращается
-        # на общую рамку зоны, а не на всю её площадь.
-        holder_workspace = self.win_workspace.get(holder)
+        # Рамка возврата — по числу вкладок стопки: окно-вкладка возвращается на
+        # общую рамку зоны, а не на всю её площадь.
         count = len(self._zone_stack(holder_zone, wa, holder_workspace))
         rect = self._stack_rect(holder_zone, wa, holder_workspace, count, grid=grid)
         if self._apply(holder, rect, holder_zone):
@@ -1132,8 +1275,12 @@ class Daemon:
         return {win: self._read_rect(win) for win in windows}
 
     def _zone_pixel_rect(self, zone, wa, workspace=None, grid=None):
-        """Пиксельная рамка зоны на мониторе `wa` (сетка — по столу или заданная)."""
-        grid = grid or self._grid_for(workspace)
+        """Пиксельная рамка зоны на мониторе `wa` (сетка — по экрану или заданная).
+
+        Без явной сетки профиль разрешается по **этому** монитору: у экрана
+        может быть свой профиль, и чужая геометрия тут не годится.
+        """
+        grid = grid or self._grid_for(workspace, self._output_for(wa))
         return tuple(int(round(v)) for v in grid.rect(zone, wa))
 
     def _tab_frame(self, zone_rect):
@@ -1294,11 +1441,12 @@ class Daemon:
         monitors = self._monitor_list()
         if not monitors:
             return []
-        grid = self._grid_for(workspace)
         frames = self._frames(self._tracked_order(client_ids))
         active = self._active_window()
         records = []
         for wa in monitors:
+            # У каждого экрана свой профиль, поэтому и зоны — свой набор.
+            grid = self._grid_for(workspace, self._output_for(wa))
             for zone in sorted(grid.zones):
                 zone_rect = self._zone_pixel_rect(zone, wa, workspace, grid)
                 tabs = [
@@ -1335,20 +1483,25 @@ class Daemon:
         """
         if self.workspace is None:
             return False
-        grid = self._grid_for(self.workspace)
         stacks = {}
         for win in self._client_order(client_ids):
             zone = self.windows.get(win)
-            if zone is None or zone not in grid.zones:
+            wa = self.win_monitor.get(win)
+            if zone is None or wa is None:
                 continue
             if not self._visible(self.win_workspace.get(win)):
                 continue
-            stacks.setdefault((zone, self.win_monitor.get(win)), []).append(win)
+            # Зона ищется в профиле того экрана, где стоит окно.
+            grid = self._grid_for(self.workspace, self._output_for(wa))
+            if zone not in grid.all_zone_names():
+                continue
+            stacks.setdefault((zone, wa), []).append(win)
         moved = False
         for (zone, wa), stack in stacks.items():
             if len(stack) != 1 or wa is None:
                 continue
             win = stack[0]
+            grid = self._grid_for(self.workspace, self._output_for(wa))
             zone_rect = self._zone_pixel_rect(zone, wa, self.workspace, grid)
             tab_frame = self._tab_frame(zone_rect)
             if tab_frame == zone_rect:
@@ -1447,17 +1600,34 @@ class Daemon:
         """Состояние демона: зоны, окно→зона, стол, монитор, профиль, reflow.
 
         Пиксельные рамки зон даются на каждый монитор (`zones_px`), потому что
-        зона — доля рабочей области, а у монитора своя область. Поля
-        `windows[].zone/window/monitor` — прежние: апплет и тесты читают их как
-        раньше; `workspace` (номер активного стола и стол каждого окна и
+        зона — доля рабочей области, а у монитора своя область.
+        **Наполнение считается по разрешённым профилям**, а не по активному
+        `zones.conf`: у каждого экрана свой профиль (см. `_grid_for`), поэтому
+        `zones` — объединение наборов по экранам (в их порядке), а
+        `zones_px[name][i]` — рамка зоны в профиле монитора `i` (или `None`,
+        если в том профиле такой зоны нет: рисовать её там нечего). Форма
+        ответа при этом прежняя.
+
+        Поля `windows[].zone/window/monitor` — прежние: апплет и тесты читают
+        их как раньше; `workspace` (номер активного стола и стол каждого окна и
         покрытия) добавлен рядом, а не вместо. `focus` — режим «только эта
         зона»: `None` или `{zone, window, minimized (число)}`.
         """
-        zones = {name: list(self.grid.fractions(name)) for name in sorted(self.grid.zones)}
         monitors = self._monitor_list()
-        zones_px = {
-            name: [list(self.grid.rect(name, wa)) for wa in monitors] for name in zones
-        }
+        # Сетка на каждый монитор — ровно та, по которой демон кладёт окна.
+        grids = [
+            self._grid_for(self.workspace, self._output_for(wa)) for wa in monitors
+        ]
+        zones = {}
+        for grid in grids or [self.grid]:
+            for name in sorted(grid.zones):
+                zones.setdefault(name, list(grid.fractions(name)))
+        zones_px = {}
+        for name in zones:
+            zones_px[name] = [
+                list(grid.rect(name, wa)) if name in grid.zones else None
+                for grid, wa in zip(grids, monitors)
+            ]
         windows = []
         for win, zone in sorted(self.windows.items()):
             wa = self.win_monitor.get(win)
@@ -1527,17 +1697,31 @@ class Daemon:
             return wa
         return monitors[0] if monitors else None
 
+    def _known_zone_names(self):
+        """Имена зон, доступные явным командам: активный конфиг и профили экранов.
+
+        Команда приходит с именем зоны от апплета или раскладчика, а те
+        показывают зоны **разрешённого** профиля — у экрана он может быть свой.
+        Поэтому проверять имя только по активному `zones.conf` нельзя: зона
+        профиля второго экрана была бы отвергнута как несуществующая.
+        """
+        names = set(self.grid.all_zone_names())
+        for wa in self._monitor_list():
+            grid = self._grid_for(self.workspace, self._output_for(wa))
+            names |= set(grid.all_zone_names())
+        return names
+
     def ipc_apply(self, request):
         """Вложить окно в зону по команде сокета (по умолчанию — активное).
 
         Успешная укладка запоминается в трекере демона: закрытие окна затем
-        штатно запускает reflow, а не оставляет призрак.
+        штатно запускает reflow, а не оставляет призрак. Сетка зоны — профиля
+        того экрана, где стоит окно (см. `_grid_for`).
         """
         zone = request.get("zone")
-        if not isinstance(zone, str) or zone not in self.grid.zones:
-            raise ValueError(
-                f"нет зоны '{zone}'. Есть: " + ", ".join(sorted(self.grid.zones))
-            )
+        known = self._known_zone_names()
+        if not isinstance(zone, str) or zone not in known:
+            raise ValueError(f"нет зоны '{zone}'. Есть: " + ", ".join(sorted(known)))
         window = request.get("window")
         if window is None:
             window = tiler.active_window()  # нет активного окна -> SystemExit
@@ -1545,24 +1729,25 @@ class Daemon:
             window = int(window, 0)
         else:
             window = int(window)
+        wa = self._monitor_for_command(request, window)
+        if wa is None:
+            raise ValueError(f"не удалось определить монитор окна 0x{window:x}")
+        grid = self._grid_for(self.workspace, self._output_for(wa))
         meta = self.read_meta(window)
         wm_class = getattr(meta, "wm_class", "") or ""
         if window_excluded(
             wm_class,
             getattr(meta, "wm_title", "") or "",
             getattr(meta, "window_type", ()),
-            self.grid.ignore,
+            grid.ignore or self.grid.ignore,
         ):
             raise ValueError(
                 f"окно 0x{window:x} под исключением ([ignore]/служебный тип) — не двигаю"
             )
-        wa = self._monitor_for_command(request, window)
-        if wa is None:
-            raise ValueError(f"не удалось определить монитор окна 0x{window:x}")
         # Окно вкладывается там, где сейчас пользователь: занятость считаем по
-        # активному столу (сетка зоны — по-прежнему из основного конфига).
+        # активному столу, а геометрию зоны — по профилю экрана окна.
         rect = self._settle_in_zone(
-            window, zone, wa, self.workspace, wm_class, grid=self.grid
+            window, zone, wa, self.workspace, wm_class, grid=grid
         )
         if rect is None:
             raise ValueError(f"не удалось вложить окно 0x{window:x} в зону '{zone}'")
@@ -1939,12 +2124,9 @@ class Daemon:
             self.sync_strips()
             return {"off": True, "restored": [hex(w) for w in restored]}
         zone = request.get("zone")
-        if zone is not None and (
-            not isinstance(zone, str) or zone not in self.grid.zones
-        ):
-            raise ValueError(
-                f"нет зоны '{zone}'. Есть: " + ", ".join(sorted(self.grid.zones))
-            )
+        known = self._known_zone_names()
+        if zone is not None and (not isinstance(zone, str) or zone not in known):
+            raise ValueError(f"нет зоны '{zone}'. Есть: " + ", ".join(sorted(known)))
         window = request.get("window")
         if window is None:
             window = tiler.active_window()  # нет активного окна -> SystemExit
@@ -1979,11 +2161,13 @@ class Daemon:
                 f"не удалось определить монитор окна 0x{window:x} — режим «только эта "
                 "зона» не включаю: его область зависит от монитора цели"
             )
+        # Геометрия зоны — профиля того экрана, где стоит цель.
+        grid = self._grid_for(self.workspace, self._output_for(wa))
         if zone is not None:
             # Цель сама становится вкладкой зоны: если там уже было окно, оба
             # встают на общую рамку, а полоса получает новый снимок.
             rect = self._settle_in_zone(
-                window, zone, wa, self.workspace, wm_class, grid=self.grid
+                window, zone, wa, self.workspace, wm_class, grid=grid
             )
             if rect is None:
                 raise ValueError(
@@ -2007,13 +2191,21 @@ class Daemon:
         }
 
     def ipc_reload(self, request=None):
-        """Перечитать zones.conf: сетка, правила, профили столов и reflow; кэши сбросить."""
+        """Перечитать zones.conf: сетку, правила, привязки экранов/столов и reflow.
+
+        Кэши сбрасываются все, включая пары (стол, выход) и разобранные
+        `[monitors]`/`[workspaces]`: новый профиль экрана подхватывается без
+        рестарта демона.
+        """
         self.grid = tiler.Grid(self.conf_path)
         self.reflow = read_reflow(self.grid.conf)
         self.tabs_height = read_tabs_height(self.grid.conf)
         self._grids = {}
         self._wa_cache = None
         self._mons_cache = None
+        self._outputs_cache = None
+        self._monitor_map_cache = None
+        self._workspace_map_cache = None
         self.log(f"конфиг перечитан: {self.conf_path}")
         self.sync_strips()
         return {
@@ -2108,14 +2300,17 @@ class Daemon:
     def on_map(self, win, override_redirect=False):
         """Новое клиентское окно: вложить в зону по правилу, если оно подходит.
 
-        Сетка берётся для стола окна (`tiler.grid_for_workspace`): на столе с
-        профилем окно встаёт в зоны профиля, а «липкое» окно — в общий набор
-        `zones.conf`. Правила — из основного конфига: имя зоны глобально, но
-        если в наборе стола такой зоны нет, окно не укладывается (лучше никак,
-        чем в чужую геометрию). Окно, попавшее в область активного режима
-        «только эта зона» (тот же стол и монитор, что у цели), укладывается по
-        правилу и сверх того сворачивается: так после выхода из режима оно
-        окажется уже в своей зоне.
+        Сетка берётся по экрану окна: `[monitors]` важнее `[workspaces]`,
+        `[workspaces]` — важнее активного `zones.conf` (см. `_grid_for`). Правила
+        и `[ignore]` читаются из **того же** профиля — они приходят внутри
+        `Grid`, а профиль без своих правил (снимок одних зон) откатывается на
+        правила активного конфига. «Липкое» окно и окно с неопознанным экраном
+        живут в наборе следующего уровня. Имя зоны глобально: если в наборе
+        экрана такой зоны нет, окно не укладывается (лучше никак, чем в чужую
+        геометрию). Окно, попавшее в область активного режима «только эта зона»
+        (тот же стол и монитор, что у цели), укладывается по правилу и сверх
+        того сворачивается: так после выхода из режима оно окажется уже в
+        своей зоне.
         """
         if win in self.windows:
             return  # окно уже уложено (повторное появление в списке)
@@ -2128,33 +2323,38 @@ class Daemon:
         wm_title = getattr(meta, "wm_title", "") or ""
         if not wm_class:
             return  # без WM_CLASS правило не проверить
+        # Стол и экран нужны до правил: у профиля экрана свои правила и свои
+        # исключения, и активный `zones.conf` тут не указ. Без `[monitors]`
+        # `_output_for` молчит и за `xrandr` не идёт — разбор идёт по столу.
+        workspace = self._window_workspace(win)
+        wa = self._monitor_of(win)
+        grid = self._grid_for(workspace, self._output_for(wa))
         if window_excluded(
-            wm_class, wm_title, getattr(meta, "window_type", ()), self.grid.ignore
+            wm_class,
+            wm_title,
+            getattr(meta, "window_type", ()),
+            grid.ignore or self.grid.ignore,
         ):
             self.log(f"окно 0x{win:x} под исключением ([ignore]/служебный тип) — не трогаю")
             return
-        zone = tiler.match_rules(self.grid.rules, wm_class, wm_title)
-        # Стол нужен и без правила: он решает, попадает ли окно в область
-        # режима «только эта зона» (без режима — лишнего чтения не делаем).
-        workspace = None
-        if zone is not None or self.focus is not None:
-            workspace = self._window_workspace(win)
+        zone = tiler.match_rules(
+            grid.rules or self.grid.rules, wm_class, wm_title
+        )
         if zone is None:
             # Правила нет — в режиме окно всё равно прячется (иначе оно окажется
             # поверх цели), но укладывать его некуда: просто сворачиваем.
             if self._focus_covers(win, workspace):
                 self._focus_minimize(win)
             return
-        grid = self._grid_for(workspace)
         if zone not in grid.all_zone_names():
             self.log(
-                f"зоны '{zone}' нет в наборе стола {workspace_label(workspace)} — "
+                f"зоны '{zone}' нет в наборе (стол {workspace_label(workspace)}, "
+                f"экран {self._output_for(wa) or 'неизвестен'}) — "
                 f"окно 0x{win:x} не укладываю"
             )
             if self._focus_covers(win, workspace):
                 self._focus_minimize(win)
             return
-        wa = self._monitor_of(win)
         if wa is None:
             return  # монитор окна недоступен: не падаем и окно не трогаем
         # Правило дизайна волны: одно окно занимает зону целиком, два и больше
@@ -2218,7 +2418,7 @@ class Daemon:
             if self.win_monitor.get(other) == wa
             and self._visible(self.win_workspace.get(other))
         }
-        grid = self._grid_for(self.workspace)
+        grid = self._grid_for(self.workspace, self._output_for(wa))
         zones = {name: grid.fractions(name) for name in grid.zones}
         changes = zone_reflow.reflow(zones, zone, occupied)
         if not changes:
