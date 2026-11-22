@@ -63,7 +63,6 @@ man/build/zh_CN/man1/gridsnap-picker.1 => /usr/share/man/zh_CN/man1/gridsnap-pic
 man/build/zh_CN/man1/gridsnap-ctl.1 => /usr/share/man/zh_CN/man1/gridsnap-ctl.1
 man/build/zh_CN/man1/setup-hotkeys.1 => /usr/share/man/zh_CN/man1/setup-hotkeys.1
 
-
 # --- иконки темы hicolor ---
 icons/gridsnap-16.png => /usr/share/icons/hicolor/16x16/apps/gridsnap.png
 icons/gridsnap-22.png => /usr/share/icons/hicolor/22x22/apps/gridsnap.png
