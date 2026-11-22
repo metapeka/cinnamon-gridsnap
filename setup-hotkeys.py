@@ -40,6 +40,7 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 import zone_config  # noqa: E402  (ищем рядом с собой, как устанавливается)
+from zone_i18n import _  # noqa: E402  (строки интерфейса и их перевод)
 
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 LIST_SCHEMA = "org.cinnamon.desktop.keybindings"
@@ -216,10 +217,17 @@ def warn_conflicts(items):
     """Предупредить в stderr о совпадении с `push-tile-*`; ничего не меняет."""
     for direction, binding in conflicts_with_push_tile(items):
         print(
-            f"setup-hotkeys: внимание: {binding} для move {direction} совпадает с родным "
-            f"{PUSH_TILE_PREFIX}{direction} muffin — на этой клавише сработает один из "
-            "двух обработчиков. Родное сочетание не выключаю: задайте своё в [move] "
-            "или отключите push-tile в настройках Cinnamon",
+            _(
+                "setup-hotkeys: внимание: {binding} для move {direction} "
+                "совпадает с родным {prefix}{direction} muffin — на этой клавише "
+                "сработает один из двух обработчиков. Родное сочетание не "
+                "выключаю: задайте своё в [move] или отключите push-tile "
+                "в настройках Cinnamon"
+            ).format(
+                binding=binding,
+                direction=direction,
+                prefix=PUSH_TILE_PREFIX,
+            ),
             file=sys.stderr,
         )
 
@@ -255,10 +263,15 @@ def set_custom_list(ids):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Горячие клавиши зон для Cinnamon")
-    ap.add_argument("--list", action="store_true", help="только показать план")
-    ap.add_argument("--remove", action="store_true", help="удалить сочетания zone-tiler")
-    ap.add_argument("--conf", help="путь к zones.conf (по умолчанию — как у zone-tiler.py)")
+    ap = argparse.ArgumentParser(description=_("Горячие клавиши зон для Cinnamon"))
+    ap.add_argument("--list", action="store_true", help=_("только показать план"))
+    ap.add_argument(
+        "--remove", action="store_true", help=_("удалить сочетания zone-tiler")
+    )
+    ap.add_argument(
+        "--conf",
+        help=_("путь к zones.conf (по умолчанию — как у zone-tiler.py)"),
+    )
     args = ap.parse_args()
 
     pairs = [] if args.remove else planned(args.conf)
@@ -288,9 +301,13 @@ def main():
     set_custom_list(kept + ids)
 
     if args.remove:
-        print("setup-hotkeys: сочетания zone-tiler удалены")
+        print(_("setup-hotkeys: сочетания zone-tiler удалены"))
     else:
-        print(f"setup-hotkeys: установлено сочетаний: {len(pairs)}")
+        print(
+            _("setup-hotkeys: установлено сочетаний: {count}").format(
+                count=len(pairs)
+            )
+        )
         for name, binding, _command in pairs:
             print(f"  {binding:<22} {name}")
         warn_conflicts(pairs)
