@@ -30,7 +30,8 @@ GRIDSNAP_LANG=en gridsnap-tiler list
 从代码仓库直接运行无需构建：没有编译好的翻译文件时，工具会直接读取仓库里的 `po/<语言>.po`
 （`make mo` 负责编译，安装脚本把编译好的 `.mo` 放进 `share/locale`）。Cinnamon 小程序按 xlet
 的惯例跟随会话区域设置，不看 `GRIDSNAP_LANG`。译文由机器生成，尚未经母语者校对。
-man 手册目前只有俄语。
+man 手册页遵循同样的规则：`man gridsnap` 按区域设置挑选页面 —— 默认英语，`ru*` 下俄语，
+`zh*` 下中文；英语和中文页面同样是机器翻译。
 
 <!-- section: install -->
 ## 安装
@@ -107,8 +108,9 @@ mkdir -p ~/.config/gridsnap && cp /usr/lib/gridsnap/zones.conf ~/.config/gridsna
 <!-- section: install-help -->
 ### 参考
 
-man 手册页包含在软件包里（`/usr/share/man/man1`），`install.sh` 则把它们装到
-`前缀/share/man/man1` —— 加 `--no-launcher` 时也照样装：这是文档，不是快捷方式的一部分。
+man 手册页包含在软件包里：英语在 `/usr/share/man/man1`（任何没有对应译文的区域设置都会拿到它），
+俄语在 `/usr/share/man/ru/man1`，中文在 `/usr/share/man/zh_CN/man1`；`install.sh` 把同样这三份装到
+`前缀/share/man` —— 加 `--no-launcher` 时也照样装：这是文档，不是快捷方式的一部分。
 `man gridsnap` —— 软件包的命令、`zones.conf`、相关文件和返回码；`man gridsnap-tiler` ——
 同一页（`man gridsnap-daemon`、`man gridsnap-editor`、`man gridsnap-picker`、
 `man gridsnap-ctl`、`man setup-hotkeys` 也一样）。
@@ -755,6 +757,10 @@ cinnamon-settings applets        # 在小程序列表里启用 GridSnap
 * Cinnamon 小程序：对 `metadata.json` 和 `settings-schema.json` 跑
   `python3 -m json.tool`，`node --check applet.js`，并在活的 Cinnamon 里加载（无头 `Xvfb` + 私有 dbus）——
   `Loaded applet gridsnap@metapeka`，面板上正是它（`contrib/applet/check-cinnamon.sh`）。
+
+* man 手册页：`make check-man-i18n` 用 po4a 构建三种语言，检查 po4a 模板的每一条都已翻译、
+  `man/gridsnap.1` 里的 `--…` 选项与七条命令真实的 `--help` 一致、`man --warnings` 没有告警，
+  并且俄语页面与源文件逐字节相同。
 
 ## 13. 许可证
 

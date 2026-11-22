@@ -30,7 +30,9 @@ GRIDSNAP_LANG=en gridsnap-tiler list
 Работа из чекаута сборки не требует: если собранных каталогов нет, инструменты читают `po/<язык>.po`
 прямо из репозитория (собирает их `make mo`, а установщики кладут готовые `.mo` в `share/locale`).
 Апплет Cinnamon идёт штатным путём xlet'ов — по локали сессии, на `GRIDSNAP_LANG` он не смотрит.
-Перевод машинный, носителем не вычитан. Man-страницы пока только русские.
+Перевод машинный, носителем не вычитан. Man-страницы следуют тому же правилу: `man gridsnap`
+выбирает страницу по локали — английскую по умолчанию, русскую под `ru*`, китайскую под `zh*`;
+английская и китайская страницы тоже машинные.
 
 <!-- section: install -->
 ## Установка
@@ -108,11 +110,12 @@ mkdir -p ~/.config/gridsnap && cp /usr/lib/gridsnap/zones.conf ~/.config/gridsna
 <!-- section: install-help -->
 ### Справка
 
-man-страницы входят в пакет (`/usr/share/man/man1`), а `install.sh` кладёт их в
-`ПРЕФИКС/share/man/man1` — в том числе при `--no-launcher`: это документация, а не часть ярлыка.
-`man gridsnap` — команды пакета, `zones.conf`, файлы и коды возврата; `man gridsnap-tiler` —
-та же страница (как и `man gridsnap-daemon`, `man gridsnap-editor`, `man gridsnap-picker`,
-`man gridsnap-ctl`, `man setup-hotkeys`).
+man-страницы входят в пакет: английская — в `/usr/share/man/man1` (её получает любая локаль без
+перевода), русская — в `/usr/share/man/ru/man1`, китайская — в `/usr/share/man/zh_CN/man1`; те же
+три каталога `install.sh` создаёт в `ПРЕФИКС/share/man` — в том числе при `--no-launcher`: это
+документация, а не часть ярлыка. `man gridsnap` — команды пакета, `zones.conf`, файлы и коды
+возврата; `man gridsnap-tiler` — та же страница (как и `man gridsnap-daemon`, `man gridsnap-editor`,
+`man gridsnap-picker`, `man gridsnap-ctl`, `man setup-hotkeys`).
 
 <!-- section: cinnamon-native -->
 ## 1. Что есть в Cinnamon из коробки
@@ -768,6 +771,10 @@ cinnamon-settings applets        # включить GridSnap в списке а�
 * апплет Cinnamon: `python3 -m json.tool` для `metadata.json` и `settings-schema.json`,
   `node --check applet.js`, загрузка в живом Cinnamon (headless `Xvfb` + приватный dbus) —
   `Loaded applet gridsnap@metapeka`, на панели ровно он (`contrib/applet/check-cinnamon.sh`).
+
+* man-страницы: `make check-man-i18n` собирает все три языка через po4a, проверяет, что переведена
+  каждая запись шаблона, что ключи `--…` в `man/gridsnap.1` совпадают с настоящим `--help` всех
+  семи команд, что `man --warnings` молчит, а русская страница байт-в-байт равна источнику.
 
 ## 13. Лицензия
 
