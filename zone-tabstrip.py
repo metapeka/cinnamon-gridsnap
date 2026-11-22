@@ -20,6 +20,13 @@
 ``zone_tabs.tabs_switch_command``, как у ``gridsnap-ctl``: отдельного канала у
 полосы нет.
 
+Два пространства координат: рамка ``rect`` в снимке — **физические** пиксели X
+(это координаты окна зоны), а окно GTK живёт в **логических**. Перевод — один,
+в :func:`window_rect` через ``zone_units.logical_rect``, с масштабом монитора
+под центром самой полосы: при ``GDK_SCALE=2`` без него полоса уехала бы вдвое
+дальше зоны и выросла бы вдвое. Рамки вкладок и рисование остаются в физических
+пикселях снимка — это локальные смещения внутри полосы, а не место на экране.
+
 Пустой снимок (``{"strips": []}``) убирает все окна полос, EOF в stdin —
 завершение процесса: демон закрыл поток, значит полос больше некому показывать.
 
@@ -31,6 +38,7 @@
 """
 
 import argparse
+import importlib.util
 import os
 import signal
 import socket
@@ -41,6 +49,7 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 import zone_tabstrip_nav as nav  # noqa: E402  (ищем рядом с собой, как устанавливается)
+import zone_units  # noqa: E402  (единственный перевод логических px в физические)
 from zone_i18n import _  # noqa: E402  (там же: строки интерфейса и их перевод)
 
 VERSION = "0.2.0"
@@ -78,6 +87,81 @@ def tabs_module():
     import zone_tabs  # noqa: PLC0415 — ленивый импорт, рядом с полосой
 
     return zone_tabs
+
+
+# Раскладчик (`zone-tiler.py`) нужен полосе только за масштабом монитора: рамки,
+# подписи и порядок вкладок приходят в снимке. Загружается один раз и лениво: без
+# X и GDK он ответить не может, а повторять его загрузку на каждый снимок — это
+# заново читать xrandr и GDK на каждой перерисовке полосы.
+_ZT = None
+_ZT_LOADED = False
+
+
+def tiler_module():
+    """Раскладчик рядом с полосой — или ``None``, если он не загрузился.
+
+    Соседний hyphen-модуль берётся по своему пути, а не по ``sys.path``: полоса
+    ставится и рядом с исходниками, и в ``/usr/lib/gridsnap``. Сбой загрузки — не
+    падение полосы: без раскладчика масштаба не спросить, и полоса ведёт себя как
+    до волны DPI (масштаб 1).
+    """
+    global _ZT, _ZT_LOADED
+    if not _ZT_LOADED:
+        _ZT_LOADED = True
+        try:
+            spec = importlib.util.spec_from_file_location(
+                "gridsnap_tabstrip_tiler", os.path.join(HERE, "zone-tiler.py")
+            )
+            if spec is None or spec.loader is None:
+                raise ImportError(_("не удалось загрузить zone-tiler.py"))
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = mod
+            spec.loader.exec_module(mod)
+            _ZT = mod
+        except Exception:  # нет модуля, нет его зависимостей — масштаб будет 1
+            _ZT = None
+    return _ZT
+
+
+def strip_scale(point):
+    """Масштаб монитора под **физической** точкой; 1 — спросить не у кого.
+
+    Масштаб берётся у раскладчика (`zone-tiler.scale_at_point`): рабочие области
+    мониторов и масштабы GDK живут там, и своего разбора мониторов полоса не
+    держит. Если X или GDK нет, раскладчик может не ответить вовсе — вплоть до
+    ``SystemExit`` из `monitors` (`fail`), — поэтому здесь ловится и он: сбой
+    чтения масштаба не должен ронять полосу.
+    """
+    zt = tiler_module()
+    if zt is None:
+        return 1
+    try:
+        return zone_units.scale_value(zt.scale_at_point(point))
+    except (Exception, SystemExit):
+        return 1
+
+
+def window_rect(rect, scale_of=strip_scale):
+    """Физическая рамка полосы из снимка → рамка окна GTK, в логических px.
+
+    Демон присылает рамку полосы в **физических** пикселях X (это координаты
+    окна зоны), а GTK считает в **логических**: при ``GDK_SCALE=2`` монитор
+    1920x1080 виден как 960x540. Без перевода полоса уехала бы вдвое дальше зоны
+    и выросла бы вдвое — `set_size_request(1920, 22)` заказал бы окно 3840x44.
+
+    Масштаб спрашивается под центром самой полосы (`scale_of`), а не под первым
+    монитором: полоса может стоять на экране с другим масштабом. Размеры после
+    перевода — целые и не меньше 1 px: окно нулевого размера не покажет ни
+    подписи, ни рамки вкладки. Точка и размеры считаются в физических px, поэтому
+    центр берётся до перевода.
+    """
+    x, y, w, h = (int(round(float(v))) for v in rect)
+    try:
+        scale = zone_units.scale_value(scale_of((x + w // 2, y + h // 2)))
+    except Exception:  # масштаб не спросили — как раньше, на масштабе 1
+        scale = 1
+    lx, ly, lw, lh = zone_units.logical_rect((x, y, w, h), scale)
+    return int(lx), int(ly), max(1, int(lw)), max(1, int(lh))
 
 
 def load_gtk():
@@ -178,7 +262,11 @@ class Strip:
         self.record = record
         self.rows = nav.layout(record)
         self.rect = rect
-        x, y, w, h = (int(round(v)) for v in rect)
+        # `self.rect` и рамки вкладок — в физических пикселях X, как в снимке;
+        # окно же GTK живёт в логических, поэтому его место и размер переводятся
+        # (`window_rect`) с масштабом под центром полосы. Локальные координаты
+        # рисования и клика остаются производными от `self.rect`.
+        x, y, w, h = window_rect(rect)
         # Размер — через `set_size_request`, а не `resize`/`set_default_size`:
         # окно POPUP рождается 200x200 и после `show_all` resize игнорирует
         # (проверено под Xvfb: `xwininfo` показывает 200 px в высоту). Полоса
