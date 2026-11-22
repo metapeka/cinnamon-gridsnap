@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: "Модуль: раскладчик zone-tiler"
 parent: gridsnap-architecture
-depends-on: [zone-tabs]
+depends-on: [zone-tabs, actions]
 ---
 
 _Черновик по `importing-a-codebase`: восстановлено из кода, владельцем не сверено._
@@ -51,6 +51,7 @@ zone-tiler.py keys  [--move] [--conf PATH]
 zone-tiler.py arrange [--by auto|rules|order] [--workspace N|current|conf] [--dry-run|--verify|--quiet] [--conf PATH]
 zone-tiler.py stack <зона> [--monitor N|ИМЯ] [--workspace N|current|conf] [--dry-run|--verify|--quiet] [--conf PATH]
 zone-tiler.py tabs-next [--quiet] [--conf PATH]
+zone-tiler.py action <имя> [--monitor N|ИМЯ] [--window ID] [--dry-run|--quiet] [--conf PATH]
 zone-tiler.py undo [--all] [--verify|--quiet] [--conf PATH]
 zone-tiler.py profile list | show <имя> | save <имя> | use <имя> | rm <имя> [--no-hotkeys] [--conf PATH]
 zone-tiler.py profile use-monitors [--dry-run|--quiet|--no-hotkeys] [--conf PATH]
@@ -72,6 +73,8 @@ zone-tiler.py --version
 - `tabs-next` — поднимает следующую вкладку стопки зоны активного окна: работу отдаёт демону
   (`zone_tabs.tabs_next_command`), без демона — код 1 и понятное сообщение. Её запускает клавиша
   `[tabs] key`.
+- `action <имя>` — выполняет действие из `[action:<имя>]`: встроенное (`run = builtin:<имя>`) или
+  свою команду. См. «Действия (`action`)» и `actions`.
 - `undo` — возвращает окна на прежние рамки из истории (последняя операция; `--all` — вся история).
 - `profile` — свои профили раскладок (см. «Профили раскладок»); `use` после записи регистрирует сочетания
   клавиш, `--no-hotkeys` это отключает.
@@ -390,6 +393,25 @@ down  = <Super>Down
 Новые окна, появившиеся уже после входа, разовая версия не отслеживает — это умеет только демон (см.
 `gridsnap-daemon`, команда `focus` у IPC). Отсюда практическое правило: если режим нужен с реакцией на
 новые окна, демон должен быть запущен.
+
+## Действия (`action`)
+
+`action <имя>` выполняет запись `[action:<имя>]` из `zones.conf`: контракт «действие получает окно и
+зону» — у пункта очереди «плагины/действия». Ядро действия — арифметика, подстановки и зеркало без X
+и GTK — живёт в `zone_actions`; раскладчик собирает контекст и запускает:
+
+- **предмет**: `zone` из записи (зона задана — окно ищется в ней), иначе активное окно (`--window`) и
+  зона, в которой оно стоит; экран — `--monitor`, иначе экран окна, иначе первый;
+- **внешнюю команду**: `shlex` без оболочки, запуск отсоединённый (`start_new_session`), контекст —
+  переменными `GRIDSNAP_*` и подстановками `{zone}`/`{window}`/`{x}`…;
+- **встроенные действия**: `minimize-others` (тот же режим, что `focus`, со всем его поведением, включая
+  делегирование демону), `show-window` (поднять окно зоны; вкладки — по кольцу), `mirror` (обмен с
+  зеркальной зоной по геометрии), `terminal` (терминал в зоне, окно которого ждётся в `_NET_CLIENT_LIST`).
+
+В отличие от остальных команд, коды `1` и `3` разделяют не «состояние» и «аргументы», а «состояние» и
+«конфиг»: битая запись и неизвестное имя встроенного действия — это код `3`, как и у остальных команд, а
+честный no-op («зона пуста — показывать нечего») — `0` с сообщением в stderr, как у `tabs-next`.
+Полный формат записи, каналы контекста и правила зеркала — в спеке `actions`.
 
 ## Рабочие столы: сетка из профиля
 
