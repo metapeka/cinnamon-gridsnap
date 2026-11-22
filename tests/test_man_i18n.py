@@ -314,6 +314,7 @@ class BuiltPagesTest(unittest.TestCase):
     """
 
     manpath = None
+    root = None
 
     @classmethod
     def setUpClass(cls):
