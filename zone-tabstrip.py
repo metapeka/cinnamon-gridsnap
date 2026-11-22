@@ -43,7 +43,7 @@ if HERE not in sys.path:
 import zone_tabstrip_nav as nav  # noqa: E402  (ищем рядом с собой, как устанавливается)
 from zone_i18n import _  # noqa: E402  (там же: строки интерфейса и их перевод)
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 EXIT_OK = 0
 EXIT_FAIL = 1

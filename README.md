@@ -79,8 +79,9 @@ make aur          # AUR recipe in dist/PKGBUILD
 ```
 
 Both paths install the same thing: the code into `/usr/lib/gridsnap`, the commands `gridsnap-tiler`,
-`gridsnap-daemon`, `gridsnap-editor`, `gridsnap-picker`, `gridsnap-ctl`, `setup-hotkeys` into
-`/usr/bin`, the launcher and icons into `/usr/share`. Installing the `make deb` artifact:
+`gridsnap-daemon`, `gridsnap-editor`, `gridsnap-picker`, `gridsnap-hotcorners`, `gridsnap-ctl`,
+`setup-hotkeys` into `/usr/bin`, the launcher and icons into `/usr/share`. Installing the
+`make deb` artifact:
 
 ```bash
 sudo apt install ./dist/gridsnap_<version>_all.deb
@@ -119,7 +120,8 @@ a translation gets), Russian in `/usr/share/man/ru/man1`, Chinese in `/usr/share
 `install.sh` lays the same three under `PREFIX/share/man` — including under `--no-launcher`: they
 are documentation, not part of the launcher. `man gridsnap` — the package commands, `zones.conf`,
 the files and the exit codes; `man gridsnap-tiler` — the same page (as are `man gridsnap-daemon`,
-`man gridsnap-editor`, `man gridsnap-picker`, `man gridsnap-ctl`, `man setup-hotkeys`).
+`man gridsnap-editor`, `man gridsnap-picker`, `man gridsnap-hotcorners`, `man gridsnap-ctl`,
+`man setup-hotkeys`).
 
 <!-- section: cinnamon-native -->
 ## 1. What Cinnamon can do out of the box

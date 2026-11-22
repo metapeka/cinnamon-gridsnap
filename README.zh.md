@@ -76,8 +76,8 @@ make aur          # dist/PKGBUILD 里的 AUR 配方
 ```
 
 两条路装的东西一样：代码进 `/usr/lib/gridsnap`，命令 `gridsnap-tiler`、`gridsnap-daemon`、
-`gridsnap-editor`、`gridsnap-picker`、`gridsnap-ctl`、`setup-hotkeys` 进 `/usr/bin`，快捷方式和图标
-进 `/usr/share`。安装 `make deb` 的产物：
+`gridsnap-editor`、`gridsnap-picker`、`gridsnap-hotcorners`、`gridsnap-ctl`、`setup-hotkeys` 进
+`/usr/bin`，快捷方式和图标进 `/usr/share`。安装 `make deb` 的产物：
 
 ```bash
 sudo apt install ./dist/gridsnap_<版本>_all.deb
@@ -113,7 +113,7 @@ man 手册页包含在软件包里：英语在 `/usr/share/man/man1`（任何没
 `前缀/share/man` —— 加 `--no-launcher` 时也照样装：这是文档，不是快捷方式的一部分。
 `man gridsnap` —— 软件包的命令、`zones.conf`、相关文件和返回码；`man gridsnap-tiler` ——
 同一页（`man gridsnap-daemon`、`man gridsnap-editor`、`man gridsnap-picker`、
-`man gridsnap-ctl`、`man setup-hotkeys` 也一样）。
+`man gridsnap-hotcorners`、`man gridsnap-ctl`、`man setup-hotkeys` 也一样）。
 
 <!-- section: cinnamon-native -->
 ## 1. Cinnamon 开箱即有的功能

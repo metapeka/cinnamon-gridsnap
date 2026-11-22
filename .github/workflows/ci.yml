@@ -99,8 +99,11 @@ jobs:
           # man-страницы: английская — по умолчанию (man1/), русская и китайская — по языкам
           dpkg-deb -c "$deb" | grep -q usr/share/man/man1/gridsnap.1.gz
           dpkg-deb -c "$deb" | grep -q usr/share/man/man1/gridsnap-tiler.1.gz
+          dpkg-deb -c "$deb" | grep -q usr/share/man/man1/gridsnap-hotcorners.1.gz
           dpkg-deb -c "$deb" | grep -q usr/share/man/ru/man1/gridsnap.1.gz
+          dpkg-deb -c "$deb" | grep -q usr/share/man/ru/man1/gridsnap-hotcorners.1.gz
           dpkg-deb -c "$deb" | grep -q usr/share/man/zh_CN/man1/gridsnap.1.gz
+          dpkg-deb -c "$deb" | grep -q usr/share/man/zh_CN/man1/gridsnap-hotcorners.1.gz
           dpkg-deb -c "$deb" | grep -q usr/share/doc/gridsnap/LICENSE
           dpkg-deb -c "$deb" | grep -q \
             usr/share/applications/gridsnap.desktop
@@ -121,8 +124,11 @@ jobs:
           test -f "$tmp/prefix/share/locale/en/LC_MESSAGES/gridsnap.mo"
           test -f "$tmp/prefix/share/locale/zh_CN/LC_MESSAGES/gridsnap.mo"
           test -f "$tmp/prefix/share/man/man1/gridsnap.1"
+          test -f "$tmp/prefix/share/man/man1/gridsnap-hotcorners.1"
           test -f "$tmp/prefix/share/man/ru/man1/gridsnap.1"
           test -f "$tmp/prefix/share/man/zh_CN/man1/gridsnap.1"
+          # Всего 24 страницы: восемь (полная и семь .so-псевдонимов) на три языка.
+          test "$(find "$tmp/prefix/share/man" -type f | wc -l)" -eq 24
           test -f "$tmp/prefix/share/doc/gridsnap/LICENSE"
           # Страница ставится в префикс вместе с псевдонимами, и man её открывает.
           man --warnings -E UTF-8 -l "$tmp/prefix/share/man/ru/man1/gridsnap.1" >/dev/null
@@ -136,7 +142,6 @@ jobs:
     name: Штатный пакет Debian (debian/)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Зависимости сборки
@@ -160,6 +165,7 @@ jobs:
           grep -q usr/share/applications/gridsnap.desktop /tmp/deb.list
           grep -q icons/hicolor/256x256/apps/gridsnap.png /tmp/deb.list
           grep -q usr/share/man/man1/gridsnap.1.gz /tmp/deb.list
+          grep -q usr/share/man/man1/gridsnap-hotcorners.1.gz /tmp/deb.list
           grep -q usr/share/man/ru/man1/gridsnap.1.gz /tmp/deb.list
           grep -q usr/share/man/zh_CN/man1/gridsnap.1.gz /tmp/deb.list
           lintian "$deb"

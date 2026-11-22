@@ -3,7 +3,7 @@
 .\"   man --warnings -E UTF-8 -l man/gridsnap.1
 .\" Дата и версия в .TH: версия обязана совпадать с VERSION в zone-tiler.py
 .\" (это проверяет `make check-version`).
-.TH GRIDSNAP 1 "2026-11-21" "gridsnap 0.1.0" "Пользовательские команды"
+.TH GRIDSNAP 1 "2026-11-22" "gridsnap 0.2.0" "Пользовательские команды"
 .SH NAME
 gridsnap, gridsnap\-tiler, gridsnap\-daemon, gridsnap\-editor, gridsnap\-picker, gridsnap\-hotcorners, gridsnap\-ctl, setup\-hotkeys \- раскладка окон по зонам для Cinnamon/X11
 .SH SYNOPSIS
@@ -38,16 +38,18 @@ GridSnap — визуальный редактор зон рабочей обл�
 muffin с компенсацией рамки окна, поэтому рамка окна совпадает с зоной, а не клиентская часть.
 Раскладка работает поверх штатного оконного менеджера и не подменяет управление окнами.
 .PP
-Пакет ставит шесть команд:
+Пакет ставит семь команд:
 \fBgridsnap\-tiler\fP (раскладчик по зонам, \fIzone\-tiler.py\fP),
 \fBgridsnap\-daemon\fP (автоукладка новых окон по правилам, \fIzone\-daemon.py\fP),
 \fBgridsnap\-editor\fP (визуальный редактор зон, \fIzone\-editor.py\fP),
 \fBgridsnap\-picker\fP (оверлей выбора зоны стрелками, \fIzone\-picker.py\fP),
+\fBgridsnap\-hotcorners\fP (подсветка зон при перетаскивании окна, \fIzone\-hotcorners.py\fP),
 \fBgridsnap\-ctl\fP (клиент IPC-сокета демона, \fIgridsnap\-ctl\fP) и
 \fBsetup\-hotkeys\fP (сочетания клавиш Cinnamon, \fIsetup\-hotkeys.py\fP).
 Все команды описаны на этой странице; страницы \fBgridsnap\-tiler\fP(1),
 \fBgridsnap\-daemon\fP(1), \fBgridsnap\-editor\fP(1), \fBgridsnap\-picker\fP(1),
-\fBgridsnap\-ctl\fP(1) и \fBsetup\-hotkeys\fP(1) — псевдонимы этой (roff \fB.so\fP).
+\fBgridsnap\-hotcorners\fP(1), \fBgridsnap\-ctl\fP(1) и \fBsetup\-hotkeys\fP(1) — псевдонимы этой
+(roff \fB.so\fP).
 .PP
 Нужен X11 и EWMH-совместимый оконный менеджер (Cinnamon/muffin); под Wayland без XWayland
 раскладка не работает. Горячие клавиши и редактор — часть Cinnamon.
@@ -287,6 +289,22 @@ muffin с компенсацией рамки окна, поэтому рамк�
 для вложения, \fB\-\-dry\-run\fP только печатает целевую рамку, \fB\-\-verify\fP сверяет рамку
 после вложения, \fB\-\-quiet\fP не печатает строку о вложении, \fB\-\-shot\fP \fIФАЙЛ.png\fP
 рисует оверлей в PNG и выходит без интерактива.
+.SS "gridsnap\-hotcorners — подсветка зон при перетаскивании"
+Перетаскивание окна за заголовок подсвечивает зону под курсором, а отпускание вкладывает в неё
+окно. Отдельный процесс: для обычной работы не нужен, демону не мешает, сочетание ему пользователь
+заводит сам (как и \fBgridsnap\-picker\fP).
+.PP
+«Окно тащат» в X11 никто не сообщает, поэтому watcher слушает raw\-события XInput2 на root (они
+приходят, даже когда устройство захвачено оконным менеджером) и считает перетаскиванием нажатие в
+полосе заголовка активного окна. Пока сетка показана, «бросок к краю» в Cinnamon (\fIedge\-tiling\fP)
+гасится, чтобы окно не встало дважды, и возвращается сразу после отпускания — выключенной настройка
+не остаётся. Если XInput2 не поднялся, watcher опрашивает указатель примерно 30 раз в секунду.
+Подробности — \fIdocs/specs/zone-hotcorners.md\fP.
+.PP
+\fB\-\-no\-hud\fP выключает подсветку (окно всё равно вкладывается по отпусканию,
+\fIedge\-tiling\fP не трогается), \fB\-\-dry\-run\fP печатает, что watcher сделал бы, ничего не
+двигая, \fB\-\-verbose\fP пишет в stderr каждое событие (нажатие, показ HUD, \fIedge\-tiling\fP,
+вложение).
 .SS "gridsnap\-ctl — клиент IPC демона"
 Говорит с UNIX-сокетом \fBgridsnap\-daemon\fP: одна JSON-команда на соединение, ответ — тоже
 JSON-строка. Команды:
@@ -378,7 +396,7 @@ reflow).
 Не печатать сообщения об успехе (в справке \fB\-\-help\fP описание не выводится).
 .TP
 .B \-\-version
-Печатает \fIzone-tiler 0.1.0\fP и выходит.
+Печатает \fIzone-tiler 0.2.0\fP и выходит.
 .PP
 Ключи остальных команд перечислены в разделе КОМАНДЫ; у каждой есть также \fB\-h\fP и
 \fB\-\-version\fP.
@@ -509,6 +527,7 @@ gridsnap\-ctl focus main
 gridsnap\-ctl focus \-\-off
 setup\-hotkeys \-\-list
 gridsnap\-picker \-\-select top\-right
+gridsnap\-hotcorners \-\-dry\-run \-\-verbose
 gridsnap\-editor \-\-conf ~/.config/gridsnap/zones.conf
 .fi
 .SH "ГОРЯЧИЕ КЛАВИШИ"
@@ -591,7 +610,7 @@ UNIX-сокет демона (права 0600, каталог 0700). Без \fI$
 у \fBsetup\-hotkeys\fP — 0, 1 и 2.
 .SH "СМОТРИ ТАКЖЕ"
 \fBgridsnap\-tiler\fP(1), \fBgridsnap\-daemon\fP(1), \fBgridsnap\-editor\fP(1),
-\fBgridsnap\-picker\fP(1), \fBgridsnap\-ctl\fP(1), \fBsetup\-hotkeys\fP(1),
-\fBman\fP(1), \fBxprop\fP(1), \fBxwininfo\fP(1), \fBgsettings\fP(1).
+\fBgridsnap\-picker\fP(1), \fBgridsnap\-hotcorners\fP(1), \fBgridsnap\-ctl\fP(1),
+\fBsetup\-hotkeys\fP(1), \fBman\fP(1), \fBxprop\fP(1), \fBxwininfo\fP(1), \fBgsettings\fP(1).
 .PP
 Документация пакета — \fI/usr/share/doc/gridsnap/\fP (README, SPEC и \fIdocs/\fP).

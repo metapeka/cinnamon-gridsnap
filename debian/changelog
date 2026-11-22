@@ -1,3 +1,16 @@
+gridsnap (0.2.0-1) unstable; urgency=medium
+
+  * Localize the user interface into English and Chinese (gettext catalogs
+    for the Python tools and the Cinnamon applet); Russian is the source
+    language and needs no catalog.
+  * Translate the manual pages into English and Chinese and install all pages
+    per language (man-db picks ru and zh_CN by locale, English is the default).
+  * Ship the MIT license with the package.
+  * Document hot corners in the manual and add the gridsnap-hotcorners manual
+    page alias for the installed command.
+
+ -- metapeka <188594035+metapeka@users.noreply.github.com>  Sun, 22 Nov 2026 12:00:00 +0300
+
 gridsnap (0.1.0-1) unstable; urgency=medium
 
   * Первая сборка штатным пакетом Debian (debian/ + debhelper):

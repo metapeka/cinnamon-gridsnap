@@ -73,6 +73,7 @@ ALIASES = (
     "gridsnap-daemon.1",
     "gridsnap-editor.1",
     "gridsnap-picker.1",
+    "gridsnap-hotcorners.1",
     "gridsnap-ctl.1",
     "setup-hotkeys.1",
 )
