@@ -24,7 +24,7 @@ jobs:
         run: |
           python3 -m compileall -q \
             zone-tiler.py zone-editor.py zone_reflow.py zone_config.py \
-            zone_geom.py zone-picker.py zone_picker_nav.py zone_i18n.py \
+            zone_geom.py zone_units.py zone-picker.py zone_picker_nav.py zone_i18n.py \
             zone_actions.py zone_tabs.py zone-tabstrip.py zone_tabstrip_nav.py \
             zone-daemon.py zone_ipc.py gridsnap-ctl setup-hotkeys.py \
             make-icon.py tools tests
