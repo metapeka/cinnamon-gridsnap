@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.2.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 20:52+0300\n"
+"POT-Creation-Date: 2026-11-22 20:54+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -682,7 +682,7 @@ msgid "применить: zone-tiler.py profile use {name}"
 msgstr ""
 
 #: zone-tiler.py
-msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>] [--force]"
+msgid "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>]"
 msgstr ""
 
 #: zone-tiler.py
@@ -771,10 +771,6 @@ msgstr ""
 
 #: zone-tiler.py
 msgid "profile import/from-gallery: имя профиля (import — по умолчанию из JSON)"
-msgstr ""
-
-#: zone-tiler.py
-msgid "profile from-gallery: перезаписать существующий профиль"
 msgstr ""
 
 #: zone-tiler.py

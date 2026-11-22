@@ -3688,11 +3688,12 @@ def _profile_gallery(zc, args):
 
 
 def _profile_from_gallery(zc, args, conf):
-    """`profile from-gallery <id>` — скопировать готовую раскладку в свой профиль.
+    """`profile from-gallery <id> [--name <имя>]` — скопировать раскладку в свой профиль.
 
     Копия, а не ссылка: дальше человек правит её как обычный профиль (и может
-    экспортировать/перенести). Существующий профиль без `--force` — ошибка: тихая
-    перезапись чужой раскладки была бы неприятным сюрпризом.
+    экспортировать/перенести). Существующий профиль не перезаписывается (даже с тем
+    же именем) — это чужой файл, и тихая потеря раскладки была бы неприятным
+    сюрпризом: выбери другое имя или убери старый (`profile rm <имя>`).
     """
     gid = (args.name or "").strip()
     if not gid:
@@ -3704,7 +3705,7 @@ def _profile_from_gallery(zc, args, conf):
         path = zc.install_gallery_layout(
             gid,
             name=(args.as_name or None),
-            force=bool(args.force),
+            force=False,
             conf_path=conf,
         )
     except zc.GalleryError as exc:
@@ -3728,7 +3729,7 @@ def cmd_profile(args):
             _(
                 "zone-tiler: profile — укажите действие: list | show <имя> | save <имя> | "
                 "use <имя> | use-monitors | rm <имя> | export <имя> [файл | --json] | "
-                "import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>] [--force]"
+                "import <файл> [--name <имя>] | gallery | from-gallery <id> [--name <имя>]"
             ),
             EXIT_USAGE,
         )
@@ -3919,11 +3920,6 @@ def _main(argv=None):
         dest="as_name",
         metavar=_("ИМЯ"),
         help=_("profile import/from-gallery: имя профиля (import — по умолчанию из JSON)"),
-    )
-    ap.add_argument(
-        "--force",
-        action="store_true",
-        help=_("profile from-gallery: перезаписать существующий профиль"),
     )
     ap.add_argument(
         "--dry-run",
