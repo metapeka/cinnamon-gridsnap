@@ -31,6 +31,7 @@ ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import zone_tabstrip_nav as nav  # noqa: E402
 import zone_units as units  # noqa: E402
 
 # Полоса — hyphen-файл: рядом с полосой он зовётся `zone-tabstrip.py`.
@@ -66,6 +67,10 @@ class TestWindowRect(unittest.TestCase):
                     strip.window_rect((10, 20, 300, 22), lambda _p, v=value: v),
                     (10, 20, 300, 22),
                 )
+
+    def test_center_of_the_strip_is_its_middle(self):
+        self.assertEqual(strip.strip_center((0, 40, 1920, 22)), (960, 51))
+        self.assertEqual(strip.strip_center((1920.4, 40.6, 1919.5, 22.2)), (2880, 52))
 
     def test_scale_is_asked_under_own_center(self):
         # Полоса на втором мониторе: масштаб — под её центром, а не первого.
@@ -110,6 +115,78 @@ class TestWindowRect(unittest.TestCase):
         # `nav.record_rect` отдаёт float — окну нужны целые.
         self.assertEqual(strip.window_rect((0.4, 21.6, 1919.5, 22.2), lambda _p: 1),
                          (0, 22, 1920, 22))
+
+
+class TestLocalRect(unittest.TestCase):
+    """Локальные координаты окна: cairo и событие GTK — логические пиксели."""
+
+    def test_scale_two_halves_offsets_and_sizes(self):
+        # Вторая вкладка полосы 1920x22 при масштабе 2 начинается на 480.5
+        # логического пикселя окна, а не на 960.5: иначе она ушла бы за окно.
+        origin = (0, 0)
+        x, y, w, h = strip.local_rect((960.5, 0, 959.5, 22), origin, 2)
+        self.assertAlmostEqual(x, 480.25)
+        self.assertEqual(y, 0)
+        self.assertAlmostEqual(w, 479.75)
+        self.assertEqual(h, 11)
+
+    def test_origin_is_the_strip_corner(self):
+        # Смещения считаются от левого верхнего угла полосы, а не от нуля экрана.
+        self.assertEqual(strip.local_rect((1920, 40, 100, 22), (1920, 40), 2),
+                         (0.0, 0.0, 50.0, 11.0))
+
+    def test_scale_one_is_plain_offset(self):
+        self.assertEqual(strip.local_rect((110, 40, 100, 22), (10, 18), 1),
+                         (100, 22, 100, 22))
+        self.assertEqual(strip.local_rect((110, 40, 100, 22), (10, 18), None),
+                         (100, 22, 100, 22))
+
+    def test_tabs_stay_inside_the_window(self):
+        rect = (0, 0, 1920, 22)
+        rows = nav.layout({"rect": rect, "tabs": [{"window": 1}, {"window": 2}]})
+        scale = 2
+        _wx, _wy, ww, wh = strip.window_rect(rect, lambda _p: scale)
+        frames = [strip.local_rect(row["rect"], rect, scale) for row in rows]
+        self.assertEqual(len(frames), 2)
+        self.assertGreaterEqual(frames[0][0], 0)
+        self.assertLessEqual(frames[-1][0] + frames[-1][2], ww + 1e-6)
+        self.assertLessEqual(max(f[1] + f[3] for f in frames), wh + 1e-6)
+
+
+class TestLocalPoint(unittest.TestCase):
+    def test_scale_two_maps_logical_click_to_physical_screen(self):
+        # Клик в середине окна полосы (логические 480, 5) — это физические
+        # (960, 10) экрана: там же, где рамки вкладок из снимка.
+        self.assertEqual(strip.local_point((480, 5), (0, 0), 2), (960, 10))
+
+    def test_scale_one_and_garbage_scale(self):
+        self.assertEqual(strip.local_point((10, 20), (100, 40), 1), (110, 60))
+        self.assertEqual(strip.local_point((10, 20), (100, 40), 0), (110, 60))
+
+    def test_round_trip_with_local_rect(self):
+        for origin, rect, scale in (((0, 0), (0, 0, 1920, 22), 2),
+                                    ((1920, 40), (1921, 40, 1919, 22), 2),
+                                    ((0, 0), (10, 20, 300, 22), 1)):
+            with self.subTest(rect=rect, scale=scale):
+                x, y, _w, _h = strip.local_rect(rect, origin, scale)
+                self.assertEqual(strip.local_point((x, y), origin, scale), (rect[0], rect[1]))
+
+    def test_click_lands_on_the_tab_that_is_drawn_there(self):
+        # Главное следствие перевода: точка клика и нарисованная вкладка — одно.
+        origin = (0, 0)
+        scale = 2
+        rows = nav.layout({"rect": (0, 0, 1920, 22),
+                           "tabs": [{"window": 0x11}, {"window": 0x22}]})
+        frames = [row["rect"] for row in rows]
+        # Левая половина окна — первая вкладка, правая — вторая: клик в
+        # логических 400/600 — это физические 800/1200, а не 400/600.
+        for logical_x, want in ((400, 0x11), (600, 0x22)):
+            with self.subTest(logical_x=logical_x):
+                point = strip.local_point((logical_x, 5), origin, scale)
+                self.assertEqual(nav.tab_under({"rect": (0, 0, 1920, 22),
+                                                "tabs": [{"window": 0x11},
+                                                         {"window": 0x22}]}, point),
+                                 want)
 
 
 class TestStripScale(unittest.TestCase):
