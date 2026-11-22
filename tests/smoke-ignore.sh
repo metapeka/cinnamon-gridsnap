@@ -47,6 +47,12 @@ unset XDG_CONFIG_HOME 2>/dev/null || true
 LOGDIR=$(mktemp -d 2>/dev/null || echo /tmp/gridsnap-ignore.$$)
 CONF="$LOGDIR/zones.conf"
 MUFFIN_LOG="$LOGDIR/gridsnap-ignore-muffin.log"
+# Сокет демона — в своём каталоге: при живом демоне владельца `arrange`
+# делегирует ему (это шаг 2 сценария), и он ушёл бы в чужой процесс.
+RUNTIME="$LOGDIR/run"
+mkdir -p "$RUNTIME"
+chmod 700 "$RUNTIME"
+export XDG_RUNTIME_DIR="$RUNTIME"
 
 fails=0
 say() { printf '%s\n' "$1"; }

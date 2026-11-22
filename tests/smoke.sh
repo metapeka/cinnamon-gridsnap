@@ -36,6 +36,12 @@ LOGDIR=$(mktemp -d 2>/dev/null || echo /tmp)
 MUFFIN_LOG="$LOGDIR/gridsnap-smoke-muffin.log"
 # История undo — во временном каталоге, чтобы не трогать состояние владельца.
 export XDG_STATE_HOME="$LOGDIR/state"
+# Сокет демона — тоже в своём каталоге: при живом демоне владельца `arrange`
+# делегирует ему, и сценарий разбирал бы поведение чужого процесса.
+RUNTIME="$LOGDIR/run"
+mkdir -p "$RUNTIME"
+chmod 700 "$RUNTIME"
+export XDG_RUNTIME_DIR="$RUNTIME"
 
 fails=0
 say() { printf '%s\n' "$1"; }
