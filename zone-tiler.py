@@ -632,6 +632,43 @@ def read_window_center(win):
     return (x + w // 2, y + h // 2)
 
 
+def output_at_point(outputs, point):
+    """Индекс и имя выхода, в чью рабочую область попал `point` (центр окна).
+
+    Общий кусок `move` и «без `--monitor`» у `apply`/`stack`: монитор берётся по
+    центру рамки окна (`monitor_for_point`), а не по номеру 0 — иначе окно уезжает
+    на первый экран, а зона ищется в чужом профиле.
+    """
+    areas = [area for _, area in outputs]
+    wa = monitor_for_point(areas, point)
+    index = areas.index(wa)
+    return index, outputs[index][0], wa
+
+
+def window_output(outputs, window, warn=True):
+    """Куда адресуется команда без `--monitor`: по экрану окна, иначе первый.
+
+    Рамку окна не прочитать (окно исчезло, окно не задано) — первый экран; `warn`
+    решает, писать ли об этом в stderr: вызывающий может предупредить и сам, а
+    повторять одну строку дважды не нужно (см. `target_output`).
+    """
+    if window is None:
+        return 0, outputs[0][0], outputs[0][1]
+    try:
+        frame = read_frame(window, frame_extents(window))
+    except Exception as exc:
+        if warn:
+            print(
+                f"zone-tiler: не удалось прочитать рамку окна 0x{window:x}: {exc} — "
+                "беру первый экран",
+                file=sys.stderr,
+            )
+        return 0, outputs[0][0], outputs[0][1]
+    return output_at_point(
+        outputs, (frame[0] + frame[2] // 2, frame[1] + frame[3] // 2)
+    )
+
+
 def monitor_for_point(monitors, point):
     """Рабочая область монитора, содержащего точку; иначе ближайшая по центру.
 
@@ -1039,15 +1076,23 @@ def resolve_monitor(spec, outputs=None):
 def target_output(args, outputs=None):
     """Имя выхода, к которому относится `apply`/`stack`, или ``None``.
 
-    Не поднимает ошибку, а отвечает ``None``, если мониторов нет или
-    `--monitor` не разрешается: проверка зоны идёт раньше, и человек должен
-    увидеть «нет зоны», а не «нет монитора». Внятную ошибку про монитор всё равно
-    даст `resolve_monitor` в самой команде.
+    Явный `--monitor` важнее; без него адресат — **экран окна** (активного или
+    заданного `--window`), ровно как в самих командах: иначе сетка пришла бы с
+    одного экрана, а рамка считалась на другом, и зона искалась бы в чужом
+    профиле. Не поднимает ошибку, а отвечает ``None``, если мониторов нет или
+    адресат не разрешается: проверка зоны идёт раньше, и человек должен увидеть
+    «нет зоны», а внятную ошибку про монитор всё равно даст `resolve_monitor` в
+    самой команде. О непрочитанной рамке окна не предупреждает — это сделает
+    команда (`warn=False`).
     """
     outputs = monitor_outputs() if outputs is None else outputs
     if not outputs:
         return None
-    text = str(monitor_arg(args)).strip()
+    if args.monitor is None:
+        window = getattr(args, "window", None) or active_window_quiet()
+        _index, output, _wa = window_output(outputs, window, warn=False)
+        return output
+    text = str(args.monitor).strip()
     for name, _wa in outputs:
         if name == text:
             return name
@@ -1096,6 +1141,20 @@ def active_window():
     if not m or int(m.group(1), 16) == 0:
         fail("zone-tiler: нет активного окна", EXIT_FAIL)
     return int(m.group(1), 16)
+
+
+def active_window_quiet():
+    """Активное окно или ``None``: там, где его отсутствие — не ошибка.
+
+    `active_window()` падает с кодом 1, когда окна нет, и это правильно для
+    команд, которым окно нужно. Но выбор монитора по экрану окна должен пережить
+    его отсутствие — `apply --dry-run` в скрипте, окно вне зон, `stack` без окон.
+    Тогда берётся первый экран — как было до появления адресации по экрану.
+    """
+    try:
+        return active_window()
+    except SystemExit:
+        return None
 
 
 # ----------------------------------------------------------------------- X11
@@ -1791,15 +1850,28 @@ def apply_zone(window, rect, label="", x11=None, verify=False, quiet=False):
 
 
 def cmd_apply(grid, args):
+    """Вложить окно в зону; без `--monitor` — на экране самого окна.
+
+    Экран окна задаёт и набор зон: зона ищется в профиле того экрана, где окно
+    (`grid_for_output`), — как `move` и как демон в IPC `apply`.
+    """
     outputs = monitor_outputs()
-    index, output = resolve_monitor(monitor_arg(args), outputs)
-    wa = outputs[index][1]
+    # Окно читается заранее: без `--monitor` оно задаёт экран, а его профиль —
+    # набор зон. `--dry-run` переживает отсутствие окна: тогда это первый экран,
+    # как было до адресации по экрану.
+    window = args.window or active_window_quiet()
+    if args.monitor is None:
+        index, output, wa = window_output(outputs, window)
+    else:
+        index, output = resolve_monitor(args.monitor, outputs)
+        wa = outputs[index][1]
     rect = grid.rect(args.zone, wa, monitor_name=output)
     if args.dry_run:
         x, y, w, h = rect
         print(f"{args.zone}: x={x} y={y} {w}x{h} (монитор {index}: {output})")
         return
-    window = args.window or active_window()
+    if window is None:
+        fail("zone-tiler: нет активного окна", EXIT_FAIL)
     if window_is_excluded(window, grid.ignore):
         if not args.quiet:
             print(
@@ -2216,10 +2288,12 @@ def _print_focus_response(response, quiet=False):
 
 
 def monitor_arg(args):
-    """`--monitor` из аргументов: не задан — 0, как было у list/apply/stack.
+    """`--monitor` из аргументов: не задан — 0.
 
-    У `move` «не задан» значит другое: монитор окна (см. `cmd_move`), поэтому
-    значение по умолчанию осталось `None`, а не `"0"`.
+    Так осталось только у `list`: он показывает рабочую область и зоны первого
+    экрана, пока `--monitor` не скажет иначе (первую строку разбирает апплет, и
+    менять её начало нельзя). `apply`/`stack`/`move` без `--monitor` работают на
+    экране окна.
     """
     return "0" if args.monitor is None else args.monitor
 
@@ -2299,10 +2373,9 @@ def cmd_move(grid, args):
         fail(f"zone-tiler: не удалось прочитать рамку окна 0x{window:x}: {exc}", EXIT_FAIL)
     if args.monitor is None:
         # Монитор окна — по центру его рамки (в рабочей области уже вычтена панель).
-        areas = [area for _, area in outputs]
-        wa = monitor_for_point(areas, (frame[0] + frame[2] // 2, frame[1] + frame[3] // 2))
-        index = areas.index(wa)
-        output = outputs[index][0]
+        index, output, wa = output_at_point(
+            outputs, (frame[0] + frame[2] // 2, frame[1] + frame[3] // 2)
+        )
     else:
         index, output = resolve_monitor(args.monitor, outputs)
         wa = outputs[index][1]
@@ -2460,8 +2533,13 @@ def cmd_stack(grid, args):
             print("zone-tiler: нет окон для вкладок")
         return
     outputs = monitor_outputs()
-    mon_index, output = resolve_monitor(monitor_arg(args), outputs)
-    wa = outputs[mon_index][1]
+    if args.monitor is None:
+        # Без `--monitor` собираем в зону на экране активного окна: там же, где
+        # пользователь смотрит, и с профилем этого экрана.
+        mon_index, output, wa = window_output(outputs, active_window_quiet())
+    else:
+        mon_index, output = resolve_monitor(args.monitor, outputs)
+        wa = outputs[mon_index][1]
     base = grid.rect(args.zone, wa, monitor_name=output)
     rect = in_zone_rect(base, len(windows), tabs_height(grid))
     x11 = None if args.dry_run else X11()
@@ -3038,7 +3116,7 @@ def main(argv=None):
         default=None,
         help=(
             "монитор для list/apply/stack/move: имя выхода (HDMI-1) или номер "
-            "(по умолчанию 0; у move — монитор окна)"
+            "(без флага — экран окна у apply/stack/move, первый у list)"
         ),
     )
     ap.add_argument(
@@ -3125,8 +3203,11 @@ def main(argv=None):
 
     # list/apply/arrange/stack работают сеткой своего стола: `--workspace N` или
     # активный стол по умолчанию; сетка берётся через grid_for_workspace, поэтому
-    # стол без профиля молча живёт в общем [zones]. Экран важнее стола: у apply/stack
-    # адресат — экран из --monitor, и сетка берётся из его профиля.
+    # стол без профиля молча живёт в общем [zones]. Экран важнее стола: если в
+    # конфиге есть привязки `[monitors]`, у apply/stack адресат — экран окна
+    # (`target_output`), и сетка берётся из профиля этого экрана. Мониторы читаются
+    # только при наличии привязок: без них это лишний поход в X (и раньше проверки
+    # зоны).
     workspace = resolve_workspace(args.workspace)
     profile = workspace_profile(args.conf, workspace)
     grid = grid_for_workspace(args.conf, workspace)

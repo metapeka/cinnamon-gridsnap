@@ -482,6 +482,36 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertIn("right: x=1500 y=0 500x1000 (монитор 1: MON2)", out)
 
+    def test_apply_without_monitor_takes_the_window_screen(self):
+        # Без `--monitor` адресат — экран окна (по подмене `read_frame` оно на
+        # MON2), значит и зона берётся из профиля этого экрана: молча уводить окно
+        # на первый экран и искать зону в чужом профиле было бы неправдой.
+        with mock.patch.object(zt, "active_window", lambda: 0x1):
+            code, out, err = self.run_cli("apply", "right")
+        self.assertEqual(code, 0, err)
+        self.assertIn("right: x=1500 y=0 500x1000 (монитор 1: MON2)", out)
+
+    def test_monitor_flag_overrides_the_window_screen(self):
+        # `--monitor` важнее экрана окна: осознанный перенос на первый экран.
+        with mock.patch.object(zt, "active_window", lambda: 0x1):
+            code, out, err = self.run_cli("apply", "global", "--monitor", "MON1")
+        self.assertEqual(code, 0, err)
+        self.assertIn("global: x=0 y=0 1000x1000 (монитор 0: MON1)", out)
+
+    def test_without_window_falls_back_to_the_first_screen(self):
+        # Окна нет (—dry-run в скрипте): первый экран, как было раньше, а не отказ.
+        with mock.patch.object(zt, "active_window_quiet", lambda: None):
+            code, out, err = self.run_cli("apply", "global")
+        self.assertEqual(code, 0, err)
+        self.assertIn("global: x=0 y=0 1000x1000 (монитор 0: MON1)", out)
+
+    def test_stack_without_monitor_takes_the_active_window_screen(self):
+        with mock.patch.object(zt, "active_window", lambda: 0x1):
+            code, out, err = self.run_cli("stack", "right")
+        self.assertEqual(code, 0, err)
+        # Одно окно — зона профиля второго экрана целиком.
+        self.assertIn("x=1500 y=0 500x1000", out)
+
     def test_apply_sees_zones_of_the_profile_default_set_too(self):
         # Зоны `big` нет в `[zones:MON2]`, но она есть в `[zones]` профиля —
         # Grid откатывается на этот набор, а не на active config.
@@ -491,7 +521,8 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
 
     def test_apply_rejects_zone_of_another_screen(self):
         # MON1 не привязан к профилю: зоны `left` там нет — код 3, а не молчаливый промах.
-        code, _out, err = self.run_cli("apply", "left")
+        # Экран задаётся явно: без `--monitor` адресат — экран окна (MON2), где `left` есть.
+        code, _out, err = self.run_cli("apply", "left", "--monitor", "MON1")
         self.assertEqual(code, 3)
         self.assertIn("нет зоны 'left'", err)
         self.assertIn("global", err)
