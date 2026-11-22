@@ -43,6 +43,7 @@ $PROG — установка GridSnap в префикс (по умолчанию
   КАТАЛОГ/bin/            gridsnap-tiler, gridsnap-daemon, gridsnap-editor, gridsnap-picker,
                           gridsnap-hotcorners, gridsnap-ctl, setup-hotkeys
   КАТАЛОГ/share/man/man1/ man-страницы (маны ставятся всегда: это документация, а не ярлык)
+  КАТАЛОГ/share/locale/   каталоги переводов en и zh_CN (домены gridsnap и gridsnap@metapeka)
   КАТАЛОГ/share/...       ярлык, иконки, документация (если не --no-launcher)
 
 Автозапуск в сессии ставится отдельно и только для текущего пользователя:
@@ -85,12 +86,17 @@ APPS="$PREFIX/share/applications"
 ICONS="$PREFIX/share/icons/hicolor"
 DOC="$PREFIX/share/doc/gridsnap"
 MANDIR="$PREFIX/share/man/man1"
+# Каталоги переводов: по домену на язык. Апплет Cinnamon берёт
+# `gridsnap@metapeka.mo` из ~/.local/share/locale (префикс по умолчанию).
+LOCALEDIR="$PREFIX/share/locale"
+LANGUAGES="en zh_CN"
+DOMAINS="gridsnap gridsnap@metapeka"
 
 MODULES="zone-tiler.py zone-daemon.py zone-editor.py zone_config.py zone_geom.py
          zone_reflow.py zone-picker.py zone_picker_nav.py zone-hotcorners.py
          zone_ipc.py zone_actions.py zone_tabs.py zone-tabstrip.py
          zone_tabstrip_nav.py
-         setup-hotkeys.py make-icon.py"
+         setup-hotkeys.py make-icon.py zone_i18n.py"
 
 refresh_caches() {
     command -v gtk-update-icon-cache >/dev/null 2>&1 && \
@@ -112,6 +118,14 @@ if [ "$ACTION" = "uninstall" ]; then
         rm -f "$MANDIR/$page"
     done
     rmdir "$MANDIR" 2>/dev/null || true   # только если каталог опустел
+    for lang in $LANGUAGES; do
+        for domain in $DOMAINS; do
+            rm -f "$LOCALEDIR/$lang/LC_MESSAGES/$domain.mo"
+        done
+        # снять опустевшие каталоги; чужие файлы (другие домены) не трогаем
+        rmdir "$LOCALEDIR/$lang/LC_MESSAGES" "$LOCALEDIR/$lang" 2>/dev/null || true
+    done
+    rmdir "$LOCALEDIR" 2>/dev/null || true
     rm -rf "$LIB" "$DOC"
     refresh_caches
     echo "GridSnap удалён из $PREFIX"
@@ -136,6 +150,18 @@ install -m 0644 "$SRC/README.md" "$SRC/SPEC.md" "$DOC/"
 mkdir -p "$MANDIR"
 for page in $MANPAGES; do
     install -m 0644 "$SRC/man/$page" "$MANDIR/"
+done
+
+# --- каталоги переводов ----------------------------------------------------
+# Собраны `make mo` (в tar.gz попадают из каталога locale/). Без них код
+# работает на русских строках — исходном языке, поэтому их отсутствие не
+# ошибка, а просто отсутствие перевода (например, в чекауте без сборки).
+for lang in $LANGUAGES; do
+    for domain in $DOMAINS; do
+        mo="$SRC/locale/$lang/LC_MESSAGES/$domain.mo"
+        [ -f "$mo" ] || continue
+        install -Dm0644 "$mo" "$LOCALEDIR/$lang/LC_MESSAGES/$domain.mo"
+    done
 done
 
 # --- команды-запускалки ----------------------------------------------------
@@ -193,6 +219,7 @@ echo "GridSnap установлен в $PREFIX"
 echo "  код:      $LIB"
 echo "  команды:  $BIN/gridsnap-tiler, $BIN/gridsnap-daemon, $BIN/gridsnap-editor, $BIN/gridsnap-picker, $BIN/gridsnap-hotcorners, $BIN/gridsnap-ctl, $BIN/setup-hotkeys"
 echo "  справка:  man -M $PREFIX/share/man gridsnap";
+echo "  переводы: $LOCALEDIR/<язык>/LC_MESSAGES (gridsnap, gridsnap@metapeka)"
 echo "  автозапуск: $LIB/install-daemon.sh (демон + привязка профилей к экранам)";
 if [ "$LAUNCHER" -eq 1 ]; then
     echo "  ярлык:    $APPS/gridsnap.desktop"

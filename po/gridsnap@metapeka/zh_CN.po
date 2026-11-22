@@ -14,3 +14,83 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "GridSnap — зоны окон"
+msgstr "GridSnap — 窗口区域"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Текущая зона:"
+msgstr "当前区域："
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Открыть редактор"
+msgstr "打开编辑器"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Применить сочетания"
+msgstr "应用快捷键"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Зоны"
+msgstr "区域"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Профили"
+msgstr "方案"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Рабочие области"
+msgstr "工作区"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Разложить окна по правилам"
+msgstr "按规则排列窗口"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Отменить последнюю раскладку"
+msgstr "撤销上次排列"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "команда завершилась с ошибкой"
+msgstr "命令执行失败"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Не удалось прочитать список профилей"
+msgstr "无法读取方案列表"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Профилей нет"
+msgstr "没有方案"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "зон:"
+msgstr "区域："
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Зон нет"
+msgstr "没有区域"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Не удалось прочитать список зон"
+msgstr "无法读取区域列表"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Мониторы не найдены"
+msgstr "未找到显示器"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Монитор "
+msgstr "显示器 "
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "нет данных"
+msgstr "无数据"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "не удалось применить зону"
+msgstr "无法应用区域"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "не удалось применить профиль"
+msgstr "无法应用方案"

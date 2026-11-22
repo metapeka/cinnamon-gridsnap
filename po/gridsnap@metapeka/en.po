@@ -14,3 +14,83 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "GridSnap — зоны окон"
+msgstr "GridSnap — window zones"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Текущая зона:"
+msgstr "Current zone:"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Открыть редактор"
+msgstr "Open editor"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Применить сочетания"
+msgstr "Apply shortcuts"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Зоны"
+msgstr "Zones"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Профили"
+msgstr "Profiles"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Рабочие области"
+msgstr "Work areas"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Разложить окна по правилам"
+msgstr "Arrange windows by rules"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Отменить последнюю раскладку"
+msgstr "Undo last arrangement"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "команда завершилась с ошибкой"
+msgstr "the command failed"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Не удалось прочитать список профилей"
+msgstr "Could not read the profile list"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Профилей нет"
+msgstr "No profiles"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "зон:"
+msgstr "zones:"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Зон нет"
+msgstr "No zones"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Не удалось прочитать список зон"
+msgstr "Could not read the zone list"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Мониторы не найдены"
+msgstr "No monitors found"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Монитор "
+msgstr "Monitor "
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "нет данных"
+msgstr "no data"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "не удалось применить зону"
+msgstr "could not apply the zone"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "не удалось применить профиль"
+msgstr "could not apply the profile"

@@ -1,7 +1,7 @@
 #!/usr/bin/dh-exec
 # Раскладка пакета — та же, что в цели `make deb` Makefile и в install.sh
 # (код в /usr/lib/gridsnap, запускалки в /usr/bin, ярлык и иконки в /usr/share,
-# man-страницы в /usr/share/man/man1).
+# man-страницы в /usr/share/man/man1, каталоги переводов в /usr/share/locale).
 #
 # «=>» — это dh-exec: он позволяет ставить файл под другим именем
 # (в исходниках иконки названы gridsnap-<размер>.png, а теме нужен gridsnap.png).
@@ -23,6 +23,7 @@ zone_tabstrip_nav.py => /usr/lib/gridsnap/zone_tabstrip_nav.py
 zone-hotcorners.py => /usr/lib/gridsnap/zone-hotcorners.py
 setup-hotkeys.py => /usr/lib/gridsnap/setup-hotkeys.py
 make-icon.py => /usr/lib/gridsnap/make-icon.py
+zone_i18n.py => /usr/lib/gridsnap/zone_i18n.py
 zones.conf => /usr/lib/gridsnap/zones.conf
 install-launcher.sh => /usr/lib/gridsnap/install-launcher.sh
 install-daemon.sh => /usr/lib/gridsnap/install-daemon.sh
@@ -54,6 +55,14 @@ icons/gridsnap-128.png => /usr/share/icons/hicolor/128x128/apps/gridsnap.png
 icons/gridsnap-256.png => /usr/share/icons/hicolor/256x256/apps/gridsnap.png
 icons/gridsnap-512.png => /usr/share/icons/hicolor/512x512/apps/gridsnap.png
 icons/gridsnap.svg => /usr/share/icons/hicolor/scalable/apps/gridsnap.svg
+
+# --- каталоги переводов (их собирает `make mo` в debian/rules) ---
+# Два домена: Python-инструменты (`gridsnap`) и апплет Cinnamon
+# (`gridsnap@metapeka`). Язык исходника — русский, каталога `ru` нет.
+locale/en/LC_MESSAGES/gridsnap.mo => /usr/share/locale/en/LC_MESSAGES/gridsnap.mo
+locale/en/LC_MESSAGES/gridsnap@metapeka.mo => /usr/share/locale/en/LC_MESSAGES/gridsnap@metapeka.mo
+locale/zh_CN/LC_MESSAGES/gridsnap.mo => /usr/share/locale/zh_CN/LC_MESSAGES/gridsnap.mo
+locale/zh_CN/LC_MESSAGES/gridsnap@metapeka.mo => /usr/share/locale/zh_CN/LC_MESSAGES/gridsnap@metapeka.mo
 
 # --- команды-запускалки (имена те же, что в Makefile/install.sh/PKGBUILD) ---
 debian/bin/gridsnap-tiler => /usr/bin/gridsnap-tiler
