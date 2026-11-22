@@ -42,11 +42,16 @@ if HERE not in sys.path:
 import zone_config  # noqa: E402  (ищем рядом с собой, как устанавливается)
 from zone_i18n import _  # noqa: E402  (строки интерфейса и их перевод)
 
+# Код возврата, когда команда не смогла сделать то, о чём её попросили.
+EXIT_FAIL = 1
+
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 LIST_SCHEMA = "org.cinnamon.desktop.keybindings"
 CB_SCHEMA = "org.cinnamon.desktop.keybindings.custom-keybinding"
 BASE = "/org/cinnamon/desktop/keybindings/custom-keybindings/"
 NAME_PREFIX = "zone-tiler: "
+# Ключи одной записи сочетания: сбрасываются по одному (см. `reset_binding`).
+CB_KEYS = ("name", "binding", "command")
 # Родной тайлинг muffin: эти сочетания живут в Cinnamon отдельно от наших.
 WM_SCHEMA = "org.cinnamon.desktop.keybindings.wm"
 PUSH_TILE_PREFIX = "push-tile-"
@@ -58,6 +63,21 @@ def gs(*args, get=False):
     if r.returncode:
         sys.exit(f"setup-hotkeys: gsettings {' '.join(args)}: {r.stderr.strip()}")
     return r.stdout.strip()
+
+
+def gs_reset(path, key):
+    """Сбросить один ключ записи в значение по умолчанию.
+
+    Отдельная функция, а не `gsettings reset-recursively`: на живом Cinnamon
+    6.4.10 рекурсивный сброс перемещаемой схемы (`схема:/путь/`) зарегистрированную
+    запись **не** сбрасывает — замер: после него `name` остался прежним, а
+    одиночный `reset` того же ключа его убрал.
+    """
+    r = subprocess.run(
+        ["gsettings", "reset", path, key], text=True, capture_output=True
+    )
+    if r.returncode:
+        sys.exit(f"setup-hotkeys: gsettings reset {key}: {r.stderr.strip()}")
 
 
 def gvariant_str(value):
@@ -232,18 +252,53 @@ def warn_conflicts(items):
         )
 
 
+def split_owned(ids):
+    """Разделить id сочетаний на свои и чужие: `(наши, чужие)`."""
+    owned, kept = [], []
+    for cid in ids:
+        (owned if cb_name(cid).startswith(NAME_PREFIX) else kept).append(cid)
+    return owned, kept
+
+
+def reset_binding(cid):
+    """Погасить запись сочетания: сбросить каждый её ключ по отдельности."""
+    path = f"{CB_SCHEMA}:{BASE}{cid}/"
+    for key in CB_KEYS:
+        gs_reset(path, key)
+
+
 def drop_owned(ids):
     """Убирает наши сочетания: сбрасывает их ключи и возвращает оставшиеся id."""
-    kept = []
-    for cid in ids:
-        if cb_name(cid).startswith(NAME_PREFIX):
-            subprocess.run(
-                ["gsettings", "reset-recursively", f"{CB_SCHEMA}:{BASE}{cid}/"],
-                capture_output=True,
-            )
-        else:
-            kept.append(cid)
+    owned, kept = split_owned(ids)
+    for cid in owned:
+        reset_binding(cid)
     return kept
+
+
+def remove_owned():
+    """Убрать все наши сочетания; вернуть id, которые убрать не удалось.
+
+    Порядок нарочный: **сначала** список без наших id, потом сброс записей,
+    потом список ещё раз. Cinnamon (`keybindings.js`) перезаписывает
+    `custom-list` из своей памяти на каждое изменение, поэтому порядок «сброс,
+    потом список» проигрывает гонку: на живом Cinnamon 6.4.10 `--remove` дважды
+    отчитался об успехе, а четыре сочетания остались и в списке, и в записях.
+    Список, написанный первым, эту память сбрасывает, и дальше ключи
+    сбрасываются без сопротивления; повторная запись списка — на случай, если
+    перезапись всё-таки случилась между шагами.
+    """
+    owned, kept = split_owned(custom_ids())
+    for _attempt in range(2):
+        if not owned:
+            return []
+        set_custom_list(kept)
+        for cid in owned:
+            reset_binding(cid)
+        set_custom_list(kept)
+        owned = [cid for cid in custom_ids() if cb_name(cid).startswith(NAME_PREFIX)]
+        if not owned:
+            return []
+    return owned
 
 
 def next_ids(kept, count):
@@ -274,7 +329,21 @@ def main():
     )
     args = ap.parse_args()
 
-    pairs = [] if args.remove else planned(args.conf)
+    if args.remove:
+        left = remove_owned()
+        if left:
+            print(
+                _(
+                    "setup-hotkeys: эти сочетания убрать не удалось: {ids} — "
+                    "уберите их вручную в настройках клавиш Cinnamon"
+                ).format(ids=", ".join(left)),
+                file=sys.stderr,
+            )
+            return EXIT_FAIL
+        print(_("setup-hotkeys: сочетания zone-tiler удалены"))
+        return 0
+
+    pairs = planned(args.conf)
     kept = drop_owned(custom_ids())
 
     if args.list:
@@ -300,18 +369,13 @@ def main():
     set_custom_list(kept)
     set_custom_list(kept + ids)
 
-    if args.remove:
-        print(_("setup-hotkeys: сочетания zone-tiler удалены"))
-    else:
-        print(
-            _("setup-hotkeys: установлено сочетаний: {count}").format(
-                count=len(pairs)
-            )
-        )
-        for name, binding, _command in pairs:
-            print(f"  {binding:<22} {name}")
-        warn_conflicts(pairs)
+    print(
+        _("setup-hotkeys: установлено сочетаний: {count}").format(count=len(pairs))
+    )
+    for name, binding, _command in pairs:
+        print(f"  {binding:<22} {name}")
+    warn_conflicts(pairs)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-22 21:48+0300\n"
+"POT-Creation-Date: 2026-11-22 23:55+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -2558,6 +2558,11 @@ msgstr "remove zone-tiler shortcuts"
 #: setup-hotkeys.py
 msgid "путь к zones.conf (по умолчанию — как у zone-tiler.py)"
 msgstr "path to zones.conf (the same as zone-tiler.py uses by default)"
+
+#: setup-hotkeys.py
+#, python-brace-format
+msgid "setup-hotkeys: эти сочетания убрать не удалось: {ids} — уберите их вручную в настройках клавиш Cinnamon"
+msgstr "setup-hotkeys: these shortcuts could not be removed: {ids} — remove them by hand in Cinnamon's keyboard settings"
 
 #: setup-hotkeys.py
 msgid "setup-hotkeys: сочетания zone-tiler удалены"
