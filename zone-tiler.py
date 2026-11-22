@@ -65,6 +65,8 @@ zone-tiler — раскладывает активное окно по зона�
   zone-tiler.py arrange --by order        # разложить окна по зонам по порядку списка
   zone-tiler.py stack main                # собрать окна в зону main вкладками
   zone-tiler.py tabs-next                 # поднять следующее окно зоны (клавиша)
+  zone-tiler.py action mirror              # выполнить действие из [action:<имя>]
+  zone-tiler.py action term-main --dry-run # что действие сделало бы, ничего не делая
   zone-tiler.py undo                      # вернуть окна из последней операции
   zone-tiler.py undo --all                # откатить всю историю раскладок
 
@@ -99,6 +101,13 @@ zone-tiler — раскладывает активное окно по зона�
 
 JSON-профиль — переносимый обмен между машинами (``gridsnap_profile``: 1);
 основным остаётся ``.conf``, JSON только для выгрузки и загрузки.
+
+Действие — запись `[action:<имя>]` в `zones.conf`: `run = builtin:<имя>` либо
+своя команда, необязательные `zone` (зона-предмет) и `key` (сочетание, его
+ставит `setup-hotkeys.py`). Действие получает окно и зону: переменными
+`GRIDSNAP_*` и подстановками `{zone}`/`{window}`/`{x}`… Своя команда
+запускается без оболочки и без ожидания; встроенные — `minimize-others`,
+`show-window`, `mirror`, `terminal` (подробности — в --help команды `action`).
 
 История раскладок — JSON в XDG-состоянии (`~/.local/state/gridsnap/history.json`),
 её читает и пишет каждая команда отдельным процессом (подробности — в --help и в
@@ -1972,6 +1981,48 @@ def cmd_tabs_next(args):
     print(f"zone-tiler: следующее окно зоны — {window}")
 
 
+def cmd_action(grid, args):
+    """Выполнить действие из `[action:<имя>]` — то, что висит на клавише.
+
+    Имя действия приходит первым позиционным аргументом (как у `profile`: у
+    команды `action` в `args.zone` лежит имя, а не зона). Запись читает
+    `zone_config.load_actions`.
+
+    **Что действие получает** (`zone_actions.ActionContext`): окно, зону, её
+    пиксельную рамку, монитор, стол, класс и заголовок окна, путь к конфигу —
+    переменными окружения `GRIDSNAP_*` и подстановками `{zone}`/`{window}`/`{x}`…
+    Внешняя команда разбирается `shlex` и запускается **без оболочки** и без
+    ожидания (`start_new_session`): клавишу нельзя вешать на `gnome-terminal`,
+    который живёт до закрытия окна.
+
+    **Предмет** — зона из записи (`zone = main`), а окно ищется в ней; без зоны —
+    активное окно и зона, в которой оно стоит. `--window` задаёт окно явно,
+    `--monitor` — экран для поиска зоны (без него: экран окна, затем активного
+    окна, затем первый).
+
+    **Встроенные** (`run = builtin:<имя>`): `minimize-others` — тот же режим, что
+    `focus` (делегирует демону, если он жив); `show-window` — поднять/развернуть
+    окно зоны (вкладки — следующая от активного); `mirror` — обмен с зеркальной
+    зоной; `terminal` — запустить терминал и положить его окно в зону.
+
+    `--dry-run` печатает разобранный контекст и план (встроенное) или готовый
+    argv (команда), ничего не делая. Коды: 3 — ошибка конфига (нет такого
+    действия, битое поле, неизвестная подстановка), 1 — отказ по состоянию, 0 —
+    успех **и** честный no-op («показывать нечего», «зеркальная зона — та же
+    зона») с сообщением в stderr.
+    """
+    raise NotImplementedError("контракт: реализует воркер B")
+
+
+def actions_module():
+    """Модуль `zone_actions`: контекст, подстановки и зеркало живут только там."""
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import zone_actions  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+
+    return zone_actions
+
+
 def cmd_focus(grid, args):
     """Режим «только эта зона»: окно в зону, остальные окна монитора — свёрнуты.
 
@@ -3084,6 +3135,7 @@ def main(argv=None):
         epilog=(
             "Примеры: zone-tiler.py arrange --by order; zone-tiler.py stack main; "
             "zone-tiler.py tabs-next; zone-tiler.py undo --all; "
+            "zone-tiler.py action mirror; "
             "zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
         ),
     )
@@ -3094,6 +3146,7 @@ def main(argv=None):
             "apply",
             "move",
             "focus",
+            "action",
             "keys",
             "arrange",
             "stack",
@@ -3104,7 +3157,9 @@ def main(argv=None):
         help=(
             "list/apply/keys — как раньше; move — перебросить окно в соседнюю зону; "
             "focus — режим «только эта зона» (окно в зону, остальные свёрнуты; "
-            "повторно — выход); arrange — разложить окна по зонам; stack — собрать "
+            "повторно — выход); action — выполнить действие из [action:<имя>] "
+            "(встроенное или своя команда); arrange — разложить окна по зонам; "
+            "stack — собрать "
             "окна в зону вкладками; tabs-next — поднять следующую вкладку зоны "
             "(клавиша [tabs]); undo — вернуть рамки из истории; profile — свои "
             "профили раскладок (зоны + правила + клавиши)"
@@ -3239,6 +3294,11 @@ def main(argv=None):
         return EXIT_OK
     if args.command == "focus":
         cmd_focus(grid, args)
+        return EXIT_OK
+    # `action` — как `focus`: ни зоны ни окна от CLI не требует (зона бывает в
+    # записи действия, а действие бывает и вовсе без зоны).
+    if args.command == "action":
+        cmd_action(grid, args)
         return EXIT_OK
     if not args.zone:
         fail("zone-tiler: укажите зону, например: zone-tiler.py apply left", EXIT_USAGE)

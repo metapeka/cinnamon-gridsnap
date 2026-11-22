@@ -65,6 +65,16 @@ FOCUS_SECTION = "focus"
 TABS_SECTION = "tabs"
 TABS_FIELDS = ("key", "height")
 
+# Действия: одна секция — один экземпляр действия, ``[action:<имя>]`` (как
+# ``[zones:<выход>]`` — один набор на экран). В :data:`RESERVED_SECTIONS` секция
+# не входит: редактор её не правит, а переносит дословно, как
+# ``[focus]``/``[tabs]``. Имя действия — из ``[a-z0-9_-]``: оно уже приведено
+# ``ConfigParser`` к нижнему регистру и попадает в командную строку клавиши
+# (``zone-tiler.py action <имя>``), поэтому пробелы и кавычки в нём недопустимы.
+ACTION_SECTION_PREFIX = "action:"
+ACTION_FIELDS = ("run", "zone", "key", "command", "axis")
+ACTION_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+
 # Рабочие столы: ``[workspaces]``, ключ — номер стола как в интерфейсе Cinnamon
 # (с 1), значение — имя профиля из ``templates/<имя>.conf``.
 WORKSPACES_SECTION = "workspaces"
@@ -328,6 +338,33 @@ def _tabs_height(text):
             zt.EXIT_CONFIG,
         )
     return height
+
+
+def load_actions(path):
+    """Действия из секций ``[action:<имя>]``: ``{имя: запись}``.
+
+    Запись — словарь с полями :data:`ACTION_FIELDS`:
+
+    * ``run`` — обязательный: ``builtin:<имя>`` из ``zone_actions.BUILTINS`` либо
+      внешняя команда (её разбирает ``zone_actions.expand_command``);
+    * ``zone`` — необязательное имя зоны-предмета; без неё предметом становится
+      активное окно и зона, где оно стоит;
+    * ``key`` — необязательное сочетание Cinnamon для ``setup-hotkeys.py``;
+    * ``command`` — только у ``builtin:terminal``: чем запускать терминал
+      (умолчание — ``zone_actions.DEFAULT_TERMINAL``);
+    * ``axis`` — только у ``builtin:mirror``: ось из ``zone_actions.MIRROR_AXES``
+      (умолчание — ``zone_actions.DEFAULT_MIRROR_AXIS``).
+
+    Отсутствующие необязательные поля — ``None``; нет файла или нет ни одной
+    секции — пустой словарь (действий нет, и это не ошибка).
+
+    Ошибка конфига (код 3): пустой ``run``/``zone``/``key``/``command``,
+    неизвестное имя встроенного действия, неизвестное поле секции, ``command``
+    или ``axis`` не у своего действия, ось не из :data:`zone_actions.MIRROR_AXES`,
+    имя секции не из ``[a-z0-9_-]``. Всё это — опечатки, из-за которых человек
+    остался бы без действия или без клавиши и не понял почему.
+    """
+    raise NotImplementedError("контракт: реализует воркер A")
 
 
 def _workspace_number(value):
