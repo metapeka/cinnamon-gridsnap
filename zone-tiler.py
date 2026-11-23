@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-zone-tiler — раскладывает активное окно по зонам собственной (нарисованной) сетки.
+zone-tiler — lays the active window out over the zones of its own (drawn) grid.
 
-Работает в Cinnamon / Muffin (X11) через EWMH-сообщения, внешние утилиты
-(wmctrl, xdotool) не нужны. Нужен только python3 + libX11 (уже есть в системе).
+Works in Cinnamon / Muffin (X11) through EWMH messages; external utilities
+(wmctrl, xdotool) are not needed. Only python3 + libX11 (already on the system).
 
-Сетка задаётся в zones.conf в долях рабочей области (без панелей):
+The grid is set in zones.conf in work-area fractions (panels excluded):
 
   [grid]
-  cols = 0.5, 0.75, 1.0      # вертикальные линии: 3 колонки (0..1, 1..2, 2..3)
-  rows = 0.5, 1.0            # горизонтальные линии: 2 строки (0..1, 1..2)
+  cols = 0.5, 0.75, 1.0      # vertical lines: 3 columns (0..1, 1..2, 2..3)
+  rows = 0.5, 1.0            # horizontal lines: 2 rows (0..1, 1..2)
 
   [zones]
-  left      = 0:1, 0:2       # колонки 0..1, строки 0..2
+  left      = 0:1, 0:2       # columns 0..1, rows 0..2
   top-right = 1:3, 0:1
 
-Зоны можно задать на каждый монитор отдельно — секцией `[zones:<выход>]`:
+Zones can be set per monitor — with a `[zones:<output>]` section:
 
   [zones:HDMI-1]
   main = 0, 0, 0.6, 1
 
-Имя выхода берётся из `xrandr --listmonitors` (`eDP-1`, `HDMI-1`) и стабильно
-между перезагрузками и переподключениями кабеля; `[zones]` обязательна и служит
-набором по умолчанию для мониторов без своей секции. `[rules]` и `[keys]` общие.
+The output name comes from `xrandr --listmonitors` (`eDP-1`, `HDMI-1`) and is stable
+across reboots and cable reconnects; `[zones]` is mandatory and serves as the
+default set for monitors without a section of their own. `[rules]` and `[keys]` are shared.
 
-Перемещение активного окна в соседнюю зону — команда `move <направление>`, а
-сочетания для неё — в необязательной секции `[move]` (зона окна ищется по его
-центру, сосед — тем же правилом, что стрелки в пикере):
+Moving the active window into a neighbouring zone is the `move <direction>` command, and
+its bindings are in the optional `[move]` section (the window's zone is found by its
+centre, the neighbour by the same rule as the arrows in the picker):
 
   [move]
   left  = <Super>Left
@@ -35,82 +35,82 @@ zone-tiler — раскладывает активное окно по зона�
   up    = <Super>Up
   down  = <Super>Down
 
-Секции нет — действуют эти же сочетания (их же muffin занимает своим
-`push-tile-*`, поэтому их и берём по умолчанию). Неизвестный ключ — ошибка
-конфига.
+No section — these same bindings apply (muffin also takes them for its
+`push-tile-*`, so we take them as the default). An unknown key is a config
+error.
 
-Вкладки в зоне — необязательная секция `[tabs]`: `key` — сочетание «следующее
-окно зоны» (`tabs-next`), `height` — высота полосы вкладок в пикселях (по
-умолчанию 22). Несколько окон в одной зоне стоят на одной рамке (зона минус
-полоса), видно верхнее; полосу рисует отдельный процесс `zone-tabstrip.py`.
+Tabs in a zone — the optional `[tabs]` section: `key` — the binding of "the next
+window of the zone" (`tabs-next`), `height` — the height of the tab strip in pixels (22
+by default). Several windows in one zone sit on one frame (the zone minus the
+strip), the topmost one is visible; the strip is drawn by a separate process `zone-tabstrip.py`.
 
   [tabs]
   key    = <Super><Alt>g
   height = 22
 
-Каскада больше нет: `--offset` и сдвиг стопки удалены, вызов с `--offset` —
-ошибка аргументов (код 2).
+There is no cascade any more: `--offset` and the stack shift were removed, a call with
+`--offset` is an argument error (code 2).
 
-Команды:
-  zone-tiler.py list                      # показать зоны и их пиксельные рамки
-  zone-tiler.py apply left                # вложить активное окно в зону "left"
-  zone-tiler.py apply left --dry-run      # только посчитать рамку
-  zone-tiler.py apply left --monitor 1    # зона на другом мониторе
-  zone-tiler.py apply left --monitor HDMI-1   # или по имени выхода (приоритетнее номера)
+Commands:
+  zone-tiler.py list                      # show the zones and their pixel frames
+  zone-tiler.py apply left                # put the active window into the zone "left"
+  zone-tiler.py apply left --dry-run      # only compute the frame
+  zone-tiler.py apply left --monitor 1    # a zone on another monitor
+  zone-tiler.py apply left --monitor HDMI-1   # or by output name (takes priority over the number)
   zone-tiler.py apply left --window 0x3400007
-  zone-tiler.py apply left --workspace 1  # зона сетки рабочего стола 1
-  zone-tiler.py move left                 # активное окно — в соседнюю зону слева
-  zone-tiler.py keys --move               # сочетания перемещения (для setup-hotkeys.py)
-  zone-tiler.py arrange                   # разложить окна по зонам (по правилам и остатку)
-  zone-tiler.py arrange --by order        # разложить окна по зонам по порядку списка
-  zone-tiler.py stack main                # собрать окна в зону main вкладками
-  zone-tiler.py tabs-next                 # поднять следующее окно зоны (клавиша)
-  zone-tiler.py action mirror              # выполнить действие из [action:<имя>]
-  zone-tiler.py action term-main --dry-run # что действие сделало бы, ничего не делая
-  zone-tiler.py undo                      # вернуть окна из последней операции
-  zone-tiler.py undo --all                # откатить всю историю раскладок
+  zone-tiler.py apply left --workspace 1  # the grid of desktop 1
+  zone-tiler.py move left                 # the active window — into the neighbouring zone on the left
+  zone-tiler.py keys --move               # move bindings (for setup-hotkeys.py)
+  zone-tiler.py arrange                   # lay the windows out over the zones (by rules and the rest)
+  zone-tiler.py arrange --by order        # lay the windows out over the zones in list order
+  zone-tiler.py stack main                # gather the windows into the zone main as tabs
+  zone-tiler.py tabs-next                 # raise the next window of the zone (a key)
+  zone-tiler.py action mirror              # run an action from [action:<name>]
+  zone-tiler.py action term-main --dry-run # what the action would do, doing nothing
+  zone-tiler.py undo                      # bring the windows back from the last operation
+  zone-tiler.py undo --all                # roll the whole layout history back
 
-Своя сетка на рабочем столе — это профиль: секция `[workspaces]` сопоставляет
-номер стола (с 1) имени профиля из `templates/`. `list`/`apply`/`arrange`/`stack`
-по умолчанию берут сетку активного стола (`--workspace current`), `--workspace N`
-адресует стол номером EWMH (с нуля). Имя зоны остаётся глобальным, `[keys]`
-общая на файл.
+A grid of its own per workspace is a profile: the `[workspaces]` section maps
+a desktop number (from 1) to a profile name from `templates/`. `list`/`apply`/`arrange`/`stack`
+take the grid of the active desktop by default (`--workspace current`), `--workspace N`
+addresses a desktop by EWMH number (from zero). The zone name stays global, `[keys]`
+is shared for the file.
 
-Профили раскладок (свои шаблоны: зоны + правила + клавиши) хранятся в
-`~/.config/gridsnap/templates/*.conf`, активация — `profile use <имя>`:
+Layout profiles (own templates: zones + rules + keys) are stored in
+`~/.config/gridsnap/templates/*.conf`, activation is `profile use <name>`:
 
-  zone-tiler.py profile list              # сохранённые профили
-  zone-tiler.py profile save work         # текущий zones.conf — в профиль «work»
-  zone-tiler.py profile use work          # активировать профиль (и обновить сочетания)
+  zone-tiler.py profile list              # saved profiles
+  zone-tiler.py profile save work         # the current zones.conf — into the "work" profile
+  zone-tiler.py profile use work          # activate the profile (and update the bindings)
   zone-tiler.py profile use work --no-hotkeys
-  zone-tiler.py profile use-monitors      # снимок профилей экранов из [monitors]
-  zone-tiler.py profile use-monitors --dry-run   # показать конфиг, ничего не писать
+  zone-tiler.py profile use-monitors      # a snapshot of the screen profiles from [monitors]
+  zone-tiler.py profile use-monitors --dry-run   # show the config, write nothing
   zone-tiler.py profile show work
   zone-tiler.py profile rm work
-  zone-tiler.py profile export work              # JSON в stdout (для пайпов)
-  zone-tiler.py profile export work work.json    # JSON в файл — поделиться раскладкой
-  zone-tiler.py profile import work.json         # JSON → templates/<имя>.conf
-  zone-tiler.py profile import work.json --name home  # то же, но под другим именем
+  zone-tiler.py profile export work              # JSON to stdout (for pipes)
+  zone-tiler.py profile export work work.json    # JSON to a file — share the layout
+  zone-tiler.py profile import work.json         # JSON → templates/<name>.conf
+  zone-tiler.py profile import work.json --name home  # the same, but under another name
 
-Своя сетка на экране — привязка в секции `[monitors]` (`HDMI-1 = work`):
-`profile use-monitors` собирает из профилей экранов снимок (`[zones]` первого
-экрана плюс `[zones:<выход>]` остальных, слияние `[rules]`/`[ignore]`/`[keys]`),
-а `apply`/`move`/`arrange`/`stack` ищут зону в профиле экрана (у `move`,
-`arrange` — экрана окна, у `apply`/`stack` — того, что задан `--monitor`),
-потом стола, потом в `zones.conf`.
+A grid of its own per screen — a binding in the `[monitors]` section (`HDMI-1 = work`):
+`profile use-monitors` builds a snapshot out of the screen profiles (`[zones]` of the first
+screen plus `[zones:<output>]` of the others, merging `[rules]`/`[ignore]`/`[keys]`),
+and `apply`/`move`/`arrange`/`stack` look for the zone in the screen profile (for `move`,
+`arrange` — the screen of the window, for `apply`/`stack` — the one set by `--monitor`),
+then the desktop, then `zones.conf`.
 
-JSON-профиль — переносимый обмен между машинами (``gridsnap_profile``: 1);
-основным остаётся ``.conf``, JSON только для выгрузки и загрузки.
+A JSON profile is portable exchange between machines (``gridsnap_profile``: 1);
+the main one stays ``.conf``, JSON only for export and import.
 
-Действие — запись `[action:<имя>]` в `zones.conf`: `run = builtin:<имя>` либо
-своя команда, необязательные `zone` (зона-предмет) и `key` (сочетание, его
-ставит `setup-hotkeys.py`). Действие получает окно и зону: переменными
-`GRIDSNAP_*` и подстановками `{zone}`/`{window}`/`{x}`… Своя команда
-запускается без оболочки и без ожидания; встроенные — `minimize-others`,
-`show-window`, `mirror`, `terminal` (подробности — в --help команды `action`).
+An action is an `[action:<name>]` entry in `zones.conf`: `run = builtin:<name>` or
+its own command, the optional `zone` (the subject zone) and `key` (the binding, it
+is set by `setup-hotkeys.py`). The action receives the window and the zone: through the
+`GRIDSNAP_*` variables and the `{zone}`/`{window}`/`{x}`… substitutions. Its own command
+runs without a shell and without waiting; the builtins are `minimize-others`,
+`show-window`, `mirror`, `terminal` (details — in the --help of the `action` command).
 
-История раскладок — JSON в XDG-состоянии (`~/.local/state/gridsnap/history.json`),
-её читает и пишет каждая команда отдельным процессом (подробности — в --help и в
+The layout history is JSON in the XDG state (`~/.local/state/gridsnap/history.json`),
+every command reads and writes it in a separate process (details — in --help and in
 `docs/specs/zone-tiler.md`).
 """
 
@@ -129,14 +129,14 @@ import tempfile
 import time
 from typing import NoReturn
 
-from zone_i18n import _  # строки интерфейса; без каталога — исходный текст
-import window_backend  # оконный слой: xprop/xwininfo/xrandr и libX11 — в одном месте
-import zone_units  # перевод логических пикселей GTK в физические X — в одном месте
+from zone_i18n import _  # interface strings; without a catalog — the source text
+import window_backend  # window layer: xprop/xwininfo/xrandr and libX11 — in one place
+import zone_units  # converting GTK logical pixels to physical X ones — in one place
 
 VERSION = "0.2.0"
 
-# Коды возврата CLI: 0 — успех, 1 — ошибка выполнения, 2 — ошибка аргументов,
-# 3 — ошибка конфига (argparse и сам сообщает об ошибках аргументов кодом 2).
+# CLI return codes: 0 — success, 1 — runtime error, 2 — argument error,
+# 3 — config error (argparse itself reports argument errors with code 2).
 EXIT_OK = 0
 EXIT_FAIL = 1
 EXIT_USAGE = 2
@@ -144,7 +144,7 @@ EXIT_CONFIG = 3
 
 
 def fail(message, code=EXIT_FAIL) -> NoReturn:
-    """Сообщить об ошибке в stderr и завершить процесс нужным кодом."""
+    """Report an error in stderr and exit the process with the needed code."""
     print(message, file=sys.stderr)
     sys.exit(code)
 
@@ -154,7 +154,7 @@ LEGACY_CONF = os.path.join(HERE, "zones.conf")
 
 
 def config_home():
-    """Каталог конфигурации XDG (его уважает и Cinnamon, и остальные утилиты)."""
+    """XDG config directory (both Cinnamon and the other utilities respect it)."""
     return os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
 
 
@@ -163,10 +163,10 @@ def xdg_conf():
 
 
 def default_conf():
-    """Путь к zones.conf.
+    """Path to zones.conf.
 
-    Приоритет — ~/.config/gridsnap/zones.conf; если его нет, читаем/пишем файл рядом
-    с кодом (совместимость с рабочими установками). Переопределяется флагом --conf.
+    Priority — ~/.config/gridsnap/zones.conf; if it is missing, we read/write the file next
+    to the code (compatibility with working installs). Overridden by the --conf flag.
     """
     path = xdg_conf()
     return path if os.path.exists(path) else LEGACY_CONF
@@ -174,21 +174,21 @@ def default_conf():
 
 CONF = default_conf()
 
-# ------------------------------------------------------------ правила окон
+# ------------------------------------------------------------- window rules
 
 
 def window_class_title(win):
-    """WM_CLASS (класс, вторая строка) и заголовок окна — см. `window_backend`."""
+    """WM_CLASS (the class, the second line) and the window title — see `window_backend`."""
     return window_backend.window_class_title(win)
 
 
 def selector_matches(selector, wm_class, wm_title):
-    """Подходит ли окно под один селектор. Чистая функция — под тесты.
+    """Does the window fit one selector. A pure function — for the tests.
 
-    Селектор `re:<regex>` ищется в строке `class|title` без учёта регистра;
-    обычный селектор — это glob по WM_CLASS (тоже без учёта регистра).
-    Некорректная регулярка не совпадает ни с чем. Один разбор на `[rules]` и
-    `[ignore]`, чтобы правила и исключения сопоставлялись одинаково.
+    The `re:<regex>` selector is searched in the `class|title` string, case-insensitively;
+    a plain selector is a glob over WM_CLASS (also case-insensitively).
+    An invalid regex matches nothing. One parse for `[rules]` and
+    `[ignore]`, so that rules and exceptions are matched the same way.
     """
     if selector.lower().startswith("re:"):
         try:
@@ -200,7 +200,7 @@ def selector_matches(selector, wm_class, wm_title):
 
 
 def match_rules(rules, wm_class, wm_title):
-    """Первая подходящая зона для окна или None. Чистая функция — под тесты."""
+    """The first matching zone for the window, or None. A pure function — for the tests."""
     for selector, zone in rules:
         if selector_matches(selector, wm_class, wm_title):
             return zone
@@ -208,17 +208,17 @@ def match_rules(rules, wm_class, wm_title):
 
 
 def matches_selectors(selectors, wm_class, wm_title):
-    """Есть ли среди селекторов хотя бы один подходящий. Чистая функция."""
+    """Whether at least one of the selectors matches. A pure function."""
     return any(selector_matches(s, wm_class, wm_title) for s in (selectors or ()))
 
 
-# --------------------------------------------------- фильтры «какие окна двигать»
+# --------------------------------------------------- filters "which windows to move"
 
-# Свойство root со списком управляемых клиентских окон (EWMH).
+# The root property with the list of managed client windows (EWMH).
 CLIENT_LIST_ATOM = "_NET_CLIENT_LIST"
 
-# Типы окон, которые не трогают ни демон, ни команды arrange/stack: это не
-# самостоятельные «окна-документы», а всплывающие/служебные поверхности.
+# Window types that neither the daemon nor the arrange/stack commands touch: these are not
+# standalone "document windows" but popup/service surfaces.
 IGNORED_WINDOW_TYPES = frozenset(
     {
         "_NET_WM_WINDOW_TYPE_DIALOG",
@@ -228,16 +228,16 @@ IGNORED_WINDOW_TYPES = frozenset(
         "_NET_WM_WINDOW_TYPE_UTILITY",
     }
 )
-# Короткие имена тех же типов — на случай, если xprop/тест отдал их без префикса.
+# Short names of the same types — in case xprop/a test hands them over without the prefix.
 IGNORED_TYPE_TAILS = frozenset(name.rsplit("_", 1)[-1] for name in IGNORED_WINDOW_TYPES)
 
-# Метаданные окна, нужные фильтрам и раскладке.
-# `window_type` — набор имён `_NET_WM_WINDOW_TYPE_*` (может быть пустым).
+# Window metadata needed by the filters and by the layout.
+# `window_type` — a set of `_NET_WM_WINDOW_TYPE_*` names (may be empty).
 WindowMeta = collections.namedtuple("WindowMeta", "wm_class wm_title window_type")
 
 
 def _type_names(window_type):
-    """Имена типов окна из набора/строки; короткое имя поднимается как есть."""
+    """Window type names out of a set/string; a short name is raised as it is."""
     if not window_type:
         return frozenset()
     if isinstance(window_type, str):
@@ -247,11 +247,11 @@ def _type_names(window_type):
 
 
 def is_ignored_type(window_type):
-    """True, если среди типов окна есть служебный (диалог, сплэш и т. п.).
+    """True if a service type (dialog, splash, etc.) is among the window types.
 
-    Общий фильтр раскладчика и демона. Принимает набор имён
-    `_NET_WM_WINDOW_TYPE_*`, строку с ними или короткое имя (`DIALOG`, ...).
-    Пустое значение — не служебное окно.
+    The shared filter of the tiler and the daemon. Accepts a set of
+    `_NET_WM_WINDOW_TYPE_*` names, a string with them or a short name (`DIALOG`, ...).
+    An empty value — not a service window.
     """
     names = _type_names(window_type)
     if names & IGNORED_WINDOW_TYPES:
@@ -260,34 +260,34 @@ def is_ignored_type(window_type):
 
 
 def window_types(win):
-    """Набор `_NET_WM_WINDOW_TYPE` окна (пустой при ошибке) — см. `window_backend`."""
+    """The window's `_NET_WM_WINDOW_TYPE` set (empty on error) — see `window_backend`."""
     return window_backend.window_types(win)
 
 
 def window_excluded(wm_class, wm_title, window_type, ignore_selectors=()):
-    """Оставить ли окно в покое. Чистая функция — один источник истины фильтра.
+    """Whether to leave the window alone. A pure function — one source of truth for the filter.
 
-    True, если тип окна служебный (`is_ignored_type`) или окно подошло хотя бы
-    под один селектор `[ignore]` (glob по `WM_CLASS` без учёта регистра или
-    `re:<regex>` по строке `class|title`). Один предикат для автоукладки демона,
-    `arrange`/`stack`, явных `apply`/`move` и пикера — поэтому фильтр не
-    расходится между точками вызова.
+    True if the window type is a service one (`is_ignored_type`) or the window matched at least
+    one `[ignore]` selector (a glob over `WM_CLASS`, case-insensitively, or
+    `re:<regex>` over the `class|title` string). One predicate for the daemon's auto-layout,
+    `arrange`/`stack`, the explicit `apply`/`move` and the picker — that is why the filter does
+    not diverge between the call sites.
     """
     if is_ignored_type(window_type):
         return True
     return matches_selectors(ignore_selectors, wm_class, wm_title)
 
 
-# Задержка перед единственным повтором чтения метаданных: `_NET_WM_NAME` иногда
-# появляется уже после того, как окно попало в `_NET_CLIENT_LIST`.
+# Delay before the single retry of reading the metadata: `_NET_WM_NAME` sometimes
+# appears only after the window has got into `_NET_CLIENT_LIST`.
 META_RETRY_DELAY = 0.2
 
 
 def read_window_meta(win):
-    """Метаданные окна: `WM_CLASS`/`_NET_WM_NAME` + тип окна.
+    """Window metadata: `WM_CLASS`/`_NET_WM_NAME` + the window type.
 
-    Если класс или заголовок ещё не появились, один раз перечитывает их после
-    короткой паузы (заголовок порой приходит уже после появления окна).
+    If the class or the title has not appeared yet, re-reads them once after a
+    short pause (the title sometimes arrives after the window itself).
     """
     wm_class, wm_title = window_class_title(win)
     if not wm_class or not wm_title:
@@ -299,22 +299,22 @@ def read_window_meta(win):
 
 
 def window_is_excluded(win, ignore_selectors=()):
-    """Под исключением ли окно `win` (`[ignore]`/служебный тип). Читает X.
+    """Whether the window `win` is excluded (`[ignore]`/service type). Reads X.
 
-    Одна проверка для явных команд (`apply`, `move`, `undo`) и пикера: факт для
-    вызывающего, сообщение печатает он сам. Это та же `window_excluded`, что и у
-    автоукладки, поэтому фильтр не может разойтись между точками вызова.
+    One check for the explicit commands (`apply`, `move`, `undo`) and the picker: the fact for
+    the caller, it prints the message itself. It is the same `window_excluded` as the one used
+    by the auto-layout, so the filter cannot diverge between the call sites.
     """
     meta = read_window_meta(win)
     return window_excluded(meta.wm_class, meta.wm_title, meta.window_type, ignore_selectors)
 
 
 def read_client_list():
-    """Клиентские окна `_NET_CLIENT_LIST` или None — см. `window_backend`."""
+    """Client windows of `_NET_CLIENT_LIST`, or None — see `window_backend`."""
     return window_backend.read_client_list()
 
 
-# ---------------------------------------------------------------- конфиг сетки
+# ---------------------------------------------------------------- grid config
 
 
 class Grid:
@@ -322,12 +322,12 @@ class Grid:
         cp = configparser.ConfigParser(
             interpolation=None,
             inline_comment_prefixes=("#", ";"),
-            delimiters=("=",),  # ключ `re:<regex>` содержит ':', разделитель только '='
+            delimiters=("=",),  # the `re:<regex>` key contains ':', so the only delimiter is '='
         )
         try:
             read = cp.read(path, encoding="utf-8")
         except configparser.Error as exc:
-            # Повтор секции или ключа: код 3 с именем файла, а не трассировка.
+            # A repeated section or key: code 3 with the file name, not a traceback.
             fail(
                 _(
                     "zone-tiler: cannot parse config {path}: {error}"
@@ -336,9 +336,9 @@ class Grid:
             )
         if not read:
             fail(_("zone-tiler: config not found: {path}").format(path=path), EXIT_CONFIG)
-        # Путь нужен там, где секции читает не сам Grid: `keys --move` берёт
-        # `[move]` через `zone_config.load_move_keys`, а `[move]` в профилях
-        # столов не живёт (она общая на файл).
+        # The path is needed where the section is not read by Grid itself: `keys --move` takes
+        # `[move]` through `zone_config.load_move_keys`, and `[move]` does not live in the desktop
+        # profiles (it is shared for the file).
         self.path = path
         self.conf = cp
         self.cols = self._numlist(cp.get("grid", "cols", fallback="1.0"))
@@ -347,9 +347,9 @@ class Grid:
         if cp.has_section("zones"):
             for name, spec in cp.items("zones"):
                 self.zones[name.strip()] = self._parse_zone(name, spec)
-        # Зоны на каждый монитор: [zones:<выход xrandr>], например [zones:HDMI-1].
-        # Имя секции регистрозависимо (ConfigParser секции не приводит к нижнему
-        # регистру), чтобы совпадать с именем выхода как его печатает xrandr.
+        # Zones per monitor: [zones:<xrandr output>], for example [zones:HDMI-1].
+        # The section name is case-sensitive (ConfigParser does not lowercase sections),
+        # so that it matches the output name as xrandr prints it.
         self.monitor_zones = {}
         for section in cp.sections():
             if not section.startswith("zones:"):
@@ -378,21 +378,21 @@ class Grid:
                     EXIT_CONFIG,
                 )
             fail(_("zone-tiler: no zones in section [zones] of zones.conf"), EXIT_CONFIG)
-        # `[rules]` читается отдельным парсером: ConfigParser по умолчанию
-        # приводит ключи к нижнему регистру (optionxform=str.lower), из-за чего
-        # селектор `re:\S+Deploy\S*` превратился бы в `re:\s+deploy\s*` —
-        # `\S` (непробел) стал бы `\s` (пробел), и правило молча не срабатывало
-        # бы. Секции `[zones]`/`[keys]` остаются у нижнерегистрового `cp`.
+        # `[rules]` is read by a separate parser: by default ConfigParser
+        # lowercases the keys (optionxform=str.lower), which would turn the
+        # selector `re:\S+Deploy\S*` into `re:\s+deploy\s*` —
+        # `\S` (non-space) would become `\s` (space) and the rule would silently stop
+        # firing. The `[zones]`/`[keys]` sections stay with the lowercasing `cp`.
         rules_cp = configparser.ConfigParser(
             interpolation=None,
             inline_comment_prefixes=("#", ";"),
             delimiters=("=",),
         )
-        rules_cp.optionxform = str  # type: ignore  # сохранить регистр селектора (`re:`)
+        rules_cp.optionxform = str  # type: ignore  # keep the selector case (`re:`)
         rules_cp.read(path, encoding="utf-8")
         self.rules = []
-        # Правило проверяется по объединению наборов: зона может быть описана
-        # только для части мониторов (тогда на остальных берётся общий [zones]).
+        # The rule is checked against the union of the sets: a zone may be described
+        # only for some monitors (then the shared [zones] is taken on the others).
         known = set(self.all_zone_names())
         if rules_cp.has_section("rules"):
             for selector, zone in rules_cp.items("rules"):
@@ -405,10 +405,10 @@ class Grid:
                         EXIT_CONFIG,
                     )
                 self.rules.append((selector, zone))
-        # `[ignore]` — те же селекторы, что в `[rules]`, но без цели: значение —
-        # произвольная заметка для человека/журнала и на сопоставление не влияет.
-        # Секция читается тем же парсером с `optionxform = str`, поэтому регистр
-        # `re:`-регулярки сохраняется; порядок строк сохраняется для журнала.
+        # `[ignore]` — the same selectors as in `[rules]`, but without a target: the value is
+        # a free-form note for a human/the log and does not affect matching.
+        # The section is read by the same parser with `optionxform = str`, so the case of the
+        # `re:` regex is kept; the line order is kept for the log.
         self.ignore = []
         if rules_cp.has_section("ignore"):
             for selector, _note in rules_cp.items("ignore"):
@@ -417,11 +417,11 @@ class Grid:
                     self.ignore.append(selector)
 
     def all_zone_names(self):
-        """Имена зон в объединении всех наборов (общий и по мониторам).
+        """Zone names in the union of all sets (the shared one and the per-monitor ones).
 
-        Порядок — сначала `[zones]` как в файле, затем зоны из `[zones:<выход>]`,
-        которых в общем наборе нет. Нужен для проверки правил/клавиш и выбора
-        `--monitor` по имени.
+        The order is `[zones]` as in the file first, then the zones from `[zones:<output>]`
+        that the shared set does not have. Needed to check rules/keys and to pick
+        `--monitor` by name.
         """
         names = list(self.zones)
         seen = set(names)
@@ -433,11 +433,11 @@ class Grid:
         return names
 
     def zones_for(self, monitor_name=None):
-        """Набор зон монитора: `[zones:<выход>]` или общий `[zones]`.
+        """The zone set of a monitor: `[zones:<output>]`, or the shared `[zones]`.
 
-        Имя выхода сравнивается как есть, а при промахе — без учёта регистра
-        (в конфиге легко написать `[zones:hdmi-1]`). Нет секции для монитора —
-        возвращается набор по умолчанию, то есть прежнее поведение.
+        The output name is compared as it is, and on a miss — case-insensitively
+        (it is easy to write `[zones:hdmi-1]` in the config). No section for the monitor —
+        the default set is returned, that is, the previous behaviour.
         """
         if monitor_name:
             zones = self.monitor_zones.get(monitor_name)
@@ -449,11 +449,11 @@ class Grid:
         return self.zones
 
     def zone_spec(self, zone, monitor_name=None):
-        """Описание зоны с учётом монитора: набор монитора, иначе общий `[zones]`.
+        """The zone description with the monitor in mind: the monitor set, else the shared `[zones]`.
 
-        Правило/клавиша может ссылаться на зону, которой нет в наборе
-        конкретного монитора; тогда при укладке на этом мониторе берётся зона из
-        общего набора. Нет ни там, ни там — ошибка конфига, а не трейсбек.
+        A rule/key may reference a zone that the set of a specific monitor does not
+        have; then, when laying out on that monitor, the zone is taken from the
+        shared set. Neither here nor there — a config error, not a traceback.
         """
         spec = self.zones_for(monitor_name).get(zone)
         if spec is None:
@@ -486,7 +486,7 @@ class Grid:
 
     def _parse_zone(self, name, spec):
         spec = spec.strip()
-        if ":" in spec:  # зона как диапазон ячеек сетки: "0:1, 0:2"
+        if ":" in spec:  # the zone as a range of grid cells: "0:1, 0:2"
             try:
                 cols_part, rows_part = [p.strip() for p in spec.split(",")]
                 c0, c1 = (int(v) for v in cols_part.split(":"))
@@ -507,7 +507,7 @@ class Grid:
                     EXIT_CONFIG,
                 )
             return ("grid", c0, c1, r0, r1)
-        # зона как свободный прямоугольник в долях: "x,y,w,h"
+        # a zone as a free rectangle in fractions: "x,y,w,h"
         nums = [p for p in re.split(r"[,\s]+", spec) if p]
         try:
             x, y, w, h = (float(v) for v in nums)
@@ -535,7 +535,7 @@ class Grid:
         return ("rect", x, y, w, h)
 
     def fractions(self, zone, monitor_name=None):
-        """Зона в долях рабочей области: (x, y, w, h)."""
+        """The zone in work-area fractions: (x, y, w, h)."""
         spec = self.zone_spec(zone, monitor_name)
         if spec[0] == "rect":
             return spec[1:]
@@ -548,10 +548,10 @@ class Grid:
         )
 
     def rect(self, zone, wa, monitor_name=None):
-        """Пиксельная рамка зоны внутри рабочей области wa=(x,y,w,h).
+        """The pixel frame of the zone inside the work area wa=(x,y,w,h).
 
-        `monitor_name` — имя выхода: у монитора может быть свой набор зон
-        (`[zones:<выход>]`), тогда берётся описание оттуда.
+        `monitor_name` — the output name: a monitor may have a zone set of its own
+        (`[zones:<output>]`), and then the description is taken from there.
         """
         spec = self.zone_spec(zone, monitor_name)
         if spec[0] == "rect":
@@ -563,26 +563,26 @@ class Grid:
     @staticmethod
     def _px(wa, fx1, fy1, fx2, fy2):
         wx, wy, ww, wh = wa
-        # края считаем от одних и тех же линий -> соседние зоны стыкуются без щелей
+        # the edges are computed from the same lines -> neighbouring zones meet without gaps
         x1, x2 = wx + round(ww * fx1), wx + round(ww * fx2)
         y1, y2 = wy + round(wh * fy1), wy + round(wh * fy2)
         return (x1, y1, max(1, x2 - x1), max(1, y2 - y1))
 
 
-# ------------------------------------------------------------- мониторы (Gdk)
+# ------------------------------------------------------------- monitors (Gdk)
 
 
 def read_window_center(win):
-    """Центр окна (px, py) по xwininfo; None при ошибке — см. `window_backend`."""
+    """The centre of the window (px, py) through xwininfo; None on error — see `window_backend`."""
     return window_backend.read_window_center(win)
 
 
 def output_at_point(outputs, point):
-    """Индекс и имя выхода, в чью рабочую область попал `point` (центр окна).
+    """The index and the name of the output whose work area `point` (the window centre) fell into.
 
-    Общий кусок `move` и «без `--monitor`» у `apply`/`stack`: монитор берётся по
-    центру рамки окна (`monitor_for_point`), а не по номеру 0 — иначе окно уезжает
-    на первый экран, а зона ищется в чужом профиле.
+    The shared piece of `move` and of "no `--monitor`" in `apply`/`stack`: the monitor is taken by
+    the centre of the window frame (`monitor_for_point`) rather than by number 0 — otherwise the window
+    would travel to the first screen while the zone is looked for in a foreign profile.
     """
     areas = [area for _unused, area in outputs]
     wa = monitor_for_point(areas, point)
@@ -591,11 +591,11 @@ def output_at_point(outputs, point):
 
 
 def window_output(outputs, window, warn=True):
-    """Куда адресуется команда без `--monitor`: по экрану окна, иначе первый.
+    """Where a command without `--monitor` is addressed: by the screen of the window, else the first.
 
-    Рамку окна не прочитать (окно исчезло, окно не задано) — первый экран; `warn`
-    решает, писать ли об этом в stderr: вызывающий может предупредить и сам, а
-    повторять одну строку дважды не нужно (см. `target_output`).
+    The window frame cannot be read (the window is gone, no window is given) — the first screen; `warn`
+    decides whether to write about it in stderr: the caller may warn itself, and
+    repeating one line twice is not needed (see `target_output`).
     """
     if window is None:
         return 0, outputs[0][0], outputs[0][1]
@@ -616,12 +616,12 @@ def window_output(outputs, window, warn=True):
 
 
 def monitor_for_point(monitors, point):
-    """Рабочая область монитора точки (иначе ближайшая) — см. `window_backend`."""
+    """The work area of the monitor of the point (else the nearest one) — see `window_backend`."""
     return window_backend.monitor_for_point(monitors, point)
 
 
 def window_monitor(win, mons):
-    """Рабочая область монитора окна или None, если её не определить."""
+    """The work area of the monitor of the window, or None if it cannot be determined."""
     point = read_window_center(win)
     if point is None:
         return None
@@ -629,30 +629,30 @@ def window_monitor(win, mons):
 
 
 def window_workspace(win):
-    """Номер стола окна (`_NET_WM_DESKTOP`) или None — см. `window_backend`."""
+    """The desktop number of the window (`_NET_WM_DESKTOP`), or None — see `window_backend`."""
     return window_backend.window_workspace(win)
 
 
 def current_workspace():
-    """Номер активного стола (`_NET_CURRENT_DESKTOP`) или None — см. `window_backend`.
+    """The number of the active desktop (`_NET_CURRENT_DESKTOP`), or None — see `window_backend`.
 
-    Перевод нумерации EWMH (с нуля) в ключи ``[workspaces]`` (с единицы) —
-    по-прежнему в :func:`grid_for_workspace`.
+    Converting the EWMH numbering (from zero) into the keys of ``[workspaces]`` (from one) is
+    still in :func:`grid_for_workspace`.
     """
     return window_backend.current_workspace()
 
 
 def current_workspace_or_first():
-    """Активный стол, а без `_NET_CURRENT_DESKTOP` — 0 (если X вообще отвечает).
+    """The active desktop, and without `_NET_CURRENT_DESKTOP` — 0 (if X answers at all).
 
-    Нужен там, где стол должен быть числом (режим `focus`, демон): в Wayland-сессии
-    Cinnamon свойства нет до первого переключения стола, и отказ здесь ломал `focus`
-    целиком (замер: ``docs/RESEARCH-wayland-recon.md``). ``None`` остаётся только
-    на «X не отвечает» — тогда, как и прежде, идёт общий `zones.conf`.
+    Needed where the desktop has to be a number (`focus` mode, the daemon): in a Wayland session
+    Cinnamon has no such property until the desktop is switched for the first time, and a failure here broke `focus`
+    entirely (measurement: ``docs/RESEARCH-wayland-recon.md``). ``None`` is left only
+    for "X does not answer" — then, as before, the shared `zones.conf` is used.
 
-    Сначала спрашивается `current_workspace()`, а не внутреннее чтение: это точка
-    подмены в тестах и у демона (``current_workspace=lambda: …``), и обходить её
-    нельзя.
+    `current_workspace()` is asked first, not an internal read: it is the point
+    of substitution in the tests and in the daemon (``current_workspace=lambda: …``), and it must
+    not be bypassed.
     """
     desk = current_workspace()
     if desk is not None:
@@ -661,16 +661,16 @@ def current_workspace_or_first():
 
 
 def window_on_other_desktop(win):
-    """Окно на другом столе — не то же самое, что свёрнуто; см. `window_backend`."""
+    """A window on another desktop is not the same as minimised; see `window_backend`."""
     return window_backend.window_on_other_desktop(win)
 
 
 def window_workspace_for_zones(win):
-    """Стол окна для выбора сетки: ``None`` у «липких» и неопознанных.
+    """The desktop of the window for picking the grid: ``None`` for "sticky" and unknown ones.
 
-    ``_NET_WM_DESKTOP = 0xFFFFFFFF`` по EWMH значит «на всех столах». Решено:
-    такие окна живут в сетке по умолчанию (``zones.conf``), а не в профиле
-    конкретного стола, — иначе липкое окно меняло бы сетку вместе со столом.
+    ``_NET_WM_DESKTOP = 0xFFFFFFFF`` means "on all desktops" per EWMH. The decision:
+    such windows live in the default grid (``zones.conf``) rather than in the profile
+    of a specific desktop, — otherwise a sticky window would change the grid together with the desktop.
     """
     workspace = window_workspace(win)
     if workspace is None or workspace >= 0xFFFFFFF0:
@@ -679,15 +679,15 @@ def window_workspace_for_zones(win):
 
 
 def grid_for_workspace(conf_path, workspace=None):
-    """Сетка для рабочего стола: профиль из ``[workspaces]`` или сам конфиг.
+    """The grid for the workspace: the profile from ``[workspaces]``, or the config itself.
 
-    ``workspace`` — номер из EWMH (с нуля); ``None`` — взять активный стол
-    (`current_workspace()`). Если стол не сопоставлен профилю, стол неизвестен,
-    или профиля нет на диске, возвращается обычный ``Grid(conf_path)``: молчаливая
-    деградация до общего набора зон лучше, чем отказ, — раскладку на столе без
-    профиля пользователь всё равно ожидает получить.
+    ``workspace`` — the EWMH number (from zero); ``None`` — take the active desktop
+    (`current_workspace()`). If the desktop is not mapped to a profile, the desktop is unknown,
+    or the profile is not on disk, the plain ``Grid(conf_path)`` is returned: silent
+    degradation to the shared zone set is better than a refusal — the user expects to get
+    the layout on a desktop without a profile anyway.
     """
-    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как в редакторе
+    import zone_config as zc  # noqa: PLC0415 — lazy import, as in the editor
 
     if workspace == WORKSPACE_CONF:
         return Grid(conf_path)
@@ -708,18 +708,18 @@ def grid_for_workspace(conf_path, workspace=None):
 
 
 WORKSPACE_CURRENT = "current"
-# Значение `--workspace conf`: брать сетку прямо из zones.conf, не глядя на
-# `[workspaces]`. Нужно редактору: он рисует и правит сам `zones.conf`, поэтому
-# «проверить зону» обязано считать ту же сетку, что на холсте, а не профиль стола.
+# The value of `--workspace conf`: take the grid straight from zones.conf, ignoring
+# `[workspaces]`. The editor needs it: it draws and edits `zones.conf` itself, so
+# "check the zone" must count the same grid as the canvas, not the desktop profile.
 WORKSPACE_CONF = "conf"
 
 
 def workspace_spec(text):
-    """Разобрать `--workspace`: ``current`` (и пусто) или номер стола EWMH.
+    """Parse `--workspace`: ``current`` (and empty) or an EWMH desktop number.
 
-    Возвращает ``WORKSPACE_CURRENT`` или ``int``; номер отрицательным быть не
-    может, поэтому `-1` — ошибка аргументов. Разбор идёт в `argparse` (тип
-    аргумента), чтобы неверное значение давало код 2 и внятное сообщение.
+    Returns ``WORKSPACE_CURRENT`` or ``int``; the number cannot be negative,
+    so `-1` is an argument error. The parsing goes on in `argparse` (the argument
+    type), so that a wrong value gives code 2 and a clear message.
     """
     value = "" if text is None else str(text).strip()
     if not value or value.lower() == WORKSPACE_CURRENT:
@@ -736,12 +736,12 @@ def workspace_spec(text):
 
 
 def resolve_workspace(spec):
-    """Номер стола для запроса сетки: ``current``/``None`` — активный стол.
+    """The desktop number for asking about the grid: ``current``/``None`` — the active desktop.
 
-    Стол ищется через `current_workspace_or_first`: в Wayland-сессии Cinnamon
-    свойства `_NET_CURRENT_DESKTOP` нет до первого переключения стола, и раньше
-    здесь получался отказ всей команды. ``None`` теперь только на «X не
-    отвечает» — тогда, как и прежде, идёт общий `zones.conf`.
+    The desktop is looked up through `current_workspace_or_first`: in a Wayland session Cinnamon
+    has no `_NET_CURRENT_DESKTOP` property until the desktop is switched for the first time, and earlier
+    that turned into a failure of the whole command. ``None`` is now only for "X does not
+    answer" — then, as before, the shared `zones.conf` is used.
     """
     if spec is None or spec == WORKSPACE_CURRENT:
         return current_workspace_or_first()
@@ -751,17 +751,17 @@ def resolve_workspace(spec):
 
 
 def workspace_profile(conf_path, workspace):
-    """Имя профиля стола из ``[workspaces]`` или ``None``, если его нет.
+    """The profile name of the desktop from ``[workspaces]``, or ``None`` if there is none.
 
-    Отвечает только на вопрос «какая сетка на этом столе»: сопоставления нет,
-    имя профиля не санируется или файла профиля нет на диске — ``None``, то есть
-    стол живёт в общем наборе зон. Та же логика деградации, что у
-    :func:`grid_for_workspace`, — чтобы подпись в `list` не расходилась с тем,
-    что команда реально показала.
+    Answers only the question "which grid is on this desktop": there is no mapping,
+    the profile name does not pass the sanitiser, or the profile file is not on disk — ``None``, that is,
+    the desktop lives in the shared zone set. The same degradation logic as in
+    :func:`grid_for_workspace`, — so that the label in `list` does not diverge from what
+    the command actually showed.
     """
     if workspace is None or workspace == WORKSPACE_CONF:
         return None
-    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как в редакторе
+    import zone_config as zc  # noqa: PLC0415 — lazy import, as in the editor
 
     profile = zc.load_workspace_map(conf_path).get(workspace + 1)
     if profile is None:
@@ -774,20 +774,20 @@ def workspace_profile(conf_path, workspace):
 
 
 def grid_for_output(conf_path, output, fallback=None, workspace=None, quiet=False):
-    """Сетка экрана: профиль из ``[monitors]`` → ``[workspaces]`` → активный конфиг.
+    """The grid of a screen: the profile from ``[monitors]`` → ``[workspaces]`` → the active config.
 
-    ``output`` — имя выхода окна (``HDMI-1``); ``workspace`` — номер стола из EWMH
-    (с нуля), ``None`` — активный. Порядок разбора —
-    :func:`zone_config.resolve_profile`: экран важнее стола, стол важнее активного
-    конфига. ``fallback`` — уже сосчитанная сетка стола: ею экран живёт, если
-    профиля нет на диске или он не найден. Откат с предупреждением, а не отказ:
-    раскладку на экране без профиля пользователь всё равно ждёт.
+    ``output`` — the output name of the window (``HDMI-1``); ``workspace`` — the desktop number from EWMH
+    (from zero), ``None`` — the active one. The resolution order is
+    :func:`zone_config.resolve_profile`: the screen is more important than the desktop, the desktop more
+    important than the active config. ``fallback`` — the already computed grid of the desktop: the screen lives on it if
+    the profile is not on disk or is not found. A fallback with a warning, not a refusal:
+    the user expects the layout on a screen without a profile anyway.
 
-    Возвращает ``(Grid, имя профиля | None)``: имя — чтобы сказать в сообщении, из
-    какого профиля взята сетка. ``--workspace conf`` профилей не читает вообще —
-    редактор обязан считать ту же сетку, что на холсте.
+    Returns ``(Grid, profile name | None)``: the name — to say in the message which
+    profile the grid was taken from. ``--workspace conf`` reads no profiles at all —
+    the editor must count the same grid as the canvas.
     """
-    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как у grid_for_workspace
+    import zone_config as zc  # noqa: PLC0415 — lazy import, as in grid_for_workspace
 
     if workspace is None:
         workspace = current_workspace()
@@ -803,8 +803,8 @@ def grid_for_output(conf_path, output, fallback=None, workspace=None, quiet=Fals
     )
     if profile is None:
         return base, None
-    # Профиль мог прийти со стола, а не с экрана: сетку стола base уже несёт, и
-    # подпись «экран …» в сообщениях была бы враньём.
+    # The profile could come from the desktop rather than from the screen: the desktop grid already carries
+    # base, and the label "screen …" in the messages would be a lie.
     bound_to_screen = any(
         str(key).strip().casefold() == str(output or "").strip().casefold()
         for key in monitor_map
@@ -836,20 +836,20 @@ def grid_for_output(conf_path, output, fallback=None, workspace=None, quiet=Fals
 
 
 def monitor_bindings(conf_path):
-    """Есть ли в конфиге привязки экранов ``[monitors]`` (без обращения к X)."""
-    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как у grid_for_output
+    """Whether the config has screen bindings ``[monitors]`` (without asking X)."""
+    import zone_config as zc  # noqa: PLC0415 — lazy import, as in grid_for_output
 
     return bool(zc.load_monitor_map(conf_path))
 
 
 def require_zone(grid, zone, workspace=None, profile=None, output=None):
-    """Проверить, что зона есть в наборе сетки; иначе ошибка конфига (код 3).
+    """Check that the zone is in the grid set; otherwise a config error (code 3).
 
-    Зона ищется в объединении наборов показанной сетки (общий `[zones]` и
-    `[zones:<выход>]`) — то есть ровно там, где её найдёт раскладка. Перечень
-    доступных зон печатается целиком: по нему видно, что стол получил не тот
-    профиль, а не только что имя набрано с ошибкой. ``output`` — экран, чей
-    профиль дал сетку: сообщение про «сетку стола» на профиле экрана врало бы.
+    The zone is looked up in the union of the sets of the shown grid (the shared `[zones]` and
+    `[zones:<output>]`) — that is, exactly where the layout will find it. The list
+    of available zones is printed in full: it shows that the desktop got the wrong
+    profile rather than only that a name was typed with a mistake. ``output`` — the screen whose
+    profile gave the grid: a message about the "desktop grid" on a screen profile would be a lie.
     """
     known = grid.all_zone_names()
     if zone in known:
@@ -885,15 +885,15 @@ def require_zone(grid, zone, workspace=None, profile=None, output=None):
 
 
 def gdk_monitors():
-    """``[(логическая рабочая область, масштаб)]`` из GDK — см. `window_backend`."""
+    """``[(logical work area, scale)]`` from GDK — see `window_backend`."""
     return window_backend.gdk_monitors()
 
 
 def monitors():
-    """Рабочие области мониторов в **физических** пикселях X.
+    """The work areas of the monitors in **physical** X pixels.
 
-    См. `window_backend.monitors`: он отвечает `WindowBackendError`, а сообщение
-    и код возврата остаются здесь — те же, что до переноса оконного слоя.
+    See `window_backend.monitors`: it answers with `WindowBackendError`, while the message
+    and the return code stay here — the same as before the window layer was moved out.
     """
     try:
         return window_backend.monitors()
@@ -902,55 +902,55 @@ def monitors():
 
 
 def monitor_scales():
-    """Масштабы мониторов в том же порядке, что `monitors()` — см. `window_backend`."""
+    """The monitor scales in the same order as `monitors()` — see `window_backend`."""
     return window_backend.monitor_scales()
 
 
 def scale_at_point(point):
-    """Масштаб монитора, в чью физическую рабочую область попала точка."""
+    """The scale of the monitor whose physical work area the point fell into."""
     return window_backend.scale_at_point(point)
 
 
 def monitor_outputs():
-    """[(имя выхода, (x, y, w, h))] — по одному на монитор.
+    """[(output name, (x, y, w, h))] — one per monitor.
 
-    См. `window_backend.monitor_outputs`: тела сшивки живут в оконном слое, а
-    собираются здесь затем, чтобы подмены `monitors`/`xrandr_monitors` в тестах
-    и остальном коде продолжали действовать.
+    See `window_backend.monitor_outputs`: the bodies of the stitching live in the window layer and
+    are gathered here so that the substitutions of `monitors`/`xrandr_monitors` in the tests
+    and in the rest of the code keep working.
     """
     return window_backend.stitch_monitor_names(xrandr_monitors(), monitors())
 
 
 def parse_xrandr_monitors(text):
-    """[(имя, (x, y, w, h))] из вывода `xrandr --listmonitors` — см. `window_backend`."""
+    """[(name, (x, y, w, h))] from the output of `xrandr --listmonitors` — see `window_backend`."""
     return window_backend.parse_xrandr_monitors(text)
 
 
 def xrandr_monitors():
-    """Мониторы из `xrandr --listmonitors`; [] если утилиты нет — см. `window_backend`."""
+    """The monitors from `xrandr --listmonitors`; [] if the utility is missing — see `window_backend`."""
     return window_backend.xrandr_monitors()
 
 
 def overlap_area(a, b):
-    """Площадь пересечения прямоугольников a и b (0, если не пересекаются)."""
+    """The area of the intersection of the rectangles a and b (0 if they do not intersect)."""
     return window_backend.overlap_area(a, b)
 
 
 def stitch_monitor_names(outputs, areas):
-    """Сшить имена выходов с рабочими областями: [(имя, область)].
+    """Stitch the output names to the work areas: [(name, area)].
 
-    См. `window_backend.stitch_monitor_names`: совпало количество — по порядку,
-    иначе — по максимальному пересечению, без имён — `monitor-<i>`.
+    See `window_backend.stitch_monitor_names`: the counts match — by order,
+    otherwise — by the largest intersection, without names — `monitor-<i>`.
     """
     return window_backend.stitch_monitor_names(outputs, areas)
 
 
 def resolve_monitor(spec, outputs=None):
-    """(индекс, имя) монитора по `--monitor`: имя выхода приоритетнее номера.
+    """(index, name) of the monitor by `--monitor`: the output name takes priority over the number.
 
-    `spec` — имя (`HDMI-1`) или номер (`1`); `outputs` — результат
-    `monitor_outputs()` (можно подменить в тестах). Неизвестное имя или
-    несуществующий номер — ошибка аргументов с перечнем доступных мониторов.
+    `spec` — a name (`HDMI-1`) or a number (`1`); `outputs` — the result of
+    `monitor_outputs()` (can be substituted in the tests). An unknown name or
+    a nonexistent number — an argument error listing the available monitors.
     """
     outputs = monitor_outputs() if outputs is None else outputs
     text = "" if spec is None else str(spec).strip()
@@ -970,16 +970,16 @@ def resolve_monitor(spec, outputs=None):
 
 
 def target_output(args, outputs=None):
-    """Имя выхода, к которому относится `apply`/`stack`, или ``None``.
+    """The output name that `apply`/`stack` refers to, or ``None``.
 
-    Явный `--monitor` важнее; без него адресат — **экран окна** (активного или
-    заданного `--window`), ровно как в самих командах: иначе сетка пришла бы с
-    одного экрана, а рамка считалась на другом, и зона искалась бы в чужом
-    профиле. Не поднимает ошибку, а отвечает ``None``, если мониторов нет или
-    адресат не разрешается: проверка зоны идёт раньше, и человек должен увидеть
-    «нет зоны», а внятную ошибку про монитор всё равно даст `resolve_monitor` в
-    самой команде. О непрочитанной рамке окна не предупреждает — это сделает
-    команда (`warn=False`).
+    An explicit `--monitor` is more important; without it the target is the **screen of the window** (the active one or
+    the one given by `--window`), exactly as in the commands themselves: otherwise the grid would come from
+    one screen while the frame is computed on another, and the zone would be looked for in a foreign
+    profile. It does not raise an error but answers ``None`` if there are no monitors or the
+    target does not resolve: the zone check goes first, and the person must see
+    "no zone", while a clear message about the monitor will be given by `resolve_monitor` in
+    the command itself anyway. It does not warn about an unread window frame — the command will
+    do that (`warn=False`).
     """
     outputs = monitor_outputs() if outputs is None else outputs
     if not outputs:
@@ -1000,15 +1000,15 @@ def target_output(args, outputs=None):
 
 
 def frame_extents(win):
-    """Толщина рамки/титлбара оконного менеджера — см. `window_backend`."""
+    """The frame/titlebar thickness of the window manager — see `window_backend`."""
     return window_backend.frame_extents(win)
 
 
 def client_size(rect, extents):
-    """Геометрия клиента внутри целевой рамки окна (компенсация рамки WM).
+    """The client geometry inside the target window frame (compensating the WM frame).
 
-    WM рисует рамку/титлбар вокруг клиента, поэтому клиенту выдаётся зона минус
-    _NET_FRAME_EXTENTS. Ширина и высота не меньше 1 px. Чистая функция — под тесты.
+    The WM draws a frame/titlebar around the client, so the client is given the zone minus
+    _NET_FRAME_EXTENTS. Width and height are at least 1 px. A pure function — for the tests.
     """
     x, y, w, h = rect
     left, right, top, bottom = extents
@@ -1016,12 +1016,12 @@ def client_size(rect, extents):
 
 
 def read_active_window():
-    """Активное окно и текст ошибки: ``(окно | None, причина | None)``.
+    """The active window and the error text: ``(window | None, reason | None)``.
 
-    Чтение — в `window_backend` (он отдаёт код причины), а текст для человека
-    остаётся здесь: `active_window` падает с кодом 1, когда окна нет (это
-    правильно для команд, которым окно нужно), а `active_window_quiet` отдаёт
-    ``None`` без сообщений в stderr — тому, для кого отсутствие окна не ошибка.
+    The read is in `window_backend` (it returns a reason code), while the text for a human
+    stays here: `active_window` fails with code 1 when there is no window (that is
+    right for the commands that need a window), and `active_window_quiet` returns
+    ``None`` without messages in stderr — for the one for whom a missing window is not an error.
     """
     window, reason = window_backend.read_active_window()
     if window is not None:
@@ -1032,7 +1032,7 @@ def read_active_window():
 
 
 def active_window():
-    """Активное окно; нет его — сообщение в stderr и код 1."""
+    """The active window; none — a message in stderr and code 1."""
     window, error = read_active_window()
     if window is None:
         fail(error, EXIT_FAIL)
@@ -1040,11 +1040,11 @@ def active_window():
 
 
 def active_window_quiet():
-    """Активное окно или ``None`` — без сообщений в stderr.
+    """The active window, or ``None`` — without messages in stderr.
 
-    Нужно там, где отсутствие окна не ошибка: выбор монитора по экрану окна,
-    `apply --dry-run` в скрипте, `stack` без окон. Тогда берётся первый экран —
-    как было до адресации по экрану.
+    Needed where a missing window is not an error: picking the monitor by the screen of the window,
+    `apply --dry-run` in a script, `stack` without windows. Then the first screen is taken —
+    as it was before addressing by screen.
     """
     return read_active_window()[0]
 
@@ -1052,41 +1052,41 @@ def active_window_quiet():
 # ----------------------------------------------------------------------- X11
 
 
-# Соединение с X-сервером и EWMH-команды целиком живут в оконном слое. Имя
-# оставлено здесь ради вызывающих и тестов: `apply_zone` открывает соединение
-# через `X11()`, а тесты подменяют `zone-tiler.X11` поддельным соединением.
+# The connection to the X server and the EWMH commands live entirely in the window layer. The name is
+# kept here for the callers and the tests: `apply_zone` opens the connection
+# through `X11()`, and the tests substitute a fake connection for `zone-tiler.X11`.
 X11 = window_backend.X11
 
-# Значения EWMH/ICCCM, которые видны снаружи класса (их сверяют тесты).
+# EWMH/ICCCM values that are visible outside the class (the tests compare them).
 SOURCE_PAGER = window_backend.SOURCE_PAGER
 ICONIC_STATE = window_backend.ICONIC_STATE
 
 
 def _x11_failed():
-    """Сообщить, что X-соединения нет, и выйти с кодом 1.
+    """Report that there is no X connection and exit with code 1.
 
-    Раньше это делал сам `X11.__init__` через `fail`; теперь соединение открывает
-    оконный слой и отвечает `WindowBackendError`, а текст и код возврата остались
-    здесь — на границе CLI (см. `main`).
+    Earlier `X11.__init__` did it itself through `fail`; now the connection is opened by the
+    window layer, which answers `WindowBackendError`, while the text and the return code stayed
+    here — at the CLI boundary (see `main`).
     """
     fail(_("zone-tiler: failed to connect to the X server (DISPLAY)"), EXIT_FAIL)
 
 
-# --------------------------------------------- сворачивание (режим «только эта зона»)
+# --------------------------------------------- minimising ("this zone only" mode)
 
 
 def window_iconic(win):
-    """Свёрнуто ли окно сейчас (`Iconic`/`_NET_WM_STATE_HIDDEN`) — см. `window_backend`."""
+    """Whether the window is minimised now (`Iconic`/`_NET_WM_STATE_HIDDEN`) — see `window_backend`."""
     return window_backend.window_iconic(win)
 
 
 def iconify(window, x11=None, quiet=True):
-    """Свернуть окно. Своё X-соединение закрывает, чужое не трогает.
+    """Minimise the window. Closes its own X connection, leaves a foreign one alone.
 
-    Единственный работающий путь: muffin игнорирует и `XMapWindow`, и
-    `WM_CHANGE_STATE` с `NormalState`, а `_NET_WM_STATE_HIDDEN` принадлежит WM
-    и снять его клиент не может (проверено дымом). `x11` подменяется в тестах;
-    демон передаёт своё долгоживущее соединение.
+    The only working way: muffin ignores both `XMapWindow` and
+    `WM_CHANGE_STATE` with `NormalState`, and `_NET_WM_STATE_HIDDEN` belongs to the WM
+    and the client cannot remove it (checked by smoke). `x11` is substituted in the tests;
+    the daemon passes its own long-lived connection.
     """
     own = x11 is None
     if own:
@@ -1101,10 +1101,10 @@ def iconify(window, x11=None, quiet=True):
 
 
 def deiconify(window, x11=None):
-    """Развернуть окно; заодно поднимает и фокусирует.
+    """Unminimise the window; it also raises and focuses it.
 
-    Поэтому зовётся по одному окну, а последним — то, на котором должно
-    остаться внимание (цель режима). `x11` — как у :func:`iconify`.
+    That is why it is called for one window at a time, and the last one is the window that should
+    keep the attention (the target of the mode). `x11` — as in :func:`iconify`.
     """
     own = x11 is None
     if own:
@@ -1117,17 +1117,17 @@ def deiconify(window, x11=None):
 
 
 def focus_candidates(entries, target, workspace, wa):
-    """Окна, которые сворачивает режим «только эта зона». Чистая функция.
+    """The windows that "this zone only" mode minimises. A pure function.
 
-    `entries` — `(окно, стол, рабочая область)` в порядке `_NET_CLIENT_LIST`
-    (демон отдаёт то же, что хранит в `win_workspace`/`win_monitor`). Берутся
-    окна **той же рабочей области** и того же стола, кроме цели; липкое окно
-    (`workspace is None`) видно везде и потому подходит. Активный стол не
-    прочитан (`workspace is None`) — подходят только липкие окна: сворачивать
-    вслепую окна чужих столов хуже, чем не сворачивать ничего.
+    `entries` — `(window, desktop, work area)` in `_NET_CLIENT_LIST` order
+    (the daemon hands over the same thing it keeps in `win_workspace`/`win_monitor`). The windows
+    of **the same work area** and of the same desktop are taken, except the target; a sticky window
+    (`workspace is None`) is visible everywhere and therefore fits. The active desktop has not been
+    read (`workspace is None`) — only sticky windows fit: minimising
+    the windows of other desktops blindly is worse than minimising nothing.
 
-    Исключения (`window_excluded`) и уже свёрнутые отсеивает вызывающий: у него
-    есть метаданные окна и `window_iconic`, а у чистой функции их нет.
+    The caller sifts out the exclusions (`window_excluded`) and the already minimised ones: it
+    has the window metadata and `window_iconic`, while the pure function does not.
     """
     out = []
     for win, entry_workspace, entry_wa in entries:
@@ -1143,14 +1143,14 @@ def focus_candidates(entries, target, workspace, wa):
 
 
 def focus_records(windows):
-    """Записи окон для `focus.json`: `WM_CLASS` и стол берутся прямо сейчас.
+    """Window records for `focus.json`: `WM_CLASS` and the desktop are taken right now.
 
-    Стол читается у **каждого** окна, а не берётся из одного поля записи: в файле
-    сходятся окна разных столов (остаток CLI и остаток демона), а разворот
-    возможен только на активном столе — значит, стол нужен по каждому окну.
-    Здесь же читается и `WM_CLASS`: записи без класса уклоняются от защиты от
-    переиспользованного XID, а читать класс в момент записи дешевле, чем потом
-    развернуть чужое окно.
+    The desktop is read for **every** window rather than taken from one field of the record: the file
+    brings together windows of different desktops (the CLI remainder and the daemon remainder), while
+    unminimising is possible only on the active desktop — so the desktop is needed per window.
+    `WM_CLASS` is read here too: records without a class dodge the protection against
+    a reused XID, and reading the class at write time is cheaper than
+    unminimising a foreign window later.
     """
     return [
         {
@@ -1163,12 +1163,12 @@ def focus_records(windows):
 
 
 def focus_entries(client_ids, monitors_):
-    """`(окно, стол, рабочая область)` для каждого клиента — вход `focus_candidates`.
+    """`(window, desktop, work area)` for every client — the input of `focus_candidates`.
 
-    Читает `_NET_WM_DESKTOP` и центр окна (`xwininfo`). Монитор не прочитался —
-    окно попадает с `None` и кандидатом не станет: сворачивать окно, которого
-    не видно, вслепую хуже, чем не сворачивать. Читает X, но решений не
-    принимает — отбор делает чистая `focus_candidates`.
+    Reads `_NET_WM_DESKTOP` and the window centre (`xwininfo`). The monitor was not read —
+    the window comes in with `None` and will not become a candidate: minimising a window that
+    is not visible blindly is worse than not minimising. It reads X but makes no
+    decisions — the sifting is done by the pure `focus_candidates`.
     """
     return [
         (win, window_workspace_for_zones(win), window_monitor(win, monitors_))
@@ -1176,18 +1176,18 @@ def focus_entries(client_ids, monitors_):
     ]
 
 
-# Сколько раз перечитать состояние окна после запроса и с какой паузой: и разворот,
-# и смена стола — клиентские сообщения, WM применяет их не мгновенно.
+# How many times to re-read the window state after a request, and with what pause: both unminimising
+# and a desktop switch are client messages, the WM does not apply them instantly.
 FOCUS_VERIFY_TRIES = 5
 FOCUS_VERIFY_DELAY = 0.2
 
 
 def switch_workspace(desktop, x11=None, read_current=None):
-    """Переключить активный стол и дождаться, что он стал активным.
+    """Switch the active desktop and wait for it to become active.
 
-    Нужно **до** разворота: `_NET_ACTIVE_WINDOW` muffin игнорирует для окна не
-    на активном столе (проверено дымом), а окна режима лежат на своём столе.
-    `read_current` подменяется в тестах. `True` — стол нужный (был или стал).
+    Needed **before** unminimising: muffin ignores `_NET_ACTIVE_WINDOW` for a window that is not
+    on the active desktop (checked by smoke), and the windows of the mode lie on their own desktop.
+    `read_current` is substituted in the tests. `True` — the desktop is the right one (it was or became).
     """
     reader = read_current or current_workspace
     own = x11 is None
@@ -1208,16 +1208,16 @@ def switch_workspace(desktop, x11=None, read_current=None):
 
 
 def deiconify_all(windows, x11=None, deiconify_fn=None):
-    """Развернуть окна и перечитать их состояние; вернёт **не развернувшиеся**.
+    """Unminimise the windows and re-read their state; returns the ones that **did not** unminimise.
 
-    `deiconify` — клиентское сообщение, и WM обрабатывает его не мгновенно,
-    поэтому состояние (`window_iconic`) перечитывается с паузами. Оставшееся
-    свёрнутым окно почти наверняка на неактивном столе: muffin игнорирует
-    активацию таких окон (проверено дымом). Вызывающий решает, что с остатком
-    делать, — молча считать его развёрнутым нельзя.
+    `deiconify` is a client message, and the WM does not process it instantly,
+    so the state (`window_iconic`) is re-read with pauses. A window that stays
+    minimised is almost certainly on an inactive desktop: muffin ignores the
+    activation of such windows (checked by smoke). The caller decides what to do with the
+    remainder — silently counting it unminimised is not allowed.
 
-    `deiconify_fn` подменяется в тестах (и демон передаёт свою инъекцию): с ней
-    X-соединение не открывается вовсе.
+    `deiconify_fn` is substituted in the tests (and the daemon passes its own injection): with it
+    no X connection is opened at all.
     """
     pending = list(dict.fromkeys(windows))
     if not pending:
@@ -1240,19 +1240,19 @@ def deiconify_all(windows, x11=None, deiconify_fn=None):
             x11.close()
 
 
-# --------------------------------------------- раскладка и история (без X)
+# --------------------------------------------- layout and history (without X)
 
-# Сколько последних операций хранить в истории раскладок.
+# How many of the latest operations to keep in the layout history.
 HISTORY_LIMIT = 20
 
 
 def movable_windows(client_ids, metas, ignore=None):
-    """id окон, которые можно двигать, в порядке `_NET_CLIENT_LIST`.
+    """Window ids that can be moved, in `_NET_CLIENT_LIST` order.
 
-    Те же фильтры, что у демона: нужен непустой `WM_CLASS` и окно не под
-    исключением — `window_excluded` (служебный тип или селектор `[ignore]`).
-    `override_redirect` окон в списке клиентов EWMH нет, поэтому там такой
-    проверки не требуется. Чистая функция — под тесты.
+    The same filters as the daemon has: a non-empty `WM_CLASS` is needed and the window must not be
+    excluded — `window_excluded` (a service type or an `[ignore]` selector).
+    `override_redirect` windows are not in the EWMH client list, so no such
+    check is needed there. A pure function — for the tests.
     """
     out = []
     for win in client_ids:
@@ -1268,23 +1268,23 @@ def movable_windows(client_ids, metas, ignore=None):
 
 
 def choose_assignments(client_ids, metas, zones, rules, by="auto", ignore=None):
-    """Сопоставить окна зонам. Чистая функция — под тесты.
+    """Match the windows to the zones. A pure function — for the tests.
 
-    client_ids — id в порядке `_NET_CLIENT_LIST` (снизу вверх);
+    client_ids — ids in `_NET_CLIENT_LIST` order (bottom to top);
     metas — {id: WindowMeta};
-    zones — имена зон в порядке файла (важен для order/auto);
-    rules — [(селектор, зона)] из `[rules]`;
-    ignore — селекторы `[ignore]` (окна под ними не двигаются);
-    by — режим:
-      `rules` — только окна со сработавшим правилом, каждое в свою зону;
-      `order` — все подвижные окна по порядку в зоны по порядку; лишним окнам
-                (сверх числа зон) достаётся последняя зона (там они —
-                вкладками);
-      `auto`  — сначала правила, затем свободные (никем не занятые по правилу)
-                зоны по порядку для окон без правила; лишние не трогаются.
+    zones — zone names in file order (it matters for order/auto);
+    rules — [(selector, zone)] from `[rules]`;
+    ignore — `[ignore]` selectors (windows under them are not moved);
+    by — the mode:
+      `rules` — only the windows whose rule fired, each into its own zone;
+      `order` — all movable windows in order into the zones in order; the extra windows
+                (over the number of zones) get the last zone (there they are
+                as tabs);
+      `auto`  — the rules first, then the free (not taken by any rule)
+                zones in order for the windows without a rule; the extras are left alone.
 
-    Возвращает список (id, зона) в порядке укладки; неназначенные окна в него
-    не попадают.
+    Returns a list of (id, zone) in layout order; unassigned windows do not get
+    into it.
     """
     windows = movable_windows(client_ids, metas, ignore)
     if by == "rules":
@@ -1322,75 +1322,75 @@ def choose_assignments(client_ids, metas, zones, rules, by="auto", ignore=None):
 
 
 def zone_tabs_module():
-    """Модуль `zone_tabs`: арифметика вкладок в зоне живёт только там."""
+    """The `zone_tabs` module: the tab arithmetic in a zone lives only there."""
     if HERE not in sys.path:
         sys.path.insert(0, HERE)
-    import zone_tabs  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+    import zone_tabs  # noqa: PLC0415 — lazy import, next to the tiler
 
     return zone_tabs
 
 
 def in_zone_rect(zone_rect, count, height=None):
-    """Рамка окна в зоне: одно окно — ровно зона, несколько — рамка вкладки.
+    """The window frame in a zone: one window — exactly the zone, several — the tab frame.
 
-    `count` — сколько окон оказалось в зоне, `height` — высота полосы вкладок
-    (`[tabs] height`, по умолчанию `zone_tabs.STRIP_HEIGHT`). Несколько окон
-    делят одну рамку вкладки (`zone_tabs.tab_rect`: зона минус полоса), а не
-    сдвигаются каскадом: сдвиг оставлял видимыми куски всех окон сразу и ломал
-    рамку зоны. В узкой зоне полосы нет и рамка вкладки — сама зона, но вкладки
-    всё равно работают. Чистая функция — под тесты. `arrange` и `stack` кладут
-    окна одним и тем же правилом.
+    `count` — how many windows ended up in the zone, `height` — the height of the tab strip
+    (`[tabs] height`, `zone_tabs.STRIP_HEIGHT` by default). Several windows
+    share one tab frame (`zone_tabs.tab_rect`: the zone minus the strip) rather than
+    shifting in a cascade: the shift left the pieces of all windows visible at once and broke
+    the frame of the zone. In a narrow zone there is no strip and the tab frame is the zone itself, but the tabs
+    work all the same. A pure function — for the tests. `arrange` and `stack` place the
+    windows by the same rule.
     """
     tabs = zone_tabs_module()
     strip = tabs.STRIP_HEIGHT if height is None else int(height)
-    # Правило «одна вкладка — вся зона, две и больше — рамка вкладки» живёт
-    # в ядре (`zone_tabs.stack_rect`): одно на демон и раскладчик, иначе
-    # `apply` и `arrange` разойдутся на одном и том же числе окон.
+    # The rule "one tab — the whole zone, two or more — the tab frame" lives
+    # in the core (`zone_tabs.stack_rect`): one for the daemon and the tiler, otherwise
+    # `apply` and `arrange` would diverge on the same number of windows.
     rect = tabs.stack_rect(zone_rect, int(count), strip)
-    # Рамки окон — пиксели: ядро считает float, а EWMH и вывод `--dry-run`
-    # ждут целых, как у `Grid.rect`.
+    # Window frames are pixels: the core computes floats, while EWMH and the `--dry-run` output
+    # expect integers, as in `Grid.rect`.
     return tuple(int(round(v)) for v in rect)
 
 
 def tabs_height(grid):
-    """Высота полосы вкладок из `[tabs] height`; нет секции — умолчание полосы.
+    """The tab strip height from `[tabs] height`; no section — the strip default.
 
-    Разбор секции живёт в `zone_config.load_tabs_config` (там же — ошибка на
-    мусор в высоте), чтобы раскладчик и полоса не разбирали `[tabs]` по-своему.
-    Импорт ленивый: `zone_config` сам загружает этот файл как модуль.
+    The parsing of the section lives in `zone_config.load_tabs_config` (the error for
+    garbage in the height is there too), so that the tiler and the strip do not parse `[tabs]` in their own ways.
+    The import is lazy: `zone_config` itself loads this file as a module.
     """
-    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как у редактора
+    import zone_config as zc  # noqa: PLC0415 — lazy import, as in the editor
 
     return zc.load_tabs_config(grid.path)["height"]
 
 
 def state_home():
-    """XDG-каталог состояния (не конфиг и не кэш)."""
+    """XDG state directory (not config and not cache)."""
     return os.environ.get("XDG_STATE_HOME") or os.path.join(
         os.path.expanduser("~"), ".local", "state"
     )
 
 
 def history_path():
-    """Путь к файлу истории раскладок.
+    """Path to the layout history file.
 
-    История — это состояние: undo запускается отдельным процессом, поэтому она
-    должна пережить выход; но это не конфиг и не то, что вправе вычистить
-    чистильщик кэша. Отсюда XDG_STATE_HOME
-    (`~/.local/state/gridsnap/history.json`) — место именно для такого состояния.
+    The history is state: undo runs in a separate process, so it
+    must survive the exit; but it is not config and not something a cache
+    cleaner has the right to wipe. Hence XDG_STATE_HOME
+    (`~/.local/state/gridsnap/history.json`) — the place exactly for such state.
     """
     return os.path.join(state_home(), "gridsnap", "history.json")
 
 
 class History:
-    """Персистентная история операций раскладки (JSON, до HISTORY_LIMIT штук)."""
+    """The persistent history of layout operations (JSON, up to HISTORY_LIMIT pieces)."""
 
     def __init__(self, path=None, limit=HISTORY_LIMIT):
         self.path = path or history_path()
         self.limit = max(1, int(limit))
 
     def load(self):
-        """Операции из файла (старые → новые). Битый/чужой файл — пустой список."""
+        """The operations from the file (old → new). A broken/foreign file — an empty list."""
         try:
             with open(self.path, encoding="utf-8") as fh:
                 data = json.load(fh)
@@ -1402,7 +1402,7 @@ class History:
         return [op for op in ops if isinstance(op, dict)]
 
     def save(self, operations):
-        """Записать операции, обрезав до предела, атомарно. Райзит OSError."""
+        """Write the operations, trimmed to the limit, atomically. Raises OSError."""
         ops = list(operations)[-self.limit :]
         directory = os.path.dirname(self.path)
         tmp = f"{self.path}.tmp"
@@ -1419,34 +1419,34 @@ class History:
             raise
 
     def record(self, operation):
-        """Дописать операцию, обрезав историю до предела. Райзит OSError."""
+        """Append an operation, trimming the history to the limit. Raises OSError."""
         ops = self.load()
         ops.append(operation)
         self.save(ops)
 
 
-# --------------------------------------------------- режим «только эта зона»
+# --------------------------------------------------- "this zone only" mode
 
-# Версия `focus.json` — состояния режима для ветки без демона.
+# The version of `focus.json` — the mode state for the branch without a daemon.
 FOCUS_STATE_VERSION = 1
 
 
 def focus_path():
-    """Путь состояния режима «только эта зона» (`$XDG_STATE_HOME/gridsnap/focus.json`).
+    """The path of the "this zone only" mode state (`$XDG_STATE_HOME/gridsnap/focus.json`).
 
-    Файл нужен только ветке без демона: у запущенного демона режим живёт в
-    памяти. Это состояние (переживает выход процесса), а не конфиг и не кэш.
+    The file is needed only by the branch without a daemon: with a running daemon the mode lives in
+    memory. It is state (it survives the exit of the process), not config and not cache.
     """
     return os.path.join(state_home(), "gridsnap", "focus.json")
 
 
 def load_focus_state(path=None):
-    """Состояние режима из файла; `{}` — режим не активен.
+    """The mode state from the file; `{}` — the mode is not active.
 
-    Битый файл, чужая версия и неполная запись читаются как «режим не
-    активен»: испорченное состояние не должно ронять раскладку. Переоткрытое
-    окно (новый XID) остаётся в записи и отсеивается при разворачивании — по
-    `wm_class`, как это делает память демона об укладках.
+    A broken file, a foreign version and an incomplete record are read as "the mode is not
+    active": corrupted state must not bring the layout down. A reopened
+    window (a new XID) stays in the record and is sifted out when unminimising — by
+    `wm_class`, the way the daemon's memory of the layouts does it.
     """
     path = path or focus_path()
     try:
@@ -1462,7 +1462,7 @@ def load_focus_state(path=None):
 
 
 def save_focus_state(state, path=None):
-    """Записать состояние режима атомарно (`.tmp` + `os.replace`). Райзит OSError."""
+    """Write the mode state atomically (`.tmp` + `os.replace`). Raises OSError."""
     path = path or focus_path()
     payload = dict(state)
     payload["version"] = FOCUS_STATE_VERSION
@@ -1482,19 +1482,19 @@ def save_focus_state(state, path=None):
 
 
 def clear_focus_state(path=None):
-    """Убрать файл состояния режима (выход из режима без демона). Идемпотентно."""
+    """Remove the mode state file (leaving the mode without a daemon). Idempotent."""
     path = path or focus_path()
     with contextlib.suppress(OSError):
         os.unlink(path)
 
 
 def undo_targets(operations, all_=False):
-    """Какие окна и в какие рамки возвращать. Чистая функция — под тесты.
+    """Which windows to bring back and into which frames. A pure function — for the tests.
 
-    `all_=False` — последняя операция; `all_=True` — вся история, причём для
-    каждого окна берётся рамка из самой ранней операции, где оно встречается
-    (так окно возвращается в состояние «до всех раскладок»). Возвращает список
-    `(id, frame, wm_class)` в порядке первого появления окон.
+    `all_=False` — the last operation; `all_=True` — the whole history, and for
+    every window the frame is taken from the earliest operation it appears in
+    (so the window returns to the state "before all layouts"). Returns a list of
+    `(id, frame, wm_class)` in the order the windows first appear.
     """
     if not operations:
         return []
@@ -1516,7 +1516,7 @@ def undo_targets(operations, all_=False):
 
 
 def remember(kind, records, quiet=False):
-    """Записать операцию в историю, не ломая раскладку из-за ошибки записи."""
+    """Write an operation into the history without breaking the layout because of a write error."""
     if not records:
         return
     operation = {"op": kind, "time": time.time(), "windows": records}
@@ -1531,10 +1531,10 @@ def remember(kind, records, quiet=False):
 
 
 def snapshot_window(win, zone=None):
-    """Снимок окна для истории: прежняя рамка, класс, воркспейс.
+    """A window snapshot for the history: the previous frame, the class, the workspace.
 
-    Райзит исключение, если геометрию не прочитать (окно исчезло) — вызывающий
-    решает, записывать ли операцию.
+    Raises an exception if the geometry cannot be read (the window is gone) — the caller
+    decides whether to record the operation.
     """
     extents = frame_extents(win)
     frame = read_frame(win, extents)
@@ -1548,17 +1548,17 @@ def snapshot_window(win, zone=None):
     }
 
 
-# -------------------------------------------------------------------- команды
+# -------------------------------------------------------------------- commands
 
 
 def cmd_list(grid, args, profile=None):
-    """Показать зоны сетки: `[zones:<выход>]` монитора или общий `[zones]`.
+    """Show the zones of the grid: `[zones:<output>]` of the monitor, or the shared `[zones]`.
 
-    `profile` — имя профиля стола, которым показана сетка (`None` — общий
-    `zones.conf`); оно дописывается в первую строку, чтобы было видно, почему
-    набор зон именно такой. В первой строке — индекс монитора, его рабочая
-    область `x,y WxH` и, при необходимости, пометки выхода и профиля; апплет
-    Cinnamon разбирает в ней именно числа (`N: x,y WxH`), а слова переводимы.
+    `profile` — the desktop profile name the grid was shown from (`None` — the shared
+    `zones.conf`); it is appended to the first line so that it is visible why the
+    zone set is exactly this one. The first line holds the monitor index, its work
+    area `x,y WxH` and, when needed, the output and profile marks; the Cinnamon
+    applet parses exactly the numbers in it (`N: x,y WxH`), while the words are translatable.
     """
     outputs = monitor_outputs()
     index, output = resolve_monitor(monitor_arg(args), outputs)
@@ -1588,10 +1588,10 @@ def cmd_list(grid, args, profile=None):
 
 
 def read_frame(window, extents):
-    """Фактическая рамка окна (x, y, w, h) по xwininfo с учётом рамки WM.
+    """The actual window frame (x, y, w, h) through xwininfo, taking the WM frame into account.
 
-    Чтение — в `window_backend.read_frame`; он сообщает только имя поля, которого
-    не оказалось в выводе, а текст `ValueError` для человека собирается здесь.
+    The read is in `window_backend.read_frame`; it reports only the name of the field that
+    was not in the output, while the human-readable `ValueError` text is built here.
     """
     try:
         return window_backend.read_frame(window, extents)
@@ -1602,13 +1602,13 @@ def read_frame(window, extents):
 
 
 def apply_zone(window, rect, label="", x11=None, verify=False, quiet=False):
-    """Вложить окно в пиксельную рамку rect=(x, y, w, h). Без глобального состояния.
+    """Put the window into the pixel frame rect=(x, y, w, h). Without global state.
 
-    Снимает максимизацию/фуллскрин и компенсирует рамку WM. `x11` можно подменить
-    (в тестах) — тогда X-сервер не нужен. Соединение, открытое самой функцией
-    (`x11 is None`), она же и закрывает; переданное чужое — не трогает, им
-    владеет вызывающий (долгоживущий демон переиспользует одно соединение).
-    При `verify` возвращает фактическую рамку.
+    Removes maximisation/fullscreen and compensates the WM frame. `x11` can be substituted
+    (in the tests) — then no X server is needed. The connection opened by the function itself
+    (`x11 is None`) is also closed by it; a foreign one passed in is left alone, the caller
+    owns it (a long-lived daemon reuses one connection).
+    With `verify` it returns the actual frame.
     """
     x, y, w, h = rect
     extents = frame_extents(window)
@@ -1616,7 +1616,7 @@ def apply_zone(window, rect, label="", x11=None, verify=False, quiet=False):
     if own:
         x11 = X11()
     try:
-        # снять максимизацию/фуллскрин/половинное тайлирование, иначе WM вернёт своё
+        # remove maximisation/fullscreen/half-tiling, otherwise the WM would put its own back
         x11.set_state(window, 0, "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ")
         x11.set_state(window, 0, "_NET_WM_STATE_FULLSCREEN", "_NET_WM_STATE_FULLSCREEN")
         time.sleep(0.05)
@@ -1656,21 +1656,21 @@ def apply_zone(window, rect, label="", x11=None, verify=False, quiet=False):
             return actual
         return None
     finally:
-        # чужое соединение не закрываем: им владеет вызывающий (демон)
+        # we do not close a foreign connection: the caller owns it (the daemon)
         if own:
             x11.close()
 
 
 def cmd_apply(grid, args):
-    """Вложить окно в зону; без `--monitor` — на экране самого окна.
+    """Put the window into a zone; without `--monitor` — on the screen of the window itself.
 
-    Экран окна задаёт и набор зон: зона ищется в профиле того экрана, где окно
-    (`grid_for_output`), — как `move` и как демон в IPC `apply`.
+    The screen of the window sets the zone set too: the zone is looked for in the profile of the screen where the window
+    is (`grid_for_output`), — like `move` and like the daemon in the IPC `apply`.
     """
     outputs = monitor_outputs()
-    # Окно читается заранее: без `--monitor` оно задаёт экран, а его профиль —
-    # набор зон. `--dry-run` переживает отсутствие окна: тогда это первый экран,
-    # как было до адресации по экрану.
+    # The window is read in advance: without `--monitor` it sets the screen, and its profile —
+    # the zone set. `--dry-run` survives the absence of a window: then it is the first screen,
+    # as it was before addressing by screen.
     window = args.window or active_window_quiet()
     if args.monitor is None:
         index, output, wa = window_output(outputs, window)
@@ -1701,34 +1701,34 @@ def cmd_apply(grid, args):
     try:
         before = snapshot_window(window, zone=args.zone)
     except Exception:
-        before = None  # геометрию не прочитать — без записи в историю
+        before = None  # the geometry cannot be read — no recording into the history
     apply_zone(window, rect, label=args.zone, verify=args.verify, quiet=args.quiet)
     if before is not None:
         remember("apply", [before], quiet=args.quiet)
 
 
-# -------------------------------------------------- режим «только эта зона» (CLI)
+# -------------------------------------------------- "this zone only" mode (CLI)
 
-# Сколько ждать ответа демона, секунд (тот же порядок, что у `gridsnap-ctl`).
+# How long to wait for the daemon's answer, seconds (the same order as in `gridsnap-ctl`).
 DAEMON_TIMEOUT = 5.0
-# Укладка по `arrange` — не мгновенный запрос: демон ставит каждое окно сам и
-# перечитывает его рамку, поэтому на большом столе 5 с на ответ может не хватить,
-# хотя демон жив и работает.
+# Laying out by `arrange` is not an instant request: the daemon places every window itself and
+# re-reads its frame, so on a large desktop 5 s may not be enough for the answer,
+# although the daemon is alive and working.
 DAEMON_ARRANGE_TIMEOUT = 30.0
 
 
 def daemon_request(request, timeout=DAEMON_TIMEOUT):
-    """Отправить одну команду живому демону; `None` — демона нет.
+    """Send one command to the live daemon; `None` — there is no daemon.
 
-    `zone_ipc` подключается лениво (как `picker_nav`): без демона раскладчику
-    этот модуль не нужен. Мёртвый сокет/отсутствие демона (`OSError`) — это
-    `None`: вызывающий сделает то же самое разово. Демон жив, но не ответил за
-    `timeout`, или ответил непонятно — это уже не «демона нет», и второй хозяин
-    режима не заводится: отказ с внятным сообщением.
+    `zone_ipc` is imported lazily (like `picker_nav`): without a daemon the tiler does not
+    need this module. A dead socket/a missing daemon (`OSError`) — that is
+    `None`: the caller will do the same thing one-off. The daemon is alive but did not answer within
+    `timeout`, or answered unintelligibly — that is no longer "there is no daemon", and a second owner
+    of the mode is not started: a refusal with a clear message.
     """
     if HERE not in sys.path:
         sys.path.insert(0, HERE)
-    import zone_ipc  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+    import zone_ipc  # noqa: PLC0415 — lazy import, next to the tiler
 
     conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     conn.settimeout(timeout)
@@ -1754,15 +1754,15 @@ def daemon_request(request, timeout=DAEMON_TIMEOUT):
 
 
 def cmd_tabs_next(args):
-    """Поднять следующую вкладку зоны активного окна (по клавише `[tabs] key`).
+    """Raise the next tab of the zone of the active window (by the `[tabs] key`).
 
-    Хозяин вкладок — демон: он один знает, какие окна стоят на рамке вкладки, и
-    только он умеет активировать окно (`_NET_ACTIVE_WINDOW` + подъём). Поэтому
-    команда ничего не раскладывает сама, а шлёт ему `zone_tabs.tabs_next_command()`
-    тем же сокетом, что и `gridsnap-ctl` (ленивый клиент — `daemon_request`).
-    Демона нет — это код 1 с понятным сообщением, а не трейсбек: без демона
-    вкладок нет, а кнопка на клавише осталась. Окно вне зон демон считает тихим
-    no-op (код 0): переключать там нечего, и это не ошибка.
+    The tabs are owned by the daemon: it alone knows which windows sit on the tab frame, and
+    only it can activate a window (`_NET_ACTIVE_WINDOW` + raise). Therefore
+    the command lays out nothing itself but sends it `zone_tabs.tabs_next_command()`
+    over the same socket as `gridsnap-ctl` (the lazy client — `daemon_request`).
+    No daemon — that is code 1 with a clear message, not a traceback: without a daemon
+    there are no tabs, yet the key binding remains. A window outside the zones the daemon counts as a silent
+    no-op (code 0): there is nothing to switch there, and that is not an error.
     """
     request = zone_tabs_module().tabs_next_command()
     response = daemon_request(request)
@@ -1786,39 +1786,39 @@ def cmd_tabs_next(args):
 
 
 def cmd_action(grid, args):
-    """Выполнить действие из `[action:<имя>]` — то, что висит на клавише.
+    """Run an action from `[action:<name>]` — what hangs on a key.
 
-    Имя действия приходит первым позиционным аргументом (как у `profile`: у
-    команды `action` в `args.zone` лежит имя, а не зона). Запись читает
+    The action name comes as the first positional argument (as with `profile`: for the
+    `action` command the name, not a zone, lies in `args.zone`). The record is read by
     `zone_config.load_actions`.
 
-    **Что действие получает** (`zone_actions.ActionContext`): окно, зону, её
-    пиксельную рамку, монитор, стол, класс и заголовок окна, путь к конфигу —
-    переменными окружения `GRIDSNAP_*` и подстановками `{zone}`/`{window}`/`{x}`…
-    Внешняя команда разбирается `shlex` и запускается **без оболочки** и без
-    ожидания (`start_new_session`): клавишу нельзя вешать на `gnome-terminal`,
-    который живёт до закрытия окна.
+    **What the action gets** (`zone_actions.ActionContext`): the window, the zone, its
+    pixel frame, the monitor, the desktop, the class and title of the window, the path to the config —
+    through the `GRIDSNAP_*` environment variables and the `{zone}`/`{window}`/`{x}`… substitutions.
+    An external command is parsed by `shlex` and started **without a shell** and without
+    waiting (`start_new_session`): a key must not be bound to `gnome-terminal`,
+    which lives until the window is closed.
 
-    **Предмет** — зона из записи (`zone = main`), а окно ищется в ней; без зоны —
-    активное окно и зона, в которой оно стоит. `--window` задаёт окно явно,
-    `--monitor` — экран для поиска зоны (без него: экран окна, затем активного
-    окна, затем первый).
+    **The subject** — the zone from the record (`zone = main`), and the window is looked for in it; without a zone —
+    the active window and the zone it stands in. `--window` sets the window explicitly,
+    `--monitor` — the screen to look for the zone on (without it: the screen of the window, then of the active
+    window, then the first one).
 
-    **Встроенные** (`run = builtin:<имя>`): `minimize-others` — тот же режим, что
-    `focus` (делегирует демону, если он жив); `show-window` — поднять/развернуть
-    окно зоны (вкладки — следующая от активного); `mirror` — обмен с зеркальной
-    зоной; `terminal` — запустить терминал и положить его окно в зону.
+    **The builtins** (`run = builtin:<name>`): `minimize-others` — the same mode as
+    `focus` (delegates to the daemon if it is alive); `show-window` — raise/unminimise
+    a window of the zone (tabs — the one next to the active one); `mirror` — exchange with the mirror
+    zone; `terminal` — start a terminal and put its window into the zone.
 
-    `--dry-run` печатает разобранный контекст и план (встроенное) или готовый
-    argv (команда), ничего не делая. Коды: 3 — ошибка конфига (нет такого
-    действия, битое поле, неизвестная подстановка), 1 — отказ по состоянию, 0 —
-    успех **и** честный no-op («показывать нечего», «зеркальная зона — та же
-    зона») с сообщением в stderr.
+    `--dry-run` prints the parsed context and the plan (a builtin) or the ready
+    argv (a command), doing nothing. Codes: 3 — config error (no such
+    action, a broken field, an unknown substitution), 1 — a refusal on state, 0 —
+    success **and** an honest no-op ("nothing to show", "the mirror zone is the same
+    zone") with a message in stderr.
 
-    У `terminal` последнее слово — за действием: окно могло уже попасть под
-    `[rules]` демона и встать по правилу, но раскладка действия важнее, поэтому
-    рамка зоны ставится ещё раз. `show-window` на пустой зоне — no-op с кодом 0:
-    клавиша не должна ругаться на то, что показывать нечего (как `tabs-next`).
+    With `terminal` the last word belongs to the action: the window may already have got under the daemon's
+    `[rules]` and stood by a rule, but the action's layout is more important, so
+    the zone frame is set once more. `show-window` on an empty zone — a no-op with code 0:
+    the key must not complain that there is nothing to show (like `tabs-next`).
     """
     za = actions_module()
     name = (args.zone or "").strip()
@@ -1845,9 +1845,9 @@ def cmd_action(grid, args):
     except za.ActionError as exc:
         fail(f"zone-tiler: {exc}", EXIT_CONFIG)
 
-    # Экран — адресат действия: явный `--monitor`, иначе экран окна, иначе первый.
-    # Окно-кандидат для выбора экрана — `--window` или активное: зону-предмет из
-    # записи ещё надо посчитать в пикселях, а для этого нужна сетка экрана.
+    # The screen — the target of the action: an explicit `--monitor`, else the screen of the window, else the first.
+    # The candidate window for picking the screen — `--window` or the active one: the subject zone from
+    # the record still has to be computed in pixels, and for that the grid of the screen is needed.
     outputs = monitor_outputs()
     if args.monitor is not None:
         index, output = resolve_monitor(args.monitor, outputs)
@@ -1877,45 +1877,45 @@ def cmd_action(grid, args):
 
 
 def actions_module():
-    """Модуль `zone_actions`: контекст, подстановки и зеркало живут только там."""
+    """The `zone_actions` module: the context, the substitutions and the mirror live only there."""
     if HERE not in sys.path:
         sys.path.insert(0, HERE)
-    import zone_actions  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+    import zone_actions  # noqa: PLC0415 — lazy import, next to the tiler
 
     return zone_actions
 
 
 def zone_config_module():
-    """Модуль `zone_config`: разбор `[action:<имя>]` живёт только там."""
+    """The `zone_config` module: parsing `[action:<name>]` lives only there."""
     if HERE not in sys.path:
         sys.path.insert(0, HERE)
-    import zone_config  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+    import zone_config  # noqa: PLC0415 — lazy import, next to the tiler
 
     return zone_config
 
 
 def load_actions(conf):
-    """Действия конфига через `zone_config.load_actions` (битый конфиг — код 3)."""
+    """The config actions through `zone_config.load_actions` (a broken config — code 3)."""
     return zone_config_module().load_actions(conf)
 
 
-# Сколько ждать окна терминала: 50 попыток по 0.1 с — около 5 секунд. Терминал
-# на холодную (загрузка профиля, первый запуск) легко не успевает за меньшее.
+# How long to wait for the terminal window: 50 tries of 0.1 s — about 5 seconds. A terminal
+# on a cold start (profile loading, first launch) easily does not make it in less.
 ACTION_WAIT_TRIES = 50
 ACTION_WAIT_DELAY = 0.1
 
 
 def _action_subject(grid, args, record, output, wa, workspace=None, profile=None):
-    """Окно и зона действия — «предмет», который получает контекст.
+    """The window and the zone of the action — the "subject" the context receives.
 
-    Зона из записи задаёт предмет сама: окно — активное (`--window`), если оно
-    стоит в этой зоне, иначе верхнее по `_NET_CLIENT_LIST` (список идёт снизу
-    вверх, поэтому «верхнее» — последнее); пустая зона — окна нет. Без зоны в
-    записи окно — `--window` или активное, а зона — та, в чью рамку (или рамку
-    вкладки) встала его рамка (`zone_actions.zone_of_frame`); вне зон — `None`.
+    The zone from the record sets the subject itself: the window is the active one (`--window`) if it
+    stands in that zone, otherwise the topmost by `_NET_CLIENT_LIST` (the list goes from the bottom
+    up, so "the topmost" is the last one); an empty zone — no window. Without a zone in the
+    record the window is `--window` or the active one, and the zone is the one whose frame (or tab
+    frame) its frame got into (`zone_actions.zone_of_frame`); outside the zones — `None`.
 
-    Зона из записи ищется в объединении наборов сетки (`require_zone`, код 3),
-    как у `apply`: имя из чужого профиля — ошибка конфига, а не «пустая зона».
+    The zone from the record is looked for in the union of the grid sets (`require_zone`, code 3),
+    as with `apply`: a name from a foreign profile is a config error, not an "empty zone".
     """
     client_ids = read_client_list() or []
     height = tabs_height(grid)
@@ -1934,7 +1934,7 @@ def _action_subject(grid, args, record, output, wa, workspace=None, profile=None
 
 
 def _action_frame(window):
-    """Рамка окна с компенсацией `_NET_FRAME_EXTENTS`; не прочитать — `None`."""
+    """The window frame with `_NET_FRAME_EXTENTS` compensated; cannot be read — `None`."""
     if window is None:
         return None
     try:
@@ -1944,30 +1944,30 @@ def _action_frame(window):
 
 
 def _action_frames(client_ids):
-    """`{окно: рамка}` для клиентов `_NET_CLIENT_LIST` (не прочиталась — `None`).
+    """`{window: frame}` for the `_NET_CLIENT_LIST` clients (could not be read — `None`).
 
-    Рамки читаются один раз на действие: и `show-window`, и `mirror` смотрят на
-    окна двух зон, и второй проход `xwininfo` по тем же окнам ничего не добавил
-    бы, а окно могло бы за это время исчезнуть.
+    The frames are read once per action: both `show-window` and `mirror` look at the
+    windows of two zones, and a second pass of `xwininfo` over the same windows would add nothing,
+    while a window could disappear in the meantime.
     """
     return {win: _action_frame(win) for win in client_ids}
 
 
 def _action_windows_in_zone(zone_rect, frames, height):
-    """Окна зоны по её пиксельной рамке — правило ядра `zone_actions.zone_windows`.
+    """The windows of a zone by its pixel frame — the core rule `zone_actions.zone_windows`.
 
-    Окно в зоне, если его рамка совпала с рамкой зоны целиком или с рамкой
-    вкладки (зона минус полоса `[tabs] height`); сравнение — с допуском ядра.
+    A window is in the zone if its frame matched the frame of the zone entirely or the frame of the
+    tab (the zone minus the `[tabs] height` strip); the comparison — with the tolerance of the core.
     """
     tab_rect = in_zone_rect(zone_rect, 2, height)
     return actions_module().zone_windows(frames, zone_rect, tab_rect)
 
 
 def _action_window_in_zone(zone_rect, client_ids, height, preferred=None):
-    """Верхнее окно зоны, а если `preferred` уже в ней — само `preferred`.
+    """The topmost window of the zone, and if `preferred` is already in it — `preferred` itself.
 
-    «Верхнее» — последнее в `_NET_CLIENT_LIST`: список идёт снизу вверх. Пустая
-    зона — `None` (действие решает, no-op это или отказ).
+    "The topmost" — the last in `_NET_CLIENT_LIST`: the list goes from the bottom up. An empty
+    zone — `None` (the action decides whether that is a no-op or a refusal).
     """
     frames = _action_frames(client_ids)
     if preferred is not None and _action_windows_in_zone(
@@ -1979,12 +1979,12 @@ def _action_window_in_zone(zone_rect, client_ids, height, preferred=None):
 
 
 def _action_context(grid, args, window, zone, output, wa):
-    """Собрать `zone_actions.ActionContext` для окна и зоны действия.
+    """Build `zone_actions.ActionContext` for the window and the zone of the action.
 
-    `rect` — пиксельная рамка зоны на её мониторе (её и ждёт чужая команда),
-    `conf` — **абсолютный** путь: действие запускает не CLI, а чужой процесс, и
-    относительный `--conf zones.conf` в нём означал бы другой файл или никакого.
-    Стол — стол окна, у липкого окна и окна без стола — активный.
+    `rect` — the pixel frame of the zone on its monitor (that is what a foreign command expects),
+    `conf` — the **absolute** path: the action is started by a foreign process, not by the CLI, and
+    a relative `--conf zones.conf` in it would mean another file or none at all.
+    The desktop — the desktop of the window; for a sticky window and a window without a desktop — the active one.
     """
     rect = grid.rect(zone, wa, monitor_name=output) if zone else None
     meta = read_window_meta(window) if window is not None else None
@@ -2004,7 +2004,7 @@ def _action_context(grid, args, window, zone, output, wa):
 
 
 def _action_plan_line(name, run, ctx):
-    """Первая строка `--dry-run`: что действие получило (окно, зона, рамка, экран)."""
+    """The first line of `--dry-run`: what the action received (window, zone, frame, screen)."""
     window = _("no window") if ctx.window is None else _("window 0x{window:x}").format(
         window=ctx.window
     )
@@ -2028,21 +2028,21 @@ def _action_plan_line(name, run, ctx):
 
 
 def _action_noop(args, message):
-    """Честный no-op: сообщение в stderr (если не `--quiet`) и код 0.
+    """An honest no-op: a message in stderr (unless `--quiet`) and code 0.
 
-    Клавиша не должна ругаться на то, что показывать или обменивать нечего:
-    так же ведёт себя `tabs-next` в зоне с одним окном.
+    The key must not complain that there is nothing to show or to exchange:
+    `tabs-next` behaves the same way in a zone with a single window.
     """
     if not args.quiet:
         print(f"zone-tiler: {message}", file=sys.stderr)
 
 
 def _action_dry_run_noop(args, name, record, ctx, message):
-    """Пустой предмет действия: no-op, а под `--dry-run` — контекст и план.
+    """An empty action subject: a no-op, and under `--dry-run` — the context and the plan.
 
-    `--dry-run` обещан любому действию, поэтому даже «показывать нечего» он
-    печатает разобранный контекст и объясняет план в stdout, а не молчит: иначе
-    по пустому выводу не отличить «зона пуста» от «действие не нашлось».
+    `--dry-run` is promised to every action, so even "nothing to show" it
+    prints the parsed context and explains the plan in stdout rather than staying silent: otherwise
+    an empty output would not tell "the zone is empty" from "the action was not found".
     """
     if not args.dry_run:
         _action_noop(args, message)
@@ -2052,11 +2052,11 @@ def _action_dry_run_noop(args, name, record, ctx, message):
 
 
 def _spawn(argv, ctx):
-    """Запустить команду действия отсоединённо: без оболочки и без ожидания.
+    """Start an action command detached: without a shell and without waiting.
 
-    `start_new_session` — чтобы терминал пережил нажатие клавиши (и чтобы
-    сигнал нашей группы процессу не дошёл); `stdin` — `/dev/null`, иначе
-    запущенный из клавиши процесс делил бы с ней ввод. Возвращает `Popen`.
+    `start_new_session` — so that the terminal survives the key press (and so that
+    a signal of our group does not reach the process); `stdin` — `/dev/null`, otherwise
+    a process started from a key would share the input with it. Returns `Popen`.
     """
     try:
         return subprocess.Popen(
@@ -2070,11 +2070,11 @@ def _spawn(argv, ctx):
 
 
 def _action_command(args, name, run, ctx, za):
-    """Внешняя команда действия: `argv` из конфига, запуск без оболочки.
+    """An external action command: `argv` from the config, started without a shell.
 
-    Неизвестная подстановка и пустая команда — `ActionError` ядра, то есть
-    ошибка конфига (код 3), а не «команда не запустилась»: опечатку в `{что-то}`
-    человек увидит сразу, а не как пустой аргумент у чужого скрипта.
+    An unknown substitution and an empty command — an `ActionError` of the core, that is,
+    a config error (code 3) rather than "the command did not start": a typo in `{something}`
+    is seen by the person right away, not as an empty argument of a foreign script.
     """
     try:
         argv = za.expand_command(run, ctx)
@@ -2094,18 +2094,18 @@ def _action_command(args, name, run, ctx, za):
 
 
 def _action_minimize_others(grid, args, name, record, ctx, wa):
-    """`builtin:minimize-others` — режим «только эта зона», то же, что `focus`.
+    """`builtin:minimize-others` — the "this zone only" mode, the same as `focus`.
 
-    Своей копии у режима нет: собираем `cmd_focus` его аргументы, и он делает
-    всё остальное — в том числе отдаёт работу живому демону, который один умеет
-    доворачивать окна, появившиеся уже в режиме. Зона — из записи (нет её —
-    «только это окно»), окно — предмет действия, иначе `--window`.
+    The mode has no copy of its own: we assemble `cmd_focus` and its arguments, and it does
+    everything else — including handing the work to the live daemon, which alone can
+    pull in the windows that appeared once the mode was on. The zone — from the record (no zone —
+    "this window only"), the window — the subject of the action, else `--window`.
     """
     zone = record.get("zone")
     window = ctx.window if ctx.window is not None else args.window
     if args.dry_run:
         _action_plan_line(name, record.get("run"), ctx)
-        # `None` печатается как раньше: шаблон и подстановка без перевода.
+        # `None` is printed as before: the template and the substitution are not translated.
         shown = window if window is None else hex(window)
         if zone:
             print(
@@ -2129,12 +2129,12 @@ def _action_minimize_others(grid, args, name, record, ctx, wa):
 
 
 def _action_show_window(grid, args, name, record, ctx, wa):
-    """`builtin:show-window` — поднять окно зоны (у стопки — сосед по кольцу).
+    """`builtin:show-window` — raise a window of the zone (in a stack — the ring neighbour).
 
-    Окна зоны — `zone_actions.zone_windows` по рамкам клиентов и рамке вкладки;
-    цель — `zone_tabs.next_tab` от активного окна (одно окно или активное вне
-    стопки — первое в порядке списка). `deiconify` — это `_NET_ACTIVE_WINDOW`:
-    развернуть, поднять, сфокусировать. Зоны нет или она пуста — no-op (код 0).
+    The windows of the zone — `zone_actions.zone_windows` by the client frames and the tab frame;
+    the target — `zone_tabs.next_tab` from the active window (a single window or the active one outside the
+    stack — the first in list order). `deiconify` is `_NET_ACTIVE_WINDOW`:
+    unminimise, raise, focus. There is no zone or it is empty — a no-op (code 0).
     """
     if not ctx.zone:
         _action_dry_run_noop(args, name, record, ctx, _("the window is outside zones - nothing to show"))
@@ -2168,15 +2168,15 @@ def _action_show_window(grid, args, name, record, ctx, wa):
 
 
 def _action_mirror(grid, args, name, record, ctx, wa):
-    """`builtin:mirror` — обмен окнами с зеркальной зоной.
+    """`builtin:mirror` — exchange windows with the mirror zone.
 
-    Зеркало ищется по геометрии (`zone_actions.find_mirror` по долям зон экрана),
-    а не по имени: имена зон человек придумывает сам. Окно-предмет идёт в
-    зеркальную зону, окно зеркальной — в предмет; пустая зона вырождает обмен в
-    переезд одного окна, обе пусты — no-op (код 0). После обмена **каждой** зоне
-    выставляется рамка по числу оказавшихся в ней окон, и она применяется ко всем
-    окнам зоны: иначе вкладки разъедутся (у стопки из двух окно стоит на рамке
-    вкладки, а не на всей зоне).
+    The mirror is looked for by geometry (`zone_actions.find_mirror` over the screen zone fractions),
+    not by name: the person invents the zone names themselves. The subject window goes into
+    the mirror zone, the window of the mirror — into the subject; an empty zone degenerates the exchange
+    into the move of one window, both empty — a no-op (code 0). After the exchange **every** zone
+    gets a frame set by the number of windows that ended up in it, and it is applied to all
+    the windows of the zone: otherwise the tabs would fall apart (in a stack of two the window stands on the tab
+    frame, not on the whole zone).
     """
     za = actions_module()
     zone = ctx.zone
@@ -2204,8 +2204,8 @@ def _action_mirror(grid, args, name, record, ctx, wa):
     mirror_rect = grid.rect(partner, wa, monitor_name=ctx.monitor)
     here = _action_windows_in_zone(rect, frames, height)
     there = _action_windows_in_zone(mirror_rect, frames, height)
-    # Переезжает предмет действия (окно, которое получил контекст), а если его в
-    # зоне уже нет — верхнее окно зоны: «верхнее» и есть видимое.
+    # What moves is the subject of the action (the window the context received), and if it is no longer
+    # in the zone — the topmost window of the zone: "the topmost" is the visible one.
     window = ctx.window if ctx.window in here else (here[-1] if here else None)
     other = there[-1] if there else None
     if window is None and other is None:
@@ -2251,8 +2251,8 @@ def _action_mirror(grid, args, name, record, ctx, wa):
         )
         return
 
-    # Прежние рамки — в историю, чтобы `undo` вернул окна. Снимок берётся до
-    # первого движения: после него геометрия уже чужая.
+    # The previous frames — into the history, so that `undo` brings the windows back. The snapshot is taken before
+    # the first move: after it the geometry is already foreign.
     records = []
     for win, target_zone in ((window, partner), (other, zone)):
         if win is None:
@@ -2260,7 +2260,7 @@ def _action_mirror(grid, args, name, record, ctx, wa):
         try:
             records.append(snapshot_window(win, zone=target_zone))
         except Exception:
-            continue  # геометрию не прочитать — окно всё равно двигаем
+            continue  # the geometry cannot be read — we move the window anyway
     x11 = X11()
     try:
         for win in final_here:
@@ -2279,21 +2279,21 @@ def _action_mirror(grid, args, name, record, ctx, wa):
 
 
 def _action_hex(window):
-    """Окно для печати: `0x…` или «пустая зона» — в плане `--dry-run`."""
+    """The window to print: `0x…` or "empty zone" — in the `--dry-run` plan."""
     if window is None:
         return _("empty zone")
     return _("window 0x{window:x}").format(window=window)
 
 
 def _action_terminal(grid, args, name, record, ctx, wa):
-    """`builtin:terminal` — терминал в зоне (своё окно встаёт на рамку зоны).
+    """`builtin:terminal` — a terminal in the zone (its own window takes the zone frame).
 
-    Команда — `command` записи или `zone_actions.DEFAULT_TERMINAL`, разбор и
-    подстановки — `zone_actions.expand_command`. Запуск отсоединённый: терминал
-    живёт до закрытия окна, и ждать его нельзя. Новое окно ищется в
-    `_NET_CLIENT_LIST` до ~5 с (окна под `[ignore]`/служебные типы не берутся) и
-    ставится рамкой по числу окон зоны плюс одно — то есть при занятой зоне на
-    рамку вкладки. Если окно не появилось — код 1 с понятным сообщением.
+    The command — the `command` of the record, or `zone_actions.DEFAULT_TERMINAL`; the parsing and the
+    substitutions — `zone_actions.expand_command`. The start is detached: a terminal
+    lives until its window is closed, and it cannot be waited for. The new window is looked for in
+    `_NET_CLIENT_LIST` for up to ~5 s (windows under `[ignore]`/service types are not taken) and
+    is placed on the frame for the number of windows of the zone plus one — that is, with the zone taken, on
+    the tab frame. If the window did not appear — code 1 with a clear message.
     """
     za = actions_module()
     if not ctx.zone:
@@ -2342,8 +2342,8 @@ def _action_terminal(grid, args, name, record, ctx, wa):
             ),
             EXIT_FAIL,
         )
-    # Последнее слово за действием: окно могло уже попасть под `[rules]` демона и
-    # встать по правилу; рамка зоны действия важнее, поэтому ставится ещё раз.
+    # The last word belongs to the action: the window may already have got under the daemon's `[rules]` and
+    # stood by a rule; the frame of the action zone is more important, so it is set once more.
     apply_zone(window, rect, label=ctx.zone, quiet=args.quiet)
     if not args.quiet:
         print(
@@ -2354,11 +2354,11 @@ def _action_terminal(grid, args, name, record, ctx, wa):
 
 
 def _wait_new_window(before, grid, tries=ACTION_WAIT_TRIES, delay=ACTION_WAIT_DELAY):
-    """Новое окно `_NET_CLIENT_LIST` (не исключённое) или `None` по таймауту.
+    """The new `_NET_CLIENT_LIST` window (not excluded), or `None` on timeout.
 
-    `before` — окна до запуска команды. Окно под `[ignore]`/служебного типа не
-    берётся: это не терминал, а splash или диалог, и двигать его нельзя.
-    Первая проверка — сразу: быстрый терминал успевает появиться до паузы.
+    `before` — the windows before the command was started. A window under `[ignore]`/of a service type is not
+    taken: that is not a terminal but a splash or a dialog, and it must not be moved.
+    The first check is immediate: a fast terminal makes it before the pause.
     """
     for attempt in range(max(1, int(tries))):
         if attempt:
@@ -2373,20 +2373,20 @@ def _wait_new_window(before, grid, tries=ACTION_WAIT_TRIES, delay=ACTION_WAIT_DE
 
 
 def cmd_focus(grid, args):
-    """Режим «только эта зона»: окно в зону, остальные окна монитора — свёрнуты.
+    """The "this zone only" mode: the window into the zone, the other windows of the monitor — minimised.
 
-    Вход и выход — **одна** команда (toggle): повторный `focus` при активном
-    режиме разворачивает окна, свёрнутые режимом, и больше ничего; свёрнутое
-    вручную остаётся свёрнутым. `--off` — явный выход для скриптов и второй
-    клавиши. Зона необязательна: без неё окно остаётся где стоит, и режим
-    значит «только это окно» (это форма клавиши `[focus]` без `zone`). Область —
-    рабочий стол и монитор целевого окна: другие экраны и столы не трогаются, а
-    исключения (`window_excluded`) и диалоги — тем более.
+    Entering and leaving are **one** command (toggle): a repeated `focus` with the mode active
+    unminimises the windows the mode minimised, and nothing more; a window minimised
+    by hand stays minimised. `--off` — an explicit exit for scripts and a second
+    key. The zone is optional: without it the window stays where it is, and the mode
+    means "this window only" (that is the form of the `[focus]` key without `zone`). The area is
+    the desktop and the monitor of the target window: other screens and desktops are not touched, and
+    the exclusions (`window_excluded`) and dialogs — even less so.
 
-    С живым демоном команда **делегирует ему**: у режима должен быть один
-    хозяин, и только демон умеет сворачивать окна, появляющиеся после входа.
-    Без демона работает разово, а список свёрнутых держит в `focus.json`
-    (см. `focus_path`) — новые окна в таком режиме не отслеживаются.
+    With a live daemon the command **delegates to it**: the mode must have one
+    owner, and only the daemon can minimise the windows that appear after entering.
+    Without a daemon it works one-off and keeps the list of minimised ones in `focus.json`
+    (see `focus_path`) — new windows are not tracked in such a mode.
     """
     request = {"cmd": "focus"}
     if args.off:
@@ -2401,16 +2401,16 @@ def cmd_focus(grid, args):
         _focus_dry_run(grid, args, state)
         return
 
-    # Toggle: `--off` или уже активный режим — выход, а не вход. Решается до
-    # делегирования, потому что вход и выход идут по сокету разными командами.
+    # Toggle: `--off` or an already active mode — an exit, not an entry. Decided before
+    # the delegation, because entering and leaving go over the socket as different commands.
     exiting = bool(request.get("off")) or bool(state)
-    # Запись CLI разворачивает сам CLI: демон мог быть поднят уже в режиме, и
-    # тогда эти окна для него — «свёрнутые не им». Разворот идёт до команды
-    # демону, иначе тот принял бы их за уже свёрнутые и не запомнил.
+    # The CLI record is unminimised by the CLI itself: the daemon may have been started already in the mode, and
+    # then those windows are "minimised not by it" for it. The unminimising goes before the command
+    # to the daemon, otherwise it would take them for already minimised and would not remember them.
     restored, remaining = _focus_restore(state) if state else ([], [])
     if state and not remaining:
-        # Запись убирается только когда разворот подтверждён: иначе окно
-        # осталось бы свёрнутым без хозяина.
+        # The record is removed only when the unminimising is confirmed: otherwise the window
+        # would stay minimised without an owner.
         clear_focus_state()
     if state and remaining:
         _focus_keep(state, remaining)
@@ -2423,7 +2423,7 @@ def cmd_focus(grid, args):
         )
 
     if exiting:
-        # У демона — свой режим со своей книгой: просим выйти и складываем счёт.
+        # The daemon has its own mode with its own ledger: we ask it to leave and add up the count.
         response = daemon_request({"cmd": "focus", "off": True})
         if response is not None:
             if not response.get("ok"):
@@ -2442,8 +2442,8 @@ def cmd_focus(grid, args):
             )
         return
 
-    # Живой демон — единственный хозяин режима: он видит `_NET_CLIENT_LIST`
-    # и умеет довернуть окна, появившиеся после входа. Без демона — разово.
+    # A live daemon is the only owner of the mode: it sees `_NET_CLIENT_LIST`
+    # and can turn the windows that appeared after entering. Without a daemon — one-off.
     response = daemon_request(request)
     if response is not None:
         if not response.get("ok"):
@@ -2460,7 +2460,7 @@ def cmd_focus(grid, args):
 
 
 def _focus_ids(values):
-    """Идентификаторы окон из ответа демона (`["0x2", …]`) — числа; мусор отброшен."""
+    """Window ids from the daemon answer (`["0x2", …]`) — numbers; garbage is dropped."""
     out = []
     for value in values or []:
         win = _focus_window_id({"window": value})
@@ -2470,11 +2470,11 @@ def _focus_ids(values):
 
 
 def _focus_dry_run(grid, args, state):
-    """Показать, что сделал бы `focus`, ничего не двигая и не сворачивая.
+    """Show what `focus` would do, without moving or minimising anything.
 
-    Живой демон — хозяин режима, его книга окон CLI не видна, поэтому при
-    доступном сокете спрашивается `status`: иначе `--dry-run` врал бы про
-    «ноль свёрнутых» — и на входе, и на выходе.
+    A live daemon is the owner of the mode and its window ledger is not visible to the CLI, so with an
+    available socket `status` is asked: otherwise `--dry-run` would lie about
+    "zero minimised" — both on entering and on leaving.
     """
     if not state:
         response = daemon_request({"cmd": "status"})
@@ -2536,7 +2536,7 @@ def _focus_dry_run(grid, args, state):
 
 
 def _focus_enter(grid, args):
-    """Разовый вход в режим без демона: цель в зону (если задана), остальные — свёрнуты."""
+    """A one-off entry into the mode without a daemon: the target into the zone (if given), the rest — minimised."""
     window = args.window or active_window()
     if args.zone:
         require_zone(grid, args.zone)
@@ -2561,7 +2561,7 @@ def _focus_enter(grid, args):
             ),
             EXIT_FAIL,
         )
-    # Зона проверяется на этой рабочей области — до того, как что-то двинулось.
+    # The zone is checked on this work area — before anything has moved.
     rect = grid.rect(args.zone, wa) if args.zone else None
     entries = focus_entries(read_client_list() or [], monitors_)
     todo = [
@@ -2575,19 +2575,19 @@ def _focus_enter(grid, args):
         try:
             before = snapshot_window(window, zone=args.zone)
         except Exception:
-            before = None  # геометрию не прочитать — без записи в историю
+            before = None  # the geometry cannot be read — no recording into the history
 
-    # Одно X-соединение на всю операцию: `iconify` чужое соединение не закрывает.
+    # One X connection for the whole operation: `iconify` does not close a foreign connection.
     x11 = X11()
     minimized = []
     try:
         if rect is not None:
             apply_zone(window, rect, label=args.zone, x11=x11, quiet=True)
-        # Состояние пишется ДО сворачивания: не записалось — ни одно окно ещё не
-        # свёрнуто, и команда честно падает вместо того, чтобы оставить окна
-        # свёрнутыми без записи (при переполнении диска или недоступном
-        # XDG_STATE_HOME). Список окон известен заранее, так что запись ничего
-        # не врёт: лишние окна при развороте просто активируются.
+        # The state is written BEFORE minimising: if it was not written, no window is minimised
+        # yet, and the command fails honestly instead of leaving the windows
+        # minimised without a record (on a full disk or an unreachable
+        # XDG_STATE_HOME). The list of windows is known in advance, so the record does not lie
+        # about anything: the extra windows are simply activated when unminimising.
         save_focus_state(
             {
                 "zone": args.zone,
@@ -2626,21 +2626,21 @@ def _focus_enter(grid, args):
 
 
 def _focus_restore(state, x11=None):
-    """Развернуть окна из записи `focus.json`; вернёт `(развёрнутые, остаток)`.
+    """Unminimise the windows from the `focus.json` record; returns `(unminimised, remainder)`.
 
-    Окна разворачиваются **по столам записи**: `_NET_ACTIVE_WINDOW` muffin
-    игнорирует для окна не на активном столе (проверено дымом), а в файле могут
-    сойтись окна разных столов — у каждого окна свой стол (`focus_records`), а
-    общий `workspace` записи — только запасной вариант. Перед каждой группой стол
-    делается активным.
+    The windows are unminimised **per desktop of the record**: muffin ignores `_NET_ACTIVE_WINDOW`
+    for a window that is not on the active desktop (checked by smoke), while the file may
+    bring together windows of different desktops — every window has its own desktop (`focus_records`), and
+    the shared `workspace` of the record is only a fallback. Before every group the desktop
+    is made active.
 
-    Окно, которого больше нет в `_NET_CLIENT_LIST`, и окно с другим `WM_CLASS`
-    (XID переиспользован другой программой) пропускаются: развернуть чужое окно
-    хуже, чем не развернуть своё. Последней активируется цель — она и должна
-    остаться в фокусе. Записей нет — и X не нужен.
+    A window that is no longer in `_NET_CLIENT_LIST`, and a window with another `WM_CLASS`
+    (the XID was reused by another program) are skipped: unminimising a foreign window
+    is worse than not unminimising our own. The target is activated last — it is the one that should
+    keep the focus. No records — X is not needed either.
 
-    `остаток` — окна, которые так и остались свёрнутыми: вызывающий обязан
-    сохранить их запись, а не считать развёрнутыми на веру.
+    `remainder` — the windows that stayed minimised: the caller is obliged to
+    keep their record rather than count them unminimised on trust.
     """
     records = [
         record
@@ -2679,20 +2679,20 @@ def _focus_restore(state, x11=None):
 
 
 def _focus_workspace(record, state):
-    """Стол окна из записи: свой, иначе общий стол записи; `None` — неизвестен."""
+    """The desktop of the window from the record: its own, else the shared desktop of the record; `None` — unknown."""
     value = record.get("workspace", state.get("workspace"))
     return value if isinstance(value, int) else None
 
 
 def _focus_keep(state, remaining):
-    """Оставить в `focus.json` только неразвёрнутое — со столом каждого окна сейчас.
+    """Leave only the not-unminimised ones in `focus.json` — with the current desktop of every window.
 
-    Записи окон строит `focus_records`: она читает `WM_CLASS` и **стол каждого
-    окна** заново. Без этого у окна не было бы своего стола (или остался бы
-    чужой из старой записи), а разворот возможен только на активном столе —
-    следующий `focus --off` опять перешёл бы не туда. Не записалось — старая
-    запись остаётся целиком; повторный разворот идемпотентен, так что хуже не
-    будет.
+    The window records are built by `focus_records`: it reads `WM_CLASS` and **the desktop of every
+    window** anew. Without that a window would have no desktop of its own (or would keep a
+    foreign one from the old record), while unminimising is possible only on the active desktop —
+    the next `focus --off` would again switch to the wrong one. If it was not written, the old
+    record stays whole; a repeated unminimising is idempotent, so it cannot get
+    worse.
     """
     try:
         save_focus_state(
@@ -2712,7 +2712,7 @@ def _focus_keep(state, remaining):
 
 
 def _focus_window_id(record):
-    """Идентификатор окна из записи `focus.json` (число или `0x…`); иначе None."""
+    """The window id from the `focus.json` record (a number or `0x…`); otherwise None."""
     value = record.get("window") if isinstance(record, dict) else record
     try:
         return int(value, 0) if isinstance(value, str) else int(value)
@@ -2721,7 +2721,7 @@ def _focus_window_id(record):
 
 
 def _focus_alive(win, record, alive):
-    """Наше ли это ещё окно: в списке клиентов и с тем же `WM_CLASS`."""
+    """Whether this is still our window: in the client list and with the same `WM_CLASS`."""
     if alive is not None and win not in alive:
         return False
     expected = record.get("wm_class") if isinstance(record, dict) else ""
@@ -2731,7 +2731,7 @@ def _focus_alive(win, record, alive):
 
 
 def _print_focus_response(response, quiet=False):
-    """Напечатать ответ демона на `focus` по-человечески (`--quiet` — молча)."""
+    """Print the daemon answer to `focus` in a human way (`--quiet` — silently)."""
     if quiet:
         return
     if response.get("off"):
@@ -2751,31 +2751,31 @@ def _print_focus_response(response, quiet=False):
 
 
 def monitor_arg(args):
-    """`--monitor` из аргументов: не задан — 0.
+    """`--monitor` from the arguments: not given — 0.
 
-    Так осталось только у `list`: он показывает рабочую область и зоны первого
-    экрана, пока `--monitor` не скажет иначе (первую строку разбирает апплет по
-    числам `N: x,y WxH`, поэтому опираться на её слова нельзя).
-    `apply`/`stack`/`move` без `--monitor` работают на экране окна.
+    That is left only for `list`: it shows the work area and the zones of the first
+    screen until `--monitor` says otherwise (the applet parses the first line by
+    the numbers `N: x,y WxH`, so its words must not be relied on).
+    `apply`/`stack`/`move` without `--monitor` work on the screen of the window.
     """
     return "0" if args.monitor is None else args.monitor
 
 
 def picker_nav():
-    """Модуль `zone_picker_nav`: правила выбора соседа живут только там."""
+    """The `zone_picker_nav` module: the rules of picking a neighbour live only there."""
     if HERE not in sys.path:
         sys.path.insert(0, HERE)
-    import zone_picker_nav  # noqa: PLC0415 — ленивый импорт, рядом с раскладчиком
+    import zone_picker_nav  # noqa: PLC0415 — lazy import, next to the tiler
 
     return zone_picker_nav
 
 
 def nearest_zone(zones, fx, fy):
-    """Индекс зоны с ближайшим к точке `(fx, fy)` центром; `None` — зон нет.
+    """The index of the zone with the centre nearest to `(fx, fy)`; `None` — there are no zones.
 
-    Нужна для окна, которое свободно плавает мимо всех зон: без неё `move` из
-    такого окна молча ничего бы не делал («зоны под центром нет»). Чистая
-    функция — под тесты.
+    Needed for a window that floats freely past all zones: without it `move` from
+    such a window would silently do nothing ("no zone under the centre"). A pure
+    function — for the tests.
     """
     nav = picker_nav()
     best, best_dist = None, None
@@ -2788,14 +2788,14 @@ def nearest_zone(zones, fx, fy):
 
 
 def move_zone_index(zones, direction, fx, fy):
-    """`(откуда, куда)` для `move`; равные индексы — соседа нет.
+    """`(from, to)` for `move`; equal indices — no neighbour.
 
-    `zones` — зоны набора в порядке файла как кортежи `(x, y, w, h)` в долях
-    рабочей области, `(fx, fy)` — центр окна в тех же долях. Зона окна — та,
-    в которой его центр (`zone_picker_nav.zone_at`), а если центр мимо всех
-    зон — ближайшая по центру (`nearest_zone`). Сосед выбирается чужим правилом
-    `zone_picker_nav.move_selection`: пикер и `move` обязаны вести себя
-    одинаково, а не двумя похожими реализациями. Чистая функция — под тесты.
+    `zones` — the zones of the set in file order as `(x, y, w, h)` tuples in work-area
+    fractions, `(fx, fy)` — the window centre in the same fractions. The window zone is the one
+    whose centre it is (`zone_picker_nav.zone_at`), and if the centre is past all
+    zones — the nearest by centre (`nearest_zone`). The neighbour is picked by a foreign rule,
+    `zone_picker_nav.move_selection`: the picker and `move` must behave the same
+    way rather than as two similar implementations. A pure function — for the tests.
     """
     nav = picker_nav()
     if not zones:
@@ -2807,18 +2807,18 @@ def move_zone_index(zones, direction, fx, fy):
 
 
 def cmd_move(grid, args):
-    """Перебросить окно в соседнюю зону по направлению (left/right/up/down).
+    """Throw the window into the neighbouring zone in a direction (left/right/up/down).
 
-    Зона окна — по центру его рамки в долях рабочей области **своего** монитора
-    (набор `[zones:<выход>]`, иначе общий `[zones]`); сосед — тот же, что
-    подсветил бы пикер (`move_zone_index`). Окно вне зон — ближайшая по центру
-    зона. На краю сетки соседа нет: это не ошибка — сообщаем в stderr и
-    выходим с кодом 0. Удачный переезд (не `--dry-run`) пишется в историю
-    операцией `move`, поэтому `undo` возвращает окно на прежнее место.
+    The window zone — by the centre of its frame in the work-area fractions of **its own** monitor
+    (the `[zones:<output>]` set, else the shared `[zones]`); the neighbour — the same one the
+    picker would highlight (`move_zone_index`). A window outside the zones — the nearest by centre
+    zone. At the edge of the grid there is no neighbour: that is not an error — we report it in stderr and
+    exit with code 0. A successful move (not `--dry-run`) is written into the history
+    as a `move` operation, so `undo` brings the window back to its previous place.
 
-    Сетка — профиль **экрана** окна: `[monitors]` → `[workspaces]` → `zones.conf`
-    (`grid_for_output`); профиля нет на диске — откат на сетку стола с
-    предупреждением, а не отказ укладки.
+    The grid — the profile of the **screen** of the window: `[monitors]` → `[workspaces]` → `zones.conf`
+    (`grid_for_output`); the profile is not on disk — a fallback to the desktop grid with
+    a warning rather than a refusal of the layout.
     """
     nav = picker_nav()
     direction = (args.zone or "").strip().lower()
@@ -2842,14 +2842,14 @@ def cmd_move(grid, args):
             EXIT_FAIL,
         )
     if args.monitor is None:
-        # Монитор окна — по центру его рамки (в рабочей области уже вычтена панель).
+        # The monitor of the window — by the centre of its frame (the panel is already subtracted in the work area).
         index, output, wa = output_at_point(
             outputs, (frame[0] + frame[2] // 2, frame[1] + frame[3] // 2)
         )
     else:
         index, output = resolve_monitor(args.monitor, outputs)
         wa = outputs[index][1]
-    # Зона ищется в профиле экрана окна, а не только в профиле его стола.
+    # The zone is looked for in the profile of the screen of the window, not only in the profile of its desktop.
     grid, _profile = grid_for_output(
         args.conf,
         output,
@@ -2912,7 +2912,7 @@ def cmd_move(grid, args):
     try:
         before = snapshot_window(window, zone=zone)
     except Exception:
-        before = None  # геометрию не прочитать — без записи в историю
+        before = None  # the geometry cannot be read — no recording into the history
     apply_zone(window, rect, label=zone, verify=args.verify, quiet=args.quiet)
     if before is not None:
         remember("move", [before], quiet=args.quiet)
@@ -2920,11 +2920,11 @@ def cmd_move(grid, args):
 
 
 def group_windows_by_monitor(client_ids, outputs):
-    """[(имя, область, [id окон])] — окна по мониторам, порядок сохранён.
+    """[(name, area, [window id])] — the windows by monitors, the order preserved.
 
-    Монитор окна — по его центру (та же `window_monitor`, что у демона). Окна
-    без центра/монитора в результат не попадают. Нужна, чтобы применять зоны
-    своего монитора (`[zones:<выход>]`) в пределах группы.
+    The monitor of a window — by its centre (the same `window_monitor` as the daemon has). Windows
+    without a centre/monitor do not get into the result. Needed to apply the zones of
+    their own monitor (`[zones:<output>]`) within the group.
     """
     areas = [wa for _output, wa in outputs]
     groups = collections.OrderedDict()
@@ -2938,18 +2938,18 @@ def group_windows_by_monitor(client_ids, outputs):
 
 
 def arrange_via_daemon(assignments, workspace, quiet=False):
-    """Разложить окна силами демона: он применит их и разошлёт события.
+    """Lay the windows out with the daemon's help: it applies them and sends the events out.
 
-    Алгоритм выбора окон и зон и память `undo` остаются здесь
-    (`choose_assignments` + `remember`), а применяет и запоминает укладки демон:
-    только он ведёт трекер, по которому закрытие окна запускает reflow, и только
-    он шлёт подписчикам `window-moved`. Без демона `False` — вызывающий
-    раскладывает окна сам, как раньше.
+    The algorithm of picking the windows and the zones and the `undo` memory stay here
+    (`choose_assignments` + `remember`), while the daemon applies and remembers the layouts:
+    it alone keeps the tracker by which closing a window triggers a reflow, and it alone
+    sends `window-moved` to the subscribers. Without a daemon `False` — the caller
+    lays the windows out itself, as before.
 
-    Снимки «до» берутся **до** отправки команды: после неё окна уже переехали, и
-    `undo` вернул бы их не туда. В историю идут только те окна, которые демон
-    действительно переставил (ответ `arranged`); отказы по отдельным окнам
-    печатаются, а не тонут в молчании.
+    The "before" snapshots are taken **before** the command is sent: after it the windows have already moved, and
+    `undo` would bring them back to the wrong place. Only the windows the daemon
+    actually moved go into the history (the `arranged` answer); refusals for individual windows
+    are printed rather than drowned in silence.
     """
     placements = []
     records = []
@@ -3004,15 +3004,15 @@ def arrange_via_daemon(assignments, workspace, quiet=False):
 
 
 def cmd_arrange(grid, args):
-    """Разложить клиентские окна `_NET_CLIENT_LIST` по зонам.
+    """Lay the `_NET_CLIENT_LIST` client windows out over the zones.
 
-    Режим `--by` (auto/rules/order) выбирает окна чистой `choose_assignments`;
-    окна группируются по монитору, и в каждой группе работает сетка **экрана**
-    (`grid_for_output`: профиль из `[monitors]` → `[workspaces]` → `zones.conf`),
-    в ней — набор `[zones:<выход>]` или общий `[zones]`. Несколько окон,
-    попавших в одну зону одного монитора, получают общую рамку вкладки
-    (`in_zone_rect`): зона минус полоса `[tabs] height`; одно окно в зоне
-    ставится ровно по зоне. Прежние рамки записываются в историю для `undo`.
+    The `--by` mode (auto/rules/order) picks the windows by the pure `choose_assignments`;
+    the windows are grouped by monitor, and in every group the grid of the **screen** works
+    (`grid_for_output`: the profile from `[monitors]` → `[workspaces]` → `zones.conf`),
+    in it — the `[zones:<output>]` set or the shared `[zones]`. Several windows that
+    ended up in one zone of one monitor get a shared tab frame
+    (`in_zone_rect`): the zone minus the `[tabs] height` strip; a single window in a zone
+    is placed exactly on the zone. The previous frames are written into the history for `undo`.
     """
     client_ids = read_client_list()
     if client_ids is None:
@@ -3046,9 +3046,9 @@ def cmd_arrange(grid, args):
             print(_("zone-tiler: no windows suitable for layout"))
         return
     if not args.dry_run and not args.verify:
-        # Живой демон — один хозяин укладки: он применит раскладку, обновит свой
-        # трекер (иначе закрытие окна запускало бы reflow не туда) и разошлёт
-        # подписчикам `window-moved`. `--verify` и `--dry-run` остаются локальными.
+        # A live daemon is the single owner of the layout: it applies the layout, updates its
+        # tracker (otherwise closing a window would trigger a reflow to the wrong place) and sends
+        # `window-moved` to the subscribers. `--verify` and `--dry-run` stay local.
         if arrange_via_daemon(assignments, workspace, quiet=args.quiet):
             return
     x11 = None if args.dry_run else X11()
@@ -3092,11 +3092,11 @@ def cmd_arrange(grid, args):
 
 
 def cmd_stack(grid, args):
-    """Собрать подвижные клиентские окна в одну зону вкладками.
+    """Gather the movable client windows into one zone as tabs.
 
-    Окна встают на одну рамку вкладки (`in_zone_rect`): зона минус полоса
-    `[tabs] height`, последнее окно списка — наверху. Одно окно в зоне ставится
-    ровно по зоне, без полосы. Переключение вкладок — `tabs-next`/клик по полосе.
+    The windows go onto one tab frame (`in_zone_rect`): the zone minus the
+    `[tabs] height` strip, the last window of the list on top. A single window in a zone is placed
+    exactly on the zone, without the strip. Switching tabs — `tabs-next`/a click on the strip.
     """
     client_ids = read_client_list()
     if client_ids is None:
@@ -3112,8 +3112,8 @@ def cmd_stack(grid, args):
         return
     outputs = monitor_outputs()
     if args.monitor is None:
-        # Без `--monitor` собираем в зону на экране активного окна: там же, где
-        # пользователь смотрит, и с профилем этого экрана.
+        # Without `--monitor` we gather into a zone on the screen of the active window: where
+        # the user is looking, and with the profile of that screen.
         mon_index, output, wa = window_output(outputs, active_window_quiet())
     else:
         mon_index, output = resolve_monitor(args.monitor, outputs)
@@ -3166,7 +3166,7 @@ def cmd_stack(grid, args):
 
 
 def cmd_undo(grid, args):
-    """Вернуть окна на прежние рамки из истории (последнюю или всю)."""
+    """Bring the windows back to their previous frames from the history (the last one or all)."""
     history = History()
     operations = history.load()
     if not operations:
@@ -3188,7 +3188,7 @@ def cmd_undo(grid, args):
         for win, frame, wm_class in targets:
             current_class, current_title = window_class_title(win)
             if wm_class and current_class and current_class != wm_class:
-                # id мог переиспользоваться другим приложением после выхода старого
+                # the id could be reused by another application after the old one exited
                 warn(
                     _(
                         "window 0x{window:x}: class mismatch ({actual} != {expected}) - skipping"
@@ -3239,19 +3239,19 @@ def cmd_undo(grid, args):
 
 
 def cmd_keys(grid, move=False, conf=None):
-    """Печатает пары 'зона<TAB>сочетание' из секции [keys] (для setup-hotkeys.py).
+    """Print the 'zone<TAB>binding' pairs from the [keys] section (for setup-hotkeys.py).
 
-    `[keys]` общая для всех мониторов, а зона может быть описана только в
-    секции конкретного монитора — поэтому проверка идёт по объединению наборов.
+    `[keys]` is shared for all monitors, while a zone may be described only in the
+    section of a specific monitor — that is why the check goes over the union of the sets.
 
-    `move=True` — вместо зон печатаются направления перемещения
-    (`направление<TAB>сочетание`) из необязательной секции `[move]`: источник
-    для `setup-hotkeys.py`, который регистрирует `move <направление>`. Разбор
-    секции и умолчания — в `zone_config.load_move_keys` (неизвестный ключ —
-    ошибка конфига, код 3).
+    `move=True` — print the move directions instead of the zones
+    (`direction<TAB>binding`) from the optional `[move]` section: the source
+    for `setup-hotkeys.py`, which registers `move <direction>`. The parsing of the
+    section and the defaults — in `zone_config.load_move_keys` (an unknown key —
+    a config error, code 3).
     """
     if move:
-        import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как у редактора
+        import zone_config as zc  # noqa: PLC0415 — lazy import, as in the editor
 
         keys = zc.load_move_keys(conf or grid.path)
         for direction in zc.MOVE_DIRECTIONS:
@@ -3274,7 +3274,7 @@ def cmd_keys(grid, move=False, conf=None):
             print(f"{zone}\t{binding}")
 
 
-# ---------------------------------------------------------------- профили
+# ---------------------------------------------------------------- profiles
 
 PROFILE_ACTIONS = (
     "list",
@@ -3289,21 +3289,21 @@ PROFILE_ACTIONS = (
     "from-gallery",
 )
 
-# Действия `profile`, которые не берут ни одного позиционного слова: у них
-# лишним считается и первое слово после действия. `use-monitors` здесь нет: у
-# него своя проверка имени (`_profile_use_monitors`) с более точной подсказкой
-# про секцию `[monitors]`.
+# The `profile` actions that take no positional word: for them the first word after
+# the action is also counted as extra. `use-monitors` is not here: it has
+# its own name check (`_profile_use_monitors`) with a more precise hint
+# about the `[monitors]` section.
 PROFILE_NO_ARG_ACTIONS = ("list", "gallery")
 
 
 def profile_extra_word(args, action):
-    """Лишнее позиционное слово у действия `profile` — оно же причина отказа.
+    """The extra positional word of a `profile` action — it is the reason for the refusal too.
 
-    Слов у действия не больше, чем описано в справке: у `export` второе слово —
-    файл, у `list`/`gallery` слов нет вовсе, у остальных только одно (имя или
-    id). Молча проглоченный аргумент — ошибка в команде, которая выглядит как
-    успех: `profile from-gallery work mine` создавал профиль «work», а `mine`
-    уходило в никуда.
+    An action has no more words than the help describes: for `export` the second word is a
+    file, `list`/`gallery` have no words at all, the rest have only one (a name or an
+    id). A silently swallowed argument is a mistake in the command that looks like
+    success: `profile from-gallery work mine` created the profile "work", while `mine`
+    went nowhere.
     """
     if action == "export":
         words = ()
@@ -3318,7 +3318,7 @@ def profile_extra_word(args, action):
 
 
 def _run_hotkeys(conf, quiet=False):
-    """Перечитать [keys] из conf и обновить сочетания Cinnamon (best-effort)."""
+    """Re-read [keys] from conf and update the Cinnamon bindings (best-effort)."""
     script = os.path.join(HERE, "setup-hotkeys.py")
     try:
         r = subprocess.run(
@@ -3344,7 +3344,7 @@ def _run_hotkeys(conf, quiet=False):
 
 
 def _profile_export(zc, args, name, conf):
-    """``profile export``: JSON-профиля в stdout или в файл."""
+    """``profile export``: the JSON of the profile to stdout or to a file."""
     target = (args.target or "").strip()
     if target and args.json:
         fail(
@@ -3366,7 +3366,7 @@ def _profile_export(zc, args, name, conf):
 
 
 def _profile_import(zc, args, path, conf):
-    """``profile import``: JSON-файл → профиль ``templates/<имя>.conf``."""
+    """``profile import``: a JSON file → the ``templates/<name>.conf`` profile."""
     data = zc.read_profile_json(path)
     written = zc.profile_from_dict(data, (args.as_name or "").strip() or None, conf)
     name = os.path.basename(written)[: -len(zc.PROFILE_EXT)]
@@ -3380,12 +3380,12 @@ def _profile_import(zc, args, path, conf):
 
 
 def section_pairs(lines):
-    """Пары ``(ключ, значение)`` из тела секции в порядке строк.
+    """``(key, value)`` pairs from the body of a section in line order.
 
-    Тело — строки как их отдаёт ``zone_config.load_extra_sections`` (или готовые
-    пары): комментарии, пустые строки и строки без ``=`` пропускаются, инлайн-
-    комментарий после пробела отбрасывается, как у ``ConfigParser``. Нужно для
-    слияния ``[rules]``/``[ignore]``: сопоставлять надо селектор, а не текст строки.
+    The body — the lines as ``zone_config.load_extra_sections`` gives them (or ready-made
+    pairs): comments, empty lines and lines without ``=`` are skipped, an inline
+    comment after a space is dropped, as in ``ConfigParser``. Needed for the
+    merging of ``[rules]``/``[ignore]``: the selector has to be matched, not the text of a line.
     """
     pairs = []
     for item in lines or []:
@@ -3405,16 +3405,16 @@ def section_pairs(lines):
 
 
 def monitor_screen_map(conf_path):
-    """``[(выход, профиль)]`` из ``[monitors]`` в порядке строк, регистр — из файла.
+    """``[(output, profile)]`` from ``[monitors]`` in line order, the case — from the file.
 
-    :func:`zone_config.load_monitor_map` валидирует секцию и санирует имена
-    профилей, но ``ConfigParser`` опускает регистр ключей, а секции
-    ``[zones:<выход>]`` принято писать так, как выход печатает ``xrandr``
-    (``HDMI-1``). Поэтому имя берём из текста секции (публичный
-    ``load_extra_sections``), а профиль — из проверенной карты; сравнение —
-    без учёта регистра, как у резолвера. Пустая секция — ``[]``.
+    :func:`zone_config.load_monitor_map` validates the section and sanitises the profile
+    names, but ``ConfigParser`` lowercases the keys, while the sections
+    ``[zones:<output>]`` are conventionally written the way ``xrandr`` prints the output
+    (``HDMI-1``). That is why the name is taken from the text of the section (the public
+    ``load_extra_sections``), and the profile — from the validated map; the comparison —
+    case-insensitively, as in the resolver. An empty section — ``[]``.
     """
-    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, как у grid_for_workspace
+    import zone_config as zc  # noqa: PLC0415 — lazy import, as in grid_for_workspace
 
     mapping = zc.load_monitor_map(conf_path)
     if not mapping:
@@ -3439,11 +3439,11 @@ def monitor_screen_map(conf_path):
 
 
 def _render_planned_config(zc, conf, default, monitor_sets, extra):
-    """Текст, который записал бы ``use-monitors``, без записи в настоящий конфиг.
+    """The text ``use-monitors`` would write, without writing into the real config.
 
-    Пишем во временный файл через тот же ``zone_config._write_config``: иначе
-    `--dry-run` пришлось бы повторять его правила сборки вручную, и показанное
-    разошлось бы с тем, что реально легло бы на диск.
+    We write into a temporary file through the same ``zone_config._write_config``: otherwise
+    `--dry-run` would have to repeat its assembly rules by hand, and what is shown
+    would diverge from what would really land on disk.
     """
     fd, tmp = tempfile.mkstemp(prefix="gridsnap-plan-", suffix=".conf")
     try:
@@ -3465,7 +3465,7 @@ def _render_planned_config(zc, conf, default, monitor_sets, extra):
 
 
 def _profile_screen_zone_set(output, zones, monitor_sets):
-    """Набор зон экрана из профиля: ``[zones:<выход>]``, иначе общий ``[zones]``."""
+    """The zone set of a screen from the profile: ``[zones:<output>]``, else the shared ``[zones]``."""
     for name, chunk in (monitor_sets or {}).items():
         if str(name).casefold() == str(output).casefold():
             return list(chunk)
@@ -3473,32 +3473,32 @@ def _profile_screen_zone_set(output, zones, monitor_sets):
 
 
 def _profile_zone_chunks(zones, monitor_sets):
-    """Наборы зон профиля в порядке файла: общий, затем ``[zones:<выход>]``."""
+    """The zone sets of a profile in file order: the shared one, then ``[zones:<output>]``."""
     return [zones or []] + list((monitor_sets or {}).values())
 
 
 def merge_monitor_profiles(screens):
-    """Слить профили экранов в снимок активного конфига (чистая функция).
+    """Merge the screen profiles into a snapshot of the active config (a pure function).
 
-    ``screens`` — ``[(выход, профиль, zones, rules, monitor_sets, ignore)]`` в
-    порядке строк ``[monitors]``; зоны — ``Zone`` с привязками ``[keys]``.
+    ``screens`` — ``[(output, profile, zones, rules, monitor_sets, ignore)]`` in
+    ``[monitors]`` line order; the zones — ``Zone`` with the ``[keys]`` bindings.
 
-    Набор по умолчанию — ``[zones]`` **первого** экрана, у которого есть зоны (его
-    ``[zones:<выход>]``, если общего набора в профиле нет). ``[zones:<выход>]``
-    пишется для каждого экрана: свой набор профиля, иначе его общий ``[zones]``.
-    ``[rules]``, ``[ignore]`` и ``[keys]`` сливаются по всем экранам: где селектор
-    или имя зоны расходятся, выигрывает первый экран, а расхождение попадает в
-    ``overrides`` (ничего не теряется молча). Правило на зону, которой нет в
-    итоговом объединении наборов, отбрасывается в ``dropped_rules``: иначе
-    ``Grid`` отказал бы кодом 3 и конфиг стал бы нечитаемым целиком.
+    The default set is ``[zones]`` of the **first** screen that has zones (its
+    ``[zones:<output>]`` if the profile has no shared set). ``[zones:<output>]``
+    is written for every screen: the set of its profile, else its shared ``[zones]``.
+    ``[rules]``, ``[ignore]`` and ``[keys]`` are merged over all screens: where a selector
+    or a zone name diverges, the first screen wins, and the divergence gets into
+    ``overrides`` (nothing is lost silently). A rule for a zone that is not in
+    the resulting union of sets is dropped into ``dropped_rules``: otherwise
+    ``Grid`` would refuse with code 3 and the config would become unreadable entirely.
     """
     default = None
     monitor_sets = {}
     zone_names = set()
-    bindings = {}  # имя зоны -> (выход, профиль, сочетание)
+    bindings = {}  # zone name -> (output, profile, binding)
     key_reported = set()
-    raw_rules = []  # (селектор, зона, выход, профиль)
-    raw_ignore = []  # (селектор, заметка, выход, профиль)
+    raw_rules = []  # (selector, zone, output, profile)
+    raw_ignore = []  # (selector, note, output, profile)
     overrides = []
     usable = []
     for output, profile, zones, rules, sets, ignore in screens:
@@ -3588,8 +3588,8 @@ def merge_monitor_profiles(screens):
                 )
             )
 
-    # `[keys]` пишется по первому появлению имени зоны: проставляем победившую
-    # привязку всем записанным наборам, иначе проигравший экран перебил бы её.
+    # `[keys]` is written by the first appearance of a zone name: we put the winning
+    # binding into every written set, otherwise the losing screen would override it.
     for chunk in [default] + list(monitor_sets.values()):
         for zone in chunk:
             owner = bindings.get(zone.name)
@@ -3606,14 +3606,14 @@ def merge_monitor_profiles(screens):
 
 
 def _profile_use_monitors(zc, args, conf):
-    """``profile use-monitors``: снимок профилей экранов из ``[monitors]``.
+    """``profile use-monitors``: a snapshot of the screen profiles from ``[monitors]``.
 
-    Пишет в **активный** конфиг то, что видят все, кто профилей не читает
-    (пикер, редактор, апплет): ``[zones]`` первого экрана, ``[zones:<выход>]``
-    каждого экрана, слитые ``[rules]``/``[ignore]``/``[keys]``. Прочие секции
-    (``[grid]``, ``[monitors]``, ``[workspaces]``, ``[daemon]``, …) переживают
-    запись дословно. Экран без файла профиля пропускается с предупреждением:
-    строка ``[monitors]`` остаётся и заработает, когда профиль вернут.
+    Writes into the **active** config what everyone who does not read profiles sees
+    (the picker, the editor, the applet): ``[zones]`` of the first screen, ``[zones:<output>]``
+    of every screen, the merged ``[rules]``/``[ignore]``/``[keys]``. The other sections
+    (``[grid]``, ``[monitors]``, ``[workspaces]``, ``[daemon]``, …) survive the
+    write verbatim. A screen without a profile file is skipped with a warning:
+    its ``[monitors]`` line stays and will work once the profile is brought back.
     """
     if (args.name or "").strip():
         fail(
@@ -3623,8 +3623,8 @@ def _profile_use_monitors(zc, args, conf):
             EXIT_USAGE,
         )
     if not os.path.exists(conf):
-        # Пустой [monitors] читается и из несуществующего файла, но писать снимок
-        # некуда: опечатка в --conf не должна выглядеть как «нечего менять».
+        # An empty [monitors] is read from a nonexistent file too, but there is nowhere to write
+        # the snapshot: a typo in --conf must not look like "nothing to change".
         fail(_("zone-tiler: config not found: {path}").format(path=conf), EXIT_CONFIG)
     monitor_map = monitor_screen_map(conf)
     if not monitor_map:
@@ -3718,11 +3718,11 @@ def _profile_use_monitors(zc, args, conf):
 
 
 def _profile_gallery(zc, args):
-    """`profile gallery` — список готовых раскладок из поставки.
+    """`profile gallery` — the list of ready-made layouts from the distribution.
 
-    Печатается по строке на раскладку (id, название, сколько зон, описание) либо
-    JSON при `--json` — как у остальных команд `profile`: id нужен скриптам, название
-    и описание — человеку.
+    One line per layout is printed (id, title, how many zones, description), or
+    JSON under `--json` — as in the other `profile` commands: the id is for scripts, the title
+    and the description — for the person.
     """
     layouts = zc.gallery_layouts()
     if not layouts:
@@ -3742,12 +3742,12 @@ def _profile_gallery(zc, args):
 
 
 def _profile_from_gallery(zc, args, conf):
-    """`profile from-gallery <id> [--name <имя>]` — скопировать раскладку в свой профиль.
+    """`profile from-gallery <id> [--name <name>]` — copy a layout into a profile of your own.
 
-    Копия, а не ссылка: дальше человек правит её как обычный профиль (и может
-    экспортировать/перенести). Существующий профиль не перезаписывается (даже с тем
-    же именем) — это чужой файл, и тихая потеря раскладки была бы неприятным
-    сюрпризом: выбери другое имя или убери старый (`profile rm <имя>`).
+    A copy, not a link: afterwards the person edits it as an ordinary profile (and can
+    export/move it). An existing profile is not overwritten (even with the same
+    name) — it is a foreign file, and a silent loss of the layout would be an unpleasant
+    surprise: choose another name or remove the old one (`profile rm <name>`).
     """
     gid = (args.name or "").strip()
     if not gid:
@@ -3774,7 +3774,7 @@ def _profile_from_gallery(zc, args, conf):
 
 
 def cmd_profile(args):
-    """Профили раскладок: list/show/save/use/rm/export/import (zone_config лениво)."""
+    """Layout profiles: list/show/save/use/rm/export/import (zone_config lazily)."""
     import zone_config as zc
 
     action = (args.zone or "").strip()
@@ -3865,11 +3865,11 @@ def cmd_profile(args):
 
 
 def main(argv=None):
-    """Точка входа CLI: отказ X-сервера остаётся сообщением и кодом 1.
+    """The CLI entry point: an X server refusal stays a message and code 1.
 
-    Раньше об этом заботился сам `X11.__init__` через `fail`; теперь соединение
-    открывает оконный слой и отвечает `WindowBackendError`, поэтому перевод в
-    прежний текст и код возврата — здесь, на границе CLI.
+    Earlier `X11.__init__` took care of it through `fail`; now the connection is
+    opened by the window layer, which answers `WindowBackendError`, so the conversion into
+    the previous text and return code — here, at the CLI boundary.
     """
     try:
         return _main(argv)
@@ -3880,8 +3880,8 @@ def main(argv=None):
 def _main(argv=None):
     ap = argparse.ArgumentParser(
         description=_("Window layout across grid zones (Cinnamon/X11)"),
-        # Без сокращений: иначе удалённый `--offset` совпадает с `--off` и
-        # вместо «неизвестный флаг» человек получает ошибку про команду '20'.
+        # No abbreviations: otherwise the removed `--offset` matches `--off` and
+        # instead of "unknown flag" the person gets an error about the command '20'.
         allow_abbrev=False,
         epilog=_(
             "Examples: zone-tiler.py arrange --by order; zone-tiler.py stack main; zone-tiler.py tabs-next; zone-tiler.py undo --all; zone-tiler.py action mirror; zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
@@ -3996,9 +3996,9 @@ def _main(argv=None):
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--conf", default=CONF)
     ap.add_argument("--version", action="version", version=f"zone-tiler {VERSION}")
-    # `--offset` удалён вместе с каскадом. Без явной проверки argparse съедает
-    # его значение как команду и ругается на «20», а не на флаг: человек
-    # видит причину только в этом сообщении.
+    # `--offset` was removed together with the cascade. Without an explicit check argparse eats
+    # its value as a command and complains about "20" rather than about the flag: the person
+    # sees the reason only in this message.
     for value in sys.argv[1:] if argv is None else argv:
         if value == "--offset" or value.startswith("--offset="):
             ap.error(
@@ -4011,27 +4011,27 @@ def _main(argv=None):
     if args.command == "profile":
         cmd_profile(args)
         return EXIT_OK
-    # `[keys]` общая на файл, а undo возвращает прежние рамки: профиль стола им
-    # не указ, поэтому читают сам zones.conf, а не сетку рабочего стола.
+    # `[keys]` is shared for the file, and undo brings the previous frames back: the desktop profile
+    # has no say over them, so zones.conf itself is read rather than the grid of the workspace.
     if args.command == "keys":
         cmd_keys(Grid(args.conf), move=args.move, conf=args.conf)
         return EXIT_OK
     if args.command == "undo":
         cmd_undo(Grid(args.conf), args)
         return EXIT_OK
-    # `tabs-next` не нужен ни конфиг, ни сетка: демон сам выбирает зону по
-    # активному окну, а высота полосы его не касается.
+    # `tabs-next` needs neither config nor grid: the daemon picks the zone itself by
+    # the active window, and the strip height does not concern it.
     if args.command == "tabs-next":
         cmd_tabs_next(args)
         return EXIT_OK
 
-    # list/apply/arrange/stack работают сеткой своего стола: `--workspace N` или
-    # активный стол по умолчанию; сетка берётся через grid_for_workspace, поэтому
-    # стол без профиля молча живёт в общем [zones]. Экран важнее стола: если в
-    # конфиге есть привязки `[monitors]`, у apply/stack адресат — экран окна
-    # (`target_output`), и сетка берётся из профиля этого экрана. Мониторы читаются
-    # только при наличии привязок: без них это лишний поход в X (и раньше проверки
-    # зоны).
+    # list/apply/arrange/stack work with the grid of their desktop: `--workspace N` or
+    # the active desktop by default; the grid is taken through grid_for_workspace, so
+    # a desktop without a profile silently lives in the shared [zones]. The screen is more important than the desktop: if
+    # the config has `[monitors]` bindings, the target of apply/stack is the screen of the window
+    # (`target_output`), and the grid is taken from the profile of that screen. The monitors are read
+    # only when there are bindings: without them it is an extra trip to X (and that before the
+    # zone check).
     workspace = resolve_workspace(args.workspace)
     profile = workspace_profile(args.conf, workspace)
     grid = grid_for_workspace(args.conf, workspace)
@@ -4054,8 +4054,8 @@ def _main(argv=None):
     if args.command == "focus":
         cmd_focus(grid, args)
         return EXIT_OK
-    # `action` — как `focus`: ни зоны ни окна от CLI не требует (зона бывает в
-    # записи действия, а действие бывает и вовсе без зоны).
+    # `action` — like `focus`: it requires neither a zone nor a window from the CLI (the zone may be in
+    # the action record, and the action may be without a zone at all).
     if args.command == "action":
         cmd_action(grid, args)
         return EXIT_OK
@@ -4063,8 +4063,8 @@ def _main(argv=None):
         fail(
             _("zone-tiler: specify a zone, for example: zone-tiler.py apply left"), EXIT_USAGE
         )
-    # Зона ищется в наборе показанной сетки (экран + стол + общий [zones]); нет её
-    # там — это ошибка конфига: конфиг и профиль разошлись.
+    # The zone is looked for in the set of the shown grid (screen + desktop + shared [zones]); if it is not
+    # there — that is a config error: the config and the profile have diverged.
     require_zone(grid, args.zone, workspace=workspace, profile=profile, output=output)
     if args.command == "stack":
         cmd_stack(grid, args)

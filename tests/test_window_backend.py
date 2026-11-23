@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Контракт оконного слоя `window_backend` — сверка сигнатур, а не реализации.
+"""The window layer contract of `window_backend` — a check of signatures, not the implementation.
 
-Смысл теста: граница оконного слоя зафиксирована **до** переноса кода. Если
-завтра кто-то возьмётся за Wayland-бэкенд, он должен реализовать ровно эти
-операции; если перенос из `zone-tiler.py` потеряет функцию или поменяет у неё
-число аргументов, тест это поймает — остальная программа зовёт оконный слой
-именно так.
+The point of the test: the boundary of the window layer is fixed **before** the code is moved. If
+tomorrow someone takes on a Wayland backend, they must implement exactly these
+operations; if the move out of `zone-tiler.py` loses a function or changes its
+number of arguments, the test catches it — the rest of the program calls the window layer
+exactly like that.
 
-Тела функций проверяет не этот тест, а поведенческие тесты раскладчика, демона и
-дымовые сценарии: здесь только интерфейс.
+The bodies of the functions are checked not by this test but by the behavioural tests
+of the tiler, the daemon and the smoke scenarios: only the interface is here.
 """
 
 import contextlib
@@ -21,8 +21,8 @@ import unittest
 from unittest import mock
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (tests run in the source language)
+except ImportError:  # launched as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,7 +33,7 @@ import window_backend as wb  # noqa: E402
 
 
 def load_tiler():
-    """Загрузить `zone-tiler.py` рядом: у него обёртки, а не реализация."""
+    """Load `zone-tiler.py` from next door: it has wrappers, not the implementation."""
     path = os.path.join(ROOT, "zone-tiler.py")
     spec = importlib.util.spec_from_file_location(
         "zone_tiler_window_backend_under_test", path
@@ -48,7 +48,7 @@ zt = load_tiler()
 
 
 def load_daemon():
-    """Загрузить `zone-daemon.py`: `read_session_id` — его обёртка."""
+    """Load `zone-daemon.py`: `read_session_id` is its wrapper."""
     path = os.path.join(ROOT, "zone-daemon.py")
     spec = importlib.util.spec_from_file_location(
         "zone_daemon_window_backend_under_test", path
@@ -58,7 +58,7 @@ def load_daemon():
     spec.loader.exec_module(mod)
     return mod
 
-# Чтение: имя -> число аргументов (кроме self).
+# Reading: name -> number of arguments (besides self).
 READ_API = {
     "window_class_title": 1,
     "window_types": 1,
@@ -82,7 +82,7 @@ READ_API = {
     "monitor_for_point": 2,
 }
 
-# Запись: методы X11 — аргументов без `self` (у `set_state` второй атом необязателен).
+# Writing: X11 methods — arguments without `self` (in `set_state` the second atom is optional).
 WRITE_API = {
     "close": 0,
     "atom": 1,
@@ -114,7 +114,7 @@ class TestWindowBackendContract(unittest.TestCase):
         for name, arity in WRITE_API.items():
             self.assertTrue(hasattr(x11, name), f"нет X11.{name}")
             method = getattr(x11, name)
-            params = list(inspect.signature(method).parameters.values())[1:]  # без self
+            params = list(inspect.signature(method).parameters.values())[1:]  # without self
             optional = sum(
                 1 for p in params if p.default is not inspect.Parameter.empty
             )
@@ -139,27 +139,27 @@ class TestWindowBackendContract(unittest.TestCase):
 
     def test_error_type_is_the_contract_for_failures(self):
         self.assertTrue(issubclass(wb.WindowBackendError, Exception))
-        # Никаких `SystemExit` из оконного слоя: код возврата — дело CLI.
+        # No `SystemExit` out of the window layer: the return code is the CLI's business.
         self.assertFalse(issubclass(wb.WindowBackendError, SystemExit))
 
     def test_no_user_facing_strings(self):
-        # Текст для пользователя и код возврата остаются у CLI: в оконном слое
-        # не должно быть ни `_()`, ни своих сообщений в stderr.
+        # The user-facing text and the return code stay with the CLI: the window layer
+        # must have neither `_()` nor messages of its own on stderr.
         source = inspect.getsource(wb)
         self.assertNotIn("from zone_i18n", source)
         self.assertNotIn("print(", source)
 
 
 class TestTilerWrappers(unittest.TestCase):
-    """Обёртки в `zone-tiler.py`: те же имена и аргументы, тексты — у CLI.
+    """The wrappers in `zone-tiler.py`: the same names and arguments, the texts are the CLI's.
 
-    Тест держит вторую половину шва: перенос тел в `window_backend` не должен
-    сдвинуть ни одну сигнатуру, которую видят демон, пикер, `zone_config`,
-    апплет и тесты, а сообщение с кодом возврата — остаться прежними.
+    The test holds the second half of the seam: moving the bodies into `window_backend` must not
+    shift a single signature that the daemon, the picker, `zone_config`,
+    the applet and the tests see, and the message with the return code must stay as it was.
     """
 
     def test_read_wrappers_keep_names_and_arity(self):
-        # `read_session_id` — обёртка демона, её проверяет тест ниже.
+        # `read_session_id` is the daemon's wrapper, the test below checks it.
         for name, arity in READ_API.items():
             if name == "read_session_id":
                 continue
@@ -178,7 +178,7 @@ class TestTilerWrappers(unittest.TestCase):
             self.assertEqual(zd.read_session_id(), "0x2a")
 
     def test_x11_name_is_the_backend_class(self):
-        # `apply_zone` и тесты берут класс по имени `zone-tiler.X11`.
+        # `apply_zone` and the tests take the class by the name `zone-tiler.X11`.
         self.assertIs(zt.X11, wb.X11)
 
     def test_monitors_failure_is_the_old_message_and_exit_code(self):

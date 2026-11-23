@@ -1,48 +1,48 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты демона GridSnap — без X-сервера и без GTK.
+"""Unit tests for the GridSnap daemon — no X server and no GTK.
 
-`zone-daemon.py` загружается через importlib (имя файла с дефисом), но сама
-загрузка не открывает X: цикл событий живёт в `serve()` и вызывается только из
-CLI. Реакция на события проверяется через инъекцию зависимостей `Daemon`.
+`zone-daemon.py` is loaded through importlib (the file name has a hyphen), but the
+loading itself does not open X: the event loop lives in `serve()` and is called only from
+the CLI. The reaction to events is checked by injecting `Daemon` dependencies.
 
-Покрыто: вложение по правилу при появлении окна в `_NET_CLIENT_LIST`, игнор
-override_redirect и диалогов, защита от повторного появления, пустой WM_CLASS,
-tolerant-чтение `[daemon]`, `read_client_list` (парсинг xprop), реконсиляция
-списка (добавление/исчезновение, повтор без перечитывания, стабильность при
-сворачивании), reflow=off/neighbors, возврат расширенной зоны, когда
-освобождённую занимает новое окно, выбор монитора окна (мультимониторность),
-разводка PropertyNotify (только `_NET_CLIENT_LIST`) и цикл `serve()` на фейковом X11.
+Covered: placement by rule when a window appears in `_NET_CLIENT_LIST`, ignoring
+override_redirect and dialogs, protection against a repeated appearance, an empty WM_CLASS,
+tolerant reading of `[daemon]`, `read_client_list` (parsing xprop), reconciliation of
+the list (adding/removing, a repeat without re-reading, stability on
+iconify), reflow=off/neighbors, returning an expanded zone when a
+new window takes the freed one, choosing the monitor of a window (multiple monitors),
+wiring of PropertyNotify (only `_NET_CLIENT_LIST`) and the `serve()` loop on a fake X11.
 
-Рабочие столы: сетка берётся из профиля стола (`[workspaces]`), занятость и
-reflow не переходят через стол, окна невидимых столов не двигаются, а
-`_NET_CURRENT_DESKTOP` меняет только `self.workspace`.
+Workspaces: the grid comes from the workspace profile (`[workspaces]`), occupancy and
+reflow do not cross a workspace, windows of invisible workspaces do not move, and
+`_NET_CURRENT_DESKTOP` changes only `self.workspace`.
 
-Режим «только эта зона»: вход/`off`/toggle, сворачивание только окон того же
-стола и монитора (исключения и свёрнутое вручную — мимо), разворот на выходе с
-активацией цели последней, снятие режима по исчезновению цели и смене стола,
-сворачивание новых окон того же стола/монитора и поле `focus` в `status`.
+“Only this zone” mode: entering/`off`/toggle, iconifying only windows of the same
+workspace and monitor (exceptions and manually iconified ones are skipped), deiconifying on exit with
+the target activated last, dropping the mode when its target disappears and on a workspace change,
+iconifying new windows of the same workspace/monitor and the `focus` field in `status`.
 
-Вкладки в зоне: рамка вкладки у второго окна и возврат на всю зону у последнего,
-переключение `tabs-next` кольцом и его пустые случаи, `tabs-switch` с чужим
-окном, `focus` с вкладками в зоне-цели (и с окном, которое правило положило
-туда уже во время режима), занятость зоны для reflow, пока в ней осталась хоть
-одна вкладка, снимок для полосы в подменённый процесс (в том числе на выходе из
-режима) и память укладок, которая считает рамку вкладки «окно в зоне».
-Нормализация стопок возвращает оставшейся одной вкладке всю зону — и после
-утаскивания соседа руками, и после перезапуска демона; сдвиг держателя вкладкой
-снимает запись `filled` о покрытой зоне. Отказ запуска полосы (нет GTK — скрипт
-падает на импорте) даёт `failed`, а смерть уже работавшей полосы — перезапуск.
+Tabs in a zone: the tab frame of the second window and the return to the whole zone for the last one,
+switching `tabs-next` in a ring and its empty cases, `tabs-switch` with a foreign
+window, `focus` with tabs in the target zone (and with a window that a rule placed
+there already during the mode), zone occupancy for reflow while at least one
+tab remains in it, the snapshot for the strip into the replaced process (including on leaving
+the mode) and the stack memory that counts a tab frame as “a window in a zone”.
+Normalising the stacks gives the whole zone back to the single remaining tab — both after
+the neighbour was dragged away by hand and after a daemon restart; moving the holder by grabbing a tab
+drops the `filled` record of the covered zone. A failed strip start (no GTK — the script
+fails on import) gives `failed`, while the death of an already running strip — a restart.
 
-Привязка профиля к экрану: окно кладётся по зонам профиля своего экрана
-(`[monitors]` важнее `[workspaces]`), правила и `[ignore]` — из того же
-профиля, откат при отсутствии привязки или файла профиля — на следующий
-уровень с записью в журнал; `status` считает зоны по разрешённым профилям.
-Отдельно проверяется автозапуск: `install-daemon.sh` пишет две записи —
-`gridsnap-daemon.desktop` и `gridsnap-monitors.desktop` (здесь —
-`profile use-monitors --quiet`), а `--list`/`--remove` видят обе.
+Binding a profile to a screen: a window is placed by the zones of its own screen's profile
+(`[monitors]` beats `[workspaces]`), the rules and `[ignore]` come from that same
+profile, and a missing binding or profile file falls back to the next
+level with a log entry; `status` counts the zones by the allowed profiles.
+Autostart is checked separately: `install-daemon.sh` writes two entries —
+`gridsnap-daemon.desktop` and `gridsnap-monitors.desktop` (here —
+`profile use-monitors --quiet`), and `--list`/`--remove` see both.
 
-Запуск:
+Running:
     python3 tests/test_daemon.py
 """
 
@@ -61,14 +61,14 @@ from unittest import mock
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # run as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)  # zone-tiler и его модули
+    sys.path.insert(0, ROOT)  # zone-tiler and its modules
 DAEMON = os.path.join(ROOT, "zone-daemon.py")
 
 
@@ -85,7 +85,7 @@ zd = load_daemon()
 WA = (0, 0, 1000, 1000)
 WA1 = (1000, 0, 800, 600)
 
-# Две соседние зоны: left примыкает к right по вертикальному ребру длиной 1.
+# Two neighbouring zones: left touches right along a vertical edge of length 1.
 TWO_ZONES = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\n"
@@ -99,18 +99,18 @@ ONE_RULE = TWO_ZONES.replace("chromium* = right\n", "")
 
 
 def filled_key(wa, zone, workspace=None):
-    """Ключ покрытия в `Daemon.filled`: (стол, рабочая область, зона).
+    """The coverage key in `Daemon.filled`: (workspace, work area, zone).
 
-    Покрытие расширенного соседа живёт на конкретном столе и мониторе: одна и
-    та же зона на разных столах/экранах — разные записи. `workspace=None` —
-    липкое окно или неизвестный active workspace.
+    Coverage of an expanded neighbour lives on a specific workspace and monitor: the same
+    zone on different workspaces/screens — different records. `workspace=None` —
+    a sticky window or an unknown active workspace.
     """
     return (workspace, wa, zone)
 
 
-# Ожидаемые смещения XPropertyEvent из Xlib.h на LP64 (тот же ABI, что у
-# `zd.XPropertyEvent`). Зашиты числами, чтобы тест ловил разъезд с ABI, а не
-# повторял ту же структуру, что и проверяемый код.
+# Expected XPropertyEvent offsets from Xlib.h on LP64 (the same ABI as
+# `zd.XPropertyEvent`). Hard-coded as numbers so the test catches a drift from the ABI
+# instead of repeating the same structure as the code under test.
 XPROPERTY_EVENT_OFFSETS = {
     "type": 0,
     "serial": 8,
@@ -125,10 +125,10 @@ XPROPERTY_EVENT_SIZE = 64
 
 
 def property_buffer(atom, window=0x2):
-    """XEvent-буфер с XPropertyEvent для PropertyNotify.
+    """An XEvent buffer with an XPropertyEvent for PropertyNotify.
 
-    Собирается сырыми байтами по ожидаемым смещениям Xlib.h (LP64), а не через
-    копию структуры из проверяемого модуля, — иначе тест повторял бы его ошибки.
+    It is built from raw bytes using the expected Xlib.h offsets (LP64) rather than from a
+    copy of the structure in the module under test — otherwise the test would repeat its bugs.
     """
     raw = bytearray(ctypes.sizeof(zd.EVENT_BUFFER))
     struct.pack_into("<i", raw, XPROPERTY_EVENT_OFFSETS["type"], zd.PROPERTY_NOTIFY)
@@ -143,14 +143,14 @@ def property_buffer(atom, window=0x2):
 
 
 class DaemonTestCase(unittest.TestCase):
-    """Общая обвязка сценариев демона: без X, с подменой apply/метаданных/столов.
+    """Common scaffolding of the daemon scenarios: no X, with apply/metadata/workspaces replaced.
 
-    `self.current` — active workspace, `self.workspaces` — стол каждого окна;
-    читатели столов подменены, поэтому тесты не зависят от живого `xprop` и от
-    того, какой стол открыт на машине сборки.
+    `self.current` is the active workspace, `self.workspaces` the workspace of each window;
+    the workspace readers are replaced, so the tests do not depend on a live `xprop` or on
+    which workspace is open on the build machine.
     """
 
-    # Тип окна диалога: служебный, демон его не двигает и не сворачивает.
+    # The window type of a dialog: auxiliary, the daemon neither moves nor iconifies it.
     DIALOG = {"_NET_WM_WINDOW_TYPE_DIALOG"}
 
     def setUp(self):
@@ -158,12 +158,12 @@ class DaemonTestCase(unittest.TestCase):
         self.metas = {}
         self.reads = []
         self.centers = {}
-        # Фактические рамки окон (для снимка вкладок): окно -> (x, y, w, h).
+        # The actual window frames (for the tab snapshot): window -> (x, y, w, h).
         self.rects = {}
         self.current = None
         self.workspaces = {}
-        # Инъекции режима «только эта зона»: что свернули/развернули и какой
-        # список клиентов видит демон. `iconic` — подмена `window_iconic`.
+        # Injections of the “only this zone” mode: what was iconified/deiconified and which
+        # client list the daemon sees. `iconic` is the replacement for `window_iconic`.
         self.iconified = []
         self.iconify_calls = []
         self.deiconified = []
@@ -171,7 +171,7 @@ class DaemonTestCase(unittest.TestCase):
         self.iconic = set()
         self.clients = []
 
-    # -- обвязка
+    # -- scaffolding
 
     def conf(self, text):
         fd, path = tempfile.mkstemp(suffix=".conf", text=True)
@@ -182,7 +182,7 @@ class DaemonTestCase(unittest.TestCase):
         return path
 
     def conf_dir(self):
-        """Пустой временный каталог GridSnap (для `zones.conf` и `templates/`)."""
+        """An empty temporary GridSnap directory (for `zones.conf` and `templates/`)."""
         directory = tempfile.mkdtemp(prefix="gridsnap-daemon-")
         self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
         return directory
@@ -194,7 +194,7 @@ class DaemonTestCase(unittest.TestCase):
         return path
 
     def daemon(self, text=ONE_RULE, reflow=None, directory=None):
-        """Демон без X; `directory` — готовый каталог GridSnap с `templates/`."""
+        """A daemon without X; `directory` — a ready GridSnap directory with `templates/`."""
         if reflow is not None:
             text = text + f"[daemon]\nreflow = {reflow}\n"
         if directory is None:
@@ -221,10 +221,10 @@ class DaemonTestCase(unittest.TestCase):
         outputs=None,
         directory=None,
     ):
-        """Демон с двумя мониторами; монитор окна — по self.centers.
+        """A daemon with two monitors; the monitor of a window — by self.centers.
 
-        `outputs` — имена выходов (для `[monitors]`), `directory` — готовый
-        каталог GridSnap с `templates/` (иначе — временный `zones.conf`).
+        `outputs` — the output names (for `[monitors]`), `directory` — a ready
+        GridSnap directory with `templates/` (otherwise — a temporary `zones.conf`).
         """
         if reflow is not None:
             text = text + f"[daemon]\nreflow = {reflow}\n"
@@ -240,7 +240,7 @@ class DaemonTestCase(unittest.TestCase):
             monitor_outputs=lambda: list(outputs or []),
             window_center=lambda win: self.centers[win],
             read_rect=lambda win: self.rects.get(win),
-            # Активное окно не читается из X: в тестах его нет.
+            # The active window is not read from X: there is none in the tests.
             active_window=lambda: None,
             current_workspace=lambda: self.current,
             window_workspace=lambda win: self.workspaces.get(win),
@@ -253,13 +253,13 @@ class DaemonTestCase(unittest.TestCase):
         self.applied.append((win, rect, label, quiet))
 
     def iconify(self, win, x11=None, quiet=True):
-        """Вместо `tiler.iconify`: запомнить и считать окно свёрнутым (как WM)."""
+        """Instead of `tiler.iconify`: remember the window and count it iconified (as a WM does)."""
         self.iconified.append(win)
         self.iconify_calls.append((win, x11, quiet))
         self.iconic.add(win)
 
     def deiconify(self, win, x11=None):
-        """Вместо `tiler.deiconify`: запомнить и считать окно видимым (как WM)."""
+        """Instead of `tiler.deiconify`: remember the window and count it visible (as a WM does)."""
         self.deiconified.append(win)
         self.deiconify_calls.append((win, x11))
         self.iconic.discard(win)
@@ -298,7 +298,7 @@ class TestDaemonEvents(DaemonTestCase):
         d = self.daemon()
         d.on_map(0x1, override_redirect=True)
         self.assertEqual(self.applied, [])
-        self.assertEqual(self.reads, [])  # метаданные даже не читались
+        self.assertEqual(self.reads, [])  # the metadata was not even read
         self.assertEqual(d.windows, {})
 
     def test_dialog_window_type_ignored(self):
@@ -315,7 +315,7 @@ class TestDaemonEvents(DaemonTestCase):
             "_NET_WM_WINDOW_TYPE_SPLASH",
             "_NET_WM_WINDOW_TYPE_TOOLTIP",
             "_NET_WM_WINDOW_TYPE_UTILITY",
-            "TOOLTIP",  # короткое имя тоже распознаётся
+            "TOOLTIP",  # the short name is recognised too
         ):
             with self.subTest(wtype=wtype):
                 self.applied.clear()
@@ -338,7 +338,7 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_map(0x1)
         d.on_map(0x1)
         self.assertEqual(len(self.applied), 1)
-        self.assertEqual(self.reads, [0x1])  # второй раз не перечитывали
+        self.assertEqual(self.reads, [0x1])  # not re-read a second time
 
     def test_empty_class_is_noop(self):
         self.metas[0x1] = self.meta("")
@@ -354,7 +354,7 @@ class TestDaemonEvents(DaemonTestCase):
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {})
 
-    # -- реконсиляция по _NET_CLIENT_LIST
+    # -- reconciliation over _NET_CLIENT_LIST
 
     def test_reconcile_maps_new_windows(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -372,7 +372,7 @@ class TestDaemonEvents(DaemonTestCase):
         self.reads.clear()
         d.reconcile([0x1])
         self.assertEqual(self.applied, [])
-        self.assertEqual(self.reads, [])  # метаданные не перечитывались
+        self.assertEqual(self.reads, [])  # the metadata was not re-read
 
     def test_reconcile_removes_disappeared_window(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -380,7 +380,7 @@ class TestDaemonEvents(DaemonTestCase):
         d = self.daemon(TWO_ZONES)  # reflow off
         d.reconcile([0x1, 0x2])
         self.applied.clear()
-        d.reconcile([0x2])  # 0x1 закрылось и ушло из списка
+        d.reconcile([0x2])  # 0x1 closed and left the list
         self.assertEqual(d.windows, {0x2: "right"})
         self.assertEqual(d.seen, {0x2})
         self.assertEqual(self.applied, [])
@@ -396,7 +396,7 @@ class TestDaemonEvents(DaemonTestCase):
         self.assertEqual(d.windows, {0x2: "right"})
 
     def test_reconcile_minimize_keeps_window_and_neighbors(self):
-        # Сворачивание не меняет _NET_CLIENT_LIST -> список тот же, ничего не двигаем.
+        # Iconifying does not change _NET_CLIENT_LIST -> the list is the same, we move nothing.
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
@@ -407,13 +407,13 @@ class TestDaemonEvents(DaemonTestCase):
         self.assertEqual(d.windows, {0x1: "left", 0x2: "right"})
 
     def test_reconcile_does_not_recheck_unmatched(self):
-        self.metas[0x1] = self.meta("libreoffice")  # нет правила
+        self.metas[0x1] = self.meta("libreoffice")  # no rule
         d = self.daemon()
         d.reconcile([0x1])
         self.assertEqual(d.windows, {})
         self.assertEqual(d.seen, {0x1})
         self.reads.clear()
-        d.reconcile([0x1])  # тот же список -> метаданные не трогаем
+        d.reconcile([0x1])  # the same list -> the metadata is left alone
         self.assertEqual(self.reads, [])
 
     def test_reconcile_ignored_type_is_seen_but_untracked(self):
@@ -427,7 +427,7 @@ class TestDaemonEvents(DaemonTestCase):
         self.assertEqual(d.seen, {0x1})
 
     def test_reconcile_new_window_occupies_freed_zone_before_reflow(self):
-        # 0x1 закрылось, 0x3 открылось в left: right не должен расширяться.
+        # 0x1 closed, 0x3 opened in left: right must not expand.
         self.metas[0x2] = self.meta("chromium")
         self.metas[0x3] = self.meta("firefox-esr")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
@@ -445,12 +445,12 @@ class TestDaemonEvents(DaemonTestCase):
         self.assertEqual(len(self.applied), 1)
         self.assertEqual(self.reads, [0x1])
 
-    # -- Destroy: реальное закрытие окна
+    # -- Destroy: a real window close
 
     def test_destroy_with_reflow_off_moves_nothing(self):
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
-        d = self.daemon(TWO_ZONES)  # reflow по умолчанию off
+        d = self.daemon(TWO_ZONES)  # reflow is off by default
         d.on_map(0x1)
         d.on_map(0x2)
         self.applied.clear()
@@ -466,11 +466,11 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_map(0x2)
         self.applied.clear()
         d.on_destroy(0x1)
-        # left освободилась, right расширяется на всю рабочую область
+        # left was freed, right expands to the whole work area
         self.assertEqual(self.applied, [(0x2, (0, 0, 1000, 1000), "right", True)])
         self.assertEqual(d.windows, {0x2: "right"})
 
-    # -- Unmap: сворачивание/скрытие/смена воркспейса -> no-op
+    # -- Unmap: iconify/hide/workspace change -> no-op
 
     def test_unmap_with_reflow_neighbors_moves_nothing(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -479,8 +479,8 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_map(0x1)
         d.on_map(0x2)
         self.applied.clear()
-        d.on_unmap(0x1)  # окно свёрнуто, но ещё живо
-        self.assertEqual(self.applied, [])  # соседей не двигаем
+        d.on_unmap(0x1)  # the window is iconified but still alive
+        self.assertEqual(self.applied, [])  # no neighbour is moved
 
     def test_unmap_keeps_window_in_tracker(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -493,10 +493,10 @@ class TestDaemonEvents(DaemonTestCase):
         self.metas[0x1] = self.meta("firefox-esr")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.on_map(0x1)
-        d.on_unmap(0x1)   # свернули
-        d.on_map(0x1)     # развернули обратно
+        d.on_unmap(0x1)   # iconified
+        d.on_map(0x1)     # deiconified back
         self.assertEqual(len(self.applied), 1)
-        self.assertEqual(self.reads, [0x1])  # повторно метаданные не читали
+        self.assertEqual(self.reads, [0x1])  # the metadata was not read again
         self.assertEqual(d.windows, {0x1: "left"})
 
     def test_unmap_then_destroy_still_reflows(self):
@@ -505,9 +505,9 @@ class TestDaemonEvents(DaemonTestCase):
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.on_map(0x1)
         d.on_map(0x2)
-        d.on_unmap(0x1)  # свернули — трекер и раскладка на месте
+        d.on_unmap(0x1)  # iconified - tracker and layout stay in place
         self.applied.clear()
-        d.on_destroy(0x1)  # действительно закрыли
+        d.on_destroy(0x1)  # really closed
         self.assertEqual(self.applied, [(0x2, (0, 0, 1000, 1000), "right", True)])
 
     def test_apply_failure_does_not_track_and_retries(self):
@@ -526,13 +526,13 @@ class TestDaemonEvents(DaemonTestCase):
             workarea=lambda: WA,
         )
         d.on_map(0x1)
-        self.assertEqual(d.windows, {})  # неудача не запоминается
-        d.on_map(0x1)  # следующий MapNotify пробует снова
+        self.assertEqual(d.windows, {})  # a failure is not remembered
+        d.on_map(0x1)  # the next MapNotify tries again
         self.assertEqual(d.windows, {0x1: "left"})
         self.assertEqual(len(calls), 2)
 
     def test_default_apply_reuses_daemon_connection(self):
-        # При дефолтном apply демон передаёт своё X-соединение (чужое не закрыть).
+        # With the default apply the daemon passes its own X connection (a foreign one cannot be closed).
         self.metas[0x1] = self.meta("firefox-esr")
         d = zd.Daemon(
             self.conf(ONE_RULE), read_meta=self.read_meta, workarea=lambda: WA
@@ -546,7 +546,7 @@ class TestDaemonEvents(DaemonTestCase):
         self.assertEqual(d.windows, {0x1: "left"})
 
     def test_system_exit_from_apply_does_not_kill_daemon(self):
-        # `fail()` в layout-коде бросает SystemExit — демон должен его пережить.
+        # `fail()` in the layout code raises SystemExit — the daemon must survive it.
         self.metas[0x1] = self.meta("firefox-esr")
 
         def boom(win, rect, label="", quiet=False):
@@ -558,12 +558,12 @@ class TestDaemonEvents(DaemonTestCase):
             read_meta=self.read_meta,
             workarea=lambda: WA,
         )
-        d.on_map(0x1)  # не должно выбросить SystemExit
+        d.on_map(0x1)  # must not raise SystemExit
         self.assertEqual(d.windows, {})
         self.assertEqual(d.seen, set())
 
     def test_keyboard_interrupt_from_apply_is_not_swallowed(self):
-        # Прерывание с клавиатуры не маскируется под ошибку X.
+        # An interrupt from the keyboard is not disguised as an X error.
         self.metas[0x1] = self.meta("firefox-esr")
 
         def interrupt(win, rect, label="", quiet=False):
@@ -579,8 +579,8 @@ class TestDaemonEvents(DaemonTestCase):
             d.on_map(0x1)
 
     def test_system_exit_from_workarea_does_not_kill_daemon(self):
-        # Провайдер рабочей области бросает SystemExit при отказе X: получение
-        # рабочей области не должно ронять демон.
+        # The work area provider raises SystemExit when X refuses: getting the
+        # work area must not bring the daemon down.
         self.metas[0x1] = self.meta("firefox-esr")
 
         def boom():
@@ -592,13 +592,13 @@ class TestDaemonEvents(DaemonTestCase):
             read_meta=self.read_meta,
             workarea=boom,
         )
-        d.on_map(0x1)  # не должно выбросить SystemExit
-        self.assertEqual(self.applied, [])  # окно не уложено
+        d.on_map(0x1)  # must not raise SystemExit
+        self.assertEqual(self.applied, [])  # the window is not placed
         self.assertEqual(d.windows, {})
         self.assertEqual(d.seen, set())
 
     def test_keyboard_interrupt_from_workarea_is_not_swallowed(self):
-        # `_forced_workarea` ловит (Exception, SystemExit), но не BaseException.
+        # `_forced_workarea` catches (Exception, SystemExit), but not BaseException.
         self.metas[0x1] = self.meta("firefox-esr")
 
         def interrupt():
@@ -614,8 +614,8 @@ class TestDaemonEvents(DaemonTestCase):
             d.on_map(0x1)
 
     def test_reflow_skipped_when_monitor_unknown(self):
-        # Монитор ушедшего окна не запомнен (трекер восстановлен вручную):
-        # reflow пропускается, а не падает.
+        # The monitor of the departed window is not remembered (the tracker was restored by hand):
+        # reflow is skipped rather than crashing.
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.windows = {0x1: "left", 0x2: "right"}
         d.win_monitor = {0x2: WA}
@@ -641,33 +641,33 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_map(0x1)
         d.on_destroy(0x1)
         self.assertEqual(d.windows, {})
-        # повторный destroy уже ничего не делает
+        # a repeated destroy already does nothing
         d.on_destroy(0x1)
         self.assertEqual(len(self.applied), 1)
         self.assertEqual(self.applied[0], (0x1, (0, 0, 500, 1000), "left", True))
 
     def test_reflow_only_moves_remaining_tracked_window(self):
-        # freed left занята ещё одним окном -> reflow не должен ничего делать.
+        # the freed left is taken by another window -> reflow must do nothing.
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("firefox-esr")
         self.metas[0x3] = self.meta("chromium")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.on_map(0x1)
-        d.on_map(0x2)  # оба окна замаплены в left; трекер хранит оба
+        d.on_map(0x2)  # both windows are mapped to left; the tracker holds both
         d.on_map(0x3)
         self.applied.clear()
         d.on_destroy(0x1)
-        # left всё ещё занята окном 0x2 -> reflow возвращает {} и соседа не
-        # двигает; переставляется только сама стопка: оставшаяся одна вкладка
-        # снова занимает зону целиком (полоса без стопки не нужна).
+        # left is still taken by window 0x2 -> reflow returns {} and does not move
+        # the neighbour; only the stack itself is rearranged: the single remaining tab
+        # takes the whole zone again (a strip without a stack is not needed).
         self.assertEqual(self.applied, [(0x2, (0, 0, 500, 1000), "left", True)])
         self.assertEqual(d.windows, {0x2: "left", 0x3: "right"})
 
-    # -- возврат расширенной зоны, когда новое окно встаёт в освобождённую
+    # -- returning an expanded zone when a new window takes the freed one
 
     def test_new_window_in_freed_zone_restores_expanded_neighbor(self):
-        # 0x1 закрылось, right расширился на left; новое окно 0x3 в left
-        # возвращает right к его рамке из конфига.
+        # 0x1 closed, right expanded onto left; a new window 0x3 in left
+        # brings right back to its frame from the config.
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
         self.metas[0x3] = self.meta("firefox-esr")
@@ -689,7 +689,7 @@ class TestDaemonEvents(DaemonTestCase):
         self.assertEqual(d.windows, {0x2: "right", 0x3: "left"})
 
     def test_window_without_rule_does_not_restore_neighbor(self):
-        # Окно без правила освобождённую зону не занимает — возвращать нечего.
+        # A window without a rule does not take the freed zone — there is nothing to return.
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
         self.metas[0x3] = self.meta("libreoffice")
@@ -716,7 +716,7 @@ class TestDaemonEvents(DaemonTestCase):
         self.assertEqual(self.applied, [(0x3, (0, 0, 500, 1000), "left", True)])
 
     def test_missing_holder_record_is_dropped(self):
-        # Держателя уже нет в трекере: запись снимается, падения нет.
+        # The holder is gone from the tracker: the record is dropped, no crash.
         self.metas[0x3] = self.meta("firefox-esr")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.windows = {}
@@ -733,7 +733,7 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_map(0x2)
         d.on_destroy(0x1)
         self.assertEqual(d.filled, {filled_key(WA, "left"): 0x2})
-        d.on_destroy(0x2)  # держатель исчез — возвращать некого
+        d.on_destroy(0x2)  # the holder is gone - there is nobody to return
         self.assertEqual(d.filled, {})
 
     def test_failed_restore_keeps_record_for_retry(self):
@@ -759,10 +759,10 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_destroy(0x1)
         calls.clear()
         fail["restore"] = True
-        d.on_map(0x3)  # новое окно встало, но вернуть соседа не удалось
+        d.on_map(0x3)  # the new window was placed, but the neighbour could not be returned
         self.assertEqual(d.windows, {0x2: "right", 0x3: "left"})
-        self.assertEqual(calls[-1][0], 0x2)  # попытка возврата была
-        self.assertEqual(d.filled, {filled_key(WA, "left"): 0x2})  # запись осталась
+        self.assertEqual(calls[-1][0], 0x2)  # a return attempt was made
+        self.assertEqual(d.filled, {filled_key(WA, "left"): 0x2})  # the record stays
 
     def test_reconcile_restores_neighbor_when_new_window_fills_freed_zone(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -770,10 +770,10 @@ class TestDaemonEvents(DaemonTestCase):
         self.metas[0x3] = self.meta("firefox-esr")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.reconcile([0x1, 0x2])
-        d.reconcile([0x2])  # 0x1 закрылось -> right расширился на left
+        d.reconcile([0x2])  # 0x1 closed -> right expanded into left
         self.assertEqual(d.filled, {filled_key(WA, "left"): 0x2})
         self.applied.clear()
-        d.reconcile([0x2, 0x3])  # 0x3 открылось в left
+        d.reconcile([0x2, 0x3])  # 0x3 opened in left
         self.assertEqual(
             self.applied,
             [
@@ -783,7 +783,7 @@ class TestDaemonEvents(DaemonTestCase):
         )
         self.assertEqual(d.filled, {})
 
-    # -- несколько мониторов
+    # -- several monitors
 
     def test_window_on_second_monitor_uses_its_workarea(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -795,7 +795,7 @@ class TestDaemonEvents(DaemonTestCase):
 
     def test_window_center_outside_monitors_picks_nearest(self):
         self.metas[0x1] = self.meta("firefox-esr")
-        self.centers[0x1] = (1400, 700)  # ниже монитора 1, ближе к нему
+        self.centers[0x1] = (1400, 700)  # below monitor 1, closer to it
         d = self.multi_daemon()
         d.on_map(0x1)
         self.assertEqual(self.applied, [(0x1, (1000, 0, 400, 600), "left", True)])
@@ -822,7 +822,7 @@ class TestDaemonEvents(DaemonTestCase):
             monitors=boom,
             window_center=lambda win: self.centers[win],
         )
-        d.on_map(0x1)  # отказ X при получении мониторов не должен уронить демон
+        d.on_map(0x1)  # X refusing to give the monitors must not bring the daemon down
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {})
 
@@ -865,11 +865,11 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_map(0x3)
         self.applied.clear()
         d.on_destroy(0x1)
-        # right на мониторе 0 расширяется окном 0x3; окно 0x2 с другого экрана не трогаем
+        # right on monitor 0 expands with window 0x3; window 0x2 from the other screen is left alone
         self.assertEqual(self.applied, [(0x3, (0, 0, 1000, 1000), "right", True)])
         self.assertEqual(d.filled, {filled_key(WA, "left"): 0x3})
 
-    # -- tolerant-чтение [daemon]
+    # -- tolerant reading of [daemon]
 
     def test_reflow_defaults_to_off(self):
         self.assertEqual(self.daemon(ONE_RULE).reflow, zd.REFLOW_OFF)
@@ -891,7 +891,7 @@ class TestDaemonEvents(DaemonTestCase):
         self.assertEqual(self.daemon(text).reflow, zd.REFLOW_NEIGHBORS)
 
 
-# Конфиг со профилем стола: стол «2» в [workspaces] — это индекс 1 в EWMH.
+# A config with a workspace profile: workspace “2” in [workspaces] is index 1 in EWMH.
 DESKTOP_CONF = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\n"
@@ -902,7 +902,7 @@ DESKTOP_CONF = (
     "[workspaces]\n"
     "2 = cinema\n"
 )
-# Профиль стола: та же зона `video` в другой геометрии (и другая `main`).
+# Workspace profile: the same zone `video` in a different geometry (and a different `main`).
 CINEMA_PROFILE = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\n"
@@ -912,20 +912,20 @@ CINEMA_PROFILE = (
 
 
 class TestWorkspaces(DaemonTestCase):
-    """Рабочие столы: сетка из профиля, занятость и reflow в пределах стола."""
+    """Workspaces: the grid from the profile, occupancy and reflow within a workspace."""
 
     def desktop_daemon(self, profile=CINEMA_PROFILE):
-        """Демон на конфиге `[workspaces]` с профилем стола во временном каталоге."""
+        """A daemon on a `[workspaces]` config with a workspace profile in a temporary directory."""
         directory = self.conf_dir()
         if profile is not None:
             self.write(os.path.join(directory, "templates", "cinema.conf"), profile)
         self.current = 1
         return self.daemon(DESKTOP_CONF, directory=directory)
 
-    # -- сетка на стол
+    # -- grid per workspace
 
     def test_on_map_uses_profile_zones_of_window_workspace(self):
-        # Окно на столе «2» (EWMH 1) встаёт в зону профиля cinema: video — 0,0.25,1,0.75.
+        # A window on workspace “2” (EWMH 1) takes the zone of the cinema profile: video — 0,0.25,1,0.75.
         self.metas[0x1] = self.meta("firefox-esr")
         self.workspaces = {0x1: 1}
         d = self.desktop_daemon()
@@ -934,7 +934,7 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(d.win_workspace, {0x1: 1})
 
     def test_on_map_uses_default_zones_for_unmapped_workspace(self):
-        # Стол 0 профиля не имеет — обычный набор `zones.conf`.
+        # Workspace 0 has no profile — the usual `zones.conf` set.
         self.metas[0x1] = self.meta("firefox-esr")
         self.workspaces = {0x1: 0}
         d = self.desktop_daemon()
@@ -942,8 +942,8 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(self.applied, [(0x1, (500, 0, 500, 1000), "video", True)])
 
     def test_sticky_window_uses_default_zones(self):
-        # «Липкое» окно (стол неизвестен) живёт в общем наборе, даже если
-        # active workspace — профильный.
+        # A “sticky” window (unknown workspace) lives in the common set, even if
+        # the active workspace has a profile.
         self.metas[0x1] = self.meta("firefox-esr")
         self.workspaces = {0x1: None}
         d = self.desktop_daemon()
@@ -959,7 +959,7 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(self.applied, [(0x1, (500, 0, 500, 1000), "video", True)])
 
     def test_rule_zone_missing_in_profile_is_not_placed(self):
-        # В профиле no zone правила — окно не укладываем, а не падаем.
+        # The profile has no zone rule — we do not place the window, we do not crash.
         self.metas[0x1] = self.meta("firefox-esr")
         self.workspaces = {0x1: 1}
         d = self.desktop_daemon(profile="[zones]\nmain = 0, 0, 1, 1\n")
@@ -967,11 +967,11 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {})
 
-    # -- reflow только на видимом столе
+    # -- reflow only on the visible workspace
 
     def test_destroy_on_invisible_workspace_moves_nothing(self):
-        # Две поддельные таблицы окон: стол 1 виден, стол 2 — нет. Закрытие окна
-        # невидимого стола чистит состояние, но не двигает никого.
+        # Two fake window tables: workspace 1 is visible, workspace 2 is not. Closing a window
+        # of an invisible workspace cleans the state but moves nobody.
         self.metas = {
             0x1: self.meta("firefox-esr"),
             0x2: self.meta("chromium"),
@@ -986,17 +986,17 @@ class TestWorkspaces(DaemonTestCase):
             d.windows, {0x1: "left", 0x2: "right", 0x3: "left", 0x4: "right"}
         )
         self.applied.clear()
-        d.reconcile([0x1, 0x2, 0x4])  # 0x3 закрылось на невидимом столе 2
+        d.reconcile([0x1, 0x2, 0x4])  # 0x3 closed on the invisible workspace 2
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {0x1: "left", 0x2: "right", 0x4: "right"})
         self.assertEqual(d.filled, {})
-        d.reconcile([0x1, 0x2])  # 0x4 там же — тоже без движений
+        d.reconcile([0x1, 0x2])  # 0x4 is there as well - no movement either
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {0x1: "left", 0x2: "right"})
 
     def test_destroy_on_invisible_workspace_does_not_expand_visible_neighbor(self):
-        # На видимом столе левая зона пуста: без проверки «стол виден» reflow
-        # расширил бы соседа видимого стола на закрытие окна чужого стола.
+        # On the visible workspace the left zone is empty: without the “workspace is visible” check reflow
+        # would expand the neighbour of the visible workspace when a window of a foreign workspace closes.
         self.metas = {
             0x2: self.meta("chromium"),
             0x3: self.meta("firefox-esr"),
@@ -1009,14 +1009,14 @@ class TestWorkspaces(DaemonTestCase):
         d.on_map(0x3)
         d.on_map(0x4)
         self.applied.clear()
-        d.on_destroy(0x3)  # окно workspace 2; на столе 1 зона left пуста
+        d.on_destroy(0x3)  # a workspace 2 window; on workspace 1 the left zone is free
         self.assertEqual(self.applied, [])
         self.assertEqual(d.filled, {})
         self.assertEqual(d.windows, {0x2: "right", 0x4: "right"})
 
     def test_occupied_zone_of_other_workspace_does_not_block_reflow(self):
-        # На столе 2 в left стоит окно: для стола 1 эта зона свободна, и right
-        # расширяется.
+        # On workspace 2 a window stands in left: for workspace 1 this zone is free, and right
+        # expands.
         self.metas = {
             0x1: self.meta("firefox-esr"),
             0x2: self.meta("chromium"),
@@ -1034,8 +1034,8 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(d.filled, {filled_key(WA, "left", 1): 0x2})
 
     def test_reflow_target_is_on_visible_workspace(self):
-        # Окно workspace 2 в той же зоне заведено раньше окна стола 1: расширять
-        # надо соседа видимого стола (0x2), а не 0x9 со workspace 2.
+        # A window of workspace 2 in the same zone was registered before the window of workspace 1: the one
+        # to expand is the neighbour of the visible workspace (0x2), not 0x9 from workspace 2.
         self.metas = {
             0x9: self.meta("chromium"),
             0x1: self.meta("firefox-esr"),
@@ -1064,7 +1064,7 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(d.filled, {filled_key(WA, "left", 1): 0x2})
 
     def test_reflow_prefers_neighbor_of_visible_workspace(self):
-        # На обоих столах в `right` стоит окно: расширяется сосед видимого стола.
+        # On both workspaces a window stands in `right`: the neighbour of the visible workspace expands.
         self.metas = {
             0x1: self.meta("firefox-esr"),
             0x2: self.meta("chromium"),
@@ -1081,8 +1081,8 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(self.applied, [(0x2, (0, 0, 1000, 1000), "right", True)])
 
     def test_destroy_with_unknown_current_workspace_moves_nothing(self):
-        # Активный стол не прочитался, а окна принадлежат столу 2: двигать
-        # вслепую нельзя.
+        # The active workspace was not read, while the windows belong to workspace 2: moving
+        # blindly is not allowed.
         self.metas = {0x1: self.meta("firefox-esr"), 0x2: self.meta("chromium")}
         self.workspaces = {0x1: 2, 0x2: 2}
         self.current = None
@@ -1095,7 +1095,7 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(d.windows, {0x2: "right"})
 
     def test_new_window_on_other_workspace_does_not_restore_holder(self):
-        # Покрытие появилось на столе 1; окно workspace 2 в ту же зону его не снимает.
+        # The coverage appeared on workspace 1; a window of workspace 2 in the same zone does not drop it.
         self.metas = {
             0x1: self.meta("firefox-esr"),
             0x2: self.meta("chromium"),
@@ -1109,7 +1109,7 @@ class TestWorkspaces(DaemonTestCase):
         d.on_destroy(0x1)
         self.assertEqual(d.filled, {filled_key(WA, "left", 1): 0x2})
         self.applied.clear()
-        d.on_map(0x3)  # окно workspace 2 в зону left
+        d.on_map(0x3)  # a workspace 2 window into the left zone
         self.assertEqual(self.applied, [(0x3, (0, 0, 500, 1000), "left", True)])
         self.assertEqual(d.filled, {filled_key(WA, "left", 1): 0x2})
 
@@ -1124,7 +1124,7 @@ class TestWorkspaces(DaemonTestCase):
         d.on_map(0x2)
         self.assertEqual(d.workspace, 1)
         self.applied.clear()
-        # Пользователь перешёл на стол 2: PropertyNotify о _NET_CURRENT_DESKTOP.
+        # The user switched to workspace 2: a PropertyNotify about _NET_CURRENT_DESKTOP.
         self.current = 2
         handled = zd.handle_property_event(
             d, property_buffer(0xABD), 0xABC, lambda: None, 0xABD
@@ -1147,11 +1147,11 @@ class TestWorkspaces(DaemonTestCase):
     def test_workspace_change_without_readable_desktop_keeps_previous(self):
         self.current = 3
         d = self.daemon(TWO_ZONES, reflow="neighbors")
-        self.current = None  # xprop не ответил
+        self.current = None  # xprop did not answer
         self.assertEqual(d.on_workspace_change(), 3)
         self.assertEqual(d.workspace, 3)
 
-    # -- status для gridsnap-ctl
+    # -- status for gridsnap-ctl
 
     def test_status_reports_current_workspace_and_window_workspace(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -1172,7 +1172,7 @@ class TestWorkspaces(DaemonTestCase):
                 }
             ],
         )
-        # прежние поля на месте
+        # the previous fields are still there
         self.assertEqual(sorted(status["zones"]), ["left", "right"])
 
     def test_status_reports_workspace_of_filled_zone(self):
@@ -1190,12 +1190,12 @@ class TestWorkspaces(DaemonTestCase):
         )
 
 
-# --- привязка профиля к экрану --------------------------------------------
+# --- binding a profile to a screen -----------------------------------------
 
-# Конфиг с привязкой экранов: `[monitors]` важнее `[workspaces]`, а тот —
-# активного набора зон. Профили отличаются и зонами, и правилами — иначе не
-# видно, чей профиль сработал: у work окно firefox идёт в `main` на весь экран,
-# у cinema — в `video` на верхнюю половину, а активный `[rules]` говорит `video`.
+# A config with screen bindings: `[monitors]` beats `[workspaces]`, and that one beats
+# the active zone set. The profiles differ both in zones and in rules — otherwise one
+# could not see whose profile worked: in work the firefox window goes to `main` full screen,
+# in cinema — to `video` on the upper half, while the active `[rules]` says `video`.
 SCREEN_CONF = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\n"
@@ -1223,7 +1223,7 @@ SCREEN_CINEMA_PROFILE = (
     "[rules]\n"
     "firefox* = video\n"
 )
-# Профиль второго экрана для reflow: две половины — соседи по вертикальному ребру.
+# The profile of the second screen for reflow: two halves — neighbours along a vertical edge.
 SCREEN_REFLOW_PROFILE = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\n"
@@ -1233,15 +1233,15 @@ SCREEN_REFLOW_PROFILE = (
     "firefox* = left\n"
     "chromium* = right\n"
 )
-# Имена выходов в том же порядке, что monitors=(WA, WA1).
+# The output names in the same order as monitors=(WA, WA1).
 SCREEN_OUTPUTS = (("HDMI-1", WA), ("HDMI-2", WA1))
 
 
 class TestMonitorProfiles(DaemonTestCase):
-    """Привязка профиля к экрану: `[monitors]` важнее `[workspaces]`.
+    """Binding a profile to a screen: `[monitors]` beats `[workspaces]`.
 
-    Профили живут в `templates/` рядом с `zones.conf` — как у стола; окно
-    кладётся по зонам профиля **своего экрана**, а не того стола, где оно стоит.
+    The profiles live in `templates/` next to `zones.conf` — as for a workspace; a window
+    is placed by the zones of the profile of **its own screen**, not of the workspace it stands on.
     """
 
     def screen_daemon(
@@ -1251,10 +1251,10 @@ class TestMonitorProfiles(DaemonTestCase):
         reflow=None,
         outputs=SCREEN_OUTPUTS,
     ):
-        """Демон с двумя экранами и профилями в `templates/`.
+        """A daemon with two screens and profiles in `templates/`.
 
-        `templates=None` — оба профиля по умолчанию; иначе — словарь
-        `{имя: текст}`; значение `None` — профиля на диске нет.
+        `templates=None` — both default profiles; otherwise — a dict
+        `{name: text}`; the value `None` — there is no profile on disk.
         """
         if templates is None:
             templates = {
@@ -1272,20 +1272,20 @@ class TestMonitorProfiles(DaemonTestCase):
 
     def open_window(self, win, wm_class, center, workspace=None):
         """
- Окно появилось: класс, центр (выбирает экран) и стол.
+ A window appeared: class, center (which chooses the screen) and workspace.
 
-        `center` в WA1 — второй экран (HDMI-2), в WA — первый (HDMI-1).
+        `center` in WA1 is the second screen (HDMI-2), in WA — the first (HDMI-1).
         """
         self.metas[win] = self.meta(wm_class)
         self.centers[win] = center
         self.workspaces[win] = workspace
 
-    # -- зона окна по экрану
+    # -- the zone of a window by screen
 
     def test_window_uses_zone_of_its_screen_profile(self):
-        # Стол 2 привязан к профилю work (firefox -> main на весь экран), но окно
-        # стоит на втором экране: решает профиль экрана cinema — video, 0..1 x
-        # 0..0.5 рабочей области WA1 (1000, 0, 800, 600).
+        # Workspace 2 is bound to the work profile (firefox -> main full screen), but the window
+        # stands on the second screen: the cinema screen profile decides — video, 0..1 x
+        # 0..0.5 of the work area of WA1 (1000, 0, 800, 600).
         self.open_window(0x1, "firefox-esr", (1400, 300), workspace=1)
         d = self.screen_daemon()
         d.on_map(0x1)
@@ -1294,16 +1294,16 @@ class TestMonitorProfiles(DaemonTestCase):
         self.assertEqual(d.win_workspace, {0x1: 1})
 
     def test_rules_come_from_the_same_profile(self):
-        # Активный [rules] говорит firefox -> video, а профиль экрана HDMI-1
-        # (work) — firefox -> main: правило берётся из профиля окна.
+        # The active [rules] says firefox -> video, while the profile of the HDMI-1 screen
+        # (work) — firefox -> main: the rule comes from the profile of the window.
         self.open_window(0x1, "firefox-esr", (500, 500), workspace=0)
         d = self.screen_daemon()
         d.on_map(0x1)
         self.assertEqual(self.applied, [(0x1, (0, 0, 1000, 1000), "main", True)])
 
     def test_window_ignored_by_screen_profile_is_not_placed(self):
-        # В профиле экрана своё [ignore] — окно, которое активный конфиг трогает,
-        # на этом экране остаётся в покое.
+        # The screen profile has its own [ignore] — a window that the active config touches
+        # is left alone on this screen.
         templates = {
             "work": SCREEN_WORK_PROFILE,
             "cinema": SCREEN_CINEMA_PROFILE + "[ignore]\nfirefox* = своё окно\n",
@@ -1314,11 +1314,11 @@ class TestMonitorProfiles(DaemonTestCase):
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {})
 
-    # -- откат, когда привязки нет или профиль пропал
+    # -- fallback when there is no binding or the profile is gone
 
     def test_screen_without_binding_uses_desktop_profile(self):
-        # У HDMI-2 привязки нет: второй экран живёт по профилю стола (work), то
-        # есть firefox встаёт в main на весь экран, а не в video активного набора.
+        # HDMI-2 has no binding: the second screen lives by the workspace profile (work), that
+        # is, firefox goes to main full screen rather than to video of the active set.
         conf = SCREEN_CONF.replace("HDMI-2 = cinema\n", "")
         self.open_window(0x1, "firefox-esr", (1400, 300), workspace=1)
         d = self.screen_daemon(conf=conf)
@@ -1326,8 +1326,8 @@ class TestMonitorProfiles(DaemonTestCase):
         self.assertEqual(self.applied, [(0x1, (1000, 0, 800, 600), "main", True)])
 
     def test_missing_screen_profile_falls_back_to_desktop_with_log(self):
-        # Привязка `HDMI-2 = cinema` есть, а файла cinema.conf нет: откат на
-        # профиль стола work с записью в журнал, демон жив и кладёт следующие окна.
+        # The binding `HDMI-2 = cinema` exists, but there is no cinema.conf file: a fallback to
+        # the work workspace profile with a log entry, the daemon is alive and places the next windows.
         templates = {"work": SCREEN_WORK_PROFILE, "cinema": None}
         self.open_window(0x1, "firefox-esr", (1400, 300), workspace=1)
         d = self.screen_daemon(templates=templates)
@@ -1338,37 +1338,37 @@ class TestMonitorProfiles(DaemonTestCase):
         self.assertIn('profile "cinema" (of monitor HDMI-2) is not on disk', lines)
         self.assertIn("falling back to the next level", lines)
         self.assertEqual(self.applied, [(0x1, (1000, 0, 800, 600), "main", True)])
-        # Демон продолжает работать: окно на первом экране встаёт в work.
+        # The daemon keeps working: a window on the first screen takes work.
         self.applied.clear()
         self.open_window(0x2, "firefox-esr", (500, 500), workspace=0)
         d.on_map(0x2)
         self.assertEqual(self.applied, [(0x2, (0, 0, 1000, 1000), "main", True)])
 
     def test_missing_desktop_profile_falls_back_to_active_conf(self):
-        # Ни экран (HDMI-2 без привязки), ни стол (профиль work пропал) не дали
-        # сетку — остаётся активный zones.conf, и окно кладётся по его правилам.
+        # Neither the screen (HDMI-2 without a binding) nor the workspace (the work profile is gone) gave
+        # a grid — the active zones.conf remains, and the window is placed by its rules.
         conf = SCREEN_CONF.replace("HDMI-2 = cinema\n", "")
         self.open_window(0x1, "firefox-esr", (1400, 300), workspace=1)
         d = self.screen_daemon(conf=conf, templates={"work": None})
         d.on_map(0x1)
-        # Активный набор: video = 0.5, 0, 0.5, 1 на WA1.
+        # The active set: video = 0.5, 0, 0.5, 1 on WA1.
         self.assertEqual(self.applied, [(0x1, (1400, 0, 400, 600), "video", True)])
 
     def test_unknown_output_name_keeps_working(self):
-        # Монитор не сопоставился с именем выхода (нет xrandr): окно живёт по
-        # профилю стола, как до волны, и раскладка не отваливается.
+        # The monitor did not match an output name (no xrandr): the window lives by the
+        # workspace profile, as before this wave, and the layout does not break.
         self.open_window(0x1, "firefox-esr", (1400, 300), workspace=1)
         d = self.screen_daemon(outputs=())
         d.on_map(0x1)
         self.assertEqual(self.applied, [(0x1, (1000, 0, 800, 600), "main", True)])
 
     def test_reload_picks_up_new_monitor_binding(self):
-        # Привязку добавили правкой конфига — reload подхватывает её без рестарта.
+        # The binding was added by editing the config — reload picks it up without a restart.
         conf = SCREEN_CONF.replace("[monitors]\nHDMI-1 = work\nHDMI-2 = cinema\n", "")
         self.open_window(0x1, "firefox-esr", (500, 500), workspace=0)
         d = self.screen_daemon(conf=conf)
         d.on_map(0x1)
-        # Без привязки экрана стол 1 живёт активным набором: firefox -> video.
+        # Without a screen binding workspace 1 lives by the active set: firefox -> video.
         self.assertEqual(self.applied, [(0x1, (500, 0, 500, 1000), "video", True)])
         self.write(d.conf_path, SCREEN_CONF)
         d.ipc_reload()
@@ -1377,11 +1377,11 @@ class TestMonitorProfiles(DaemonTestCase):
         d.on_map(0x2)
         self.assertEqual(self.applied, [(0x2, (1000, 0, 800, 300), "video", True)])
 
-    # -- reflow и вкладки — на сетке того же профиля
+    # -- reflow and tabs — on the grid of the same profile
 
     def test_reflow_uses_screen_profile_geometry(self):
-        # Окно в левой половине экрана закрылось: сосед справа расширяется по
-        # долям профиля экрана. В активном наборе зон left/right нет вовсе.
+        # A window in the left half of the screen closed: the neighbour on the right expands by
+        # the fractions of the screen profile. The active zone set has no left/right at all.
         templates = {"work": SCREEN_WORK_PROFILE, "cinema": SCREEN_REFLOW_PROFILE}
         self.open_window(0x1, "firefox-esr", (1200, 500), workspace=1)
         self.open_window(0x2, "chromium", (1600, 500), workspace=1)
@@ -1401,15 +1401,15 @@ class TestMonitorProfiles(DaemonTestCase):
         self.assertEqual(d.filled, {filled_key(WA1, "left", 1): 0x2})
 
     def test_tabs_snapshot_uses_screen_profile_zones(self):
-        # Две вкладки на втором экране: снимок полосы считает зону по профилю
-        # cinema (video — верхняя половина экрана), а не по активному набору
-        # (там video — правая половина другого монитора).
+        # Two tabs on the second screen: the strip snapshot counts the zone by the
+        # cinema profile (video — the upper half of the screen) rather than by the active set
+        # (there video is the right half of the other monitor).
         self.open_window(0x1, "firefox-esr", (1200, 100), workspace=1)
         self.open_window(0x2, "firefox-esr", (1300, 120), workspace=1)
         d = self.screen_daemon()
         d.on_map(0x1)
         d.on_map(0x2)
-        # Обе стоят на общей рамке вкладок: зона cinema минус полоса 22 px.
+        # Both stand on the shared tab frame: the cinema zone minus the 22 px strip.
         self.rects = {0x1: (1000, 22, 800, 278), 0x2: (1000, 22, 800, 278)}
         records = d.tabs_picture()
         self.assertEqual(len(records), 1)
@@ -1418,9 +1418,9 @@ class TestMonitorProfiles(DaemonTestCase):
         self.assertEqual([tab["window"] for tab in records[0]["tabs"]], [0x1, 0x2])
 
     def test_collapsed_tab_uses_screen_profile_zone(self):
-        # Из стопки ушла одна вкладка: оставшаяся занимает зону целиком по
-        # геометрии профиля экрана (cinema: video — верхняя половина), а не по
-        # сетке стола.
+        # One tab left the stack: the remaining one takes the whole zone by the
+        # geometry of the screen profile (cinema: video — the upper half), not by the
+        # workspace grid.
         self.open_window(0x1, "firefox-esr", (1200, 100), workspace=1)
         self.open_window(0x2, "firefox-esr", (1300, 120), workspace=1)
         d = self.screen_daemon()
@@ -1430,14 +1430,14 @@ class TestMonitorProfiles(DaemonTestCase):
         d.on_destroy(0x2)
         self.assertEqual(self.applied, [(0x1, (1000, 0, 800, 300), "video", True)])
 
-    # -- status — по разрешённым профилям
+    # -- status — by the allowed profiles
 
     def test_status_reports_zones_of_resolved_profiles(self):
         self.open_window(0x1, "firefox-esr", (1400, 300), workspace=0)
         d = self.screen_daemon()
         d.on_map(0x1)
         status = d.ipc_status()
-        # Форма прежняя: zones — доли, zones_px — рамки на каждый монитор.
+        # The shape is as before: zones — fractions, zones_px — frames per monitor.
         self.assertEqual(status["monitors"], [list(WA), list(WA1)])
         self.assertEqual(
             status["zones"],
@@ -1460,8 +1460,8 @@ class TestMonitorProfiles(DaemonTestCase):
         )
 
     def test_status_without_monitor_bindings_is_unchanged(self):
-        # Привязок экранов нет: status считает по активному конфигу, как раньше
-        # (в том числе зона на каждом мониторе).
+        # There are no screen bindings: status counts by the active config, as before
+        # (including a zone on every monitor).
         d = self.multi_daemon(TWO_ZONES)
         status = d.ipc_status()
         self.assertEqual(sorted(status["zones"]), ["left", "right"])
@@ -1471,7 +1471,7 @@ class TestMonitorProfiles(DaemonTestCase):
 
 
 class TestDaemonIgnore(DaemonTestCase):
-    """`[ignore]` в демоне: автоукладка по правилам и явный apply по сокету."""
+    """`[ignore]` in the daemon: autoplacement by rules and an explicit apply over the socket."""
 
     IGNORE_LEFT = (
         "[grid]\ncols = 1.0\nrows = 1.0\n"
@@ -1513,11 +1513,11 @@ class TestDaemonIgnore(DaemonTestCase):
 
 
 class TestFocusMode(DaemonTestCase):
-    """Режим «только эта зона»: вход, toggle, выход и новички.
+    """The “only this zone” mode: entering, toggle, leaving and newcomers.
 
-    `window_iconic` подменён состоянием `self.iconic`: без X настоящая проверка
-    всегда говорит «видимо». `self.iconify`/`self.deiconify` это состояние
-    меняют, как настоящий WM, поэтому вручную свёрнутое окно остаётся таковым.
+    `window_iconic` is replaced by the state of `self.iconic`: without X the real check
+    always says “visible”. `self.iconify`/`self.deiconify` change that state,
+    as a real WM does, so a manually iconified window stays that way.
     """
 
     def setUp(self):
@@ -1527,30 +1527,30 @@ class TestFocusMode(DaemonTestCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
-        # Паузы проверки состояния в развороте — нулевые: тесты не должны ждать.
+        # The polls of the window state on deiconify are zero: the tests must not wait.
         delay = mock.patch.object(zd.tiler, "FOCUS_VERIFY_DELAY", 0)
         delay.start()
         self.addCleanup(delay.stop)
 
     def setup_clients(self, windows, workspace=0):
-        """Клиенты демона: окна на столе `workspace` и первом мониторе."""
+        """The clients of the daemon: windows on `workspace` and on the first monitor."""
         for win in windows:
             self.workspaces[win] = workspace
             self.centers[win] = (100, 100)
         self.clients = list(windows)
 
     def focus_daemon(self, text=TWO_ZONES):
-        """Демон с двумя мониторами: он же проверяет область сворачивания."""
+        """A daemon with two monitors: it is also what checks the iconify scope."""
         return self.multi_daemon(text=text)
 
-    # -- вход
+    # -- entering
 
     def test_entry_minimizes_only_same_workspace_and_monitor(self):
         self.current = 0
         self.setup_clients([0x1, 0x2, 0x3, 0x4, 0x5])
-        self.workspaces[0x5] = 1  # окно другого стола
-        self.centers[0x4] = (1500, 300)  # окно другого монитора
-        self.metas[0x1] = self.meta("firefox-esr")  # правило: left
+        self.workspaces[0x5] = 1  # a window of another workspace
+        self.centers[0x4] = (1500, 300)  # a window of another monitor
+        self.metas[0x1] = self.meta("firefox-esr")  # rule: left
         self.metas[0x2] = self.meta("chromium")
         self.metas[0x3] = self.meta("dialog-x", window_type=self.DIALOG)
         self.metas[0x4] = self.meta("chromium")
@@ -1567,7 +1567,7 @@ class TestFocusMode(DaemonTestCase):
             },
         )
         self.assertEqual(self.applied, [(0x1, (0, 0, 500, 1000), "left", True)])
-        # диалог и окна чужого стола/монитора остаются видимыми
+        # the dialog and the windows of a foreign workspace/monitor stay visible
         self.assertEqual(self.iconified, [0x2])
         self.assertEqual(self.iconify_calls, [(0x2, None, True)])
         self.assertEqual(d.windows, {0x1: "left"})
@@ -1585,10 +1585,10 @@ class TestFocusMode(DaemonTestCase):
         )
 
     def test_entry_without_zone_keeps_target_in_place(self):
-        # Форма `[focus]` без зоны: цель не двигается и в трекеры не попадает.
+        # The shape of `[focus]` without a zone: the target is not moved and does not reach a tracker.
         self.current = 0
         self.setup_clients([0x1, 0x2, 0x3])
-        self.workspaces[0x3] = 1  # чужой стол — не сворачиваем
+        self.workspaces[0x3] = 1  # another workspace - we do not iconify
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("gimp")
         self.metas[0x3] = self.meta("gimp")
@@ -1662,7 +1662,7 @@ class TestFocusMode(DaemonTestCase):
         self.assertEqual(self.iconified, [])
         self.assertIsNone(d.focus)
 
-    # -- toggle и выход
+    # -- toggle and exit
 
     def test_toggle_restores_only_mode_windows_and_activates_target_last(self):
         self.current = 0
@@ -1670,13 +1670,13 @@ class TestFocusMode(DaemonTestCase):
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
         self.metas[0x3] = self.meta("gimp")
-        self.iconic = {0x3}  # свёрнуто вручную до входа в режим
+        self.iconic = {0x3}  # iconified by hand before entering the mode
         d = self.focus_daemon()
         reply = d.ipc_focus({"zone": "left", "window": 0x1})
         self.assertEqual(reply["minimized"], ["0x2"])
         out = d.ipc_focus({"zone": "left", "window": 0x1})
         self.assertEqual(out, {"off": True, "restored": ["0x2"]})
-        # свёрнутое вручную не разворачиваем, цель активируется последней
+        # a manually iconified window is not deiconified, the target is activated last
         self.assertEqual(self.deiconified, [0x2, 0x1])
         self.assertEqual(self.deiconify_calls, [(0x2, None), (0x1, None)])
         self.assertIsNone(d.focus)
@@ -1694,14 +1694,14 @@ class TestFocusMode(DaemonTestCase):
         self.assertEqual(self.applied, [])
 
     def test_explicit_exit_switches_to_mode_workspace(self):
-        # Явный выход сам переходит на стол режима: без этого muffin не развернул
-        # бы окна (он игнорирует активацию окна не на активном столе).
+        # An explicit exit switches to the workspace of the mode itself: without that muffin would not
+        # deiconify the windows (it ignores the activation of a window that is not on the active workspace).
         self.current = 0
         self.setup_clients([0x1, 0x2])
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
         d = self.focus_daemon()
-        d.x11 = object()  # «соединение есть»: без него переход пропускается
+        d.x11 = object()  # "there is a connection": without it the switch is skipped
         d.ipc_focus({"zone": "left", "window": 0x1})
         with mock.patch.object(zd.tiler, "switch_workspace") as switch:
             d.ipc_focus({"off": True})
@@ -1717,31 +1717,31 @@ class TestFocusMode(DaemonTestCase):
         d = self.focus_daemon()
         d.ipc_focus({"zone": "left", "window": 0x1})
         d.seen = {0x1, 0x2}
-        d.reconcile([0x2])  # цель 0x1 исчезла из _NET_CLIENT_LIST
+        d.reconcile([0x2])  # target 0x1 disappeared from _NET_CLIENT_LIST
         self.assertIsNone(d.focus)
         self.assertEqual(self.deiconified, [0x2, 0x1])
         self.assertEqual(d.windows, {})
 
     def test_target_disappearing_without_zone_leaves_mode(self):
-        # Форма `focus` без зоны: цель в `windows` не лежит, поэтому её исчезновение
-        # ловит только отдельная проверка цели в реконсиляции.
+        # The shape of `focus` without a zone: the target does not lie in `windows`, so its disappearance
+        # is caught only by the separate target check in the reconciliation.
         self.current = 0
         self.setup_clients([0x1, 0x2])
-        self.metas[0x1] = self.meta("gimp")  # правила нет — цель нигде не учтена
+        self.metas[0x1] = self.meta("gimp")  # no rule - the target is counted nowhere
         self.metas[0x2] = self.meta("gimp")
         d = self.focus_daemon()
         d.ipc_focus({"window": 0x1})
         self.assertIsNone(d.focus["zone"])
         self.assertEqual(self.iconified, [0x2])
         d.seen = {0x1, 0x2}
-        d.reconcile([0x2])  # цель 0x1 исчезла из _NET_CLIENT_LIST
+        d.reconcile([0x2])  # target 0x1 disappeared from _NET_CLIENT_LIST
         self.assertIsNone(d.focus)
         self.assertEqual(self.deiconified, [0x2, 0x1])
 
     def test_unrestorable_windows_go_to_focus_json(self):
-        # Активацию окна на неактивном столе muffin игнорирует. Демон не теряет
-        # такое окно, а отдаёт в `focus.json`:
-        # без записи оно осталось бы свёрнутым навсегда, а так его доведёт `focus --off`.
+        # muffin ignores the activation of a window that is not on the active workspace. The daemon does not lose
+        # such a window but hands it to `focus.json`:
+        # without the record it would stay iconified forever, while this way `focus --off` finishes it.
         self.current = 0
         self.setup_clients([0x1, 0x2])
         self.metas[0x1] = self.meta("firefox-esr")
@@ -1751,7 +1751,7 @@ class TestFocusMode(DaemonTestCase):
         os.close(fd)
         self.addCleanup(os.unlink, path)
         d.focus_path = path
-        d.deiconify = lambda win, x11=None: None  # «разворот не действует»
+        d.deiconify = lambda win, x11=None: None  # "deiconify does nothing"
         d.ipc_focus({"zone": "left", "window": 0x1})
         out = d.ipc_focus({"off": True})
         self.assertEqual(out, {"off": True, "restored": []})
@@ -1759,15 +1759,15 @@ class TestFocusMode(DaemonTestCase):
         state = zd.tiler.load_focus_state(path)
         self.assertEqual([r["window"] for r in state["windows"]], ["0x2"])
         self.assertEqual(state["workspace"], 0)
-        # Стол и класс окна записаны на момент записи (`focus_records`), а цель
-        # в записи не нужна: она видима, разворачивать её не надо.
+        # The workspace and the class of the window are recorded at the moment of writing (`focus_records`), while the target
+        # is not needed in the record: it is visible, there is no need to deiconify it.
         self.assertEqual(state["windows"][0]["workspace"], 0)
         self.assertIsNone(state["target"])
 
     def test_handoff_keeps_per_window_workspace(self):
-        # В файле могут сойтись окна разных столов: общий `workspace` старой
-        # записи не должен увести разворот на чужой стол (иначе окно осталось бы
-        # свёрнутым навсегда, а каждое `focus --off` ходило бы не туда).
+        # The file may bring together windows of different workspaces: the shared `workspace` of an old
+        # record must not take the deiconification to a foreign workspace (otherwise the window would stay
+        # iconified forever, and every `focus --off` would go to the wrong place).
         self.current = 0
         self.setup_clients([0x1, 0x2])
         self.metas[0x1] = self.meta("firefox-esr")
@@ -1777,8 +1777,8 @@ class TestFocusMode(DaemonTestCase):
         os.close(fd)
         self.addCleanup(os.unlink, path)
         d.focus_path = path
-        d.deiconify = lambda win, x11=None: None  # «разворот не действует»
-        # Чужая запись от ветки без демона: окно на третьем столе.
+        d.deiconify = lambda win, x11=None: None  # "deiconify does nothing"
+        # A foreign record from a branch without the daemon: a window on the third workspace.
         zd.tiler.save_focus_state(
             {
                 "zone": None,
@@ -1792,13 +1792,13 @@ class TestFocusMode(DaemonTestCase):
             path,
         )
         self.workspaces[0x9] = 2
-        self.iconic = {0x9}  # чужое окно всё ещё свёрнуто — его и надо вернуть
+        self.iconic = {0x9}  # another window is still iconified - that is the one to return
         d.ipc_focus({"zone": "left", "window": 0x1})
         d.ipc_focus({"off": True})
         state = zd.tiler.load_focus_state(path)
         by_window = {r["window"]: r for r in state["windows"]}
-        # Оба окна на своих столах — режима (0) и чужой записи (2), — а не на
-        # столе старой записи: иначе `focus --off` ходил бы не туда.
+        # Both windows are on their own workspaces — of the mode (0) and of the foreign record (2), — not on
+        # the workspace of the old record: otherwise `focus --off` would go to the wrong place.
         self.assertEqual(by_window["0x2"]["workspace"], 0)
         self.assertEqual(by_window["0x9"]["workspace"], 2)
 
@@ -1806,20 +1806,20 @@ class TestFocusMode(DaemonTestCase):
         self.current = 0
         self.setup_clients([0x1, 0x2])
         self.metas[0x1] = self.meta("firefox-esr")
-        self.metas[0x2] = self.meta("gimp")  # правила нет: в windows его нет
+        self.metas[0x2] = self.meta("gimp")  # no rule: it is not in windows
         d = self.focus_daemon()
         d.ipc_focus({"zone": "left", "window": 0x1})
         d.seen = {0x1, 0x2}
-        d.reconcile([0x1])  # свёрнутое 0x2 исчезло, цель жива
+        d.reconcile([0x1])  # the iconified 0x2 is gone, the target is alive
         self.assertIsNotNone(d.focus)
         self.assertEqual(d.focus["minimized"], set())
         self.assertEqual(self.deiconified, [])
         self.assertEqual(d.ipc_status()["focus"]["minimized"], 0)
 
     def test_workspace_change_keeps_mode(self):
-        # Уход со стола режим НЕ снимает: окна того стола и так не видны, а снять
-        # его нельзя — `_NET_ACTIVE_WINDOW` muffin игнорирует для окна не на
-        # активном столе, и окна остались бы свёрнутыми без хозяина.
+        # Leaving the workspace does NOT drop the mode: the windows of that workspace are invisible anyway, and it cannot
+        # be dropped — muffin ignores `_NET_ACTIVE_WINDOW` for a window that is not on
+        # the active workspace, and the windows would stay iconified without an owner.
         self.current = 0
         self.setup_clients([0x1, 0x2])
         self.metas[0x1] = self.meta("firefox-esr")
@@ -1844,7 +1844,7 @@ class TestFocusMode(DaemonTestCase):
         self.assertIsNotNone(d.focus)
         self.assertEqual(self.deiconified, [])
 
-    # -- новое окно при активном режиме
+    # -- a new window while the mode is active
 
     def test_new_window_is_placed_then_minimized(self):
         self.current = 0
@@ -1859,7 +1859,7 @@ class TestFocusMode(DaemonTestCase):
         self.workspaces[0x9] = 0
         self.centers[0x9] = (200, 200)
         d.on_map(0x9)
-        # сначала укладка по правилу — после выхода окно окажется в своей зоне
+        # placement by rule comes first — after the exit the window will be in its zone
         self.assertEqual(self.applied, [(0x9, (500, 0, 500, 1000), "right", True)])
         self.assertEqual(self.iconified, [0x9])
         self.assertEqual(d.windows[0x9], "right")
@@ -1873,7 +1873,7 @@ class TestFocusMode(DaemonTestCase):
         d = self.focus_daemon()
         d.ipc_focus({"zone": "left", "window": 0x1})
         self.iconified.clear()
-        self.metas[0x9] = self.meta("terminal")  # правила нет
+        self.metas[0x9] = self.meta("terminal")  # no rule
         self.workspaces[0x9] = 0
         self.centers[0x9] = (200, 200)
         d.on_map(0x9)
@@ -1908,7 +1908,7 @@ class TestFocusMode(DaemonTestCase):
         self.workspaces[0x9] = 1
         self.centers[0x9] = (200, 200)
         d.on_map(0x9)
-        # обычное поведение: уложено по правилу и осталось видимым
+        # the usual behaviour: placed by rule and left visible
         self.assertEqual(self.iconified, [0x2])
         self.assertEqual(d.windows[0x9], "right")
 
@@ -1926,7 +1926,7 @@ class TestFocusMode(DaemonTestCase):
         self.assertEqual(
             status["focus"], {"zone": "left", "window": "0x1", "minimized": 1}
         )
-        # прежние поля не изменились
+        # the previous fields did not change
         self.assertEqual(status["workspace"], 0)
         self.assertEqual(
             status["windows"],
@@ -1937,7 +1937,7 @@ class TestFocusMode(DaemonTestCase):
 
 
 class FakeStrip:
-    """Подмена `TabStripProcess`: копит снимки вкладок вместо запуска GTK."""
+    """A replacement for `TabStripProcess`: it collects tab snapshots instead of starting GTK."""
 
     def __init__(self, accept=True):
         self.payloads = []
@@ -1959,14 +1959,14 @@ class FakeStrip:
 
 
 class TestZoneTabs(DaemonTestCase):
-    """Вкладки в зоне: общая рамка, переключение и снимок для полосы.
+    """Tabs in a zone: a shared frame, switching and the snapshot for the strip.
 
-    Демон без X: `apply` не только запоминается в `self.applied`, но и меняет
-    `self.frames` — так рамка окна после укладки видна следующему чтению, как
-    у настоящего WM. `self.active` — подмена `_NET_ACTIVE_WINDOW`.
+    A daemon without X: `apply` is not only remembered in `self.applied` but also changes
+    `self.frames` — so the window frame after placement is visible to the next read, as
+    with a real WM. `self.active` is the replacement for `_NET_ACTIVE_WINDOW`.
     """
 
-    # Зона на всю рабочую область: рамка вкладки — зона минус полоса.
+    # The zone covers the whole work area: the tab frame is the zone minus the strip.
     ZONE = (
         "[grid]\ncols = 1.0\nrows = 1.0\n"
         "[zones]\nmain = 0, 0, 1, 1\n"
@@ -1980,15 +1980,15 @@ class TestZoneTabs(DaemonTestCase):
         self.active = None
         self.strip = FakeStrip()
         self.current = 0
-        # Свёрнутые окна и их разворот — как в тестах режима: без X настоящая
-        # `window_iconic` всегда говорит «видимо».
+        # Iconified windows and their deiconification — as in the mode tests: without X the real
+        # `window_iconic` always says “visible”.
         patcher = mock.patch.object(
             zd.tiler, "window_iconic", lambda win: win in self.iconic
         )
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    # -- обвязка
+    # -- scaffolding
 
     def apply(self, win, rect, label="", quiet=False):
         super().apply(win, rect, label, quiet)
@@ -1998,7 +1998,7 @@ class TestZoneTabs(DaemonTestCase):
         return self.frames.get(win)
 
     def tabs_daemon(self, text=None, reflow=None, use_strip=True, state_path=None):
-        """Демон с подменёнными рамками, активным окном и полосой."""
+        """A daemon with replaced frames, an active window and a strip."""
         text = text or self.ZONE
         if reflow is not None:
             text = text + f"[daemon]\nreflow = {reflow}\n"
@@ -2019,7 +2019,7 @@ class TestZoneTabs(DaemonTestCase):
         )
 
     def two_tabs(self, text=None, reflow=None):
-        """Два окна в зоне `main` — уже вкладками, как после второго окна."""
+        """Two windows in the zone `main` — already tabs, as after the second window."""
         self.metas[0x1] = self.meta("firefox-esr", "Почта")
         self.metas[0x2] = self.meta("chromium", "Терминал")
         self.workspaces = {0x1: 0, 0x2: 0}
@@ -2029,7 +2029,7 @@ class TestZoneTabs(DaemonTestCase):
         self.applied.clear()
         return d
 
-    # -- укладка
+    # -- placement
 
     def test_first_window_takes_the_whole_zone_and_no_strip(self):
         self.metas[0x1] = self.meta("firefox-esr", "Почта")
@@ -2050,8 +2050,8 @@ class TestZoneTabs(DaemonTestCase):
         self.applied.clear()
         self.clients = [0x1, 0x2]
         d.reconcile([0x1, 0x2])
-        # Новое окно — на рамку вкладки, и уже стоявшее переставляется туда же:
-        # полоса появилась, окно стало ниже на её высоту.
+        # A new window goes onto the tab frame, and the window that was already there is moved there too:
+        # the strip appeared, so the window became lower by its height.
         self.assertEqual(
             self.applied,
             [(0x2, self.TAB, "main", True), (0x1, self.TAB, "main", True)],
@@ -2081,8 +2081,8 @@ class TestZoneTabs(DaemonTestCase):
                          [0, 0, 1000, 30])
 
     def test_zone_is_occupied_while_a_tab_remains(self):
-        # reflow=neighbors: пока в left есть хоть одна вкладка, right не
-        # расширяется; ушла последняя — расширяется.
+        # reflow=neighbors: while there is at least one tab in left, right does not
+        # expand; the last one is gone — it expands.
         text = TWO_ZONES
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("firefox-esr")
@@ -2095,23 +2095,23 @@ class TestZoneTabs(DaemonTestCase):
         self.applied.clear()
         self.clients = [0x2, 0x3]
         d.reconcile([0x2, 0x3])
-        # left занята окном 0x2: right остаётся в своей зоне, а оставшаяся
-        # вкладка возвращается на всю зону.
+        # left is taken by window 0x2: right stays in its zone, while the remaining
+        # tab returns to the whole zone.
         self.assertEqual(self.applied, [(0x2, (0, 0, 500, 1000), "left", True)])
         self.applied.clear()
         self.clients = [0x3]
         d.reconcile([0x3])
-        # Последняя вкладка ушла: зона свободна и right расширяется на неё.
+        # The last tab is gone: the zone is free and right expands onto it.
         self.assertEqual(
             self.applied, [(0x3, (0, 0, 1000, 1000), "right", True)]
         )
 
     def test_window_dragged_out_of_the_stack_returns_the_whole_zone(self):
-        # Пользователь утащил одну из двух вкладок: `_refresh_detached` сняло её с
-        # трекера, стопка стала одиночной — оставшемуся окну возвращается вся
-        # зона, а не рамка вкладки с пустой полосой сверху.
+        # The user dragged away one of the two tabs: `_refresh_detached` dropped it from
+        # the tracker, the stack became single — the remaining window gets the whole
+        # zone back, not a tab frame with an empty strip on top.
         d = self.two_tabs()
-        self.frames[0x2] = (600, 600, 300, 300)  # утащили руками
+        self.frames[0x2] = (600, 600, 300, 300)  # dragged by hand
         self.clients = [0x1, 0x2]
         d.reconcile([0x1, 0x2])
         self.assertIn(0x2, d.detached)
@@ -2127,8 +2127,8 @@ class TestZoneTabs(DaemonTestCase):
         ])
 
     def test_reflow_expanded_window_is_not_normalized_back(self):
-        # Расширенный на соседнюю зону держатель стоит не на рамке зоны, но и
-        # не на рамке вкладки: нормализация стопок его не трогает.
+        # A holder expanded onto a neighbouring zone stands neither on the zone frame nor
+        # on the tab frame: the stack normalisation does not touch it.
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
         self.workspaces = {0x1: 0, 0x2: 0}
@@ -2139,15 +2139,15 @@ class TestZoneTabs(DaemonTestCase):
         d.reconcile([0x1])
         self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
         self.applied.clear()
-        d.reconcile([0x1])  # повторная реконсиляция ничего не двигает
+        d.reconcile([0x1])  # a repeated reconciliation moves nothing
         self.assertEqual(self.applied, [])
         self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
 
     def test_ipc_apply_puts_a_second_window_on_the_tab_frame(self):
-        # Правило «полоса только от двух окон» — одно и то же в автоукладке и
-        # в IPC `apply`: второе окно в занятую зону ставит обоих на общую рамку.
+        # The rule “a strip only from two windows” — the same in the autoplacement and
+        # in the IPC `apply`: a second window into a taken zone puts both on the shared frame.
         self.metas[0x1] = self.meta("firefox-esr")
-        self.metas[0x2] = self.meta("libreoffice")  # правила нет — только IPC
+        self.metas[0x2] = self.meta("libreoffice")  # no rule - IPC only
         self.workspaces = {0x1: 0, 0x2: 0}
         self.clients = [0x1, 0x2]
         d = self.tabs_daemon()
@@ -2159,8 +2159,8 @@ class TestZoneTabs(DaemonTestCase):
         self.assertEqual(self.frames[0x2], self.TAB)
 
     def test_moved_window_leaves_collapsed_zone_behind(self):
-        # 0x2 уехало из стопки в другую зону: оставшаяся одна вкладка снова
-        # занимает свою зону целиком.
+        # 0x2 left the stack for another zone: the single remaining tab takes
+        # its zone whole again.
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("firefox-esr")
         self.workspaces = {0x1: 0, 0x2: 0}
@@ -2174,8 +2174,8 @@ class TestZoneTabs(DaemonTestCase):
         self.assertEqual(d.windows, {0x1: "left", 0x2: "right"})
 
     def test_reflow_does_not_pull_a_tab_out_of_the_stack(self):
-        # right освободилась, но в left стопка: вынуть из неё одно окно значит
-        # разложить вкладки, поэтому reflow такую зону не расширяет.
+        # right was freed, but there is a stack in left: taking one window out of it means
+        # unfolding the tabs, so reflow does not expand such a zone.
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("firefox-esr")
         self.metas[0x3] = self.meta("chromium")
@@ -2191,9 +2191,9 @@ class TestZoneTabs(DaemonTestCase):
         self.assertEqual(self.frames[0x1], (0, 22, 500, 978))
 
     def test_expanded_holder_moved_by_a_tab_releases_its_coverage(self):
-        # Держатель покрытия сам стал вкладкой: `_align_stack` сдвинул его на
-        # общую рамку, значит покрытая зона больше не за ним — запись `filled`
-        # снимается, и `status` не врёт апплету, будто зона покрыта.
+        # The coverage holder became a tab itself: `_align_stack` moved it onto
+        # the shared frame, so the covered zone is no longer its — the `filled` record
+        # is dropped, and `status` does not lie to the applet that the zone is covered.
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
         self.metas[0x3] = self.meta("firefox-esr")
@@ -2202,29 +2202,29 @@ class TestZoneTabs(DaemonTestCase):
         d = self.tabs_daemon(TWO_ZONES, reflow="neighbors")
         self.clients = [0x1, 0x2]
         d.reconcile([0x1, 0x2])
-        self.clients = [0x1]  # right закрылась: left расширяется на неё
+        self.clients = [0x1]  # right closed: left expands into it
         d.reconcile([0x1])
         self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
         self.assertEqual(d.filled, {(0, WA, "right"): 0x1})
         self.applied.clear()
-        self.clients = [0x1, 0x3]  # второе окно в left: стопка из двух
+        self.clients = [0x1, 0x3]  # a second window in left: a stack of two
         d.reconcile([0x1, 0x3])
         self.assertEqual(self.frames[0x1], (0, 22, 500, 978))
-        # Окно сдвинули вкладкой — покрытие right больше не его.
+        # The window was moved by grabbing a tab — the coverage of right is no longer its.
         self.assertEqual(d.filled, {})
         self.assertEqual(d.ipc_status()["filled"], [])
         self.applied.clear()
-        self.clients = [0x1, 0x3, 0x4]  # новое окно в right
+        self.clients = [0x1, 0x3, 0x4]  # a new window in right
         d.reconcile([0x1, 0x3, 0x4])
-        # 0x1 уже на общей рамке стопки: возвращать его некуда, а 0x4 встаёт в
-        # right по своей зоне.
+        # 0x1 is already on the shared stack frame: there is nowhere to return it, while 0x4 takes
+        # right by its own zone.
         self.assertEqual(self.applied, [(0x4, (500, 0, 500, 1000), "right", True)])
         self.assertEqual(self.frames[0x1], (0, 22, 500, 978))
         self.assertEqual(d.filled, {})
 
     def test_collapsed_tab_releases_coverage_of_the_remaining_window(self):
-        # Осталась одна вкладка — `_collapse_stack` вернул ей всю зону: сдвинутое
-        # окно перестало быть держателем покрытия.
+        # One tab remains — `_collapse_stack` gave it the whole zone: the moved
+        # window stopped being the coverage holder.
         d = self.two_tabs()
         d.filled[(0, WA, "right")] = 0x1
         self.assertEqual(len(d.ipc_status()["filled"]), 1)
@@ -2235,10 +2235,10 @@ class TestZoneTabs(DaemonTestCase):
         self.assertEqual(d.ipc_status()["filled"], [])
 
     def test_window_moved_to_another_zone_releases_its_coverage(self):
-        # `_settle_in_zone` переставил держателя в другую зону — записи о
-        # покрытых им зонах снимаются там же, где окно двигают. Покрытие тут
-        # не совпадает с зоной назначения: иначе его снял бы `_restore_holder`
-        # и тест не отличал бы одно от другого.
+        # `_settle_in_zone` moved the holder to another zone — the records of
+        # the zones it covered are dropped where the window is moved. The coverage here
+        # does not coincide with the destination zone: otherwise `_restore_holder` would drop it
+        # and the test could not tell one from the other.
         three = (
             "[grid]\ncols = 1.0\nrows = 1.0\n"
             "[zones]\n"
@@ -2254,13 +2254,13 @@ class TestZoneTabs(DaemonTestCase):
         self.clients = [0x1]
         d = self.tabs_daemon(three)
         d.on_map(0x1)
-        d.filled[(0, WA, "bottom")] = 0x1  # окно расширялось на bottom
+        d.filled[(0, WA, "bottom")] = 0x1  # the window expanded into bottom
         d.ipc_apply({"zone": "right", "window": 0x1})
         self.assertEqual(d.windows, {0x1: "right"})
         self.assertEqual(d.filled, {})
         self.assertEqual(d.ipc_status()["filled"], [])
 
-    # -- полоса
+    # -- strip
 
     def test_snapshot_goes_to_the_strip_process(self):
         self.two_tabs()
@@ -2281,7 +2281,7 @@ class TestZoneTabs(DaemonTestCase):
     def test_active_tab_is_the_active_window(self):
         d = self.two_tabs()
         self.active = 0x1
-        d.sync_strips()  # снимок активной вкладки — по активному окну
+        d.sync_strips()  # the snapshot of the active tab - taken from the active window
         tabs = json.loads(self.strip.payloads[-1])["strips"][0]["tabs"]
         self.assertEqual([tab["active"] for tab in tabs], [True, False])
 
@@ -2305,14 +2305,14 @@ class TestZoneTabs(DaemonTestCase):
         self.workspaces = {0x1: 0, 0x2: 0}
         self.clients = [0x1, 0x2]
         d = self.tabs_daemon()
-        d.reconcile([0x1, 0x2])  # полоса снимок не приняла
+        d.reconcile([0x1, 0x2])  # the strip did not accept the snapshot
         self.assertEqual(d.windows, {0x1: "main", 0x2: "main"})
-        self.assertIsNone(d._strips_last)  # снимок отдадим заново
+        self.assertIsNone(d._strips_last)  # the snapshot will be offered again
 
     def test_no_strip_means_no_work(self):
         self.metas[0x1] = self.meta("firefox-esr")
         self.clients = [0x1]
-        d = self.tabs_daemon(use_strip=False)  # полосы нет вовсе
+        d = self.tabs_daemon(use_strip=False)  # there is no strip at all
         self.assertIsNone(d.strip)
         self.assertFalse(d.sync_strips())
 
@@ -2327,7 +2327,7 @@ class TestZoneTabs(DaemonTestCase):
             {"switched": True, "zone": "main", "window": "0x2", "previous": "0x1"},
         )
         self.assertEqual(self.deiconified, [0x2])
-        # с верхней вкладки кольцо уводит на нижнюю
+        # from the top tab the ring leads to the bottom one
         self.active = 0x2
         self.assertEqual(d.ipc_tabs_next()["window"], "0x1")
         self.assertEqual(self.deiconified, [0x2, 0x1])
@@ -2341,7 +2341,7 @@ class TestZoneTabs(DaemonTestCase):
 
     def test_tabs_next_outside_zones_is_a_honest_noop(self):
         d = self.two_tabs()
-        self.active = 0x9  # окно без зоны
+        self.active = 0x9  # a window without a zone
         reply = d.ipc_tabs_next()
         self.assertFalse(reply["switched"])
         self.assertIsNone(reply["zone"])
@@ -2391,7 +2391,7 @@ class TestZoneTabs(DaemonTestCase):
         reply = dispatcher.dispatch('{"cmd": "tabs-switch", "zone": "main", "window": 1}')
         self.assertTrue(reply["ok"])
 
-    # -- focus × вкладки
+    # -- focus × tabs
 
     def test_focus_keeps_the_tabs_of_the_target_zone(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -2418,15 +2418,15 @@ class TestZoneTabs(DaemonTestCase):
         d.reconcile([0x1, 0x2, 0x3])
         self.assertEqual(d.windows, {0x1: "left", 0x2: "left", 0x3: "right"})
         reply = d.ipc_focus({"zone": "left", "window": 0x1})
-        # вкладка 0x2 — часть зоны режима, её не сворачиваем
+        # tab 0x2 is part of the zone of the mode, we do not iconify it
         self.assertEqual(reply["minimized"], ["0x3"])
         self.assertEqual(self.iconified, [0x3])
 
     def test_new_window_in_the_target_zone_is_not_minimized_by_focus(self):
-        # Режим называется «только эта зона», а не «только это окно»: окно,
-        # которое правило положило в ту же зону уже во время режима, становится
-        # вкладкой и остаётся видимым. Свернуть его — спрятать окно той самой
-        # зоны, которую пользователь оставил.
+        # The mode is called “only this zone”, not “only this window”: a window that
+        # a rule placed into the same zone already during the mode becomes
+        # a tab and stays visible. Iconifying it means hiding a window of the very
+        # zone that the user kept.
         self.metas[0x1] = self.meta("firefox-esr", "Почта")
         self.metas[0x2] = self.meta("firefox-esr", "Терминал")
         self.metas[0x3] = self.meta("chromium", "Чужое")
@@ -2438,20 +2438,20 @@ class TestZoneTabs(DaemonTestCase):
         self.assertEqual(self.iconified, [0x3])
         self.iconified.clear()
         self.applied.clear()
-        # Новое окно по правилу — в ту самую зону, где идёт режим.
+        # A new window by rule — into the very zone where the mode runs.
         self.metas[0x4] = self.meta("firefox-esr", "Ещё")
         self.workspaces[0x4] = 0
         self.clients = [0x1, 0x2, 0x3, 0x4]
         d.on_map(0x4)
-        self.assertEqual(self.iconified, [])  # window_iconic/iconify не звались
+        self.assertEqual(self.iconified, [])  # window_iconic/iconify were not called
         self.assertNotIn(0x4, d.focus["minimized"])
         self.assertEqual(d.windows[0x4], "left")
-        self.assertEqual(self.frames[0x4], (0, 22, 500, 978))  # третья вкладка
+        self.assertEqual(self.frames[0x4], (0, 22, 500, 978))  # the third tab
         self.assertEqual(d.tabs_in_zone("left", WA, 0), [0x1, 0x2, 0x4])
 
     def test_exit_from_focus_rebuilds_the_strip_snapshot(self):
-        # Выход из режима разворачивает окна и активирует цель последней:
-        # активная вкладка меняется, значит снимок полосы надо пересобрать.
+        # Leaving the mode deiconifies the windows and activates the target last:
+        # the active tab changes, so the strip snapshot has to be rebuilt.
         delay = mock.patch.object(zd.tiler, "FOCUS_VERIFY_DELAY", 0)
         delay.start()
         self.addCleanup(delay.stop)
@@ -2470,7 +2470,7 @@ class TestZoneTabs(DaemonTestCase):
 
         def deiconify_and_activate(win, x11=None):
             self.deiconify(win, x11=x11)
-            self.active = win  # WM поднимает и фокусирует развёрнутое окно
+            self.active = win  # the WM raises and focuses the deiconified window
 
         d.deiconify = deiconify_and_activate
         self.active = None
@@ -2478,7 +2478,7 @@ class TestZoneTabs(DaemonTestCase):
         tabs = json.loads(self.strip.payloads[-1])["strips"][0]["tabs"]
         self.assertEqual([tab["active"] for tab in tabs], [True, False])
 
-    # -- память укладок: рамка вкладки — это «окно в зоне»
+    # -- stack memory: a tab frame is “a window in a zone”
 
     def test_restart_keeps_a_tab_window_in_its_zone(self):
         directory = tempfile.mkdtemp(prefix="gridsnap-tabs-")
@@ -2510,16 +2510,16 @@ class TestZoneTabs(DaemonTestCase):
         self.clients = [0x1, 0x2]
         d = self.tabs_daemon(state_path=state_path)
         d.reconcile([0x1, 0x2])
-        # Окно-вкладка считается стоящим в зоне: демон его не переставляет.
+        # A tab window counts as standing in the zone: the daemon does not move it.
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {0x1: "main", 0x2: "main"})
         self.assertNotIn(0x1, d.detached)
         self.assertNotIn(0x2, d.detached)
 
     def test_restart_with_a_single_leftover_tab_returns_the_whole_zone(self):
-        # Вторая вкладка исчезла, пока демон не работал: запомненная рамка —
-        # рамка вкладки, но она осталась одна, значит полосы нет и зона — вся
-        # её. Без нормализации окно осталось бы на 22 px ниже с пустой полосой.
+        # The second tab disappeared while the daemon was not running: the remembered frame is
+        # a tab frame, but it is the only one left, so there is no strip and the zone is the whole
+        # of it. Without the normalisation the window would stay 22 px lower with an empty strip.
         directory = tempfile.mkdtemp(prefix="gridsnap-tabs-")
         self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
         state_path = os.path.join(directory, "placed.json")
@@ -2546,10 +2546,10 @@ class TestZoneTabs(DaemonTestCase):
 
 
 class TestTabStripProcess(unittest.TestCase):
-    """Процесс полосы: команда запуска, отказ без GTK и перезапуск умершей."""
+    """The strip process: the start command, a failure without GTK and the restart of a dead one."""
 
     def script(self, body):
-        """Временный скрипт полосы: тело — на python."""
+        """A temporary strip script: the body is python."""
         directory = tempfile.mkdtemp(prefix="gridsnap-strip-")
         self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
         path = os.path.join(directory, "zone-tabstrip.py")
@@ -2574,19 +2574,19 @@ class TestTabStripProcess(unittest.TestCase):
         self.assertFalse(strip.feed('{"strips": []}\n'))
 
     def test_script_dying_on_import_is_failed_and_not_retried(self):
-        # «Нет GTK»: файл на месте и python стартует, а скрипт падает на импорте
-        # с кодом 1. Это отказ запуска, а не смерть работавшей полосы — такого
-        # ребёнка нельзя переспавнивать на каждом изменении картины.
+        # “No GTK”: the file is in place and python starts, but the script fails on import
+        # with code 1. That is a start failure, not the death of a strip that worked — such a
+        # child must not be respawned on every change of the picture.
         path = self.script("import sys\nsys.exit(1)\n")
         strip = zd.TabStripProcess("/tmp/zones.conf", script=path)
         self.assertFalse(strip.start())
         self.assertTrue(strip.failed)
-        self.assertIsNone(strip.proc)  # мёртвого ребёнка за собой не держим
+        self.assertIsNone(strip.proc)  # we do not keep a dead child behind us
         self.assertFalse(strip.running())
         self.assertFalse(strip.feed('{"strips": []}\n'))
 
     def test_dead_working_strip_is_restarted(self):
-        # Полоса, которая уже работала и умерла, перезапускается как раньше.
+        # A strip that already worked and died is restarted as before.
         path = self.script("import sys\nsys.stdin.readline()\nsys.exit(0)\n")
         strip = zd.TabStripProcess("/tmp/zones.conf", script=path)
         self.addCleanup(strip.stop)
@@ -2594,15 +2594,15 @@ class TestTabStripProcess(unittest.TestCase):
         self.assertFalse(strip.failed)
         first = strip.proc.pid
         self.assertTrue(strip.feed('{"strips": []}\n'))
-        # Полоса прочитала снимок и завершилась сама — это смерть работавшей.
+        # The strip read the snapshot and finished by itself — that is the death of a working one.
         strip.proc.wait(timeout=5)
         self.assertFalse(strip.running())
-        self.assertTrue(strip.feed('{"strips": []}\n'))  # перезапущена
+        self.assertTrue(strip.feed('{"strips": []}\n'))  # restarted
         self.assertFalse(strip.failed)
         self.assertNotEqual(strip.proc.pid, first)
 
     def test_empty_snapshot_without_process_is_not_a_failure(self):
-        # Полоса ещё не запускалась и рисовать нечего: процесс не поднимаем.
+        # The strip has not started yet and there is nothing to draw: we do not spawn the process.
         strip = zd.TabStripProcess("/tmp/zones.conf")
         self.assertIsNone(strip.proc)
         self.assertFalse(strip.failed)
@@ -2615,7 +2615,7 @@ class TestTabStripProcess(unittest.TestCase):
 
 
 class TestPlacedState(unittest.TestCase):
-    """Файл памяти об укладках: чтение терпимо к мусору, запись — атомарная."""
+    """The stack memory file: reading tolerates garbage, writing is atomic."""
 
     def setUp(self):
         directory = tempfile.mkdtemp(prefix="gridsnap-placed-")
@@ -2672,12 +2672,12 @@ class TestPlacedState(unittest.TestCase):
         zd.save_placed_state(self.path, {"1": record}, session="0x1400003")
         self.assertEqual(zd.load_placed_state(self.path, "0x1400003"), {1: record})
         self.assertEqual(zd.load_placed_state(self.path, "0x9999999"), {})
-        # без известной сессии файл читается как раньше
+        # without a known session the file is read as before
         self.assertEqual(zd.load_placed_state(self.path), {1: record})
 
 
 class TestDaemonPlacedMemory(DaemonTestCase):
-    """Память демона: окно, вынесенное из зоны, само туда не возвращается."""
+    """The daemon memory: a window taken out of a zone does not come back by itself."""
 
     TEXT = (
         "[grid]\ncols = 1.0\nrows = 1.0\n"
@@ -2696,7 +2696,7 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         return self.frames.get(win)
 
     def placed_daemon(self, text=None):
-        """Демон с подменённой геометрией и своим файлом состояния."""
+        """A daemon with replaced geometry and its own state file."""
         return zd.Daemon(
             self.conf(text or self.TEXT),
             apply=self.apply,
@@ -2726,12 +2726,12 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         d.reconcile([0x1])
         self.assertEqual(d.windows, {0x1: "left"})
         d.filled[(None, WA, "left")] = 0x1
-        self.frames[0x1] = (600, 600, 300, 300)  # пользователь вынес окно
+        self.frames[0x1] = (600, 600, 300, 300)  # the user moved the window out
         d.reconcile([0x1])
         self.assertEqual(d.windows, {})
-        self.assertEqual(d.filled, {})  # зона свободна для reflow
+        self.assertEqual(d.filled, {})  # the zone is free for reflow
         self.assertIn(0x1, d.detached)
-        self.assertEqual(len(self.applied), 1)  # заново не укладывал
+        self.assertEqual(len(self.applied), 1)  # did not place it again
         d.on_map(0x1)
         self.assertEqual(len(self.applied), 1)
 
@@ -2742,7 +2742,7 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         self.applied.clear()
         second = self.placed_daemon()
         second.reconcile([0x1])
-        self.assertEqual(self.applied, [])  # усыновил без apply
+        self.assertEqual(self.applied, [])  # adopted without apply
         self.assertEqual(second.windows, {0x1: "left"})
         self.assertEqual(second.win_monitor, {0x1: WA})
 
@@ -2762,7 +2762,7 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         self.metas[0x1] = self.meta("firefox-esr")
         self.frames[0x1] = (0, 0, 500, 1000)
         self.placed_daemon().on_map(0x1)
-        self.metas[0x1] = self.meta("chromium")  # XID переиспользован
+        self.metas[0x1] = self.meta("chromium")  # the XID was reused
         self.applied.clear()
         second = self.placed_daemon()
         second.reconcile([0x1])
@@ -2779,10 +2779,10 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         self.assertEqual(d.windows, {0x1: "left"})
 
     def test_restart_returns_reflow_expanded_window_to_its_zone(self):
-        # Файл состояния: демон расширил окно 0x1 (зона left) на right и записал
-        # объединённую рамку. Перезапуск должен вернуть окно в left: книга
-        # покрытий `filled` в файле не живёт, и иначе новое окно в right ляжет
-        # поверх расширенного.
+        # The state file: the daemon expanded window 0x1 (zone left) onto right and wrote
+        # the merged frame. A restart must return the window to left: the coverage
+        # book `filled` does not live in the file, and otherwise a new window in right would land
+        # on top of the expanded one.
         zd.save_placed_state(
             self.state_path,
             {
@@ -2803,9 +2803,9 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         self.assertEqual(d.windows, {0x1: "left"})
 
     def test_placement_retries_late_wm_move(self):
-        # WM применил `_NET_MOVERESIZE_WINDOW` не сразу: первое чтение — старая
-        # рамка, второе — уже целевая. В `placed` должна попасть целевая, иначе
-        # окно тут же сочли бы «вышедшим из зоны».
+        # The WM applied `_NET_MOVERESIZE_WINDOW` not at once: the first read is the old
+        # frame, the second one is already the target. The target must get into `placed`, otherwise
+        # the window would at once be considered “gone out of the zone”.
         self.metas[0x1] = self.meta("firefox-esr")
         reads = iter([(300, 300, 200, 200), (0, 0, 500, 1000)])
         d = zd.Daemon(
@@ -2828,11 +2828,11 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         self.assertEqual(d.windows, {0x1: "left"})
         self.frames[0x1] = (600, 600, 300, 300)
         d.reconcile([0x1])
-        self.assertEqual(d.windows, {0x1: "left"})  # невидимый стол не трогаем
+        self.assertEqual(d.windows, {0x1: "left"})  # we do not touch the invisible workspace
         self.current = 2
         d.on_workspace_change()
         d.reconcile([0x1])
-        self.assertEqual(d.windows, {})  # на своём столе переезд виден
+        self.assertEqual(d.windows, {})  # on its own workspace the move is visible
         self.assertIn(0x1, d.detached)
 
     def test_no_state_path_writes_nothing(self):
@@ -2874,11 +2874,11 @@ class TestFractionsToPixels(unittest.TestCase):
 
 
 class TestMonitorScaleCache(unittest.TestCase):
-    """Смена масштаба экрана на лету сбрасывает кэш рабочих областей.
+    """Changing the screen scale on the fly drops the work area cache.
 
-    Рабочие области GDK меняются вместе с масштабом (`GDK_SCALE=2` — вдвое
-    меньше), поэтому демон сверяет отпечаток масштабов: иначе до `reload` он
-    клал бы окна по старым пикселям.
+    The GDK work areas change together with the scale (`GDK_SCALE=2` — twice
+    smaller), so the daemon compares a fingerprint of the scales: otherwise until `reload` it
+    would place windows by the old pixels.
     """
 
     def setUp(self):
@@ -2887,7 +2887,7 @@ class TestMonitorScaleCache(unittest.TestCase):
         with open(self.conf, "w", encoding="utf-8") as fh:
             fh.write(ONE_RULE)
         self.addCleanup(os.unlink, self.conf)
-        # Мониторы и масштабы читаются из этого состояния, как из X-сессии.
+        # The monitors and the scales are read from this state, as from an X session.
         self.areas = [(0, 0, 960, 540)]
         self.scales = [2]
         self.calls = 0
@@ -2913,7 +2913,7 @@ class TestMonitorScaleCache(unittest.TestCase):
     def test_new_scale_re_reads_monitors(self):
         dae = self.daemon()
         self.assertEqual(dae._monitors(), [(0, 0, 960, 540)])
-        # Пользователь поставил масштаб 1: области стали вдвое шире.
+        # The user set scale 1: the areas became twice as wide.
         self.scales = [1]
         self.areas = [(0, 0, 1920, 1080)]
         self.assertEqual(dae._monitors(), [(0, 0, 1920, 1080)])
@@ -2985,7 +2985,7 @@ class TestReadWindowCenter(unittest.TestCase):
 
 
 class TestReadWindowMeta(unittest.TestCase):
-    """Дефолтный read_window_meta: один retry, если класс/заголовок пусты."""
+    """The default read_window_meta: one retry when the class/title are empty."""
 
     def setUp(self):
         self._class = zd.tiler.window_class_title
@@ -3027,11 +3027,11 @@ class TestReadWindowMeta(unittest.TestCase):
 
 
 class TestPropertyEvent(unittest.TestCase):
-    """handle_property_event: реконсиляция только на PropertyNotify о _NET_CLIENT_LIST.
+    """handle_property_event: reconciliation only on a PropertyNotify about _NET_CLIENT_LIST.
 
-    Буфер событий собирается сырыми байтами по ожидаемым смещениям XPropertyEvent
-    из Xlib.h (LP64), а не копией структуры из проверяемого модуля: тест ловит
-    разъезд offset'ов относительно X11 ABI.
+    The event buffer is built from raw bytes using the expected XPropertyEvent offsets
+    from Xlib.h (LP64) rather than from a copy of the structure in the module under test: the test catches
+    a drift of the offsets against the X11 ABI.
     """
 
     class Stub:
@@ -3063,8 +3063,8 @@ class TestPropertyEvent(unittest.TestCase):
         handled = zd.handle_property_event(
             dae, property_buffer(0xABC), 0xABC, lambda: None
         )
-        self.assertTrue(handled)  # событие про наш атом
-        self.assertEqual(dae.calls, [])  # но реконсиляции нет
+        self.assertTrue(handled)  # an event about our atom
+        self.assertEqual(dae.calls, [])  # but there is no reconciliation
 
     def test_other_atom_is_ignored(self):
         dae = self.Stub()
@@ -3082,10 +3082,10 @@ class TestPropertyEvent(unittest.TestCase):
         )
         self.assertTrue(handled)
         self.assertEqual(dae.workspace_calls, 1)
-        self.assertEqual(dae.calls, [])  # список клиентов не читали
+        self.assertEqual(dae.calls, [])  # the client list was not read
 
     def test_current_desktop_atom_ignored_without_atom_argument(self):
-        # Старый вызов из четырёх аргументов не знает про стол — событие чужое.
+        # The old call with four arguments does not know about the workspace — the event is foreign.
         dae = self.Stub()
         handled = zd.handle_property_event(
             dae, property_buffer(0xABD), 0xABC, lambda: [0x9]
@@ -3096,7 +3096,7 @@ class TestPropertyEvent(unittest.TestCase):
 
 
 class TestReadClientList(unittest.TestCase):
-    """read_client_list: разбор `xprop -root _NET_CLIENT_LIST`."""
+    """read_client_list: parsing `xprop -root _NET_CLIENT_LIST`."""
 
     def setUp(self):
         self._check_output = zd.tiler.subprocess.check_output
@@ -3123,8 +3123,8 @@ class TestReadClientList(unittest.TestCase):
         self.assertEqual(seen["args"], ["xprop", "-root", "_NET_CLIENT_LIST"])
 
     def test_empty_when_property_missing(self):
-        # xprop при отсутствии свойства печатает сообщение и выходит с кодом 0 —
-        # это не «клиентов нет», а «список недоступен».
+        # when the property is absent xprop prints a message and exits with code 0 —
+        # that is not “no clients” but “the list is unavailable”.
         zd.tiler.subprocess.check_output = lambda *a, **k: "_NET_CLIENT_LIST:  not found.\n"
         self.assertIsNone(zd.read_client_list())
 
@@ -3135,12 +3135,12 @@ class TestReadClientList(unittest.TestCase):
         self.assertIsNone(zd.read_client_list())
 
     def test_none_without_window_id_marker(self):
-        # Вывод без маркера `window id #` не разбирается как список окон.
+        # Output without the `window id #` marker is not parsed as a window list.
         zd.tiler.subprocess.check_output = lambda *a, **k: "_NET_CLIENT_LIST(WINDOW): \n"
         self.assertIsNone(zd.read_client_list())
 
     def test_empty_list_when_property_present_but_no_windows(self):
-        # Валидное состояние «клиентов нет» — это [], а не None.
+        # The valid state “no clients” is [], not None.
         zd.tiler.subprocess.check_output = lambda *a, **k: (
             "_NET_CLIENT_LIST(WINDOW): window id #\n"
         )
@@ -3155,7 +3155,7 @@ class TestReadClientList(unittest.TestCase):
 
 
 class _StubFunc:
-    """Обёртка callable с полями argtypes/restype (как у ctypes _FuncPtr)."""
+    """A callable wrapper with argtypes/restype fields (like ctypes _FuncPtr)."""
 
     def __init__(self, fn):
         self._fn = fn
@@ -3167,7 +3167,7 @@ class _StubFunc:
 
 
 class FakeX11:
-    """Мини-заглушка X11: очередь событий и всё, что зовёт `serve`."""
+    """A mini X11 stub: the event queue and everything that `serve` calls."""
 
     CLIENT_LIST_ATOM = 0xABC
     DESKTOP_ATOM = 0xABD
@@ -3211,7 +3211,7 @@ class FakeX11:
 
 
 class StubDaemon:
-    """Демон-заглушка для serve(): только фиксирует реконсиляции и смену стола."""
+    """A stub daemon for serve(): it only records reconciliations and workspace changes."""
 
     def __init__(self):
         self.reconciled = []
@@ -3232,7 +3232,7 @@ class StubDaemon:
 
 
 class TestServeLoop(unittest.TestCase):
-    """serve(): PropertyChangeMask на root, стартовая реконсиляция и PropertyNotify."""
+    """serve(): PropertyChangeMask on root, the initial reconciliation and PropertyNotify."""
 
     def conf(self, text):
         fd, path = tempfile.mkstemp(suffix=".conf", text=True)
@@ -3243,7 +3243,7 @@ class TestServeLoop(unittest.TestCase):
         return path
 
     def pipe_fd(self):
-        """fd, который никогда не станет читаемым (для таймаута в --once)."""
+        """An fd that will never become readable (for the timeout in --once)."""
         r, w = os.pipe()
         self.addCleanup(os.close, r)
         self.addCleanup(os.close, w)
@@ -3259,7 +3259,7 @@ class TestServeLoop(unittest.TestCase):
         self.assertEqual(
             fake.selected, [(fake.dpy, fake.root, zd.PROPERTY_CHANGE_MASK)]
         )
-        # serve() передаёт соединение демону, чтобы apply_zone переиспользовал его
+        # serve() passes the connection to the daemon so that apply_zone reuses it
         self.assertIs(dae.x11, fake)
         self.assertTrue(fake.closed)
 
@@ -3273,8 +3273,8 @@ class TestServeLoop(unittest.TestCase):
         self.assertTrue(fake.closed)
 
     def test_unreadable_list_keeps_tracker_on_property_notify(self):
-        # Настоящий Daemon (а не заглушка со своим reconcile): пропущенная
-        # реконсиляция не должна трогать ни трекер, ни `seen`.
+        # The real Daemon (not a stub with its own reconcile): a skipped
+        # reconciliation must touch neither the tracker nor `seen`.
         dae = zd.Daemon(self.conf(ONE_RULE), workarea=lambda: WA)
         dae.windows = {0x1: "left"}
         dae.seen = {0x1}
@@ -3284,7 +3284,7 @@ class TestServeLoop(unittest.TestCase):
         zd.serve(
             dae, x11=fake, once=True, read_clients=lambda: None, once_timeout=0.05
         )
-        # список не прочитался — ни реконсиляции, ни изменений трекера
+        # the list was not read — no reconciliation and no changes of the tracker
         self.assertEqual(dae.windows, {0x1: "left"})
         self.assertEqual(dae.seen, {0x1})
 
@@ -3296,7 +3296,7 @@ class TestServeLoop(unittest.TestCase):
         zd.serve(
             dae, x11=fake, once=True, read_clients=lambda: [0x22], once_timeout=0.05
         )
-        # первая — стартовая, вторая — по PropertyNotify о _NET_CLIENT_LIST
+        # the first is the initial one, the second one is by the PropertyNotify about _NET_CLIENT_LIST
         self.assertEqual(dae.reconciled, [[0x22], [0x22]])
         self.assertTrue(fake.closed)
 
@@ -3306,18 +3306,18 @@ class TestServeLoop(unittest.TestCase):
         zd.serve(
             dae, x11=fake, once=True, read_clients=lambda: [0x22], once_timeout=0.05
         )
-        self.assertEqual(dae.reconciled, [[0x22]])  # только стартовая
-        self.assertEqual(dae.workspace_calls, 0)  # стол тоже не трогали
+        self.assertEqual(dae.reconciled, [[0x22]])  # the initial one only
+        self.assertEqual(dae.workspace_calls, 0)  # the workspace was not touched either
 
     def test_current_desktop_property_notify_updates_workspace_only(self):
-        # Смена стола — это не изменение списка клиентов: ни реконсиляции, ни
-        # перемещений, только обновление `self.workspace`.
+        # A workspace change is not a change of the client list: no reconciliation, no
+        # moves, only an update of `self.workspace`.
         dae = StubDaemon()
         fake = FakeX11(events=[property_buffer(FakeX11.DESKTOP_ATOM)], fd=self.pipe_fd())
         zd.serve(
             dae, x11=fake, once=True, read_clients=lambda: [0x22], once_timeout=0.05
         )
-        self.assertEqual(dae.reconciled, [[0x22]])  # только стартовая
+        self.assertEqual(dae.reconciled, [[0x22]])  # the initial one only
         self.assertEqual(dae.workspace_calls, 1)
 
     def test_once_without_events_times_out(self):
@@ -3328,8 +3328,8 @@ class TestServeLoop(unittest.TestCase):
         self.assertTrue(fake.closed)
 
     def test_serve_restores_focus_windows_on_exit(self):
-        # Режим «только эта зона» не должен пережить демон: в `finally` serve
-        # разворачивает его окна, цель — последней.
+        # The “only this zone” mode must not survive the daemon: in `finally` serve
+        # deiconifies its windows, the target last.
         restored = []
         dae = zd.Daemon(
             self.conf(ONE_RULE),
@@ -3353,7 +3353,7 @@ class TestServeLoop(unittest.TestCase):
         self.assertTrue(fake.closed)
 
     def test_focus_state_is_dropped_without_x(self):
-        # Ранний выход без X-соединения: окна не развернуть, состояние снимаем.
+        # An early exit without an X connection: the windows cannot be deiconified, the state is dropped.
         dae = zd.Daemon(self.conf(ONE_RULE), workarea=lambda: WA)
         dae.focus = {
             "zone": "left",
@@ -3371,11 +3371,11 @@ INSTALL_DAEMON = os.path.join(ROOT, "install-daemon.sh")
 
 
 class TestAutostart(unittest.TestCase):
-    """Автозапуск: `install-daemon.sh` кладёт демон и привязку профилей к экранам.
+    """Autostart: `install-daemon.sh` installs the daemon and the binding of profiles to screens.
 
-    `.desktop` в пакете нет: его пишет скрипт установки в
-    `$XDG_CONFIG_HOME/autostart` (как у демона), поэтому проверяется поведение
-    скрипта, а не файл в репозитории.
+    There is no `.desktop` in the package: the install script writes it into
+    `$XDG_CONFIG_HOME/autostart` (as for a workspace), so what is checked is the behaviour
+    of the script, not a file in the repository.
     """
 
     def run_script(self, home, *args):
@@ -3397,7 +3397,7 @@ class TestAutostart(unittest.TestCase):
             with open(monitors_entry, encoding="utf-8") as fh:
                 text = fh.read()
             self.assertIn("[Desktop Entry]", text)
-            # Exec — тот же каталог, что у скрипта, и зафиксированные флаги команды.
+            # Exec — the same directory as the script's, and the pinned flags of the command.
             self.assertIn(
                 f"Exec=python3 {ROOT}/zone-tiler.py profile use-monitors --quiet", text
             )

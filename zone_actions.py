@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""zone_actions — чистое ядро действий над окном и зоной для GridSnap.
+"""zone_actions — the pure core of window and zone actions for GridSnap.
 
-Действие — это то, что пользователь повесил на клавишу: «свернуть остальные»,
-«показать окно зоны», «зеркалить», «терминал в зоне» — и вообще любая его
-команда. Запись живёт в `zones.conf` секцией ``[action:<имя>]`` (см.
-``zone_config.load_actions``), а запускается командой ``zone-tiler.py action
-<имя>`` из сочетания, которое ставит ``setup-hotkeys.py``.
+An action is what the user bound to a key: "minimize the others", "show the
+zone window", "mirror", "terminal in the zone" — and in general any command of
+theirs. The record lives in `zones.conf` in the ``[action:<name>]`` section (see
+``zone_config.load_actions``), and is started by the ``zone-tiler.py action
+<name>`` command from the keybinding that ``setup-hotkeys.py`` installs.
 
-Контракт один на все действия: **действие получает окно и зону** — окно, зону,
-её пиксельную рамку, монитор, стол, класс и заголовок окна, путь к конфигу.
-Раздаётся двумя каналами (:class:`ActionContext`): переменными окружения
-``GRIDSNAP_*`` и подстановками ``{zone}``/``{window}``/``{x}``… в аргументах
-команды. Оба канала описаны в :meth:`ActionContext.env` и
-:meth:`ActionContext.values` — это и есть публичный API, на который опираются
-документация и чужие скрипты.
+There is one contract for all actions: **an action gets a window and a zone** — the window, the zone,
+its pixel frame, the monitor, the workspace, the window class and title, the path to the config.
+It is handed over through two channels (:class:`ActionContext`): the environment variables
+``GRIDSNAP_*`` and the ``{zone}``/``{window}``/``{x}``… substitutions in the command
+arguments. Both channels are described in :meth:`ActionContext.env` and
+:meth:`ActionContext.values` — that is the public API that the documentation
+and other people's scripts rely on.
 
-Модуль чистый: ни X, ни GTK, ни сокета — только арифметика рамок, разбор
-команды и подстановки. Поэтому он проверяется обычными юнит-тестами без
-X-сервера, как ``zone_tabs``/``zone_reflow``/``zone_picker_nav``. Всё, что
-трогает окна (свернуть, поднять, запустить процесс), живёт в ``zone-tiler.py``.
+The module is pure: no X, no GTK, no socket — only frame arithmetic, command
+parsing and substitutions. That is why it is covered by ordinary unit tests without
+an X server, like ``zone_tabs``/``zone_reflow``/``zone_picker_nav``. Everything
+that touches windows (minimize, raise, start a process) lives in ``zone-tiler.py``.
 """
 
 import math
@@ -29,33 +29,33 @@ from dataclasses import dataclass
 
 import zone_tabs
 
-from zone_i18n import _  # строки интерфейса; без каталога — исходный текст
+from zone_i18n import _  # interface strings; without a catalog — the source text
 
-# Встроенные действия записываются в `[action:<имя>] run` как `builtin:<имя>`:
-# так одна и та же запись может быть и своей командой, и готовым действием
-# проекта, а ядро не путает одно с другим.
+# Built-in actions are written into `[action:<name>] run` as `builtin:<name>`:
+# so the same record can be both a command of its own and a ready-made action
+# of the project, and the core does not confuse one with the other.
 BUILTIN_PREFIX = "builtin:"
 
-# Имена встроенных действий. `minimize-others` — тот же режим, что `focus`
-# (окно в зону, остальные окна стола и монитора свёрнуты, повторное нажатие
-# возвращает); `show-window` — показать окно зоны; `mirror` — обмен с
-# зеркальной зоной; `terminal` — терминал в зоне.
+# Names of the built-in actions. `minimize-others` is the same mode as `focus`
+# (the window into the zone, the rest of the workspace and monitor minimized, a second
+# press restores it); `show-window` — show the window of the zone; `mirror` — swap
+# with the mirror zone; `terminal` — a terminal in the zone.
 MINIMIZE_OTHERS = "minimize-others"
 SHOW_WINDOW = "show-window"
 MIRROR = "mirror"
 TERMINAL = "terminal"
 BUILTINS = (MINIMIZE_OTHERS, SHOW_WINDOW, MIRROR, TERMINAL)
 
-# Терминал `builtin:terminal` по умолчанию: альтернативы Debian, за которыми
-# стоит терминал рабочего стола. Переопределяется полем `command` записи.
+# The default `builtin:terminal` terminal: the Debian alternatives that stand for
+# a desktop terminal. Overridden by the `command` field of the record.
 DEFAULT_TERMINAL = "x-terminal-emulator"
 
-# Ось зеркала: `horizontal` — левое↔правое (умолчание), `vertical` — верх↔низ.
+# The mirror axis: `horizontal` — left↔right (the default), `vertical` — top↔bottom.
 MIRROR_AXES = ("horizontal", "vertical")
 DEFAULT_MIRROR_AXIS = "horizontal"
 
-# Префикс переменных окружения и имена подстановок — один список имён на оба
-# канала, чтобы они не разъехались.
+# The prefix of the environment variables and the substitution names — one list of names
+# for both channels, so that they do not drift apart.
 ENV_PREFIX = "GRIDSNAP_"
 PLACEHOLDERS = (
     "window",
@@ -71,36 +71,36 @@ PLACEHOLDERS = (
     "conf",
 )
 
-# Подстановка в аргументах команды: `{имя}`. Заменяются только известные имена
-# (PLACEHOLDERS); неизвестное `{что-то}` — ошибка конфига, а не тихая пустота:
-# опечатка в чужом скрипте иначе выглядела бы как «пустой аргумент».
-# Имя — слово из букв, цифр, `_` и `-` (кириллица тоже): `{зона}` и `{что-то}`
-# дают ту же ошибку, что `{zon}`. Шаблон не задевает то, что подстановкой не
-# является: `$` перед скобкой — переменная оболочки (`${HOME}`), `{}` из
-# `find -exec`, а `{print $1}` у `awk` словом не является (пробел и `$`).
+# A substitution in the command arguments: `{name}`. Only the known names are
+# replaced (PLACEHOLDERS); an unknown `{something}` is a config error, not a silent
+# emptiness: a typo in someone else's script would otherwise look like "an empty argument".
+# A name is a word of letters, digits, `_` and `-` (Cyrillic letters count as letters): a name
+# typed in Cyrillic gives the same error as `{zon}`. The pattern does not touch what is not
+# a substitution: `$` before the brace is a shell variable (`${HOME}`), `{}` from
+# `find -exec`, and `{print $1}` in `awk` is not a word (a space and `$`).
 _PLACEHOLDER_RE = re.compile(r"(?<!\$)\{([^\W\d][\w-]*)\}")
 
 
 class ActionError(Exception):
-    """Отказ действия: неизвестное встроенное имя, битая команда, нет зеркала.
+    """An action refusal: an unknown built-in name, a broken command, no mirror.
 
-    Разбор конфига заворачивает её в код 3 (`zone_config.load_actions`), а
-    отказ по состоянию окна (нет зоны, нечего показывать) раскладчик сообщает
-    сам — здесь только то, что не зависит от X.
+    The config parsing wraps it into code 3 (`zone_config.load_actions`), and a
+    refusal on the state of a window (no zone, nothing to show) is reported by the tiler
+    itself — only what does not depend on X belongs here.
     """
 
 
 @dataclass(frozen=True)
 class ActionContext:
-    """Что действие получает про окно и зону.
+    """What an action is told about the window and the zone.
 
-    Поля пусты (`None`/`""`), когда неизвестны: окно вне зон — нет `zone` и
-    `rect`; действие без зоны — нет `monitor`; окна нет вовсе (пустая зона) —
-    нет `window`, `wm_class` и `wm_title`.
+    The fields are empty (`None`/`""`) when unknown: a window outside the zones has no
+    `zone` and `rect`; an action without a zone has no `monitor`; there is no window at
+    all (an empty zone) — no `window`, `wm_class` and `wm_title`.
 
-    `rect` — пиксельная рамка зоны `(x, y, w, h)` на её мониторе: то, что нужно
-    команде, чтобы поставить окно или запустить терминал в зоне, не считая
-    доли самой.
+    `rect` — the pixel frame of the zone `(x, y, w, h)` on its monitor: what a
+    command needs to place a window or start a terminal in the zone without counting
+    the fractions of the zone itself.
     """
 
     window: int | None = None
@@ -113,12 +113,12 @@ class ActionContext:
     conf: str = ""
 
     def values(self):
-        """``{имя подстановки: значение}`` — для `{zone}`, `{window}` и прочих.
+        """``{substitution name: value}`` — for `{zone}`, `{window}` and the rest.
 
-        Неизвестное значение — пустая строка, а не «None»: подстановка попадает
-        в чужую команду, и там должно быть видно «ничего», а не выдуманное слово.
-        Окно отдаётся в hex (`0x1a00007`) — в том же виде, в каком его печатают
-        раскладчик и демон.
+        An unknown value is an empty string, not "None": the substitution lands in
+        someone else's command, and there must be "nothing" visible, not an invented word.
+        The window is given in hex (`0x1a00007`) — in the same form the tiler and the
+        daemon print it.
         """
         x, y, w, h = self.rect if self.rect else ("", "", "", "")
         return {
@@ -136,31 +136,31 @@ class ActionContext:
         }
 
     def env(self):
-        """Окружение для внешней команды: ``GRIDSNAP_*`` поверх текущего.
+        """The environment for an external command: ``GRIDSNAP_*`` on top of the current one.
 
-        Имена — `GRIDSNAP_WINDOW`, `GRIDSNAP_ZONE`, `GRIDSNAP_X`, `GRIDSNAP_Y`,
+        The names are `GRIDSNAP_WINDOW`, `GRIDSNAP_ZONE`, `GRIDSNAP_X`, `GRIDSNAP_Y`,
         `GRIDSNAP_W`, `GRIDSNAP_H`, `GRIDSNAP_MONITOR`, `GRIDSNAP_WORKSPACE`,
-        `GRIDSNAP_CLASS`, `GRIDSNAP_TITLE`, `GRIDSNAP_CONF`; значения те же, что
-        у :meth:`values` (пустая строка — «неизвестно»).
+        `GRIDSNAP_CLASS`, `GRIDSNAP_TITLE`, `GRIDSNAP_CONF`; the values are the same as
+        in :meth:`values` (an empty string means "unknown").
         """
         return {ENV_PREFIX + name.upper(): value for name, value in self.values().items()}
 
 
 def is_builtin(run):
-    """Начинается ли ``run`` с ``builtin:`` — встроенное действие или команда.
+    """Does ``run`` start with ``builtin:`` — a built-in action or a command.
 
-    Имя при этом не проверяется: за него отвечает :func:`builtin_name`, чтобы у
-    «это встроенное» и «такого встроенного нет» были разные сообщения.
+    The name is not checked here: :func:`builtin_name` is responsible for it, so that
+    "this is built-in" and "there is no such built-in" get different messages.
     """
     return str(run or "").strip().lower().startswith(BUILTIN_PREFIX)
 
 
 def builtin_name(run):
-    """Имя встроенного действия из ``run`` или ``None`` — если это команда.
+    """The name of the built-in action from ``run``, or ``None`` if it is a command.
 
     ``"builtin:mirror"`` → ``"mirror"``; ``"notify-send …"`` → ``None``.
-    Неизвестное имя (``builtin:что-то``) — :class:`ActionError` со списком
-    известных: опечатка не должна молча оставить человека без действия.
+    An unknown name (``builtin:<something>``) is an :class:`ActionError` with the list of
+    the known ones: a typo must not silently leave a person without an action.
     """
     text = str(run or "").strip()
     if not is_builtin(text):
@@ -179,12 +179,12 @@ def builtin_name(run):
 
 
 def expand_command(command, context, splitter=shlex.split):
-    """Команда из конфига → ``argv`` с подставленным контекстом.
+    """A command from the config → ``argv`` with the context substituted in.
 
-    Разбор — `shlex.split` (оболочки нет: ни ``|``, ни ``>``, ни ``$VAR``; кому
-    нужна оболочка, пишет ``sh -c "…"`` сам), затем подстановки в каждом
-    аргументе. Пустая команда и неизвестная подстановка ``{что-то}`` —
-    :class:`ActionError`; отсутствующие значения дают пустую строку.
+    The parsing is `shlex.split` (there is no shell: no ``|``, no ``>``, no ``$VAR``; whoever
+    needs a shell writes ``sh -c "…"`` themselves), then the substitutions in every
+    argument. An empty command and an unknown substitution ``{something}`` are an
+    :class:`ActionError`; missing values give an empty string.
     """
     text = str(command or "").strip()
     if not text:
@@ -202,7 +202,7 @@ def expand_command(command, context, splitter=shlex.split):
 
 
 def _expand_token(token, values):
-    """Подставить ``{имя}`` в один аргумент; неизвестное имя — `ActionError`."""
+    """Substitute ``{name}`` in one argument; an unknown name is an `ActionError`."""
 
     def replace(match):
         name = match.group(1)
@@ -221,12 +221,12 @@ def _expand_token(token, values):
 
 
 def mirror_fractions(rect, axis=DEFAULT_MIRROR_AXIS):
-    """Зеркальная рамка в долях: относительно центра рабочей области по оси.
+    """The mirror frame in fractions: about the centre of the work area along the axis.
 
-    ``horizontal`` (умолчание) — левое↔правое: ``(1 - x - w, y, w, h)``;
-    ``vertical`` — верх↔низ: ``(x, 1 - y - h, w, h)``. Неизвестная ось —
-    :class:`ActionError`. Рамка нужна, чтобы найти зону-партнёра по геометрии
-    (:func:`find_mirror`), а не по имени: имена зон человек придумывает сам.
+    ``horizontal`` (the default) — left↔right: ``(1 - x - w, y, w, h)``;
+    ``vertical`` — top↔bottom: ``(x, 1 - y - h, w, h)``. An unknown axis is an
+    :class:`ActionError`. The frame is needed to find the partner zone by geometry
+    (:func:`find_mirror`), not by name: a person invents the zone names themselves.
     """
     axis = _mirror_axis(axis)
     x, y, w, h = (float(v) for v in rect)
@@ -236,7 +236,7 @@ def mirror_fractions(rect, axis=DEFAULT_MIRROR_AXIS):
 
 
 def _mirror_axis(axis):
-    """Ось зеркала из конфига: `horizontal`/`vertical`, иначе `ActionError`."""
+    """The mirror axis from the config: `horizontal`/`vertical`, otherwise an `ActionError`."""
     name = str(axis or DEFAULT_MIRROR_AXIS).strip().lower()
     if name not in MIRROR_AXES:
         raise ActionError(
@@ -248,16 +248,16 @@ def _mirror_axis(axis):
 
 
 def find_mirror(zones, subject, axis=DEFAULT_MIRROR_AXIS):
-    """Имя зеркальной зоны для ``subject`` или ``None`` — если её нет.
+    """The name of the mirror zone for ``subject``, or ``None`` if there is none.
 
-    ``zones`` — ``{имя: (x, y, w, h)}`` в долях рабочей области одного монитора,
-    в порядке сетки. Зеркальная рамка считается :func:`mirror_fractions`, а
-    зоной-партнёром становится та, у которой с ней **наибольшая площадь
-    пересечения**; ничьи решаются по близости центров, затем по порядку зон.
-    Сама `subject` кандидатом не является: зеркало зоны во весь экран — она же,
-    и обмен с собой ничего не делает. Нет пересечения ни с одной зоной — ``None``:
-    «в этой сетке зеркальной зоны нет» — честный отказ, а не догадка.
-    Неизвестное имя `subject` — :class:`ActionError`.
+    ``zones`` — ``{name: (x, y, w, h)}`` in fractions of the work area of one monitor,
+    in grid order. The mirror frame is computed by :func:`mirror_fractions`, and the
+    partner zone is the one with the **largest intersection area** with it; ties are
+    decided by the closeness of the centres, then by the order of the zones.
+    `subject` itself is not a candidate: the mirror of a full-screen zone is that same zone,
+    and swapping with itself does nothing. No intersection with any zone — ``None``:
+    "there is no mirror zone in this grid" is an honest refusal, not a guess.
+    An unknown `subject` name is an :class:`ActionError`.
     """
     if subject not in zones:
         raise ActionError(
@@ -273,9 +273,9 @@ def find_mirror(zones, subject, axis=DEFAULT_MIRROR_AXIS):
         if area <= 0:
             continue
         cx, cy = _center(rect)
-        # Меньше — лучше: сначала площадь (с минусом), затем расстояние, затем
-        # порядок сетки: два равных кандидата должны разрешаться одинаково
-        # в каждом запуске, а не как ляжет словарь.
+        # Smaller is better: first the area (with a minus), then the distance, then
+        # the grid order: two equal candidates must be resolved the same way
+        # in every run, and not the way the dict happens to lie.
         rank = (-area, math.hypot(cx - tx, cy - ty), order)
         if best is None or rank < best[0]:
             best = (rank, name)
@@ -283,13 +283,13 @@ def find_mirror(zones, subject, axis=DEFAULT_MIRROR_AXIS):
 
 
 def _center(rect):
-    """Центр рамки в долях: ``(x + w/2, y + h/2)``."""
+    """The centre of the frame in fractions: ``(x + w/2, y + h/2)``."""
     x, y, w, h = (float(v) for v in rect)
     return (x + w / 2.0, y + h / 2.0)
 
 
 def _intersection_area(left, right):
-    """Площадь пересечения двух рамок в долях; не пересекаются — ноль."""
+    """The intersection area of two frames in fractions; they do not intersect — zero."""
     lx, ly, lw, lh = (float(v) for v in left)
     rx, ry, rw, rh = (float(v) for v in right)
     width = min(lx + lw, rx + rw) - max(lx, rx)
@@ -300,14 +300,14 @@ def _intersection_area(left, right):
 
 
 def zone_windows(frames, zone_rect, tab_rect, tolerance=zone_tabs.FRAME_TOLERANCE):
-    """Окна, стоящие в зоне, — в порядке переданного словаря рамок.
+    """The windows standing in the zone — in the order of the given frame dict.
 
-    Окно считается стоящим в зоне, если его рамка совпала с рамкой зоны целиком
-    (одно окно в зоне) **или** с рамкой вкладки (несколько окон зоны стоят на
-    общей рамке). Сравнение — по каждой стороне с допуском ``tolerance``: рамку
-    ставит оконный менеджер, точного равенства float недостаточно (тот же смысл
-    и та же величина, что у `zone_tabs.FRAME_TOLERANCE`). Рамка не прочитана
-    (``None``) — окно пропускается.
+    A window counts as standing in the zone if its frame matched the zone frame as a
+    whole (one window in the zone) **or** matched the tab frame (several windows of the
+    zone stand on the shared frame). The comparison is per side with a ``tolerance``:
+    the window manager places the frame, exact float equality is not enough (the same
+    meaning and the same value as in `zone_tabs.FRAME_TOLERANCE`). The frame was not read
+    (``None``) — the window is skipped.
     """
     found = []
     for win, frame in frames.items():
@@ -319,11 +319,11 @@ def zone_windows(frames, zone_rect, tab_rect, tolerance=zone_tabs.FRAME_TOLERANC
 
 
 def _same_rect(left, right, tolerance):
-    """Совпали ли две рамки с точностью ``tolerance`` по каждой стороне.
+    """Do two frames match with a ``tolerance`` on every side.
 
-    Копия правила `zone_tabs._same_rect` (оно приватное): здесь оно нужно и для
-    «окно в зоне», и для «зона окна», а тянуть приватную функцию из соседнего
-    модуля хуже, чем продублировать две строки.
+    A copy of the rule from `zone_tabs._same_rect` (it is private): here it is needed for
+    both "the window in the zone" and "the zone of the window", and pulling a private
+    function out of a neighbouring module is worse than duplicating two lines.
     """
     if left is None or right is None:
         return False
@@ -331,12 +331,12 @@ def _same_rect(left, right, tolerance):
 
 
 def zone_of_frame(frame, zones_px, height=None, tolerance=zone_tabs.FRAME_TOLERANCE):
-    """Имя зоны, в которой стоит окно с рамкой ``frame``, или ``None``.
+    """The name of the zone a window with the frame ``frame`` stands in, or ``None``.
 
-    ``zones_px`` — ``{имя: (x, y, w, h)}`` в пикселях на одном мониторе, в
-    порядке сетки; ``height`` — высота полосы вкладок (`[tabs] height`), чтобы
-    принять за «в зоне» и окно на общей рамке вкладки. Первое совпадение по
-    порядку сетки — зоны не перекрываются, и двух ответов быть не должно.
+    ``zones_px`` — ``{name: (x, y, w, h)}`` in pixels on one monitor, in grid
+    order; ``height`` — the height of the tab strip (`[tabs] height`), so that a window
+    on the shared tab frame is also taken for "in the zone". The first match in grid
+    order — zones do not overlap, and there must not be two answers.
     """
     if frame is None:
         return None

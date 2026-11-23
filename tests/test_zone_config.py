@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты `zone_config` — чистого слоя конфига редактора зон.
+"""Unit tests for `zone_config` — the pure config layer of the zone editor.
 
-Без X-сервера и без GTK: `zone_config` намеренно не импортирует gi, поэтому
-тесты идут в CI, где `python3-gi` не установлен. Проверяют парсинг обеих форм
-зон, канонический вывод `x,y,w,h`, секцию `[keys]` и — главное — round-trip
-чужих секций `[rules]`/`[daemon]` при сохранении из редактора.
+Without an X server and without GTK: `zone_config` deliberately does not import gi, so the
+tests run in CI where `python3-gi` is not installed. They check the parsing of both forms of
+zones, the canonical output `x,y,w,h`, the `[keys]` section and — the main thing — the round-trip
+of the foreign sections `[rules]`/`[daemon]` when saving from the editor.
 
-Запуск:
+Running:
     python3 tests/test_zone_config.py
 """
 
@@ -21,8 +21,8 @@ import unittest
 from unittest import mock
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -47,7 +47,7 @@ DAEMON = "[daemon]\nreflow = off   # off | neighbors\n"
 
 
 class ConfMixin:
-    """Временный каталог с zones.conf; каталог убирается после теста."""
+    """A temporary directory with a zones.conf; the directory is removed after the test."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix="gridsnap-conf-")
@@ -67,12 +67,12 @@ class ConfMixin:
 
 
 def sections_in(text):
-    """Имена секций в файле по порядку (только заголовки строк)."""
+    """The names of the sections in the file in order (the headings of the lines only)."""
     return [line.strip()[1:-1] for line in text.splitlines() if line.strip().startswith("[")]
 
 
 def section_index(text, name):
-    """Номер строки с заголовком ``[name]`` или -1 — в отличие от str.index не ловит упоминания в комментариях."""
+    """The line number with the ``[name]`` heading, or -1 — unlike str.index it does not catch mentions in comments."""
     for i, line in enumerate(text.splitlines()):
         if line.strip() == f"[{name}]":
             return i
@@ -133,7 +133,7 @@ class TestLoadZones(ConfMixin, unittest.TestCase):
 
 
 class TestMonitorZoneSets(ConfMixin, unittest.TestCase):
-    """Наборы зон на монитор: ``[zones]`` плюс ``[zones:<имя выхода>]``."""
+    """The zone sets per monitor: ``[zones]`` plus ``[zones:<output name>]``."""
 
     def two_sets(self):
         return self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES)
@@ -153,7 +153,7 @@ class TestMonitorZoneSets(ConfMixin, unittest.TestCase):
         self.assertEqual([z.name for z in zc.load_zones(self.two_sets(), "")], ["main", "top-right"])
 
     def test_monitor_name_is_case_sensitive(self):
-        # имя выхода X11 — не имя зоны: санитайза нет, регистр значим
+        # the name of an X11 output is not a zone name: there is no sanitizing, case matters
         zones = zc.load_zones(self.two_sets(), "hdmi-1")
         self.assertEqual([z.name for z in zones], ["main", "top-right"])
 
@@ -193,12 +193,12 @@ class TestMonitorZoneSets(ConfMixin, unittest.TestCase):
         self.assertIn("[zones:HDMI-1]", err.getvalue())
 
     def test_extra_sections_skip_monitor_sets(self):
-        # иначе `[zones:HDMI-1]` уедет в «чужие» секции нижним регистром и задвоится
+        # otherwise `[zones:HDMI-1]` would go into the "foreign" sections lowercased and be doubled
         path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + RULES)
         self.assertEqual(set(zc.load_extra_sections(path)), {"rules"})
 
     def test_ignore_section_survives_editor_save(self):
-        # `[ignore]` — «чужая» для редактора секция: сохранение раскладки её не теряет
+        # `[ignore]` is a section "foreign" to the editor: saving the layout does not lose it
         path = self.conf(BASE_GRID + RECT_ZONES + "[ignore]\nChrome = заметка\n")
         extra = zc.load_extra_sections(path)
         self.assertEqual(extra.get("ignore"), ["Chrome = заметка"])
@@ -208,7 +208,7 @@ class TestMonitorZoneSets(ConfMixin, unittest.TestCase):
 
 
 class TestZoneSetList(ConfMixin, unittest.TestCase):
-    """``list_zone_sets`` — какие наборы есть в файле (для редактора и CLI)."""
+    """``list_zone_sets`` — which sets the file has (for the editor and the CLI)."""
 
     def test_lists_default_and_monitor_sets(self):
         path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES)
@@ -255,7 +255,7 @@ class TestSaveMonitorZoneSets(ConfMixin, unittest.TestCase):
         zc.save_zones(path, zones, zc.load_extra_sections(path), monitor="HDMI-1")
         text = self.read(path)
         self.assertIn("[zones:HDMI-1]", text)
-        self.assertIn("[zones:DP-2]", text)  # соседний набор на месте
+        self.assertIn("[zones:DP-2]", text)  # the neighbouring set is in place
         self.assertIn("wide = 0, 0, 1, 1", text)
         self.assertIn("[rules]\nChrome = main", text)
         self.assertIn("reflow = off   # off | neighbors", text)
@@ -310,10 +310,10 @@ class TestSaveMonitorZoneSets(ConfMixin, unittest.TestCase):
 
 
 class TestSaveZoneSets(ConfMixin, unittest.TestCase):
-    """Все наборы за один проход (`save_zone_sets`) и `[keys]` без повторов."""
+    """All the sets in one pass (`save_zone_sets`) and `[keys]` without repeats."""
 
     def keys_of(self, path):
-        """Тело `[keys]` по строкам — не путать с подсказкой в шапке файла."""
+        """The body of `[keys]` line by line — not to be confused with the hint in the file header."""
         body, inside = [], False
         for line in self.read(path).splitlines():
             stripped = line.strip()
@@ -350,7 +350,7 @@ class TestSaveZoneSets(ConfMixin, unittest.TestCase):
         )
         self.assertEqual(self.keys_of(path), ["main = <Super><Alt>1",
                                              "wide = <Super><Alt>2"])
-        # главный ключ — из общего набора, он пишется первым
+        # the main key comes from the general set, it is written first
         sets = zc.load_zone_sets(path)
         self.assertEqual([z.binding for z in sets[None]], ["<Super><Alt>1"])
         self.assertEqual([z.binding for z in sets["HDMI-1"]], ["<Super><Alt>1", "<Super><Alt>2"])
@@ -365,8 +365,8 @@ class TestSaveZoneSets(ConfMixin, unittest.TestCase):
         self.assertEqual(self.keys_of(path), ["main = <Super><Alt>1"])
 
     def test_broken_keys_in_file_do_not_stop_the_rewrite(self):
-        # Файл, испорченный руками: повтор в [keys]. Читать его писателю не нужно —
-        # файл переписывается целиком, поэтому повтора в нём уже не будет.
+        # A file broken by hand: a repeat in [keys]. The writer does not need to read it —
+        # the file is rewritten whole, so there will be no repeat in it any more.
         path = self.conf(BASE_GRID + "[zones]\nmain = 0, 0, 1, 1\n"
                          + "[keys]\nmain = <Super><Alt>1\nmain = <Super><Alt>9\n")
         zc.save_zone_sets(path, [zc.Zone("main", 0, 0, 1, 1, "<Super><Alt>1")])
@@ -374,7 +374,7 @@ class TestSaveZoneSets(ConfMixin, unittest.TestCase):
         self.assertEqual([z.binding for z in zc.load_zones(path)], ["<Super><Alt>1"])
 
     def test_sets_not_passed_are_not_kept(self):
-        # Новая API — полная запись: что не передали, того в файле не будет.
+        # A new API — a full write: what was not passed is not in the file.
         path = self.conf(BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES)
         zc.save_zone_sets(path, [zc.Zone("only", 0, 0, 1, 1)], {"HDMI-1": [zc.Zone("top", 0, 0, 1, 1)]})
         self.assertEqual(zc.list_zone_sets(path),
@@ -587,14 +587,14 @@ class TestNames(unittest.TestCase):
         self.assertEqual(zc.sanitize_name("зона №1"), "зона-1")
 
     def test_sanitize_keeps_russian_yo(self):
-        """«ё» — такая же русская буква, как «а», а не посторонний символ."""
+        """The letter yo (U+0451) is a Russian letter like any other, not a foreign character."""
         self.assertEqual(zc.sanitize_name("ёлка"), "ёлка")
         self.assertEqual(zc.sanitize_name("Всё хорошо"), "Всё-хорошо")
         self.assertEqual(zc.sanitize_name("ЖЁЛУДЬ"), "ЖЁЛУДЬ")
         self.assertEqual(zc.sanitize_profile_name("ёлка"), "ёлка")
 
     def test_sanitize_keeps_all_cyrillic_letters(self):
-        """Диапазон кириллицы, а не только А-Яа-я: украинские и белорусские буквы тоже."""
+        """The whole Cyrillic range, not only the basic Russian letters: the Ukrainian and Belarusian ones too."""
         self.assertEqual(zc.sanitize_name("їжачок"), "їжачок")
         self.assertEqual(zc.sanitize_name("ўсё"), "ўсё")
         self.assertEqual(zc.sanitize_name("ґанок"), "ґанок")
@@ -611,10 +611,10 @@ class TestNames(unittest.TestCase):
 
 
 class TestSaveWorkspaceMap(ConfMixin, unittest.TestCase):
-    """`[workspaces]`: запись «номер стола → профиль» без потерь соседних секций."""
+    """`[workspaces]`: the "workspace number -> profile" map without losing the neighbouring sections."""
 
     def full_conf(self):
-        """Конфиг «как после ручной правки»: оба набора зон, клавиши, чужие секции."""
+        """A config "as after a manual edit": both zone sets, the keys, the foreign sections."""
         return (BASE_GRID + RECT_ZONES + MONITOR_ZONES + SECOND_MONITOR_ZONES
                 + RULES + "[keys]\nmain = <Super><Alt>1\n" + DAEMON)
 
@@ -624,7 +624,7 @@ class TestSaveWorkspaceMap(ConfMixin, unittest.TestCase):
         self.assertEqual(zc.load_workspace_map(path), {1: "work", 3: "cinema"})
 
     def test_format_is_number_space_profile(self):
-        # Формат из задания: `{2: "cinema"}` → `[workspaces]` и `2 = cinema`.
+        # The format from the task: `{2: "cinema"}` -> `[workspaces]` and `2 = cinema`.
         path = self.conf(BASE_GRID + RECT_ZONES)
         zc.save_workspace_map(path, {2: "cinema"})
         self.assertIn("[workspaces]\n2 = cinema\n", self.read(path))
@@ -652,7 +652,7 @@ class TestSaveWorkspaceMap(ConfMixin, unittest.TestCase):
         self.assertIn("[keys]\nmain = <Super><Alt>1", text)
 
     def test_existing_section_is_replaced_in_place(self):
-        # Секция не в конце файла: она обновляется, соседи остаются на местах.
+        # The section is not at the end of the file: it is updated, the neighbours stay in place.
         path = self.conf(BASE_GRID + "[workspaces]\n1 = old\n2 = old2\n" + RECT_ZONES)
         zc.save_workspace_map(path, {1: "new"})
         self.assertEqual(zc.load_workspace_map(path), {1: "new"})
@@ -683,8 +683,8 @@ class TestSaveWorkspaceMap(ConfMixin, unittest.TestCase):
         self.assertEqual(zc.load_workspace_map(path), {1: "work"})
 
     def test_extra_section_keeps_map_for_ctrl_s(self):
-        # Так редактор сохраняет Ctrl+S: `[workspaces]` едет среди чужих секций
-        # дословно и после записи зон остаётся в файле.
+        # This is how the editor saves with Ctrl+S: `[workspaces]` travels among the foreign sections
+        # verbatim and stays in the file after the zones are written.
         path = self.conf(BASE_GRID + RECT_ZONES)
         zc.save_workspace_map(path, {2: "cinema"})
         extra = zc.load_extra_sections(path)
@@ -694,13 +694,13 @@ class TestSaveWorkspaceMap(ConfMixin, unittest.TestCase):
 
 
 class GalleryDirTest(unittest.TestCase):
-    """Где искать каталог готовых раскладок — тот же порядок, что у установки.
+    """Where to look for the directory of ready-made layouts — the same order as in the installation.
 
-    `zone_config.gallery_dir` — единственное место, где галерея зависит от того,
-    как поставлен GridSnap: в чекауте она рядом с кодом, в установке — в
-    `<префикс>/share/gridsnap/gallery` (код при этом в `<префикс>/lib/gridsnap`).
-    Ошибка здесь не падает тестами из чекаута, а видна только пользователю:
-    меню «Из галереи…» пустое.
+    `zone_config.gallery_dir` is the only place where the gallery depends on how
+    GridSnap is installed: in a checkout it is next to the code, in an installation — in
+    `<prefix>/share/gridsnap/gallery` (the code itself being in `<prefix>/lib/gridsnap`).
+    A mistake here does not fail the tests from a checkout, it is visible only to the user:
+    the "From the gallery…" menu is empty.
     """
 
     def test_env_override_wins(self):
@@ -717,7 +717,7 @@ class GalleryDirTest(unittest.TestCase):
                 self.assertEqual(zc.gallery_dir(), os.path.join(root, "gallery"))
 
     def test_installed_gallery_in_share_prefix(self):
-        # Код в <префикс>/lib/gridsnap, данные — в <префикс>/share/gridsnap/gallery.
+        # The code in <prefix>/lib/gridsnap, the data — in <prefix>/share/gridsnap/gallery.
         with tempfile.TemporaryDirectory() as prefix:
             lib = os.path.join(prefix, "lib", "gridsnap")
             share = os.path.join(prefix, "share", "gridsnap", "gallery")
@@ -730,8 +730,8 @@ class GalleryDirTest(unittest.TestCase):
                 self.assertEqual(zc.gallery_ids(), [])
 
     def test_shipped_layouts_are_profiles_with_meta(self):
-        # Каждый файл поставки читается той же дорогой, что профиль: зоны,
-        # клавиши, правила. Кривой файл не должен доехать до пользователя.
+        # Every shipped file is read by the same path as a profile: the zones,
+        # the keys, the rules. A broken file must not reach the user.
         self.assertGreaterEqual(len(zc.gallery_ids()), 6)
         for gid in zc.gallery_ids():
             layout = zc.load_gallery_layout(gid)

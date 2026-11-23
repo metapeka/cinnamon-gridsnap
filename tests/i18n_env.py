@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Исходный язык интерфейса для тестов.
+"""The source language of the interface for the tests.
 
-Строки в коде английские (язык исходника), а поверх них ложатся каталоги `ru` и
-`zh_CN`; язык выбирается из локали машины, и `LANG=ru_RU.UTF-8` означает русский.
-Тесты проверяют поведение, а не перевод, и сверяются с английскими сообщениями
-прямо из кода, поэтому им нужен исходный язык — один и тот же на любой машине.
+The strings in the code are English (the source language), and the `ru` and `zh_CN`
+catalogs are layered on top; the language comes from the machine locale, and `LANG=ru_RU.UTF-8` means Russian.
+The tests check behaviour rather than translation and compare against the English messages
+straight from the code, so they need the source language — the same on any machine.
 
-Подключается одной строкой в начале модуля:
+It is included with one line at the top of a module:
 
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
+    import i18n_env  # noqa: F401  (the tests run in the source language)
 
-Переменная не перетирается, если `GRIDSNAP_LANG` уже выставлен снаружи: так
-работает и `GRIDSNAP_LANG=ru python3 -m unittest discover -s tests`, и тесты
-выбора языка в `test_zone_i18n.py`.
+The variable is not overwritten if `GRIDSNAP_LANG` is already set outside: that is how
+`GRIDSNAP_LANG=ru python3 -m unittest discover -s tests` works, and so do the language
+tests in `test_zone_i18n.py`.
 """
 
 import os

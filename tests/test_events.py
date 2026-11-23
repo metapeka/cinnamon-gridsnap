@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Контракт событий демона: подписка и формы строк.
+"""The daemon event contract: subscription and the shapes of the lines.
 
-Смысл: внешний потребитель (скрипт, панель, апплет) подключается и слушает, что
-делает демон. Формы событий зафиксированы здесь, потому что их читают снаружи —
-апплет на JavaScript тоже, и менять поля задним числом нельзя.
+The point: an external consumer (script, panel, applet) connects and listens to what
+the daemon does. The event shapes are fixed here because they are read from outside —
+the JavaScript applet too, and the fields cannot be changed after the fact.
 
-Серверную часть (набор подписчиков и рассылку) проверяет дымовой сценарий
-`tests/smoke-events.sh`; здесь — только протокол.
+The server side (the subscriber set and the broadcast) is checked by the smoke scenario
+`tests/smoke-events.sh`; here — the protocol only.
 """
 
 import importlib.util
@@ -27,7 +27,7 @@ DAEMON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))
 
 
 def load_daemon():
-    """Загрузить `zone-daemon.py` (имя с дефисом) без обращения к X."""
+    """Load `zone-daemon.py` (a name with a dash) without touching X."""
     spec = importlib.util.spec_from_file_location("zone_daemon_events_test", DAEMON)
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -50,7 +50,7 @@ class TestSubscription(unittest.TestCase):
         self.assertEqual(groups, ("focus", "window"))
 
     def test_empty_list_is_an_error_not_everything(self):
-        # Иначе опечатка в запросе молча давала бы поток, которого клиент не ждал.
+        # Otherwise a typo in the request would silently give a stream the client did not wait for.
         with self.assertRaises(ipc.ProtocolError):
             ipc.parse_subscription({"cmd": "subscribe", "events": []})
 
@@ -69,7 +69,7 @@ class TestSubscription(unittest.TestCase):
 
 
 class TestEventShapes(unittest.TestCase):
-    """Поля событий — контракт для внешних потребителей (в т.ч. апплета)."""
+    """The event fields — a contract for external consumers (including the applet)."""
 
     def test_window_appeared(self):
         self.assertEqual(
@@ -84,7 +84,7 @@ class TestEventShapes(unittest.TestCase):
         )
 
     def test_window_appeared_without_zone(self):
-        # Окно под [ignore] или без правила: появилось, но никуда не встало.
+        # A window under [ignore] or without a rule: it appeared, but never got placed.
         event = parsed(ipc.event_window_appeared(0x1))
         self.assertEqual(event["zone"], None)
         self.assertEqual(event["window"], "0x1")
@@ -145,10 +145,10 @@ class TestFiltering(unittest.TestCase):
 
 
 class TestSubscriptionTransport(unittest.TestCase):
-    """Подписка как свойство транспорта: соединение остаётся и служит рассылке."""
+    """Subscription as a property of the transport: the connection stays and serves the broadcast."""
 
     def read_line(self, conn):
-        """Прочитать одну строку протокола: `recv` может отдать сразу две."""
+        """Read one line of the protocol: `recv` may hand over two at once."""
         buf = b""
         while b"\n" not in buf:
             chunk = conn.recv(4096)
@@ -184,7 +184,7 @@ class TestSubscriptionTransport(unittest.TestCase):
             self.assertTrue(subs.has(server), "соединение перешло в подписчики")
             self.assertEqual(subs.groups(server), ("focus",))
             self.assertEqual(parsed(self.read_line(client))["subscribed"], ["focus"])
-            # Соединение не закрыто: рассылка доходит.
+            # The connection is not closed: the broadcast gets through.
             self.assertEqual(subs.broadcast("focus-on", ipc.event_focus_on("main")), 1)
             self.assertEqual(parsed(self.read_line(client))["event"], "focus-on")
         finally:
@@ -212,8 +212,8 @@ class TestSubscriptionTransport(unittest.TestCase):
             server.close()
 
     def test_slow_subscriber_is_dropped_not_buffered(self):
-        # Подписчик, который не читает: событие — новость, а не очередь, поэтому
-        # демон его отбрасывает, а не копит буфер в своей памяти.
+        # A subscriber that does not read: an event is news, not a queue, so
+        # the daemon drops it instead of piling up a buffer in its own memory.
         client, server = socket.socketpair()
         client.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
         server.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
@@ -281,7 +281,7 @@ class TestSubscriptionTransport(unittest.TestCase):
 
 
 class FakeSubscribers:
-    """Подмена реестра подписчиков: запомнить события, не заводя сокета."""
+    """A replacement for the subscriber registry: remember events without making a socket."""
 
     def __init__(self, groups=ipc.ALL_EVENT_GROUPS):
         self.groups = tuple(groups)
@@ -318,14 +318,14 @@ class FakeSubscribers:
 
 
 class TestDaemonEvents(unittest.TestCase):
-    """Демон шлёт события в точки укладки, закрытия, переезда и режима."""
+    """The daemon sends events at the points of placing, closing, moving and mode."""
 
     @classmethod
     def setUpClass(cls):
         cls.daemon = load_daemon()
 
     def setUp(self):
-        # Без X `window_iconic` недоступен: подменяем состоянием «ничего не свёрнуто».
+        # Without X `window_iconic` is unavailable: the state is replaced with "nothing is minimized".
         patcher = mock.patch.object(self.daemon.tiler, "window_iconic", lambda win: False)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -385,7 +385,7 @@ class TestDaemonEvents(unittest.TestCase):
         response = dae.build_dispatcher().dispatch(
             '{"cmd": "subscribe", "events": ["focus"]}'
         )
-        # Тот же класс, что у демона: он загружает `zone_ipc` своим модулем.
+        # The same class as the daemon has: it loads `zone_ipc` as its own module.
         self.assertIsInstance(response, self.daemon.zone_ipc.Subscription)
         self.assertEqual(response["subscribed"], ["focus"])
         self.assertEqual(response.groups, ("focus",))
@@ -410,7 +410,7 @@ class TestDaemonEvents(unittest.TestCase):
         self.assertEqual(appeared[0]["workspace"], 0)
 
     def test_appeared_without_zone_for_unmatched_window(self):
-        # Правило не сработало: окно появилось, но никуда не встало.
+        # The rule did not fire: the window appeared, but never got placed.
         dae, subs = self.make_daemon(meta=lambda win: self.Meta(wm_class="gimp"))
         dae.reconcile([0x2A])
         appeared = subs.of("window-appeared")
@@ -439,7 +439,7 @@ class TestDaemonEvents(unittest.TestCase):
         self.assertEqual(moved[0]["previous"], "left")
 
     def test_focus_emits_on_and_off(self):
-        # Второе окно без правила: оно не в зоне цели, поэтому режим его свернёт.
+        # A second window without a rule: it is not in the target zone, so the mode will minimize it.
         def meta(win):
             return self.Meta(wm_class="firefox" if win == 0x2A else "gimp")
 

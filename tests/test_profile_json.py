@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Юнит-тесты переносимого JSON-профиля (``gridsnap_profile``: 1).
+"""Unit tests for the portable JSON profile (``gridsnap_profile``: 1).
 
-Проверяется контракт формата: ``profile_to_dict`` (профиль → dict),
-``profile_from_dict`` (dict → файл профиля), стабильный текст
-(``dumps_profile``) и CLI ``zone-tiler.py profile export/import`` без дисплея.
-Круг проверяется целиком: профиль → dict → файл → профиль сохраняет зоны,
-наборы мониторов, правила и клавиши, а ошибки формата выходят кодом 3.
+The format contract is checked: ``profile_to_dict`` (profile → dict),
+``profile_from_dict`` (dict → profile file), the stable text
+(``dumps_profile``) and the ``zone-tiler.py profile export/import`` CLI without a display.
+The round is checked as a whole: profile → dict → file → profile keeps the zones,
+the monitor sets, the rules and the keys, and format errors exit with code 3.
 
-Запуск:
+Running:
     python3 tests/test_profile_json.py
 """
 
@@ -20,8 +20,8 @@ import tempfile
 import unittest
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -51,7 +51,7 @@ TEMPLATES = ("templates",)
 
 
 class ConfMixin:
-    """Временный ``zones.conf`` и каталог профилей рядом с ним."""
+    """A temporary ``zones.conf`` and the profile directory next to it."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-json-")
@@ -69,7 +69,7 @@ class ConfMixin:
 
 
 def sorted_json(data):
-    """Тот же текст, что пишет ``dumps_profile``: для сверки стабильности."""
+    """The same text that ``dumps_profile`` writes: for comparing stability."""
     return json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
 
 
@@ -102,7 +102,7 @@ class TestProfileToDict(ConfMixin, unittest.TestCase):
         self.assertIsInstance(data["zones"]["left"][2], float)
 
     def test_fractions_are_rounded_to_conf_precision(self):
-        # ``.conf`` пишет 4 знака (``Zone.fmt``), JSON не мельче.
+        # ``.conf`` writes 4 digits (``Zone.fmt``), JSON is no coarser.
         zc.save_profile("third", [zc.Zone("third", 0, 0, 1 / 3, 1)], conf_path=self.conf)
         data = zc.profile_to_dict("third", self.conf)
         self.assertEqual(data["zones"]["third"], [0, 0, 0.3333, 1])
@@ -131,7 +131,7 @@ class TestProfileToDict(ConfMixin, unittest.TestCase):
 
 
 class TestRoundTrip(ConfMixin, unittest.TestCase):
-    """Круг профиль → dict → файл → профиль ничего не теряет."""
+    """The round profile → dict → file → profile loses nothing."""
 
     def test_full_profile_survives_round_trip(self):
         zc.save_profile("cinema", ZONES, RULES, self.conf,
@@ -145,7 +145,7 @@ class TestRoundTrip(ConfMixin, unittest.TestCase):
                           ("side", (0.5, 0.0, 0.5, 1.0), "<Super><Alt>2")])
         self.assertEqual(rules, RULES)
         self.assertEqual(ignore, [])
-        # Порядок зон в наборе после JSON — по алфавиту (sort_keys), имена те же.
+        # The order of the zones in a set after JSON is alphabetical (sort_keys), the names are the same.
         self.assertEqual(sorted(z.name for z in monitor_sets["HDMI-1"]), ["bottom", "top"])
         self.assertEqual(zc.profile_to_dict("cinema", self.conf), data)
 
@@ -203,7 +203,7 @@ class TestProfileFromDictErrors(ConfMixin, unittest.TestCase):
         with self.assertRaises(zc.ProfileJsonError) as caught:
             zc.profile_from_dict(data, conf_path=self.conf, **kwargs)
         self.assertIsInstance(caught.exception, ValueError)
-        self.assertEqual(zc.list_profiles(self.conf), [])  # ничего не записано
+        self.assertEqual(zc.list_profiles(self.conf), [])  # nothing written
         return str(caught.exception)
 
     def test_missing_version(self):
@@ -237,7 +237,7 @@ class TestProfileFromDictErrors(ConfMixin, unittest.TestCase):
     def test_rule_to_unknown_zone(self):
         text = self.assertJsonError(dict(GOOD, rules=["Chrome = nope"]))
         self.assertIn("nope", text)
-        # зона из набора монитора — существует
+        # a zone from the monitor set — it exists
         zc.profile_from_dict(dict(GOOD, rules=["Chrome = top"]), conf_path=self.conf)
 
     def test_rule_without_equals(self):

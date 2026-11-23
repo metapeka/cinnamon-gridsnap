@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты правил «класс/заголовок -> зона» в zone-tiler.
+"""Unit tests for the "class/title -> zone" rules in zone-tiler.
 
-Без X-сервера и GTK: `match_rules` — чистая функция, разбор вывода xprop
-проверяется через подмену subprocess.check_output, а `Grid.rules` — на временном
+Without an X server and GTK: `match_rules` is a pure function, the parsing of the xprop output
+is checked with subprocess.check_output replaced, and `Grid.rules` — against a temporary
 zones.conf.
 
-Запуск:
+Running:
     python3 tests/test_rules.py
 """
 
@@ -19,14 +19,14 @@ from unittest import mock
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)  # zone-tiler и его модули
+    sys.path.insert(0, ROOT)  # zone-tiler and its modules
 TILER = os.path.join(ROOT, "zone-tiler.py")
 
 
@@ -44,7 +44,7 @@ ZONES = "[zones]\nmain = 0, 0, 0.5, 1\ntop-right = 0.5, 0, 0.5, 0.5\n"
 
 
 class ConfMixin:
-    """Пишет временный zones.conf и убирает его после теста."""
+    """Writes a temporary zones.conf and removes it after the test."""
 
     def conf(self, text):
         fd, path = tempfile.mkstemp(suffix=".conf", text=True)
@@ -152,17 +152,17 @@ class TestGridRules(ConfMixin, unittest.TestCase):
         )
 
     def test_rules_selector_case_is_preserved(self):
-        # ConfigParser по умолчанию приводит ключи к нижнему регистру, из-за чего
-        # `re:\S+Deploy\S*` мутирует в `\s+deploy\s*` (\S -> \s), и правило
-        # молча не срабатывает. Селектор должен сохраниться дословно.
+        # ConfigParser lowercases the keys by default, which is why
+        # `re:\S+Deploy\S*` mutates into `\s+deploy\s*` (\S -> \s), and the rule
+        # silently does not fire. The selector must be kept literally.
         selector = r"re:\S+Deploy\S*"
         path = self.conf(BASE_GRID + ZONES + f"[rules]\n{selector} = main\n")
         grid = zt.Grid(path)
         self.assertEqual(grid.rules, [(selector, "main")])
 
     def test_regex_escape_class_stays_uppercase_and_matches(self):
-        # `\S+Deploy\S*` должен матчить не-пробелы вокруг Deploy; если бы регистр
-        # упал, `\s+deploy\s*` требовал бы пробелы и не совпал бы.
+        # `\S+Deploy\S*` must match the non-spaces around Deploy; if the case
+        # had dropped, `\s+deploy\s*` would require spaces and would not match.
         path = self.conf(BASE_GRID + ZONES + "[rules]\nre:\\S+Deploy\\S* = main\n")
         grid = zt.Grid(path)
         self.assertEqual(zt.match_rules(grid.rules, "xterm", "webDeployProd"), "main")
@@ -246,7 +246,7 @@ class TestMovableWindowsIgnores(unittest.TestCase):
 
 class TestGridIgnore(ConfMixin, unittest.TestCase):
     def test_ignore_parsed_with_notes_and_case(self):
-        # Значение — заметка для человека; регистр `re:`-регекспа сохраняется.
+        # The value is a note for a human; the case of the `re:` regex is preserved.
         selector = r"re:\S+Deploy\S*"
         path = self.conf(
             BASE_GRID + ZONES + f"[ignore]\nChrome = заметка\n{selector} = ещё\n"
@@ -265,7 +265,7 @@ class TestGridIgnore(ConfMixin, unittest.TestCase):
 
 
 class TestWindowIsExcluded(unittest.TestCase):
-    """`window_is_excluded` — та же чистая проверка, но с чтением X."""
+    """`window_is_excluded` — the same pure check, but with X reads."""
 
     def _out(self, text):
         return mock.patch.object(zt.subprocess, "check_output", return_value=text)

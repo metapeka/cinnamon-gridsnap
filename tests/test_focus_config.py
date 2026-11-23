@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Тесты «поверхности» режима «только эта зона»: CLI, `[focus]`, сочетание.
+"""Tests of the "only this zone" mode's surface: the CLI, `[focus]`, the keybinding.
 
-Режим живёт в демоне (`ipc_focus`); здесь проверяется то, что вокруг него:
-команда `gridsnap-ctl focus` (какой запрос уходит, что считается ошибкой
-аргументов и с каким кодом), разбор необязательной секции `[focus]` в
-`zone_config` (нет секции — режим не настроен, чужой ключ и пустая `zone` —
-код 3) и третья пара в плане `setup-hotkeys.py`.
+The mode lives in the daemon (`ipc_focus`); what is checked here is what surrounds it:
+the `gridsnap-ctl focus` command (which request goes out, what counts as an argument
+error and with which code), parsing of the optional `[focus]` section in
+`zone_config` (no section — the mode is not configured, a foreign key and an empty `zone` —
+code 3) and the third pair in the `setup-hotkeys.py` plan.
 
-Без X-сервера и GTK: `send_command` у клиента и `zone_pairs` у
-`setup-hotkeys.py` подменяются заглушками, поэтому реальный демон и
-раскладчик не запускаются.
+No X server and no GTK: `send_command` in the client and `zone_pairs` in
+`setup-hotkeys.py` are replaced with stubs, so the real daemon and
+the tiler are not started.
 
-Запуск:
+Running:
     python3 tests/test_focus_config.py
     python3 -m unittest discover -s tests -v
 """
@@ -29,8 +29,8 @@ import unittest
 from unittest import mock
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (tests run in the source language)
+except ImportError:  # launched as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -45,7 +45,7 @@ import zone_config as zc  # noqa: E402
 
 
 def load_ctl():
-    """`gridsnap-ctl` — файл без `.py`: загружается через `SourceFileLoader`."""
+    """`gridsnap-ctl` is a file without `.py`: it is loaded through `SourceFileLoader`."""
     loader = importlib.machinery.SourceFileLoader("gridsnap_ctl_focus_test", CTL)
     spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
@@ -69,7 +69,7 @@ BASE = (
 
 
 class FocusSectionTest(unittest.TestCase):
-    """Разбор `[focus]` в `zone_config` — без X и GTK."""
+    """Parsing `[focus]` in `zone_config` — without X and GTK."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-focus-conf-")
@@ -128,8 +128,8 @@ class FocusSectionTest(unittest.TestCase):
         self.assertIn("empty zone value", err.getvalue())
 
     def test_section_is_foreign_and_survives_saving(self):
-        # `[focus]` не в RESERVED_SECTIONS: редактор переносит её дословно,
-        # поэтому сохранение раскладки не должно её терять.
+        # `[focus]` is not in RESERVED_SECTIONS: the editor carries it over verbatim,
+        # so saving the layout must not lose it.
         self.write(BASE + "[focus]\nkey = <Super>f\nzone = main\n")
         self.assertIn("focus", zc.load_extra_sections(self.path))
         zc.save_zones(
@@ -141,7 +141,7 @@ class FocusSectionTest(unittest.TestCase):
 
 
 class FocusHotkeyPlanTest(unittest.TestCase):
-    """Третья пара в `setup-hotkeys.planned`: `focus` после зон и `move`."""
+    """The third pair in `setup-hotkeys.planned`: `focus` after the zones and `move`."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-focus-hotkeys-")
@@ -188,20 +188,20 @@ class FocusHotkeyPlanTest(unittest.TestCase):
         self.assertEqual([name for name, _b, _c in items], ["main", "move left"])
 
     def test_hotkey_name_keeps_zone_tiler_prefix(self):
-        # Имя пары уходит в `zone-tiler: focus` — под тем же префиксом, что и
-        # остальные, иначе `--remove` и `drop_owned` её не подчистят.
+        # The pair name goes into `zone-tiler: focus` — under the same prefix as
+        # the others, otherwise `--remove` and `drop_owned` will not clean it up.
         items = self.plan(BASE + "[focus]\nkey = <Super>f\n")
         self.assertTrue((self.mod.NAME_PREFIX + items[2][0]).startswith("zone-tiler: "))
 
 
 class FocusRequestTest(unittest.TestCase):
-    """`gridsnap-ctl focus`: запрос у демона и ошибки аргументов (код 2)."""
+    """`gridsnap-ctl focus`: the request to the daemon and argument errors (code 2)."""
 
     def setUp(self):
         self.ctl = load_ctl()
 
     def run_ctl(self, *argv):
-        """`(код, запрос, stderr)`: `send_command` подменён, демона нет."""
+        """`(code, request, stderr)`: `send_command` is replaced, there is no daemon."""
         sent = {}
 
         def fake_send(request, path, timeout=0):
@@ -235,8 +235,8 @@ class FocusRequestTest(unittest.TestCase):
         self.assertIn("--off", err)
 
     def test_focus_without_zone_collapses_others(self):
-        # Без зоны и без `--off` — «свернуть всё, кроме этого окна»: окно
-        # остаётся на месте, в запросе нет ни `zone`, ни `off`.
+        # No zone and no `--off` means "collapse everything except this window": the window
+        # stays in place, and the request has neither `zone` nor `off`.
         code, sent, _err = self.run_ctl("focus")
         self.assertEqual(code, 0)
         self.assertEqual(sent, {"cmd": "focus"})

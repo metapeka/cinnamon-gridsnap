@@ -1,50 +1,50 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-zone-hotcorners — watcher перетаскивания окна: водит HUD ``zone-picker --hud``
-и вкладывает окно в зону под точкой отпускания (Cinnamon/Muffin, X11).
+zone-hotcorners — a window drag watcher: it drives the ``zone-picker --hud`` HUD
+and places the window into the zone under the release point (Cinnamon/Muffin, X11).
 
-События «пользователь тащит окно» в EWMH нет: ``_NET_WM_MOVERESIZE`` только
-начинает drag, а перетаскивание за титлбар — внутренний grab muffin. Поэтому
-watcher слушает XInput2 raw events на root: они приходят «at all times, even
-when the device is grabbed by another client». Ни XGrabPointer, ни XTest, ни
-XRecord не нужны и не используются.
+EWMH has no "the user is dragging a window" event: ``_NET_WM_MOVERESIZE`` only
+starts a drag, and dragging by the title bar is muffin's internal grab. So the
+watcher listens to XInput2 raw events on the root: they arrive "at all times, even
+when the device is grabbed by another client". Neither XGrabPointer, nor XTest, nor
+XRecord is needed or used.
 
-Цикл:
+The loop:
 
-1. ``RawButtonPress`` (кнопка 1) — запоминаем, что кнопка нажата, и «arm»:
-   попала ли точка нажатия в полосу титлбара активного окна (высота полосы —
-   ``_NET_FRAME_EXTENTS.top`` плюс запас). Нажатие мимо титлбара — обычный клик
-   в приложении, watcher ничего не делает.
-2. ``RawMotion`` при нажатой кнопке и «arm» — точку (её берём ``XQueryPointer``:
-   raw-значения у относительных устройств — смещения, а не координаты) отдаём
-   в HUD и не чаще ~30 раз в секунду. HUD — дочерний ``zone-picker.py --hud
-   --follow`` на мониторе под точкой; при переходе на другой монитор он
-   перезапускается там. Пока HUD жив, edge-tiling muffin гасится: наш дроп
-   главный, а его OSD при тайлинге у края мешает.
-3. ``RawButtonRelease`` — точка отпускания переводится в доли рабочей области
-   монитора (``zone_picker_nav.zone_at``); попала в зону — окно вкладывается
-   через ``zone-tiler.apply_zone``, мимо зон — не делается ничего. HUD гасится,
-   edge-tiling возвращается в прежнее значение.
+1. ``RawButtonPress`` (button 1) — remember that the button is down, and "arm":
+   did the press point land in the title bar band of the active window (the band height is
+   ``_NET_FRAME_EXTENTS.top`` plus slack). A press outside the title bar is an ordinary click
+   in the application, the watcher does nothing.
+2. ``RawMotion`` with the button down and "arm" — the point (taken with ``XQueryPointer``:
+   raw values of relative devices are offsets, not coordinates) is fed
+   to the HUD no more than ~30 times a second. The HUD is a child ``zone-picker.py --hud
+   --follow`` on the monitor under the point; when the point moves to another monitor it
+   is restarted there. While the HUD is alive, muffin edge-tiling is turned off: our drop
+   is the main one, and its OSD on edge tiling gets in the way.
+3. ``RawButtonRelease`` — the release point is converted to fractions of the monitor
+   work area (``zone_picker_nav.zone_at``); inside a zone — the window is placed
+   through ``zone-tiler.apply_zone``, off the zones — nothing is done. The HUD is stopped,
+   edge-tiling is restored to its previous value.
 
-Если XI2 не поднялся (нет libXi, старый сервер, отказ ``XIQueryVersion``),
-watcher уходит в fallback: опрос ``XQueryPointer`` ~30 Гц по позиции и маске
-кнопок. Поведение то же, только вместо событий — сравнение двух срезов.
+If XI2 did not come up (no libXi, an old server, ``XIQueryVersion`` refused),
+the watcher goes to the fallback: polling ``XQueryPointer`` at ~30 Hz for the position and the
+button mask. The behaviour is the same, only instead of events — a comparison of two samples.
 
-Возврат edge-tiling обязателен: он делается на дропе, на отмене, в ``finally``
-и по ``SIGTERM``/``SIGINT``. Другие настройки Cinnamon не трогаются.
+Restoring edge-tiling is mandatory: it is done on a drop, on a cancel, in ``finally``
+and on ``SIGTERM``/``SIGINT``. Other Cinnamon settings are not touched.
 
-Запуск:
-  zone-hotcorners.py                # слушать перетаскивания до Ctrl-C
-  zone-hotcorners.py --dry-run      # печатать, что вложил бы, но окно не двигать
-  zone-hotcorners.py --no-hud       # без оверлея: только дроп по отпусканию
-  zone-hotcorners.py --verbose      # писать в stderr, что происходит
+Usage:
+  zone-hotcorners.py                # listen to drags until Ctrl-C
+  zone-hotcorners.py --dry-run      # print what it would place, but not move the window
+  zone-hotcorners.py --no-hud       # no overlay: only the drop on release
+  zone-hotcorners.py --verbose      # write to stderr what is happening
   zone-hotcorners.py --conf PATH
 
-Чистая часть (без X и без gsettings) — в начале файла: попадание в титлбар,
-троттлинг точек, «точка → монитор → зона», разбор аргументов и состояние
-edge-tiling как данные. Она проверяется ``tests/test_hotcorners.py`` без
-дисплея; X и запуск процессов — в ``Hotcorners``/``XClient``/``HudProcess``.
+The pure part (no X and no gsettings) is at the top of the file: hitting the title bar,
+point throttling, "point → monitor → zone", argument parsing and the edge-tiling
+state as data. It is covered by ``tests/test_hotcorners.py`` without a
+display; X and process launching are in ``Hotcorners``/``XClient``/``HudProcess``.
 """
 
 import argparse
@@ -64,7 +64,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-from zone_i18n import _  # noqa: E402  (там же: строки интерфейса и их перевод)
+from zone_i18n import _  # noqa: E402  (same place: interface strings and their translation)
 
 EXIT_OK = 0
 EXIT_FAIL = 1
@@ -75,7 +75,7 @@ PICKER = os.path.join(HERE, "zone-picker.py")
 
 
 def _load_sibling(name, filename):
-    """Загрузить соседний hyphen-модуль (zone-tiler.py) без зависимости от sys.path."""
+    """Load a neighbouring hyphen module (zone-tiler.py) without depending on sys.path."""
     path = os.path.join(HERE, filename)
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -90,45 +90,45 @@ tiler = _load_sibling("gridsnap_hotcorners_tiler", "zone-tiler.py")
 nav = _load_sibling("gridsnap_hotcorners_nav", "zone_picker_nav.py")
 
 
-# ------------------------------------------------------------------ чистая часть
+# ------------------------------------------------------------------ the pure part
 
-# Запас к полосе титлбара: нажатие чуть ниже неё тоже считается «за титлбар».
-# Мышью легко попасть на 1–2 px ниже, а «arm» — это разрешение тащить окно, а
-# не точное измерение; ложное срабатывание стоит одного лишнего HUD, промах —
-# неработающего перетаскивания.
+# Slack for the title bar band: a press a little below it still counts as "on the title bar".
+# It is easy to land 1-2 px lower with a mouse, and "arm" is permission to drag a
+# window, not an exact measurement; a false positive costs one extra HUD, a miss —
+# a drag that does not work.
 TITLE_SLACK = 8
 
-# Если `_NET_FRAME_EXTENTS` не прочитались (нет xprop, окно без рамки), полоса
-# титлбара всё равно должна существовать: у muffin она около 30 px.
+# If `_NET_FRAME_EXTENTS` was not read (no xprop, a window without a frame), the title
+# bar band must exist anyway: on muffin it is around 30 px.
 TITLE_FALLBACK_TOP = 30
 
-# Точки в HUD — не чаще 30 раз в секунду: чаще курсор всё равно не двигается
-# заметно, а каждое сообщение — перерисовка оверлея.
+# Points to the HUD — no more than 30 times a second: the cursor does not move
+# perceptibly more often, and every message is an overlay redraw.
 POINT_INTERVAL = 1.0 / 30.0
 
-# Период опроса в fallback-режиме (XI2 не поднялся).
+# Polling period in the fallback mode (XI2 did not come up).
 POLL_INTERVAL = 1.0 / 30.0
 
-# Допуск сравнения времён: точка ровно через интервал не должна теряться.
+# Time comparison tolerance: a point exactly one interval later must not be lost.
 EPS = 1e-9
 
-# Ожидание активации окна: muffin активирует окно по нажатию, и raw-событие
-# может прийти раньше, чем `_NET_ACTIVE_WINDOW` обновится.
+# Waiting for the window activation: muffin activates a window on a press, and the raw event
+# may arrive before `_NET_ACTIVE_WINDOW` is updated.
 ARM_RETRY_DELAY = 0.05
 
 
 def normalize_bool_text(text):
-    """``'true'``/``'false'`` (как печатает gsettings) или ``None``.
+    """``'true'``/``'false'`` (as gsettings prints it) or ``None``.
 
-    Чистая функция: так исходное значение edge-tiling хранится и проверяется
-    как данные, без запуска gsettings.
+    A pure function: this way the original edge-tiling value is stored and checked
+    as data, without running gsettings.
     """
     value = ("" if text is None else str(text)).strip().lower()
     return value if value in ("true", "false") else None
 
 
 def title_band(top, slack=TITLE_SLACK):
-    """Высота полосы титлбара с запасом, в пикселях (не меньше fallback)."""
+    """The height of the title bar band with slack, in pixels (not less than the fallback)."""
     try:
         height = int(top)
     except (TypeError, ValueError):
@@ -139,14 +139,14 @@ def title_band(top, slack=TITLE_SLACK):
 
 
 def is_title_bar_press(point, frame, top, slack=TITLE_SLACK):
-    """Попало ли нажатие ``point`` в полосу титлбара окна с рамкой ``frame``?
+    """Did the press ``point`` land in the title bar band of the window with frame ``frame``?
 
-    ``frame`` — внешняя рамка окна ``(x, y, w, h)`` в экранных пикселях (её даёт
-    ``zone-tiler.read_frame``: клиент плюс ``_NET_FRAME_EXTENTS``); ``top`` —
-    верхняя рамка из ``frame_extents``, то есть высота титлбара без запаса.
-    Полоса — от верхнего края рамки вниз на :func:`title_band`, по всей ширине
-    окна. Нажатие выше или ниже полосы, левее/правее окна — не «arm».
-    Чистая функция — под тесты.
+    ``frame`` — the outer frame of the window ``(x, y, w, h)`` in screen pixels (given by
+    ``zone-tiler.read_frame``: the client plus ``_NET_FRAME_EXTENTS``); ``top`` —
+    the top frame from ``frame_extents``, that is the title bar height without slack.
+    The band goes from the top edge of the frame down by :func:`title_band`, over the whole
+    window width. A press above or below the band, left or right of the window — not "arm".
+    A pure function — for the tests.
     """
     if frame is None or point is None:
         return False
@@ -158,12 +158,12 @@ def is_title_bar_press(point, frame, top, slack=TITLE_SLACK):
 
 
 def should_emit(last, now, interval=POINT_INTERVAL):
-    """Пора ли отдать очередную точку в HUD (троттлинг ~30 Гц).
+    """Is it time to feed the next point to the HUD (throttling ~30 Hz).
 
-    ``last`` — время прошлой отданной точки (``None`` — точек ещё не было).
-    Чистая функция: времени она не читает, поэтому тест задаёт его сам.
-    Допуск ``EPS`` — чтобы точка ровно через интервал не терялась на
-    погрешности float (``1000 + 1/30 - 1000`` чуть меньше ``1/30``).
+    ``last`` — the time of the last fed point (``None`` — there were no points yet).
+    A pure function: it does not read the time, so a test sets it itself.
+    The ``EPS`` tolerance — so that a point exactly one interval later is not lost on
+    float error (``1000 + 1/30 - 1000`` is a little less than ``1/30``).
     """
     if last is None:
         return True
@@ -171,12 +171,12 @@ def should_emit(last, now, interval=POINT_INTERVAL):
 
 
 def poll_events(prev, now):
-    """События перетаскивания по двум срезам ``XQueryPointer``.
+    """Drag events from two ``XQueryPointer`` samples.
 
-    Срез — ``(x, y, button1_down)``; ``now=None`` — опрос не удался. Возвращает
-    список ``('press'|'motion'|'release', (x, y))``. Первый срез с уже нажатой
-    кнопкой даёт ``press`` (watcher запустили посреди перетаскивания), дальше
-    сравниваются соседние срезы. Чистая функция — под тесты и для fallback.
+    A sample is ``(x, y, button1_down)``; ``now=None`` — the poll failed. Returns a
+    list of ``('press'|'motion'|'release', (x, y))``. The first sample with the button already
+    down gives ``press`` (the watcher was started in the middle of a drag), after that
+    neighbouring samples are compared. A pure function — for the tests and for the fallback.
     """
     if now is None:
         return []
@@ -186,8 +186,8 @@ def poll_events(prev, now):
     px, py, pdown = prev
     events = []
     if down and not pdown:
-        # Нажатие и есть событие этого такта: точку «когда нажали» точнее
-        # текущей не знает никто, а отдельное motion с той же точкой — шум.
+        # The press is the event of this tick: nobody knows the "when it was pressed" point
+        # more precisely than the current one, and a separate motion with the same point is noise.
         events.append(("press", (x, y)))
     elif down and (x, y) != (px, py):
         events.append(("motion", (x, y)))
@@ -197,13 +197,13 @@ def poll_events(prev, now):
 
 
 def monitor_index_for_point(outputs, point):
-    """Индекс монитора под точкой; ``None`` — мониторов нет.
+    """Index of the monitor under the point; ``None`` — there are no monitors.
 
-    ``outputs`` — ``[(имя выхода, (x, y, w, h))]`` как у
-    ``zone-tiler.monitor_outputs``. Точка вне всех областей (щель между
-    мониторами, панель) достаётся ближайшему по центру монитору — тем же
-    правилом, что и в раскладчике (``zone-tiler.monitor_for_point``), чтобы
-    watcher и HUD не расходились в выборе экрана.
+    ``outputs`` — ``[(output name, (x, y, w, h))]`` as in
+    ``zone-tiler.monitor_outputs``. A point outside all areas (the gap between
+    monitors, the panel) goes to the monitor nearest by centre — by the same
+    rule as in the tiler (``zone-tiler.monitor_for_point``), so that the
+    watcher and the HUD do not diverge in choosing the screen.
     """
     if not outputs:
         return None
@@ -213,21 +213,21 @@ def monitor_index_for_point(outputs, point):
 
 
 def zone_rects(grid, monitor_name=None):
-    """``[(имя зоны, доли (x, y, w, h))]`` для набора зон монитора.
+    """``[(zone name, fractions (x, y, w, h))]`` for the zone set of a monitor.
 
-    Порядок — как в файле конфига: ``zone_picker_nav.zone_at`` при перекрытии
-    выбирает последнюю нарисованную зону, и это должно совпадать с HUD.
+    The order is as in the config file: ``zone_picker_nav.zone_at`` on overlap
+    chooses the last drawn zone, and this must match the HUD.
     """
     zones = grid.zones_for(monitor_name)
     return [(name, grid.fractions(name, monitor_name)) for name in zones]
 
 
 def zone_under(rects, area, point):
-    """``(имя, доли)`` зоны под экранной точкой или ``None`` — мимо зон.
+    """``(name, fractions)`` of the zone under a screen point, or ``None`` — off the zones.
 
-    Точка переводится в доли рабочей области монитора ``area`` и ищется той же
-    ``zone_picker_nav.zone_at_point``, что и в HUD: подсвеченная зона и зона
-    дропа — один и тот же код.
+    The point is converted to fractions of the monitor work area ``area`` and looked up with
+    the same ``zone_picker_nav.zone_at_point`` as in the HUD: the highlighted zone and the zone
+    of the drop are the same code.
     """
     index = nav.zone_at_point([fractions for _, fractions in rects], area, point)
     if index is None:
@@ -236,13 +236,13 @@ def zone_under(rects, area, point):
 
 
 class EdgeTiling:
-    """Состояние edge-tiling muffin: запомнить, погасить, вернуть.
+    """Muffin edge-tiling state: remember it, turn it off, restore it.
 
-    Значение настройки живёт здесь как данные (``original`` — ``'true'`` /
-    ``'false'`` / ``None``), а gsettings запускается через ``runner``: в тестах
-    это записывающая заглушка, в бою — `subprocess.run`. Решение «гасить ли»
-    тоже чистое: если настройка уже выключена, её не трогают вовсе, чтобы не
-    «включать» её потом по ошибке.
+    The setting value lives here as data (``original`` — ``'true'`` /
+    ``'false'`` / ``None``), and gsettings is run through ``runner``: in tests
+    it is a recording stub, in the field — `subprocess.run`. The decision "turn it off or not"
+    is pure too: if the setting is already off, it is not touched at all, so as not to
+    "turn it on" later by mistake.
     """
 
     SCHEMA = "org.cinnamon.muffin"
@@ -263,23 +263,23 @@ class EdgeTiling:
 
     @property
     def restore_value(self):
-        """Куда возвращать: исходное значение, а без него — ``'true'``.
+        """Where to restore to: the original value, and without one — ``'true'``.
 
-        Незнакомое/пустое исходное значение трактуется как «было включено»:
-        оставить edge-tiling выключенным после нас хуже, чем включить его там,
-        где он и был включён по умолчанию.
+        An unknown/empty original value is treated as "it was on":
+        leaving edge-tiling off after us is worse than turning it on where
+        it was on by default anyway.
         """
         return self.original or "true"
 
     def read(self):
-        """Прочитать текущее значение (``self.original``); ``None`` при сбое."""
+        """Read the current value (``self.original``); ``None`` on a failure."""
         code, out = self.runner(self.get_args())
         self.original = normalize_bool_text(out) if code == 0 else None
         return self.original
 
     def disable(self):
-        """Погасить edge-tiling; ``False`` — не понадобилось или не вышло."""
-        if self.original == "false":  # уже выключен: не трогаем вовсе
+        """Turn edge-tiling off; ``False`` — it was not needed or did not work."""
+        if self.original == "false":  # already off: do not touch it at all
             return False
         code, _ = self.runner(self.set_args("false"))
         if code != 0:
@@ -288,7 +288,7 @@ class EdgeTiling:
         return True
 
     def restore(self):
-        """Вернуть исходное значение; ``False`` — мы ничего не меняли."""
+        """Restore the original value; ``False`` — we changed nothing."""
         if not self.touched:
             return False
         code, _ = self.runner(self.set_args(self.restore_value))
@@ -298,7 +298,7 @@ class EdgeTiling:
 
 
 def run_gsettings(argv):
-    """``(код возврата, stdout)`` для argv gsettings; сбой запуска — ``(1, '')``."""
+    """``(return code, stdout)`` for a gsettings argv; a launch failure — ``(1, '')``."""
     try:
         done = subprocess.run(
             argv,
@@ -312,15 +312,15 @@ def run_gsettings(argv):
     return done.returncode, (done.stdout or "").strip()
 
 
-# ------------------------------------------------------------------ HUD и дроп
+# ------------------------------------------------------------------ HUD and drop
 
 
 class HudProcess:
-    """Дочерний ``zone-picker.py --hud --follow`` на одном мониторе.
+    """The child ``zone-picker.py --hud --follow`` on one monitor.
 
-    Точки пишутся ему в stdin строками ``X Y`` — тот же формат, что у
-    ``--follow``; закрытие stdin (EOF) завершает его главный цикл, поэтому
-    останов — это сначала мягкий EOF, потом ``terminate``/``kill``.
+    Points are written to its stdin as ``X Y`` lines — the same format as
+    ``--follow``; closing stdin (EOF) finishes its main loop, so
+    stopping is a soft EOF first, then ``terminate``/``kill``.
     """
 
     def __init__(self, conf, picker=PICKER, python=None, verbose=False):
@@ -346,11 +346,11 @@ class HudProcess:
         ]
 
     def start(self, index, name=""):
-        """Запустить HUD на мониторе ``index``; уже запущенный — не трогаем.
+        """Start the HUD on monitor ``index``; one already running — leave it alone.
 
-        Сбой запуска (нет ``python3-gi``, нет ``zone-picker.py``) не должен
-        ронять watcher: дроп работает и без оверлея, поэтому запоминаем отказ
-        и больше не пытаемся.
+        A failed start (no ``python3-gi``, no ``zone-picker.py``) must not
+        bring the watcher down: the drop works without an overlay too, so the failure is
+        remembered and never retried.
         """
         if self.proc is not None and self.index == index:
             return False
@@ -380,7 +380,7 @@ class HudProcess:
         return True
 
     def feed(self, point):
-        """Отдать HUD точку; ``False`` — канал закрыт (HUD завершился)."""
+        """Feed a point to the HUD; ``False`` — the channel is closed (the HUD has exited)."""
         if self.proc is None or self.proc.stdin is None:
             return False
         try:
@@ -395,7 +395,7 @@ class HudProcess:
         return self.proc is not None and self.proc.poll() is None
 
     def stop(self):
-        """Погасить HUD: EOF в stdin, затем terminate/kill. Идемпотентно."""
+        """Stop the HUD: EOF to stdin, then terminate/kill. Idempotent."""
         proc, self.proc = self.proc, None
         self.index = None
         self.name = ""
@@ -422,21 +422,21 @@ class HudProcess:
 
 
 class Hotcorners:
-    """Ядро watcher'а: события кнопки/движения -> HUD и дроп.
+    """The core of the watcher: button/motion events -> the HUD and the drop.
 
-    Зависимости инъектируются (как у ``zone-daemon.Daemon``), поэтому весь
-    сценарий перетаскивания проверяется юнит-тестами без X, без HUD и без
+    The dependencies are injected (as in ``zone-daemon.Daemon``), so the whole
+    drag scenario is covered by unit tests without X, without a HUD and without
     gsettings:
 
-      active_window  — id активного окна;
-      frame_extents  — толщина рамки окна ``(left, right, top, bottom)``;
-      read_frame     — внешняя рамка окна ``(x, y, w, h)``;
-      outputs        — ``[(имя выхода, рабочая область)]``;
-      grid_for       — ``Grid`` для окна (по его рабочему столу);
-      apply          — вложить окно в пиксельную рамку;
-      hud            — :class:`HudProcess` или ``None`` (``--no-hud``);
+      active_window  — the id of the active window;
+      frame_extents  — the thickness of the window frame ``(left, right, top, bottom)``;
+      read_frame     — the outer frame of the window ``(x, y, w, h)``;
+      outputs        — ``[(output name, work area)]``;
+      grid_for       — ``Grid`` for the window (by its workspace);
+      apply          — place the window into a pixel frame;
+      hud            — :class:`HudProcess` or ``None`` (``--no-hud``);
       edge           — :class:`EdgeTiling`;
-      clock/sleep    — время и пауза (в тестах — управляемые).
+      clock/sleep    — time and pause (controllable in tests).
     """
 
     def __init__(
@@ -478,10 +478,10 @@ class Hotcorners:
         self.err = err or (lambda text: print(text, file=sys.stderr, flush=True))
         self.reset()
 
-    # ---- состояние перетаскивания
+    # ---- drag state
 
     def reset(self):
-        """Забыть текущее перетаскивание (без побочных эффектов HUD/gsettings)."""
+        """Forget the current drag (without HUD/gsettings side effects)."""
         self.pressed = False
         self.armed = False
         self.drag_win = None
@@ -496,20 +496,20 @@ class Hotcorners:
             self.err(f"zone-hotcorners: {text}")
 
     def default_grid(self, win):
-        """Сетка окна: профиль его рабочего стола (``grid_for_workspace``)."""
+        """The window grid: the profile of its workspace (``grid_for_workspace``)."""
         workspace = tiler.window_workspace_for_zones(win)
         return tiler.grid_for_workspace(self.conf, workspace)
 
     def read_monitors(self):
-        """Рабочие области мониторов один раз на перетаскивание.
+        """The work areas of the monitors, once per drag.
 
-        ``zone-tiler.monitor_outputs`` дёргает xrandr и GDK, а точки идут до
-        30 раз в секунду — поэтому список читается на «arm», а не на каждое
-        движение. Сбой чтения не роняет watcher: без мониторов просто нет дропа.
+        ``zone-tiler.monitor_outputs`` runs xrandr and GDK, and points come up to
+        30 times a second — so the list is read on "arm", not on every
+        motion. A read failure does not bring the watcher down: without monitors there is no drop.
         """
         try:
             return list(self.outputs())
-        except SystemExit:  # tiler.fail: не удалось определить рабочую область
+        except SystemExit:  # tiler.fail: failed to determine the work area
             self.err(_("zone-hotcorners: failed to read monitor work areas"))
             return []
         except Exception as exc:
@@ -517,31 +517,31 @@ class Hotcorners:
             return []
 
     def zones_for(self, index, name):
-        """Зоны монитора (с кэшем на время одного перетаскивания)."""
+        """The zones of a monitor (cached for the time of one drag)."""
         if index not in self.rects:
             self.rects[index] = zone_rects(self.grid, name)
         return self.rects[index]
 
-    # ---- «arm»: нажатие в титлбаре
+    # ---- "arm": a press in the title bar
 
     def arm_at(self, point):
-        """Окно, чей титлбар накрывает точку нажатия, или ``None``.
+        """The window whose title bar covers the press point, or ``None``.
 
-        Активное окно может обновиться чуть позже самого нажатия (muffin
-        активирует окно по нажатию), поэтому промах повторяется один раз после
-        короткой паузы — но только промах: попав, мы не ждём зря.
+        The active window may update a little later than the press itself (muffin
+        activates a window on a press), so a miss is repeated once after
+        a short pause — but only a miss: having hit, we do not wait for nothing.
         """
         for attempt in (0, 1):
             try:
                 win = self.active_window()
-            except SystemExit:  # tiler.fail: в сессии нет активного окна
+            except SystemExit:  # tiler.fail: no active window in this session
                 self.log(_("no active window - this is a normal click"))
                 win = None
             if win:
                 extents = self.frame_extents(win)
                 try:
                     frame = self.read_frame(win, extents)
-                except Exception as exc:  # xwininfo не прочитал геометрию
+                except Exception as exc:  # xwininfo did not read the geometry
                     self.log(_("frame of window 0x{:x} not read: {}").format(win, exc))
                     frame = None
                 if is_title_bar_press(point, frame, extents[2]):
@@ -551,10 +551,10 @@ class Hotcorners:
         return None
 
     def on_press(self, point, button=1):
-        """Кнопка нажата: запомнить нажатие и, если это титлбар, «arm»."""
+        """The button is pressed: remember the press and, if it is the title bar, "arm"."""
         if button != 1 or point is None:
             return False
-        self.finish_drag()  # предыдущее перетаскивание не должно протечь
+        self.finish_drag()  # the previous drag must not leak
         self.pressed = True
         found = self.arm_at(point)
         if found is None:
@@ -564,7 +564,7 @@ class Hotcorners:
         self.armed = True
         try:
             self.grid = self.grid_for(self.drag_win)
-        except SystemExit:  # tiler.fail: битый конфиг или нет конфига
+        except SystemExit:  # tiler.fail: broken config or no config
             self.err(_("zone-hotcorners: zone grid not read, dragging abandoned"))
             self.finish_drag()
             return False
@@ -586,10 +586,10 @@ class Hotcorners:
         )
         return True
 
-    # ---- движение: HUD
+    # ---- motion: HUD
 
     def hud_point(self, point):
-        """Отдать точку в HUD (запустив/перезапустив его на нужном мониторе)."""
+        """Feed a point to the HUD (starting/restarting it on the right monitor)."""
         if self.hud is None or point is None:
             return False
         outputs = self.monitors
@@ -603,20 +603,20 @@ class Hotcorners:
         return self.hud.feed(point)
 
     def motion_due(self):
-        """Стоит ли вообще опрашивать позицию по очередному RawMotion.
+        """Is it worth polling the position on the next RawMotion at all.
 
-        RawMotion приходит с частотой устройства (у игровых мышей — до 1000 Гц), а
-        позиция нужна только пока жив HUD: до «arm», без HUD и чаще 30 Гц
-        спрашивать ``XQueryPointer`` незачем. Предикат передаётся в
-        ``XClient.read_events`` и решает это ДО запроса к серверу; само решение
-        «отдать точку» остаётся в :meth:`on_motion`.
+        RawMotion comes at the rate of the device (up to 1000 Hz for gaming mice), and
+        the position is only needed while the HUD is alive: before "arm", without a HUD and
+        more often than 30 Hz there is no point in asking ``XQueryPointer``. The predicate
+        is passed to ``XClient.read_events`` and decides this BEFORE the request to the server;
+        the decision "feed the point" itself stays in :meth:`on_motion`.
         """
         if self.hud is None or not (self.pressed and self.armed):
             return False
         return should_emit(self.last_point, self.clock())
 
     def on_motion(self, point):
-        """Движение при нажатой кнопке и «arm»: точка в HUD (не чаще 30 Гц)."""
+        """Motion with the button down and "arm": the point to the HUD (no more than 30 Hz)."""
         if not (self.pressed and self.armed) or point is None:
             return False
         now = self.clock()
@@ -625,10 +625,10 @@ class Hotcorners:
         self.last_point = now
         return self.hud_point(point)
 
-    # ---- отпускание: дроп
+    # ---- release: the drop
 
     def target_at(self, point):
-        """``(имя, доли, область, имя выхода, индекс)`` зоны под точкой."""
+        """``(name, fractions, area, output name, index)`` of the zone under the point."""
         if point is None or not self.monitors:
             return None
         outputs = self.monitors
@@ -638,7 +638,7 @@ class Hotcorners:
         name, area = outputs[index]
         try:
             found = zone_under(self.zones_for(index, name), area, point)
-        except SystemExit:  # битая секция [zones:<выход>]
+        except SystemExit:  # broken [zones:<output>] section
             self.err(_("zone-hotcorners: zones of monitor {} not read").format(name))
             return None
         if found is None:
@@ -646,7 +646,7 @@ class Hotcorners:
         return found[0], found[1], area, name, index
 
     def on_release(self, point, button=1):
-        """Кнопка отпущена: вернуть настройки, вложить окно в зону под точкой."""
+        """The button is released: restore the settings, place the window into the zone under the point."""
         if button != 1:
             return False
         was_armed = self.pressed and self.armed
@@ -660,8 +660,8 @@ class Hotcorners:
         if target is not None:
             zone, _fractions, area, output, index = target
             rect = grid.rect(zone, area, monitor_name=output)
-        # HUD и edge-tiling гасим ДО укладки: иначе muffin может дотэйлить окно
-        # по своему правилу края уже после нашего move/resize.
+        # The HUD and edge-tiling are turned off BEFORE placing: otherwise muffin may tile the window
+        # by its own edge rule after our move/resize.
         self.finish_drag()
         if rect is None:
             self.log(_("released in {} - off the zones, not moving the window").format(point))
@@ -680,8 +680,8 @@ class Hotcorners:
         try:
             self.apply(win, rect, zone)
         except (SystemExit, OSError, subprocess.SubprocessError) as exc:
-            # Долгоживущий watcher не должен умирать из-за одного окна или
-            # пропавшего X-соединения: сообщаем и продолжаем слушать.
+            # A long-lived watcher must not die because of one window or
+            # a lost X connection: report it and keep listening.
             self.err(
                 _("zone-hotcorners: window 0x{:x} not placed: {}").format(
                     win, exc or _("X failure")
@@ -693,10 +693,10 @@ class Hotcorners:
     # ---- edge-tiling
 
     def disable_edge_tiling(self):
-        """Погасить edge-tiling на время HUD (без HUD настройка не трогается).
+        """Turn edge-tiling off for the time of the HUD (without a HUD the setting is not touched).
 
-        В ``--dry-run`` настройка тоже не трогается: dry-run обещает не менять
-        ничего, кроме собственного вывода.
+        In ``--dry-run`` the setting is not touched either: a dry run promises to change
+        nothing but its own output.
         """
         if self.hud is None or self.edge.touched:
             return False
@@ -716,10 +716,10 @@ class Hotcorners:
         return False
 
     def finish_drag(self):
-        """Погасить HUD, вернуть edge-tiling и забыть перетаскивание.
+        """Stop the HUD, restore edge-tiling and forget the drag.
 
-        Вызывается на дропе, на отмене (сигнал) и в ``finally`` — поэтому
-        настройка возвращается при любом выходе, а не только на удачном дропе.
+        It is called on a drop, on a cancel (a signal) and in ``finally`` — so
+        the setting is restored on any exit, not only on a successful drop.
         """
         if self.hud is not None:
             self.hud.stop()
@@ -742,16 +742,16 @@ XI_RawMotion = 17
 XI_ALL_MASTER_DEVICES = 1
 
 BUTTON1 = 1
-# Маска кнопок у XQueryPointer: Button1Mask (X.h).
+# The button mask of XQueryPointer: Button1Mask (X.h).
 BUTTON1_MASK = 1 << 8
 
-# XEvent — объединение 192 байта на LP64: XNextEvent пишет в него событие
-# целиком, поэтому буфер не может быть меньше, чем сам XEvent.
+# XEvent is a 192-byte union on LP64: XNextEvent writes the whole event into
+# it, so the buffer cannot be smaller than XEvent itself.
 EVENT_BUFFER = ctypes.c_char * 192
 
 
 class XGenericEventCookie(ctypes.Structure):
-    """Префикс ``XGenericEventCookie``: через него Xlib отдаёт события XI2."""
+    """The prefix of ``XGenericEventCookie``: this is how Xlib delivers XI2 events."""
 
     _fields_ = [
         ("type", ctypes.c_int),
@@ -766,11 +766,11 @@ class XGenericEventCookie(ctypes.Structure):
 
 
 class XIRawEvent(ctypes.Structure):
-    """Префикс ``XIRawEvent`` — до ``detail``/``flags`` включительно.
+    """The prefix of ``XIRawEvent`` — up to ``detail``/``flags`` inclusive.
 
-    Координаты raw-события намеренно не читаются: у относительных устройств
-    ``raw_values`` — смещения, а не позиция. Позиция всегда берётся
-    ``XQueryPointer``, поэтому она одна и та же в XI2 и в fallback.
+    The coordinates of a raw event are deliberately not read: for relative devices
+    ``raw_values`` are offsets, not a position. The position is always taken with
+    ``XQueryPointer``, so it is the same in XI2 and in the fallback.
     """
 
     _fields_ = [
@@ -789,7 +789,7 @@ class XIRawEvent(ctypes.Structure):
 
 
 class XIEventMask(ctypes.Structure):
-    """``XIEventMask``: какие XI2-события слушать и на каких устройствах."""
+    """``XIEventMask``: which XI2 events to listen to and on which devices."""
 
     _fields_ = [
         ("deviceid", ctypes.c_int),
@@ -804,13 +804,13 @@ RAW_EVENT_KINDS = {
     XI_RawMotion: "motion",
 }
 
-# Обработчик ошибок Xlib: ``int (*)(Display *, XErrorEvent *)``. Нужен, чтобы
-# убедиться, что XISelectEvents принят сервером, а не отвалился асинхронно.
+# An Xlib error handler: ``int (*)(Display *, XErrorEvent *)``. It is needed to
+# make sure XISelectEvents was accepted by the server and did not fail asynchronously.
 X_ERROR_HANDLER = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
 
 
 class XClient:
-    """Соединение с X: XQueryPointer всегда, XI2 raw events — если поднялись."""
+    """The X connection: XQueryPointer always, XI2 raw events — if they came up."""
 
     def __init__(self, display=None):
         name = ctypes.util.find_library("X11") or "libX11.so.6"
@@ -865,10 +865,10 @@ class XClient:
         self.xi_version = None
         self.raw_events = False
 
-    # ---- обычный указатель
+    # ---- the ordinary pointer
 
     def pointer_state(self):
-        """``(x, y, button1_down)`` в корневых координатах; ``None`` при сбое."""
+        """``(x, y, button1_down)`` in root coordinates; ``None`` on a failure."""
         root_ret = ctypes.c_ulong()
         child_ret = ctypes.c_ulong()
         root_x, root_y = ctypes.c_int(), ctypes.c_int()
@@ -899,11 +899,11 @@ class XClient:
     # ---- XI2 raw events
 
     def enable_raw_events(self):
-        """Подписать root на XI_RawMotion|RawButtonPress|RawButtonRelease.
+        """Subscribe the root to XI_RawMotion|RawButtonPress|RawButtonRelease.
 
-        Возвращает ``(major, minor)`` версии XInput, которую согласовал сервер,
-        или ``None`` — тогда watcher идёт в fallback по XQueryPointer. Никаких
-        grab'ов: raw-события приходят и при чужом grab, в этом весь смысл.
+        Returns the ``(major, minor)`` XInput version the server agreed to,
+        or ``None`` — then the watcher goes to the XQueryPointer fallback. No
+        grabs at all: raw events arrive even under a foreign grab, that is the whole point.
         """
         opcode = ctypes.c_int()
         event = ctypes.c_int()
@@ -936,8 +936,8 @@ class XClient:
         major, minor = ctypes.c_int(2), ctypes.c_int(1)
         if self.xi.XIQueryVersion(self.dpy, ctypes.byref(major), ctypes.byref(minor)) != 0:
             return None
-        # raw-события появились в XI2.0, но версию просим 2.1 (стабильный
-        # контракт raw events); сервер вправе ответить своей, обычно 2.4.
+        # raw events appeared in XI2.0, but we ask for version 2.1 (the stable
+        # contract of raw events); the server may answer with its own, usually 2.4.
         if (major.value, minor.value) < (2, 1):
             return None
         mask = (ctypes.c_ubyte * 4)()
@@ -947,8 +947,8 @@ class XClient:
         masks.deviceid = XI_ALL_MASTER_DEVICES
         masks.mask_len = len(mask)
         masks.mask = ctypes.cast(mask, ctypes.POINTER(ctypes.c_ubyte))
-        # Ошибка X приходит асинхронно: ловим её обработчиком и синхронизируемся
-        # до возврата, иначе «подписка не удалась» выглядела бы как рабочий XI2.
+        # An X error arrives asynchronously: we catch it with the handler and sync
+        # before returning, otherwise "the subscription failed" would look like a working XI2.
         errors = []
 
         def on_error(_dpy, _event):
@@ -970,15 +970,15 @@ class XClient:
         return self.xi_version
 
     def read_events(self, query_motion=None):
-        """События перетаскивания из очереди X; ``[('press'|'motion'|'release', (x, y), button)]``.
+        """Drag events from the X queue; ``[('press'|'motion'|'release', (x, y), button)]``.
 
-        Не наши события (MappingNotify, XI2 не от root и т.п.) пропускаются.
-        Данные generic-события обязаны быть освобождены через XFreeEventData —
-        иначе Xlib копит их в памяти.
+        Events that are not ours (MappingNotify, XI2 not from the root and so on) are skipped.
+        The data of a generic event must be freed through XFreeEventData —
+        otherwise Xlib accumulates it in memory.
 
-        ``query_motion`` — необязательный предикат: спрашивать ли позицию для
-        очередного ``RawMotion``. Без него спрашиваем всегда. Нажатие и
-        отпускание опрашиваются всегда: их точка — это и есть результат.
+        ``query_motion`` — an optional predicate: whether to ask for the position on
+        the next ``RawMotion``. Without it we always ask. Press and
+        release are always polled: their point is the result itself.
         """
         events = []
         while self.x.XPending(self.dpy):
@@ -1005,7 +1005,7 @@ class XClient:
         return events
 
     def poll_events(self, state):
-        """Fallback: одно сравнение срезов XQueryPointer (``state`` — прошлый)."""
+        """Fallback: one comparison of XQueryPointer samples (``state`` — the previous one)."""
         now = self.pointer_state()
         events = [(kind, point, BUTTON1) for kind, point in poll_events(state, now)]
         return events, (state if now is None else now)
@@ -1017,12 +1017,12 @@ class XClient:
 
 
 class StopFlag:
-    """Флаг остановки + self-pipe: сигнал будит ``select``, а не ждёт таймаута.
+    """A stop flag + a self-pipe: a signal wakes ``select`` instead of waiting for a timeout.
 
-    Обработчик сигнала только ставит флаг и пишет байт в pipe: делать в нём
-    что-то ещё (останавливать HUD, звать gsettings) нельзя. ``select`` в
-    главном цикле слушает читающий конец, поэтому завершение по SIGTERM
-    мгновенное и детерминированное.
+    The signal handler only sets the flag and writes a byte into the pipe: doing anything
+    else in it (stopping the HUD, calling gsettings) is not allowed. ``select`` in the
+    main loop watches the read end, so termination on SIGTERM is
+    instant and deterministic.
     """
 
     def __init__(self):
@@ -1053,19 +1053,19 @@ class StopFlag:
 
 
 def install_signal_handlers(stop):
-    """SIGTERM/SIGINT/SIGHUP — в ``StopFlag`` (аккуратное завершение)."""
+    """SIGTERM/SIGINT/SIGHUP — into ``StopFlag`` (a tidy shutdown)."""
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         try:
             signal.signal(signum, stop.handler)
-        except (ValueError, OSError):  # не главный поток / сигнал недоступен
+        except (ValueError, OSError):  # not the main thread / the signal is unavailable
             pass
 
 
 def serve(watcher, client, stop):
-    """Цикл watcher'а: ``select`` по fd X и self-pipe, события -> ``Hotcorners``.
+    """The watcher loop: ``select`` on the X fd and the self-pipe, events -> ``Hotcorners``.
 
-    В XI2-режиме ждём события X; в fallback — таймаут ``POLL_INTERVAL`` и один
-    опрос ``XQueryPointer`` за итерацию. Выход — по флагу ``stop`` (сигнал).
+    In XI2 mode we wait for X events; in the fallback — a ``POLL_INTERVAL`` timeout and one
+    ``XQueryPointer`` poll per iteration. The exit is by the ``stop`` flag (a signal).
     """
     watch = [stop.reader]
     if client.raw_events:
@@ -1075,7 +1075,7 @@ def serve(watcher, client, stop):
     while not stop.stopped:
         try:
             ready, _, _ = select.select(watch, [], [], timeout)
-        except OSError:  # EINTR на некоторых платформах
+        except OSError:  # EINTR on some platforms
             continue
         if stop.stopped or stop.reader in ready:
             stop.drain()
@@ -1177,7 +1177,7 @@ def main(argv=None):
         return EXIT_OK
     finally:
         if watcher is not None:
-            watcher.finish_drag()  # HUD погашен, edge-tiling возвращён
+            watcher.finish_drag()  # the HUD is stopped, edge-tiling is restored
         client.close()
         stop.close()
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты перевода рамки полосы из физических пикселей в логические.
+"""Unit tests for converting the strip frame from physical pixels to logical ones.
 
-Проверяют `window_rect` из `zone-tabstrip.py`: демон присылает физическую рамку
-(координаты окна зоны), а окно GTK живёт в логических пикселях, поэтому при
-`GDK_SCALE=2` без перевода полоса уезжает вдвое и растёт вдвое. Модуль грузит
-GTK лениво (`load_gtk`), поэтому тест импортирует полосу без X и без GTK —
-и заодно проверяет, что импорт их не требует.
+They check `window_rect` from `zone-tabstrip.py`: the daemon sends a physical frame
+(the coordinates of the zone window), while the GTK window lives in logical pixels, so with
+`GDK_SCALE=2` and no conversion the strip moves twice as far and grows twice as big. The module loads
+GTK lazily (`load_gtk`), so the test imports the strip without X and without GTK —
+and also checks that the import does not require them.
 
-Запуск:
+Running:
     python3 tests/test_tabstrip_scale.py
     python3 -m unittest discover -s tests -v
 """
@@ -22,8 +22,8 @@ import unittest
 from unittest import mock
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (tests run in the source language)
+except ImportError:  # launched as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,7 +34,7 @@ if ROOT not in sys.path:
 import zone_tabstrip_nav as nav  # noqa: E402
 import zone_units as units  # noqa: E402
 
-# Полоса — hyphen-файл: рядом с полосой он зовётся `zone-tabstrip.py`.
+# The strip is a hyphen file: next to the strip it is called `zone-tabstrip.py`.
 _spec = importlib.util.spec_from_file_location(
     "gridsnap_tabstrip_module", os.path.join(ROOT, "zone-tabstrip.py")
 )
@@ -43,7 +43,7 @@ _spec.loader.exec_module(strip)
 
 
 def fixed(scale):
-    """`scale_of` с постоянным масштабом: возвращает и запоминает точки."""
+    """`scale_of` with a constant scale: returns and records the points."""
     seen = []
 
     def scale_of(point):
@@ -55,12 +55,12 @@ def fixed(scale):
 
 class TestWindowRect(unittest.TestCase):
     def test_scale_two_halves_place_and_size(self):
-        # 1920x22 физических пикселей — это 960x11 логических: и место, и размер.
+        # 1920x22 physical pixels are 960x11 logical ones: both the place and the size.
         self.assertEqual(strip.window_rect((0, 0, 1920, 22), lambda _p: 2), (0, 0, 960, 11))
 
     def test_scale_one_is_identity(self):
         self.assertEqual(strip.window_rect((10, 20, 300, 22), lambda _p: 1), (10, 20, 300, 22))
-        # Нет масштаба вовсе (GDK не ответил) — тоже 1, а не ошибка.
+        # No scale at all (GDK did not answer) — also 1, not an error.
         for value in (None, 0, -3, "x"):
             with self.subTest(value=value):
                 self.assertEqual(
@@ -73,14 +73,14 @@ class TestWindowRect(unittest.TestCase):
         self.assertEqual(strip.strip_center((1920.4, 40.6, 1919.5, 22.2)), (2880, 52))
 
     def test_scale_is_asked_under_own_center(self):
-        # Полоса на втором мониторе: масштаб — под её центром, а не первого.
+        # The strip on the second monitor: the scale comes from under its centre, not the first's.
         scale_of, seen = fixed(2)
         strip.window_rect((100, 200, 300, 22), scale_of)
         self.assertEqual(seen, [(100 + 300 // 2, 200 + 22 // 2)])
 
     def test_matches_zone_units_conversion(self):
-        # Перевод — ровно `zone_units.logical_rect`, без своей арифметики: края
-        # считаются от общих линий, чтобы соседние полосы не разошлись на 1 px.
+        # The conversion is exactly `zone_units.logical_rect`, no arithmetic of its own: the edges
+        # are computed from the shared lines so that neighbouring strips do not drift apart by 1 px.
         for rect in ((0, 0, 1920, 22), (1920, 40, 1921, 23), (37, 11, 101, 23)):
             for scale in (1, 2, 3):
                 with self.subTest(rect=rect, scale=scale):
@@ -91,8 +91,8 @@ class TestWindowRect(unittest.TestCase):
                     )
 
     def test_size_never_below_one_pixel(self):
-        # Узкая полоса на большом масштабе: окно нулевого размера не покажет ни
-        # подписи, ни рамки вкладки.
+        # A narrow strip at a large scale: a window of zero size would show neither
+        # the label nor the tab frame.
         for rect in ((0, 0, 1, 1), (5, 5, 1, 22), (0, 0, 3, 3)):
             with self.subTest(rect=rect):
                 _x, _y, w, h = strip.window_rect(rect, lambda _p: 4)
@@ -105,24 +105,24 @@ class TestWindowRect(unittest.TestCase):
         )
 
     def test_scale_lookup_failure_falls_back_to_one(self):
-        # Сбой чтения масштаба не должен ронять полосу: масштаб 1, место прежнее.
+        # A failure to read the scale must not bring the strip down: scale 1, same place.
         def broken(_point):
             raise RuntimeError("нет X")
 
         self.assertEqual(strip.window_rect((10, 20, 300, 22), broken), (10, 20, 300, 22))
 
     def test_fractional_rect_is_rounded_to_whole_pixels(self):
-        # `nav.record_rect` отдаёт float — окну нужны целые.
+        # `nav.record_rect` returns floats — the window needs whole pixels.
         self.assertEqual(strip.window_rect((0.4, 21.6, 1919.5, 22.2), lambda _p: 1),
                          (0, 22, 1920, 22))
 
 
 class TestLocalRect(unittest.TestCase):
-    """Локальные координаты окна: cairo и событие GTK — логические пиксели."""
+    """Window-local coordinates: cairo and the GTK event use logical pixels."""
 
     def test_scale_two_halves_offsets_and_sizes(self):
-        # Вторая вкладка полосы 1920x22 при масштабе 2 начинается на 480.5
-        # логического пикселя окна, а не на 960.5: иначе она ушла бы за окно.
+        # The second tab of a 1920x22 strip at scale 2 starts at 480.5
+        # logical window pixels, not at 960.5: otherwise it would go beyond the window.
         origin = (0, 0)
         x, y, w, h = strip.local_rect((960.5, 0, 959.5, 22), origin, 2)
         self.assertAlmostEqual(x, 480.25)
@@ -131,7 +131,7 @@ class TestLocalRect(unittest.TestCase):
         self.assertEqual(h, 11)
 
     def test_origin_is_the_strip_corner(self):
-        # Смещения считаются от левого верхнего угла полосы, а не от нуля экрана.
+        # The offsets are counted from the top-left corner of the strip, not from screen zero.
         self.assertEqual(strip.local_rect((1920, 40, 100, 22), (1920, 40), 2),
                          (0.0, 0.0, 50.0, 11.0))
 
@@ -155,8 +155,8 @@ class TestLocalRect(unittest.TestCase):
 
 class TestLocalPoint(unittest.TestCase):
     def test_scale_two_maps_logical_click_to_physical_screen(self):
-        # Клик в середине окна полосы (логические 480, 5) — это физические
-        # (960, 10) экрана: там же, где рамки вкладок из снимка.
+        # A click in the middle of the strip window (logical 480, 5) is physical
+        # (960, 10) on the screen: the same place as the tab frames from the snapshot.
         self.assertEqual(strip.local_point((480, 5), (0, 0), 2), (960, 10))
 
     def test_scale_one_and_garbage_scale(self):
@@ -172,14 +172,14 @@ class TestLocalPoint(unittest.TestCase):
                 self.assertEqual(strip.local_point((x, y), origin, scale), (rect[0], rect[1]))
 
     def test_click_lands_on_the_tab_that_is_drawn_there(self):
-        # Главное следствие перевода: точка клика и нарисованная вкладка — одно.
+        # The main consequence of the conversion: the click point and the drawn tab are one.
         origin = (0, 0)
         scale = 2
         rows = nav.layout({"rect": (0, 0, 1920, 22),
                            "tabs": [{"window": 0x11}, {"window": 0x22}]})
         frames = [row["rect"] for row in rows]
-        # Левая половина окна — первая вкладка, правая — вторая: клик в
-        # логических 400/600 — это физические 800/1200, а не 400/600.
+        # The left half of the window is the first tab, the right half the second: a click at
+        # logical 400/600 is physical 800/1200, not 400/600.
         for logical_x, want in ((400, 0x11), (600, 0x22)):
             with self.subTest(logical_x=logical_x):
                 point = strip.local_point((logical_x, 5), origin, scale)
@@ -191,7 +191,7 @@ class TestLocalPoint(unittest.TestCase):
 
 class TestStripScale(unittest.TestCase):
     def test_no_tiler_means_scale_one(self):
-        # Раскладчика нет (не установлен, нет его зависимостей) — полоса как раньше.
+        # No tiler (not installed, its dependencies are missing) — the strip as before.
         with mock.patch.object(strip, "tiler_module", lambda: None):
             self.assertEqual(strip.strip_scale((10, 10)), 1)
 
@@ -214,7 +214,7 @@ class TestStripScale(unittest.TestCase):
             self.assertEqual(strip.strip_scale((10, 10)), 1)
 
     def test_tiler_exit_and_error_do_not_kill_the_strip(self):
-        # `zone-tiler.monitors` без X говорит `fail` (SystemExit) — полоса жива.
+        # `zone-tiler.monitors` without X says `fail` (SystemExit) — the strip stays alive.
         class Exiting:
             @staticmethod
             def scale_at_point(_point):
@@ -231,7 +231,7 @@ class TestStripScale(unittest.TestCase):
                     self.assertEqual(strip.strip_scale((10, 10)), 1)
 
     def test_tiler_module_is_loaded_once(self):
-        # Снимок приходит на каждое изменение картины: загрузка раскладчика — раз.
+        # A snapshot arrives on every change of the picture: the tiler is loaded once.
         calls = []
 
         def fake_loader():
@@ -241,24 +241,24 @@ class TestStripScale(unittest.TestCase):
         with mock.patch.object(strip, "tiler_module", fake_loader):
             strip.strip_scale((0, 0))
             strip.strip_scale((10, 10))
-        self.assertEqual(len(calls), 2)  # патч считает вызовы самого `strip_scale`
+        self.assertEqual(len(calls), 2)  # the patch counts the calls of `strip_scale` itself
 
 
-import unittest.mock  # noqa: E402  (нужен в тестах выше по тексту)
+import unittest.mock  # noqa: E402  (needed by the tests above in the file)
 
 
 class TestTilerLoading(unittest.TestCase):
     def test_module_import_needs_neither_gtk_nor_display(self):
-        # Полоса грузится без GTK: `load_gtk` вызывается только из `main`.
+        # The strip loads without GTK: `load_gtk` is called only from `main`.
         self.assertIsNone(strip.Gtk)
         self.assertIsNone(strip.cairo)
 
     def test_real_tiler_without_display_gives_scale_one(self):
-        # Настоящий `zone-tiler.py` без DISPLAY: масштаба не спросить — 1.
+        # The real `zone-tiler.py` without DISPLAY: the scale cannot be asked — 1.
         saved = strip._ZT, strip._ZT_LOADED
         strip._ZT, strip._ZT_LOADED = None, False
         env = {key: os.environ.pop(key) for key in ("DISPLAY", "GDK_SCALE") if key in os.environ}
-        noise = io.StringIO()  # `fail` раскладчика пишет в stderr — это не наш вывод
+        noise = io.StringIO()  # the tiler's `fail` writes to stderr — that is not our output
         try:
             with contextlib.redirect_stderr(noise):
                 self.assertEqual(strip.strip_scale((10, 10)), 1)

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Тесты трёх языковых версий README: структура и ссылки не расходятся.
+"""Tests for the three language versions of the README: the structure and the links do not drift apart.
 
-README есть на английском (`README.md` — главная страница репозитория),
-упрощённом китайском (`README.zh.md`) и русском (`README.ru.md`). Переводы
-делаются отдельно друг от друга, поэтому проверяется то, что расходится первым:
+The README exists in English (`README.md` — the main page of the repository),
+simplified Chinese (`README.zh.md`) and Russian (`README.ru.md`). The translations
+are made separately from each other, so what diverges first is checked:
 
-* файл `README.en.md` удалён: его роль взял `README.md`, а вторая английская
-  версия рядом снова бы отстала (так и случилось с прежним `README.en.md`);
-* ключи разделов (`<!-- section: <слаг> -->`) у всех трёх совпадают и идут в
-  одном порядке — по ним видно, что перевод не потерял и не добавил раздел;
-* в каждой версии есть переключатель языков со ссылками на две другие;
-* картинки, на которые ссылаются README, существуют.
+* the file `README.en.md` is removed: `README.md` took over its role, and a second English
+  version next to it would fall behind again (as happened with the former `README.en.md`);
+* the section keys (`<!-- section: <slug> -->`) are the same in all three and go in
+  one order — they show that a translation neither lost nor added a section;
+* every version has a language switcher with links to the two others;
+* the images that the READMEs link to exist.
 
-Запуск: `python3 -m unittest discover -s tests` или `python3 tests/test_docs_languages.py`.
+Running: `python3 -m unittest discover -s tests` or `python3 tests/test_docs_languages.py`.
 """
 
 import os
@@ -22,14 +22,14 @@ import unittest
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-# Главная — английская: порядок языков en → zh → ru.
+# The main one is English: the language order is en → zh → ru.
 SOURCES = ("README.md", "README.zh.md", "README.ru.md")
 SECTION_RE = re.compile(r"<!--\s*section:\s*([a-z0-9-]+)\s*-->")
 IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)")

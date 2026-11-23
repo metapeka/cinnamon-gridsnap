@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты watcher'а перетаскивания `zone-hotcorners.py` — без X и без gsettings.
+"""Unit tests of the `zone-hotcorners.py` drag watcher — without X and without gsettings.
 
-Проверяется ровно то, что требует контракт задачи:
+Exactly what the task contract requires is checked:
 
-* «arm»: нажатие в полосе титлбара активного окна (рамка + ``frame_extents.top``
-  + запас) и промахи — выше/ниже полосы, левее окна, окно без рамки;
-* троттлинг точек в HUD — не чаще ~30 раз в секунду;
-* отпускание мимо зон (в том числе в «щель» между зонами) — ничего не делает;
-  отпускание в зоне — вкладывает окно в ту же зону, что подсветил бы HUD, и с
-  правильной пиксельной рамкой; край сетки (последний пиксель и точка ровно на
-  правой/нижней границе) относится к крайней зоне, а не теряется;
-* edge-tiling: исходное значение запоминается, гасится на время HUD и
-  возвращается на дропе; уже offную настройку не трогаем; если исходное
-  значение не прочиталось, возвращаем «включено» (true), а не оставляем
-  offной; восстановление — данными (argv gsettings), без запуска утилиты;
-* fallback: `poll_events` по двум срезам XQueryPointer даёт press/motion/release
-  и не повторяет события;
-* разбор аргументов: `--conf`, `--dry-run`, `--verbose`, `--no-hud`, `--version`.
+* "arm": a press in the title bar band of the active window (frame + ``frame_extents.top`` +
+  the slack) and the misses — above/below the band, left of the window, a window without a frame;
+* throttling the points into the HUD — no more than ~30 times a second;
+* releasing outside the zones (including into the "gap" between zones) does nothing;
+  releasing inside a zone places the window into the same zone the HUD would have highlighted, with
+  the right pixel frame; the edge of the grid (the last pixel and a point exactly on
+  the right/bottom border) belongs to the outermost zone rather than being lost;
+* edge-tiling: the original value is remembered, turned off for the duration of the HUD and
+  restored on the drop; a setting that is already off is not touched; if the original
+  value could not be read, we return "on" (true) rather than leaving it
+  off; the restore happens through data (gsettings argv), without launching the utility;
+* fallback: `poll_events` over two XQueryPointer samples yields press/motion/release
+  and does not repeat events;
+* argument parsing: `--conf`, `--dry-run`, `--verbose`, `--no-hud`, `--version`.
 
-Сценарий перетаскивания целиком (press -> motion -> release) гоняется на
-заглушках HUD, gsettings и укладчика: настоящий drag в CI не воспроизвести
-(XTest-инъекции запрещены решением, а XWarpPointer raw-событий не порождает).
-X нужен только тесту `XClient`, и он пропускается без DISPLAY.
+The whole drag scenario (press -> motion -> release) runs on
+stubs for the HUD, gsettings and the tiler: a real drag is not reproducible in CI
+(XTest injections are forbidden by decision, and XWarpPointer produces no raw events).
+X is needed only by the `XClient` test, and it is skipped without DISPLAY.
 
-Запуск:
+Usage:
     python3 tests/test_hotcorners.py
     python3 -m unittest discover -s tests -v
 """
@@ -38,8 +38,8 @@ import unittest
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # run as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -57,20 +57,20 @@ def load_watcher():
 
 hc = load_watcher()
 
-# Окно: внешняя рамка (x=100, y=100, 400x300), титлбар 30 px — как у muffin.
+# The window: an outer frame (x=100, y=100, 400x300), a 30 px title bar — like muffin's.
 WIN = 0x400001
 FRAME = (100, 100, 400, 300)
 EXTENTS = (0, 0, 30, 0)
-INSIDE_TITLE = (300, 115)  # полоса 100..138 (30 + запас 8)
-BELOW_TITLE = (300, 200)  # в окне, но ниже полосы
+INSIDE_TITLE = (300, 115)  # the strip 100..138 (30 + a margin of 8)
+BELOW_TITLE = (300, 200)  # inside the window but below the strip
 LEFT_OF_WINDOW = (50, 115)
 
-# Рабочая область одного монитора: 1000x800 в корневых координатах.
+# The work area of one monitor: 1000x800 in root coordinates.
 ONE_MONITOR = [("eDP-1", (0, 0, 1000, 800))]
-# Два монитора рядом: второй — справа.
+# Two monitors side by side: the second one is on the right.
 TWO_MONITORS = [("eDP-1", (0, 0, 1000, 800)), ("HDMI-1", (1000, 0, 800, 600))]
 
-# Сетка 2x2 в общем [zones]: имена и порядок — как в файле.
+# A 2x2 grid in a shared [zones]: names and order as in the file.
 GRID_CONF = """[grid]
 cols = 0.5, 1.0
 rows = 0.5, 1.0
@@ -81,7 +81,7 @@ tr = 1:2, 0:1
 bl = 0:1, 1:2
 br = 1:2, 1:2
 """
-# Зоны с «щелью» посередине: 0.4..0.6 не занято ни одной.
+# Zones with a "gap" in the middle: 0.4..0.6 is taken by neither of them.
 GAP_CONF = """[grid]
 cols = 1.0
 rows = 1.0
@@ -93,7 +93,7 @@ right = 0.6, 0, 0.4, 1
 
 
 class TempConf:
-    """zones.conf во временном каталоге; удаляется на выходе."""
+    """zones.conf in a temporary directory; removed on exit."""
 
     def __init__(self, text):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-hotcorners-")
@@ -112,7 +112,7 @@ class TempConf:
 
 
 class FakeHud:
-    """Заглушка HudProcess: помнит запуски, точки и остановки."""
+    """A HudProcess stub: it remembers starts, points and stops."""
 
     def __init__(self):
         self.starts = []
@@ -151,7 +151,7 @@ class FakeHud:
 
 
 def recording_runner(log, get_value="true", set_code=0):
-    """Заглушка `run_gsettings`: пишет argv и отдаёт заданное значение."""
+    """A `run_gsettings` stub: writes argv and returns the given value."""
 
     def runner(argv):
         log.append(list(argv))
@@ -163,7 +163,7 @@ def recording_runner(log, get_value="true", set_code=0):
 
 
 class Clock:
-    """Управляемое время: `clock()` и `advance()` вместо настоящего сна."""
+    """Controlled time: `clock()` and `advance()` instead of a real sleep."""
 
     def __init__(self, start=1000.0):
         self.now = start
@@ -178,10 +178,10 @@ class Clock:
 
 def make_watcher(conf_text=GRID_CONF, *, hud=None, edge=None, clock=None, dry_run=False,
                  no_hud=False, outputs=None, applied=None, is_excluded=None):
-    """Hotcorners с заглушками X/HUD/gsettings; возвращает (watcher, контекст).
+    """Hotcorners with X/HUD/gsettings stubs; returns (watcher, context).
 
-    Контекст — TempConf; вызывающий держит его открытым, пока watcher жив
-    (конфиг читается лениво, на первом перетаскивании).
+    The context is a TempConf; the caller keeps it open while the watcher is alive
+    (the config is read lazily, on the first drag).
     """
     ctx = TempConf(conf_text)
     log = [] if edge is None else None
@@ -211,7 +211,7 @@ def make_watcher(conf_text=GRID_CONF, *, hud=None, edge=None, clock=None, dry_ru
 
 
 def full_drag(conf_text=GRID_CONF, *, points=(INSIDE_TITLE,), release=None, **kwargs):
-    """press -> движения -> release; возвращает watcher, applied, hud, edge-log."""
+    """press -> motions -> release; returns watcher, applied, hud, edge-log."""
     clock = kwargs.pop("clock", None) or Clock()
     hud = kwargs.pop("hud", None) or FakeHud()
     log = []
@@ -234,7 +234,7 @@ def full_drag(conf_text=GRID_CONF, *, points=(INSIDE_TITLE,), release=None, **kw
 
 
 class TestTitleBar(unittest.TestCase):
-    """«Arm»: попадание нажатия в полосу титлбара и промахи."""
+    """"Arm": a press landing in the title bar band, and the misses."""
 
     def test_band_adds_slack_to_frame_top(self):
         self.assertEqual(hc.title_band(30), 30 + hc.TITLE_SLACK)
@@ -276,7 +276,7 @@ class TestTitleBar(unittest.TestCase):
             ctx.__exit__(None, None, None)
 
     def test_arm_at_retries_when_window_not_active_yet(self):
-        """Активация приходит позже нажатия: промах повторяется один раз."""
+        """Activation comes later than the press: the miss is retried once."""
         sequence = [None, WIN]
         sleeps = []
         watcher, ctx, _ = make_watcher()
@@ -291,7 +291,7 @@ class TestTitleBar(unittest.TestCase):
 
 
 class TestThrottle(unittest.TestCase):
-    """Точки в HUD — не чаще POINT_INTERVAL (30 в секунду)."""
+    """Points into the HUD — no more often than POINT_INTERVAL (30 per second)."""
 
     def test_first_point_always_emitted(self):
         self.assertTrue(hc.should_emit(None, 0.0))
@@ -302,7 +302,7 @@ class TestThrottle(unittest.TestCase):
         self.assertTrue(hc.should_emit(1000.0, 1000.0 + hc.POINT_INTERVAL * 2))
 
     def test_at_most_thirty_per_second(self):
-        """1000 предложений подряд за секунду -> не больше 31 отданной точки."""
+        """1000 offers in a row within a second -> no more than 31 points emitted."""
         emitted = 0
         last = None
         step = 0.001
@@ -315,23 +315,23 @@ class TestThrottle(unittest.TestCase):
         self.assertGreaterEqual(emitted, 29)
 
     def test_motion_due_only_when_armed_with_hud(self):
-        """Позицию по RawMotion спрашиваем только при живом HUD и не чаще 30 Гц."""
+        """The position on RawMotion is asked only with a live HUD and no more often than 30 Hz."""
         clock = Clock()
         watcher, ctx, _ = make_watcher(clock=clock)
         ctx.__enter__()
         try:
-            self.assertFalse(watcher.motion_due())  # до нажатия
+            self.assertFalse(watcher.motion_due())  # before the press
             watcher.on_press(INSIDE_TITLE, 1)
             self.assertTrue(watcher.motion_due())
             watcher.on_motion((150, 150))
-            self.assertFalse(watcher.motion_due())  # только что отдали точку
+            self.assertFalse(watcher.motion_due())  # the point was just handed over
             clock.advance(hc.POINT_INTERVAL)
             self.assertTrue(watcher.motion_due())
         finally:
             ctx.__exit__(None, None, None)
 
     def test_motion_due_false_without_hud(self):
-        """--no-hud: движение в HUD не нужно вовсе, XQueryPointer не дёргаем."""
+        """--no-hud: no motion into the HUD at all, XQueryPointer is not called."""
         watcher, ctx, _ = make_watcher(no_hud=True)
         ctx.__enter__()
         try:
@@ -348,7 +348,7 @@ class TestThrottle(unittest.TestCase):
         try:
             watcher.on_press(INSIDE_TITLE, 1)
             self.assertTrue(watcher.on_motion((150, 150)))
-            self.assertFalse(watcher.on_motion((160, 160)))  # слишком часто
+            self.assertFalse(watcher.on_motion((160, 160)))  # too often
             clock.advance(hc.POINT_INTERVAL)
             self.assertTrue(watcher.on_motion((170, 170)))
             self.assertEqual(hud.points, [(150, 150), (170, 170)])
@@ -356,7 +356,7 @@ class TestThrottle(unittest.TestCase):
             ctx.__exit__(None, None, None)
 
     def test_motion_without_arm_does_nothing(self):
-        """Нажатие не в титлбаре — обычный клик: HUD не запускается вовсе."""
+        """A press outside the title bar is an ordinary click: the HUD is not started at all."""
         clock = Clock()
         hud = FakeHud()
         watcher, ctx, _ = make_watcher(hud=hud, clock=clock)
@@ -383,7 +383,7 @@ class TestThrottle(unittest.TestCase):
 
 
 class TestIgnore(unittest.TestCase):
-    """Окно под `[ignore]` watcher не отслеживает: ни HUD, ни дропа."""
+    """A window under `[ignore]` is not tracked by the watcher: neither HUD nor drop."""
 
     def test_excluded_window_is_not_armed(self):
         watcher, ctx, applied = make_watcher(
@@ -414,12 +414,12 @@ class TestIgnore(unittest.TestCase):
 
 
 class TestZones(unittest.TestCase):
-    """«Точка -> монитор -> зона» и пиксельная рамка дропа."""
+    """"Point -> monitor -> zone" and the pixel frame of the drop."""
 
     def test_monitor_index_point_inside_and_between(self):
         self.assertEqual(hc.monitor_index_for_point(TWO_MONITORS, (1500, 300)), 1)
         self.assertEqual(hc.monitor_index_for_point(TWO_MONITORS, (10, 10)), 0)
-        # Щель правее первого монитора и выше второго: ближайший по центру — 0.
+        # A gap to the right of the first monitor and above the second: the nearest by centre is 0.
         self.assertEqual(hc.monitor_index_for_point(TWO_MONITORS, (1200, 700)), 1)
         self.assertIsNone(hc.monitor_index_for_point([], (10, 10)))
 
@@ -441,7 +441,7 @@ class TestZones(unittest.TestCase):
         self.assertEqual(hc.zone_under(rects, area, (990, 790))[0], "br")
 
     def test_zone_under_grid_edge_belongs_to_edge_zone(self):
-        """Край сетки: последний пиксель и точка ровно на границе — крайняя зона."""
+        """The grid edge: the last pixel and a point exactly on the border belong to the edge zone."""
         with TempConf(GRID_CONF) as conf:
             grid = hc.tiler.Grid(conf)
             rects = hc.zone_rects(grid, "eDP-1")
@@ -462,7 +462,7 @@ class TestZones(unittest.TestCase):
             points=(INSIDE_TITLE, (150, 600)), release=(150, 600)
         )
         self.assertEqual(applied, [(WIN, (0, 400, 500, 400), "bl")])
-        # HUD водили той же точкой и остановили; edge-tiling погашен и возвращён.
+        # The HUD was driven with the same point and stopped; edge-tiling was turned off and restored.
         self.assertEqual(hud.points, [(150, 600)])
         self.assertEqual(hud.stops, 1)
         self.assertEqual(
@@ -484,7 +484,7 @@ class TestZones(unittest.TestCase):
         )
         self.assertEqual(applied, [])
         self.assertEqual(hud.stops, 1)
-        # Ghost-дроп: настройка всё равно вернулась.
+        # A ghost drop: the setting was restored all the same.
         self.assertIn(["gsettings", "set", "org.cinnamon.muffin", "edge-tiling", "true"], log)
         self.assertFalse(edge.touched)
 
@@ -497,15 +497,15 @@ class TestZones(unittest.TestCase):
             watcher.on_motion((1500, 300))
             self.assertEqual(hud.starts[0][0], 1)
             watcher.on_release((1500, 300), 1)
-            # Рабочая область HDMI-1: 800x600, точка (500, 300) в неё — правый
-            # нижний квадрант, зона br.
+            # The work area of HDMI-1: 800x600, the point (500, 300) in it is the bottom
+            # right quadrant, zone br.
             self.assertEqual(applied, [(WIN, (1400, 300, 400, 300), "br")])
         finally:
             watcher.finish_drag()
             ctx.__exit__(None, None, None)
 
     def test_no_active_window_does_not_kill_watcher(self):
-        """tiler.active_window поднимает SystemExit, если окна нет: press — мимо."""
+        """tiler.active_window raises SystemExit when there is no window: the press is a miss."""
         watcher, ctx, _ = make_watcher()
         watcher.active_window = lambda: (_ for _ in ()).throw(SystemExit(1))
         watcher.sleep = lambda seconds: None
@@ -517,7 +517,7 @@ class TestZones(unittest.TestCase):
             ctx.__exit__(None, None, None)
 
     def test_apply_failure_does_not_kill_watcher(self):
-        """Сбой apply_zone (нет X/EWMH) логируется, а watcher живёт дальше."""
+        """An apply_zone failure (no X/EWMH) is logged, and the watcher lives on."""
         errors = []
         applied = []
 
@@ -534,7 +534,7 @@ class TestZones(unittest.TestCase):
             self.assertFalse(watcher.on_release((150, 600), 1))
             self.assertEqual(len(applied), 1)
             self.assertTrue(any("not placed" in text for text in errors))
-            # HUD погашен и состояние сброшено: следующее перетаскивание работает.
+            # The HUD is off and the state is reset: the next drag works.
             self.assertFalse(watcher.pressed or watcher.armed)
         finally:
             watcher.finish_drag()
@@ -561,7 +561,7 @@ class TestZones(unittest.TestCase):
         try:
             watcher.on_press(INSIDE_TITLE, 1)
             watcher.on_release((150, 600), 1)
-            # Применения нет: только строка плана.
+            # No application: only the plan line.
             self.assertEqual(len(applied), 1)
             kind, text = applied[0]
             self.assertEqual(kind, "вывод")
@@ -581,7 +581,7 @@ class TestZones(unittest.TestCase):
             watcher.on_motion((150, 600))
             watcher.on_release((150, 600), 1)
             self.assertEqual(applied, [(WIN, (0, 400, 500, 400), "bl")])
-            self.assertEqual(log, [])  # edge-tiling не трогали вовсе
+            self.assertEqual(log, [])  # edge-tiling was not touched at all
         finally:
             watcher.finish_drag()
             ctx.__exit__(None, None, None)
@@ -602,7 +602,7 @@ class TestZones(unittest.TestCase):
 
 
 class TestEdgeTiling(unittest.TestCase):
-    """edge-tiling как данные: запомнить, погасить, вернуть."""
+    """edge-tiling as data: remember, turn off, restore."""
 
     def test_restore_value_keeps_original(self):
         self.assertEqual(hc.EdgeTiling("true").restore_value, "true")
@@ -627,7 +627,7 @@ class TestEdgeTiling(unittest.TestCase):
                 ["gsettings", "set", "org.cinnamon.muffin", "edge-tiling", "true"],
             ],
         )
-        # Повторный restore ничего не запускает.
+        # A repeated restore launches nothing.
         self.assertFalse(edge.restore())
         self.assertEqual(len(log), 2)
 
@@ -657,7 +657,7 @@ class TestEdgeTiling(unittest.TestCase):
         self.assertFalse(edge.touched)
 
     def test_hud_start_reads_and_greens_setting(self):
-        """HUD ещё не запускался — исходное значение читается один раз."""
+        """The HUD has not started yet — the original value is read once."""
         log = []
         edge = hc.EdgeTiling(None, runner=recording_runner(log, get_value="true"))
         hud = FakeHud()
@@ -676,7 +676,7 @@ class TestEdgeTiling(unittest.TestCase):
 
 
 class TestPollFallback(unittest.TestCase):
-    """Fallback без XI2: события — по двум срезам XQueryPointer."""
+    """Fallback without XI2: the events come from two XQueryPointer samples."""
 
     def test_no_change_no_events(self):
         state = (10, 20, False)
@@ -701,12 +701,12 @@ class TestPollFallback(unittest.TestCase):
         self.assertEqual(state2, state)
 
     def test_press_and_motion_in_one_tick(self):
-        """Нажатие между опросами — одно событие press: точку задаёт текущий срез."""
+        """A press between polls is one press event: the current sample sets the point."""
         self.assertEqual(hc.poll_events((10, 10, False), (40, 40, True)), [("press", (40, 40))])
 
 
 class _PollStub:
-    """Подмена XClient для чистого теста `poll_events`-обёртки."""
+    """A stand-in for XClient for a clean test of the `poll_events` wrapper."""
 
     def __init__(self, state):
         self.state = state
@@ -716,7 +716,7 @@ class _PollStub:
 
 
 class TestArguments(unittest.TestCase):
-    """Разбор аргументов: флаги по умолчанию, --conf, --version, мусор."""
+    """Argument parsing: the default flags, --conf, --version, garbage."""
 
     def test_defaults(self):
         args = hc.parse_args([])
@@ -767,7 +767,7 @@ class TestArguments(unittest.TestCase):
 
 
 class TestHudCommand(unittest.TestCase):
-    """Команда HUD — тот же контракт `zone-picker --hud --follow`, что у пикера."""
+    """The HUD command — the same `zone-picker --hud --follow` contract as the picker's."""
 
     def test_command_has_monitor_and_follow(self):
         with TempConf(GRID_CONF) as conf:
@@ -780,7 +780,7 @@ class TestHudCommand(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("--monitor") + 1], "2")
 
     def test_start_is_idempotent_per_monitor(self):
-        """Заглушка повторяет контракт: тот же монитор — не перезапуск."""
+        """The stub repeats the contract: the same monitor is not a restart."""
         hud = FakeHud()
         self.assertTrue(hud.start(0, "eDP-1"))
         self.assertFalse(hud.start(0, "eDP-1"))
@@ -790,7 +790,7 @@ class TestHudCommand(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("DISPLAY"), "нет DISPLAY: XClient не поднять")
 class TestXClient(unittest.TestCase):
-    """Живое соединение с X: XI2 raw events поднимаются или дают fallback."""
+    """A live X connection: XI2 raw events come up or fall back."""
 
     def test_xi2_or_fallback_and_pointer(self):
         client = hc.XClient()
@@ -811,7 +811,7 @@ class TestXClient(unittest.TestCase):
 
 
 class RecordingWatcher:
-    """Что получил цикл `serve`: порядок и аргументы вызовов."""
+    """What the `serve` loop received: the order and the arguments of the calls."""
 
     def __init__(self):
         self.calls = []
@@ -830,7 +830,7 @@ class RecordingWatcher:
 
 
 class RawFakeClient:
-    """XI2-режим без X: fd из pipe, пачка событий, потом остановка."""
+    """XI2 mode without X: an fd from a pipe, a batch of events, then a stop."""
 
     raw_events = True
 
@@ -838,7 +838,7 @@ class RawFakeClient:
         self.stop = stop
         self.events = list(events)
         self.read_fd, self.write_fd = os.pipe()
-        os.write(self.write_fd, b"x")  # select сразу готов
+        os.write(self.write_fd, b"x")  # select is ready at once
         self.queries = []
 
     def fd(self):
@@ -849,12 +849,12 @@ class RawFakeClient:
         if self.events:
             events, self.events = self.events, []
             return events
-        self.stop.handler()  # очередь пуста — цикл должен выйти
+        self.stop.handler()  # the queue is empty - the loop must exit
         return []
 
 
 class PollFakeClient:
-    """Fallback без X: одна пачка опроса, потом остановка."""
+    """Fallback without X: one poll batch, then a stop."""
 
     raw_events = False
 
@@ -873,7 +873,7 @@ class PollFakeClient:
 
 
 class TestServe(unittest.TestCase):
-    """Главный цикл: select по fd, разбор событий, выход по флагу."""
+    """The main loop: select on the fd, event dispatch, exit on the flag."""
 
     def test_raw_events_are_dispatched_in_order(self):
         stop = hc.StopFlag()
@@ -892,7 +892,7 @@ class TestServe(unittest.TestCase):
             watcher.calls,
             [("press", INSIDE_TITLE, 1), ("motion", (200, 200)), ("release", (150, 600), 1)],
         )
-        # Предикат «спрашивать ли позицию по motion» передан клиенту.
+        # The predicate "ask for the position on motion" is passed to the client.
         self.assertTrue(client.queries)
         self.assertTrue(all(q == watcher.motion_due for q in client.queries))
 
@@ -907,7 +907,7 @@ class TestServe(unittest.TestCase):
         self.assertEqual(
             watcher.calls, [("press", (10, 10), 1), ("release", (20, 20), 1)]
         )
-        # Первый опрос — без прошлого среза, дальше состояние передаётся.
+        # The first poll is without a previous sample; after that the state is passed.
         self.assertEqual(client.states[0], None)
 
     def test_stop_flag_ends_loop_without_events(self):
@@ -915,7 +915,7 @@ class TestServe(unittest.TestCase):
         try:
             client = PollFakeClient(stop, [])
             watcher = RecordingWatcher()
-            stop.handler()  # сигнал ещё до цикла
+            stop.handler()  # the signal is there before the loop
             hc.serve(watcher, client, stop)
         finally:
             stop.close()
@@ -923,7 +923,7 @@ class TestServe(unittest.TestCase):
 
 
 class TestStopFlag(unittest.TestCase):
-    """Сигнал будит select через self-pipe; close идемпотентен."""
+    """The signal wakes select through the self-pipe; close is idempotent."""
 
     def test_handler_sets_flag_and_wakes_pipe(self):
         import select

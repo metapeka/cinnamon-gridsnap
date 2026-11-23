@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Тесты `zone_units` — перевода логических пикселей GTK в физические X.
+"""Tests for `zone_units` — converting GTK logical pixels into X physical ones.
 
-Модуль чистый, поэтому X-сервер и GTK тут не нужны: проверяется арифметика,
-которой пользуются раскладчик, демон, пикер, HUD и полоса вкладок. Главное
-свойство — **соседние зоны остаются сомкнутыми** после перевода: расхождение на
-пиксель между ними и было бы «съехавшей сеткой».
+The module is pure, so no X server and no GTK are needed here: what is checked is the arithmetic
+that the tiler, the daemon, the picker, the HUD and the tab strip use. The main
+property is that **neighbouring zones stay closed** after the conversion: a divergence would leave a
+pixel between them and would look like a "grid that slipped".
 """
 
 import os
@@ -18,7 +18,7 @@ import zone_units as zu  # noqa: E402
 
 class TestScaleValue(unittest.TestCase):
     def test_normalises_garbage_to_one(self):
-        for value in (None, "", "два", 0, -2, 0.5):
+        for value in (None, "", "two", 0, -2, 0.5):
             self.assertEqual(zu.scale_value(value), 1, value)
 
     def test_keeps_integer_scale(self):
@@ -28,27 +28,27 @@ class TestScaleValue(unittest.TestCase):
 
 class TestPhysicalRect(unittest.TestCase):
     def test_scale_two_multiplies_the_workarea(self):
-        # ровно случай из замера: GDK видит 960x540, X — 1920x1080
+        # exactly the case from the measurement: GDK sees 960x540, X sees 1920x1080
         self.assertEqual(zu.physical_rect((0, 0, 960, 540), 2), (0, 0, 1920, 1080))
 
     def test_scale_one_changes_nothing(self):
         self.assertEqual(zu.physical_rect((0, 40, 1920, 1040), 1), (0, 40, 1920, 1040))
 
     def test_monitor_offset_is_scaled_too(self):
-        # второй экран справа: GDK 960 логических, X 1920 физических
+        # a second screen on the right: GDK 960 logical, X 1920 physical
         self.assertEqual(
             zu.physical_rect((960, 0, 960, 540), 2), (1920, 0, 1920, 1080)
         )
 
     def test_neighbours_stay_flush_when_scale_does_not_divide(self):
-        # ширина 1001 при масштабе 2: сумма ширин равна ширине целого
+        # width 1001 at scale 2: the sum of the widths equals the width of the whole
         left = zu.physical_rect((0, 0, 500, 10), 2)
         right = zu.physical_rect((500, 0, 501, 10), 2)
         self.assertEqual(left[0] + left[2], right[0])
         self.assertEqual(left[2] + right[2], 2002)
 
     def test_gap_between_zones_does_not_appear(self):
-        # доли соседних зон стыкуются: 0.5 и 0.5 от нечётной ширины
+        # fractions of neighbouring zones meet: 0.5 and 0.5 of an odd width
         a = zu.physical_rect((0, 0, 801, 600), 2)
         b = zu.physical_rect((801, 0, 799, 600), 2)
         self.assertEqual(a[0] + a[2], b[0])
@@ -97,7 +97,7 @@ class TestScaleForPoint(unittest.TestCase):
         self.assertEqual(zu.scale_for_point(self.areas, [1, 2], (2500, 500)), 2)
 
     def test_point_outside_every_area_takes_nearest_centre(self):
-        # точка далеко справа: ближе центр правого монитора
+        # a point far to the right: closer to the centre of the right monitor
         self.assertEqual(zu.scale_for_point(self.areas, [1, 2], (5000, 500)), 2)
         self.assertEqual(zu.scale_for_point(self.areas, [1, 2], (-5000, 500)), 1)
 

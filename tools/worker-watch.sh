@@ -94,7 +94,10 @@ age_seconds() {
     "$ORCA" orchestration worker-show --dispatch "$1" --json 2>/dev/null | python3 -c '
 import json, re, sys
 r = json.load(sys.stdin).get("result", {})
-text = str(r.get("lastActivity", ""))
+text = str(r.get("lastActivity", "")).strip()
+if text in ("just now", "now", ""):
+    print(0)          # только что — свежая активность, а не «возраст неизвестен»
+    sys.exit(0)
 m = re.match(r"(\d+)\s*(s|m|h|d)", text)
 mult = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 print(int(m.group(1)) * mult[m.group(2)] if m else -1)
@@ -158,13 +161,19 @@ $line"; fi
     # «Nm ago», и она меняется сама по себе каждую минуту — по такой строке
     # прогресс виделся бы вечно (на этом наблюдатель уже проспал 45 минут).
     stalled=1
+    unknown=0
     for id in $DISPATCHES; do
         age=$(age_seconds "$id")
-        if [ "$age" -ge 0 ] && [ "$age" -lt "$STALL" ]; then
+        if [ "$age" -lt 0 ]; then
+            # Возраст не разобрали — это «неизвестно», а не «завис»: иначе свежий
+            # воркер со «just now» объявлялся бы зависшим. Ждём дедлайна.
+            unknown=1
+            stalled=0
+        elif [ "$age" -lt "$STALL" ]; then
             stalled=0
         fi
     done
-    if [ "$stalled" -eq 1 ]; then
+    if [ "$stalled" -eq 1 ] && [ "$unknown" -eq 0 ]; then
         echo "worker-watch: ни один воркер не подавал признаков жизни ${STALL}s и дольше"
         echo "worker-watch: смотреть orca orchestration worker-list / worker-show --dispatch <id>"
         exit 2

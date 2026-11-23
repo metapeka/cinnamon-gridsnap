@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Тест демонстрации: `site/assets/demo.gif` и скрипт её записи.
+"""Test of the demo: `site/assets/demo.gif` and the script that records it.
 
-Демонстрацию снимает `tools/record-demo.sh` (свой Xvfb, muffin, окна и демон
-зон), а ссылаются на неё README на трёх языках и все три страницы сайта.
-Поэтому проверяется не «картинка вообще», а именно запись сцены:
+The demo is recorded by `tools/record-demo.sh` (its own Xvfb, muffin, windows and the zone
+daemon), and it is referenced by the README in three languages and by all three pages of the site.
+So what is checked is not "a picture in general" but specifically the recording of the scene:
 
-* файл существует и начинается с `GIF87a`/`GIF89a` — не PNG и не заглушка;
-* ширина не меньше 640 px: в маленьком окне README сцена должна читаться;
-* кадров больше десяти — значит, это движение (редактор, вкладки, пикер,
-  режим «только эта зона»), а не один статичный снимок;
-* размер в пределах 2.5 МБ — иначе README и сайт грузятся зря;
-* `tools/record-demo.sh` исполняемый и пишет по умолчанию в `site/assets/demo.gif`:
-  демонстрацию можно перезаписать одной командой, а не «где-то был скрипт».
+* the file exists and starts with `GIF87a`/`GIF89a` — not a PNG and not a stub;
+* the width is at least 640 px: in the small README window the scene must be readable;
+* there are more than ten frames — so this is motion (the editor, tabs, the picker,
+  the "only this zone" mode), not a single static snapshot;
+* the size is within 2.5 MB — otherwise the README and the site load for nothing;
+* `tools/record-demo.sh` is executable and writes to `site/assets/demo.gif` by default:
+  the demo can be re-recorded with one command, rather than "there was a script somewhere".
 
-Кадры считаются по блокам-дескрипторам изображения `0x2C` (а не по числу
-байтов): у GIF кадр — это дескриптор, за которым идут LZW-подблоки, и только
-разбор блоков отличает 20 кадров от одного с мусором в данных.
+Frames are counted by image descriptor blocks `0x2C` (not by the number of
+bytes): in a GIF a frame is a descriptor followed by LZW sub-blocks, and only
+parsing the blocks tells 20 frames from one with garbage in the data.
 
-X, GTK и ffmpeg тесту не нужны — только байты файлов.
+The test needs no X, GTK or ffmpeg — only the bytes of the files.
 
-Запуск: `python3 -m unittest tests.test_demo_gif -v` или
+Running: `python3 -m unittest tests.test_demo_gif -v` or
 `python3 -m unittest discover -s tests`.
 """
 
@@ -29,8 +29,8 @@ import unittest
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (tests run in the source language)
+except ImportError:  # launched as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -45,7 +45,7 @@ MAX_BYTES = int(2.5 * 1024 * 1024)
 
 
 def skip_subblocks(data, offset):
-    """Пропустить цепочку подблоков GIF (размер + данные, конец — нулевой блок)."""
+    """Skip a chain of GIF sub-blocks (size + data, the end is a zero block)."""
     while offset < len(data):
         size = data[offset]
         offset += 1
@@ -56,11 +56,11 @@ def skip_subblocks(data, offset):
 
 
 def gif_info(data):
-    """`(подпись, ширина, высота, число кадров)` из байтов GIF.
+    """`(signature, width, height, frame count)` from the bytes of a GIF.
 
-    Разбирает только заголовок, логический экран, глобальную палитру,
-    расширения и дескрипторы изображений: этого хватает, чтобы отличить
-    настоящую анимацию от заглушки, и не нужно распаковывать LZW.
+    Parses only the header, the logical screen, the global palette,
+    extensions and image descriptors: that is enough to tell
+    a real animation from a stub, and there is no need to unpack LZW.
     """
     if len(data) < 13:
         raise ValueError("файл короче заголовка GIF")
@@ -71,27 +71,27 @@ def gif_info(data):
     height = int.from_bytes(data[8:10], "little")
     packed = data[10]
     offset = 13
-    if packed & 0x80:  # глобальная палитра
+    if packed & 0x80:  # global palette
         offset += 3 * (2 ** ((packed & 0x07) + 1))
 
     frames = 0
     while offset < len(data):
         block = data[offset]
-        if block == 0x3B:  # трейлер
+        if block == 0x3B:  # trailer
             break
-        if block == 0x21:  # расширение: метка, затем подблоки
+        if block == 0x21:  # extension: a label, then sub-blocks
             offset = skip_subblocks(data, offset + 2)
-        elif block == 0x2C:  # дескриптор изображения — это кадр
+        elif block == 0x2C:  # an image descriptor is a frame
             frames += 1
             if offset + 10 > len(data):
                 raise ValueError("дескриптор кадра оборван")
             local = data[offset + 9]
             offset += 10
-            if local & 0x80:  # локальная палитра кадра
+            if local & 0x80:  # the frame's local palette
                 offset += 3 * (2 ** ((local & 0x07) + 1))
-            offset += 1  # минимальный размер LZW-кода
+            offset += 1  # the minimum LZW code size
             offset = skip_subblocks(data, offset)
-        elif block == 0x00:  # заполнитель между блоками
+        elif block == 0x00:  # filler between blocks
             offset += 1
         else:
             raise ValueError(f"неизвестный блок GIF 0x{block:02x} на смещении {offset}")
@@ -99,12 +99,12 @@ def gif_info(data):
 
 
 class DemoGifTest(unittest.TestCase):
-    """Запись демонстрации на месте и пригодна для README и сайта."""
+    """The demo recording is in place and fit for the README and the site."""
 
     @classmethod
     def setUpClass(cls):
-        # Файла может не быть — тогда падает test_file_exists с внятным
-        # сообщением, а не setUpClass трейсбеком на открытии.
+        # The file may be missing — then test_file_exists fails with a clear
+        # message, not setUpClass with a traceback on open.
         cls.data = None
         if os.path.isfile(GIF):
             with open(GIF, "rb") as handle:
@@ -112,7 +112,7 @@ class DemoGifTest(unittest.TestCase):
         cls.info = gif_info(cls.data) if cls.data else None
 
     def parsed(self):
-        """`(подпись, ширина, высота, кадров)` — с проверкой, что файл есть."""
+        """`(signature, width, height, frames)` — with a check that the file exists."""
         self.assertIsNotNone(self.info, f"нет файла демонстрации: {GIF}")
         return self.info
 

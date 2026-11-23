@@ -81,9 +81,11 @@ One rule for the whole code base: **every message is one literal inside `_()`**,
 `xgettext` would not see it, and a translation inside a piece would break the word order. Wrapped are
 also `--help`/`description`/`epilog` of argparse and the daemon journal.
 
-Not translated (marked with `# i18n: do not translate` if the string contains anything non-ASCII):
-docstrings, comments, regular expressions, config keys and the headers the code writes into
-`zones.conf` and profiles. That is file content, not interface text.
+Not translated (and marked with `# i18n: do not translate` when the string contains anything
+non-ASCII — the wrapping test skips those lines): docstrings, comments, regular expressions, config keys,
+and the headers the code writes into `zones.conf` and profiles. That last group is file content rather than
+interface text: it is written in English, like everything else in the source, and is not localized per
+locale.
 
 A name trap: in a function where `_` is already taken by a throwaway variable (`for _ in ...`), `_`
 becomes local and `_(...)` fails with `UnboundLocalError` — rename the throwaway variable.

@@ -1,72 +1,72 @@
 #!/usr/bin/env python3
-"""zone_i18n — выбор языка интерфейса и каталоги переводов GridSnap.
+"""zone_i18n — choosing the interface language and the GridSnap translation catalogs.
 
-Чистый модуль: ни X, ни GTK, ни `gi`. Его импортируют редактор, пикер, полоса
-вкладок, горячие края, раскладчик, демон, клиент сокета, хоткеи и конфиг-слой,
-поэтому правило выбора языка живёт ровно в одном месте и не расходится.
+A pure module: no X, no GTK, no `gi`. It is imported by the editor, the picker, the tab
+strip, hot corners, the tiler, the daemon, the socket client, hotkeys and the config layer,
+so the rule of choosing the language lives in exactly one place and does not diverge.
 
-Язык исходника — английский: строки в коде английские, а поверх них ложатся
-каталоги `ru` и `zh_CN`. Каталога `en` нет нарочно: английский — это `msgid`
-как есть.
+The source language is English: the strings in the code are English, and the `ru` and
+`zh_CN` catalogs are laid on top of them. There is deliberately no `en` catalog: English
+is the `msgid` as it is.
 
-Порядок выбора языка (первое непустое значение выигрывает):
+The order of choosing the language (the first non-empty value wins):
 
-1. `GRIDSNAP_LANG` — явное перекрытие (для тестов и для «хочу русский сейчас»);
+1. `GRIDSNAP_LANG` — an explicit override (for the tests and for "I want Russian now");
 2. `LC_ALL`;
 3. `LC_MESSAGES`;
 4. `LANG`.
 
-Значение переводится в код языка по префиксу (`ru_RU.UTF-8` → `ru`, `zh-Hans` →
-`zh_CN`); всё остальное (`en`, `de`, `fr`, `C`, `POSIX`, мусор) — английский,
-он же язык исходника и язык по умолчанию. Переменная `LANGUAGE` нарочно не
-читается: правило выбора должно быть одно и явное, а `GRIDSNAP_LANG`
-перекрывает всё.
+The value is turned into a language code by its prefix (`ru_RU.UTF-8` → `ru`, `zh-Hans`
+→ `zh_CN`); everything else (`en`, `de`, `fr`, `C`, `POSIX`, garbage) is English, which
+is both the source language and the default one. The `LANGUAGE` variable is deliberately
+not read: the rule of choosing must be one and explicit, and `GRIDSNAP_LANG` overrides
+everything.
 
-Каталог ищется так: сначала собранный `.mo` (в `locale/` рядом с кодом, в
-`share/locale` префикса или там, куда указал `GRIDSNAP_LOCALEDIR`), затем — если
-`.mo` нет — `po/<язык>.po` рядом с модулем. Так владелец работает прямо из
-чекаута, ничего не собирая, а пакет пользуется стандартным `.mo`. Ни `.mo`, ни
-`.po` — не ошибка: работают исходные (английские) строки.
+The catalog is looked up like this: first the built `.mo` (in `locale/` next to the code, in
+the prefix's `share/locale` or wherever `GRIDSNAP_LOCALEDIR` points it), then — if the `.mo`
+is missing — `po/<language>.po` next to the module. That way the owner works straight
+from the checkout without building anything, while the package uses the standard `.mo`.
+Neither the `.mo` nor the `.po` is an error: the source (English) strings work.
 """
 
 import gettext
 import os
 import struct
 
-# Домен Python-инструментов и отдельный домен апплета Cinnamon: xlet'ы берут
-# перевод через `Gettext.bindtextdomain(uuid, ...)`, поэтому у них своё имя.
+# The domain of the Python tools and a separate domain of the Cinnamon applet: the xlets get
+# their translations through `Gettext.bindtextdomain(uuid, ...)`, hence a name of their own.
 DOMAIN = "gridsnap"
 APPLET_DOMAIN = "gridsnap@metapeka"
 
-# Язык исходника (`msgid` как есть) и язык по умолчанию для всех прочих локалей.
+# The source language (`msgid` as it is) and the default language for every other locale.
 SOURCE_LANGUAGE = "en"
 DEFAULT_LANGUAGE = "en"
-# Языки, для которых есть каталог. `en` тут нет: это исходные строки.
+# The languages that have a catalog. There is no `en` here: those are the source strings.
 LANGUAGES = ("ru", "zh_CN")
 
-# Локаль → каталог: `zh` покрывает и `zh_CN`, и `zh_TW`; `ru` — свой каталог,
-# остальное — язык по умолчанию (исходные строки).
+# Locale → catalog: `zh` covers both `zh_CN` and `zh_TW`; `ru` has a catalog of its own,
+# everything else is the default language (the source strings).
 LANGUAGE_ALIASES = {"zh": "zh_CN"}
 
-# Переопределение из `set_language` (None — «решать по окружению»).
+# The override from `set_language` (None — "decide from the environment").
 _override = None
-# Кэш каталогов: язык → {msgid: msgstr}.
+# The catalog cache: language → {msgid: msgstr}.
 _catalogs = {}
 
 
-# --------------------------------------------------------------- выбор языка
+# ----------------------------------------------------- choosing the language
 
 
 def normalize_language(value):
-    """Код языка по значению локали; пусто — `None`.
+    """The language code for a locale value; empty — `None`.
 
     `ru_RU.UTF-8@modifier` → `ru`, `zh-Hans` → `zh_CN`, `en`/`C`/`POSIX`/`de`/
-    мусор → `en` (язык исходника и по умолчанию). Разбор — по префиксу до
-    `_`/`-`, как принято у локалей: `zh_CN` и `zh_TW` у нас оба попадают в
-    упрощённый каталог.
+    garbage → `en` (the source language and the default one). Parsing is by the prefix
+    before `_`/`-`, as is customary for locales: `zh_CN` and `zh_TW` both land in our
+    simplified catalog.
     """
     text = (value or "").strip().lower()
-    # Кодировка и модификатор к языку не относятся: ru_RU.UTF-8@euro -> ru_ru.
+    # The encoding and the modifier are not part of the language: ru_RU.UTF-8@euro -> ru_ru.
     text = text.split(".", 1)[0].split("@", 1)[0]
     if not text:
         return None
@@ -79,7 +79,7 @@ def normalize_language(value):
 
 
 def resolve_language(*values):
-    """Первый непустой код языка из переданных значений, иначе язык по умолчанию."""
+    """The first non-empty language code of those passed, otherwise the default."""
     for value in values:
         code = normalize_language(value)
         if code is not None:
@@ -88,10 +88,10 @@ def resolve_language(*values):
 
 
 def language():
-    """Выбранный язык интерфейса: `ru`, `zh_CN` или `en`.
+    """The chosen interface language: `ru`, `zh_CN` or `en`.
 
-    Переопределение из :func:`set_language` важнее окружения; иначе смотрим
-    `GRIDSNAP_LANG`, затем локаль в порядке gettext.
+    The override from :func:`set_language` matters more than the environment; otherwise we
+    look at `GRIDSNAP_LANG`, then at the locale in gettext order.
     """
     if _override is not None:
         return _override
@@ -104,10 +104,10 @@ def language():
 
 
 def set_language(code=None):
-    """Переопределить язык; `None`/`""`/`"auto"` возвращают выбор по окружению.
+    """Override the language; `None`/`""`/`"auto"` return the choice from the environment.
 
-    Возвращает получившийся код языка. Нужен тестам и тем, кто хочет сменить
-    язык, не трогая переменные окружения процесса.
+    Returns the resulting language code. It is needed by the tests and by those who want to
+    change the language without touching the environment variables of the process.
     """
     global _override
     if code is None or (isinstance(code, str) and code.strip().lower() in ("", "auto")):
@@ -117,20 +117,20 @@ def set_language(code=None):
     return language()
 
 
-# ------------------------------------------------------------------- каталоги
+# ------------------------------------------------------------------- catalogs
 
 
 def module_dir():
-    """Каталог, в котором лежит этот модуль (рядом — код и `po/`)."""
+    """The directory this module lives in (the code and `po/` are next to it)."""
     return os.path.dirname(os.path.abspath(__file__))
 
 
 def localedirs():
-    """Каталоги-кандидаты для собранных `.mo`, в порядке приоритета.
+    """The candidate directories for the built `.mo` files, in order of priority.
 
-    `$GRIDSNAP_LOCALEDIR` — явное перекрытие (тесты, ручная сборка); `locale/`
-    рядом с кодом — сборка из чекаута; `../../share/locale` от каталога кода —
-    префикс установки (`/usr/lib/gridsnap` → `/usr/share/locale`,
+    `$GRIDSNAP_LOCALEDIR` is an explicit override (tests, a manual build); `locale/`
+    next to the code is a build from the checkout; `../../share/locale` from the code
+    directory is the installation prefix (`/usr/lib/gridsnap` → `/usr/share/locale`,
     `~/.local/lib/gridsnap` → `~/.local/share/locale`).
     """
     dirs = []
@@ -144,12 +144,12 @@ def localedirs():
 
 
 def po_dir():
-    """Каталог с `.po`-файлами рядом с модулем (`<чекаут>/po`)."""
+    """The directory with the `.po` files next to the module (`<checkout>/po`)."""
     return os.path.join(module_dir(), "po")
 
 
 def mo_path(lang, domain=DOMAIN):
-    """Путь к собранному `.mo` для языка, или `None` — если его нигде нет."""
+    """The path to the built `.mo` for a language, or `None` if there is none anywhere."""
     for directory in localedirs():
         path = os.path.join(directory, lang, "LC_MESSAGES", domain + ".mo")
         if os.path.isfile(path):
@@ -158,19 +158,19 @@ def mo_path(lang, domain=DOMAIN):
 
 
 def po_path(lang, domain=DOMAIN):
-    """Путь к `.po` для языка, или `None`.
+    """The path to the `.po` for a language, or `None`.
 
-    Основной домен лежит как `po/<язык>.po`; отдельные домены (апплет) — в
-    подкаталоге своего имени, `po/<домен>/<язык>.po`.
+    The main domain lives as `po/<language>.po`; separate domains (the applet) live in
+    a subdirectory of their own name, `po/<domain>/<language>.po`.
     """
     base = po_dir() if domain == DOMAIN else os.path.join(po_dir(), domain)
     path = os.path.join(base, lang + ".po")
     return path if os.path.isfile(path) else None
 
 
-# --------------------------------------------------------------- разбор `.po`
+# -------------------------------------------------------------- parsing `.po`
 
-# Эскейпы, которые GNU gettext пишет в `.po` (см. `po-gram-gen.y`).
+# The escapes GNU gettext writes into `.po` (see `po-gram-gen.y`).
 _ESCAPES = {
     "n": "\n",
     "t": "\t",
@@ -186,7 +186,7 @@ _ESCAPES = {
 
 
 def unescape_po(text):
-    """Снять эскейпы со строки `.po` (`\\n`, `\\t`, `\\"`, `\\\\` и прочие)."""
+    """Strip the escapes from a `.po` string (`\\n`, `\\t`, `\\"`, `\\\\` and the rest)."""
     out = []
     i = 0
     while i < len(text):
@@ -197,7 +197,7 @@ def unescape_po(text):
                 out.append(_ESCAPES[nxt])
                 i += 2
                 continue
-            # Незнакомый эскейп оставляем как есть: лучше видимый текст, чем потеря.
+            # An unknown escape is left as it is: visible text is better than a loss.
             out.append(ch)
             i += 1
             continue
@@ -207,7 +207,7 @@ def unescape_po(text):
 
 
 def _unquote(line):
-    """Содержимое строки `.po`, если она начинается с кавычки; иначе `None`."""
+    """The content of a `.po` line if it starts with a quote; otherwise `None`."""
     text = line.strip()
     if not text.startswith('"'):
         return None
@@ -218,18 +218,18 @@ def _unquote(line):
 
 
 def parse_po(text):
-    """`{msgid: msgstr}` из текста `.po` (включая пустые `msgstr`).
+    """`{msgid: msgstr}` from the text of a `.po` (including empty `msgstr`).
 
-    Понимает многострочные строки (соседние `"..."`), комментарии, `#, fuzzy`
-    (запись пропускается) и заголовок файла (`msgid ""`). Множественные формы
-    (`msgid_plural`) нам не нужны, поэтому `msgstr[n]` и `msgctxt` пропускаются:
-    их в наших каталогах нет, и молча терять обычные записи из-за них нельзя.
+    It understands multi-line strings (adjacent `"..."`), comments, `#, fuzzy`
+    (the entry is skipped) and the file header (`msgid ""`). We do not need plural
+    forms (`msgid_plural`), so `msgstr[n]` and `msgctxt` are skipped: our catalogs have
+    none of them, and ordinary entries must not be lost silently because of them.
     """
     catalog = {}
     msgid = None
     msgstr = None
     fuzzy = False
-    # Запись не наша (`msgctxt`/`msgid_plural`) — пропускаем её целиком.
+    # Not our entry (`msgctxt`/`msgid_plural`) — skip it entirely.
     skip = False
 
     def flush():
@@ -259,7 +259,7 @@ def parse_po(text):
         if line.startswith("msgstr["):
             continue
         if line.startswith("msgid"):
-            # Новая запись без пустой строки-разделителя: предыдущую дописываем.
+            # A new entry with no blank separator line: finish off the previous one first.
             if msgid is not None or msgstr is not None:
                 flush()
             msgid = _unquote(line[len("msgid"):]) or ""
@@ -276,23 +276,23 @@ def parse_po(text):
             elif msgid is not None:
                 msgid += part
             continue
-        # Неизвестная строка: файл не наш, но и падать из-за неё незачем.
+        # An unknown line: the file is not ours, but there is no reason to fall over it.
     flush()
     return catalog
 
 
-# ------------------------------------------------------------------ переводы
+# -------------------------------------------------------------- translations
 
 
 def _read_catalog(lang):
-    """`{msgid: msgstr}` языка из `.mo`, иначе из `.po`, иначе `{}`."""
+    """`{msgid: msgstr}` of a language, from `.mo`, otherwise from `.po`, otherwise `{}`."""
     path = mo_path(lang)
     if path:
         try:
             with open(path, "rb") as handle:
                 return dict(gettext.GNUTranslations(handle)._catalog)
         except (OSError, ValueError, struct.error, EOFError, UnicodeDecodeError):
-            pass  # Битый .mo — не повод остаться без перевода: пробуем .po.
+            pass  # A corrupt .mo is no reason to be left without a translation: try .po.
     path = po_path(lang)
     if path:
         try:
@@ -304,7 +304,7 @@ def _read_catalog(lang):
 
 
 def catalog(lang=None):
-    """`{msgid: msgstr}` выбранного языка; нет каталога — пустой словарь."""
+    """`{msgid: msgstr}` of the chosen language; no catalog — an empty dictionary."""
     lang = lang or language()
     if lang not in _catalogs:
         _catalogs[lang] = {} if lang == SOURCE_LANGUAGE else _read_catalog(lang)
@@ -312,12 +312,12 @@ def catalog(lang=None):
 
 
 def reset_cache():
-    """Забыть прочитанные каталоги (нужно тестам после подмены файлов)."""
+    """Forget the catalogs that have been read (the tests need it after swapping files)."""
     _catalogs.clear()
 
 
 def translate(message):
-    """Перевод строки; нет каталога или записи — исходный (английский) текст."""
+    """Translate a string; no catalog or no entry — the source (English) text."""
     lang = language()
     if lang == SOURCE_LANGUAGE:
         return message
@@ -325,9 +325,9 @@ def translate(message):
 
 
 def _(message):
-    """Короткий синоним :func:`translate` — под `_("строка")` в коде."""
+    """A short synonym of :func:`translate` — for `_("string")` in the code."""
     return translate(message)
 
 
-if __name__ == "__main__":  # pragma: no cover - ручная проверка
+if __name__ == "__main__":  # pragma: no cover - a manual check
     print(language())

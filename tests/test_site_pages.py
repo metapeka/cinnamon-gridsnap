@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Тесты страниц сайта (`site/`): три языка, одни якоря, живые ссылки.
+"""Tests for the site pages (`site/`): three languages, the same anchors, live links.
 
-Сайт — три самостоятельных HTML-файла (без сборки и генератора), общий
-`site/style.css` и картинки в `site/assets/`. Отдельные файлы на каждый язык
-легко расходятся, поэтому проверяется:
+The site is three independent HTML files (no build and no generator), a shared
+`site/style.css` and images in `site/assets/`. Separate files per language drift
+apart easily, so this is checked:
 
-* `site/index.html` (английский — он же вход Pages), `site/index.zh.html`
-  (упрощённый китайский) и `site/index.ru.html` (русский);
-* набор `id` одинаков во всех трёх страницах и равен ожидаемому: раздел,
-  который есть на одной странице и забыт на другой, — это разошедшийся перевод;
-* каждая страница ссылается на две другие версии;
-* все локальные ссылки и картинки существуют, а ссылки-якоря ведут на реальные `id`;
-* у страниц правильные `lang` (en, zh-Hans, ru).
+* `site/index.html` (English — it is also the Pages entry point), `site/index.zh.html`
+  (simplified Chinese) and `site/index.ru.html` (Russian);
+* the set of `id` is the same on all three pages and equals the expected one: a section
+  that is on one page and forgotten on another is a translation that drifted apart;
+* every page links to the two other versions;
+* all local links and images exist, and anchor links lead to real `id`s;
+* the pages have the right `lang` (en, zh-Hans, ru).
 
-Запуск: `python3 -m unittest discover -s tests` или `python3 tests/test_site_pages.py`.
+Running: `python3 -m unittest discover -s tests` or `python3 tests/test_site_pages.py`.
 """
 
 import html.parser
@@ -24,8 +24,8 @@ from urllib.parse import urlparse
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,13 +34,13 @@ SITE = os.path.join(ROOT, "site")
 
 PAGES = ("index.html", "index.zh.html", "index.ru.html")
 LANGS = {"index.html": "en", "index.zh.html": "zh-Hans", "index.ru.html": "ru"}
-# Разделы страницы: заголовок, возможности, снимки, установка, документация.
+# The sections of the page: header, features, screenshots, install, documentation.
 IDS = ("lang", "top", "features", "screenshots", "install", "docs")
 EXTERNAL = ("http://", "https://", "mailto:", "//")
 
 
 class PageParser(html.parser.HTMLParser):
-    """Собирает `id`, ссылки и картинки страницы — без внешних зависимостей."""
+    """Collects the `id`s, links and images of a page — without external dependencies."""
 
     def __init__(self):
         super().__init__()
@@ -105,7 +105,7 @@ class SitePagesTest(unittest.TestCase):
                 if ref.startswith(EXTERNAL):
                     continue
                 path = urlparse(ref).path
-                if not path:  # ссылка-якорь: проверяется ниже
+                if not path:  # an anchor link: checked below
                     continue
                 self.assertTrue(
                     os.path.exists(os.path.join(SITE, path)),

@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Списки модулей в упаковке не должны отставать от кода.
+"""The module lists in the packaging must not fall behind the code.
 
-Модуль, добавленный в корне (`zone_units.py`), обязан появиться **во всех** путях
-установки: `Makefile` (`make tarball`/`make deb`), `install.sh` (`--prefix`),
-`debian/install` (штатный пакет) и `PKGBUILD` (AUR). Пропущенный модуль не видно ни
-юнит-тестам, ни дымовым сценариям: код работает из чекаута, где файл лежит рядом, а
-падает только установленный пакет — `import zone_units` из `zone-tiler.py` даёт
-`ModuleNotFoundError`. Именно это поймал CI на волне DPI, и стоило это прогона CI,
-потому что локально такой проверки не было.
+A module added at the root (`zone_units.py`) must appear **in every** installation
+path: `Makefile` (`make tarball`/`make deb`), `install.sh` (`--prefix`),
+`debian/install` (the distribution package) and `PKGBUILD` (AUR). A missing module is
+visible neither to the unit tests nor to the smoke scenarios: the code runs from the
+checkout, where the file lies next to it, and only the installed package fails —
+`import zone_units` from `zone-tiler.py` raises `ModuleNotFoundError`. Exactly what CI
+caught in the DPI wave, and it cost a CI run, because there was no such check locally.
 
-Тест читает сами списки (текстом), а не повторяет их: разойтись с упаковкой он не
-может, а новый модуль в корне заставит дописать его везде.
+The test reads the lists themselves (as text) instead of repeating them: it cannot
+drift away from the packaging, and a new module at the root forces adding it everywhere.
 
-Тем же тестом стережётся и каталог `gallery/`: готовые раскладки — это данные, а
-не модули, но цена забытой строки та же — в установленном пакете меню «Из
-галереи…» пустое (тесты из чекаута этого не видят: в чекауте каталог лежит рядом).
+The same test also guards the `gallery/` directory: ready-made layouts are data, not modules,
+but the price of a forgotten line is the same — in the installed package the "From the
+gallery…" menu is empty (the checkout tests miss it: the directory lies next to the code).
 """
 
 import os
@@ -24,7 +24,7 @@ import unittest
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-# Где перечислены модули поставки. Значение — как вытащить имена из файла.
+# Where the distribution modules are listed. The value says how to pull the names out.
 SOURCES = {
     "Makefile": "MODULES",
     "install.sh": "MODULES",
@@ -36,11 +36,11 @@ MODULE_RE = re.compile(r"[A-Za-z0-9_-]+\.py")
 
 GALLERY_DIR = os.path.join(ROOT, "gallery")
 
-# Готовые раскладки ищутся в `<префикс>/share/gridsnap/gallery` (см.
-# `zone_config.gallery_dir`), а в tar.gz едет каталог `gallery/` целиком. Что
-# именно проверить в каждом файле: путь установки и то, что копируются сами
-# `*.conf`, а не пустой каталог (добавишь раскладку — новые файлы доедут без
-# правки списков, но только если каталог вообще есть в поставке).
+# The ready-made layouts are looked up in `<prefix>/share/gridsnap/gallery` (see
+# `zone_config.gallery_dir`), and the tarball ships the whole `gallery/` directory. What
+# exactly to check in each file: the install path, and that the files are the
+# `*.conf` ones themselves, not an empty directory (add a layout and the new files
+# arrive without touching the lists, but only if the directory is in the distribution at all).
 GALLERY_MARKERS = {
     "install.sh": ("share/gridsnap/gallery", "gallery/*.conf"),
     "debian/install": ("gallery usr/share/gridsnap",),
@@ -49,7 +49,7 @@ GALLERY_MARKERS = {
 
 
 def root_modules():
-    """Модули в корне репозитория — то, что должно быть в поставке."""
+    """Modules at the root of the repository — what must be in the distribution."""
     return {
         name
         for name in os.listdir(ROOT)
@@ -58,11 +58,11 @@ def root_modules():
 
 
 def listed_modules(path):
-    """Имена модулей, перечисленные в файле упаковки."""
+    """The module names listed in a packaging file."""
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
     if path.endswith("Makefile"):
-        # Берём только строку(и) переменной MODULES до следующего заголовка файла.
+        # Take only the line(s) of the MODULES variable up to the next heading of the file.
         start = text.index("MODULES :=")
         end = text.index("\n\n", start)
         text = text[start:end]
@@ -76,7 +76,7 @@ def listed_modules(path):
 class TestPackagingLists(unittest.TestCase):
     def test_every_root_module_is_listed_everywhere(self):
         modules = root_modules()
-        self.assertIn("zone_units.py", modules)  # сам тест не должен ослепнуть
+        self.assertIn("zone_units.py", modules)  # the test itself must not go blind
         for name in SOURCES:
             listed = listed_modules(os.path.join(ROOT, name))
             missing = sorted(modules - listed)
@@ -101,12 +101,12 @@ if __name__ == "__main__":
     unittest.main()
 
 class TestGalleryPackaging(unittest.TestCase):
-    """Каталог `gallery/` доезжает до пользователя всеми четырьмя путями.
+    """The `gallery/` directory reaches the user by all four paths.
 
-    Раскладки — данные, а не модули: забыть их в списке так же легко, а цена
-    другая — не `ModuleNotFoundError`, а пустое меню «Из галереи…» в
-    установленном пакете. Из чекаута такой провал не виден: там каталог лежит
-    рядом с кодом, и тест `test_gallery` его находит.
+    Layouts are data, not modules: forgetting them in the list is just as easy, but the price
+    is different — not `ModuleNotFoundError` but an empty "From the gallery…" menu in the
+    installed package. From the checkout such a failure is invisible: there the directory lies
+    next to the code, and the `test_gallery` test finds it.
     """
 
     def test_gallery_has_layouts(self):

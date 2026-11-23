@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты примитивов режима «только эта зона» — без X-сервера и GTK.
+"""Unit tests for the primitives of the "only this zone" mode — without an X server and GTK.
 
-Проверяют то, что не требует дисплея: отбор окон для сворачивания
-(`focus_candidates`), состояние режима в `focus.json` и сами EWMH-запросы
-(поддельное X-соединение вместо живого X11).
+What does not need a display is checked: the selection of the windows to minimize
+(`focus_candidates`), the state of the mode in `focus.json` and the EWMH requests themselves
+(a fake X connection instead of a live X11).
 
-Живое сворачивание muffin проверяется дымовым `tests/smoke-focus.sh`.
+The live minimization by muffin is checked by the smoke scenario `tests/smoke-focus.sh`.
 
-Запуск:
+Running:
     python3 -m unittest discover -s tests -v
     python3 tests/test_focus.py
 """
@@ -25,14 +25,14 @@ from unittest import mock
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)  # zone-tiler и его модули
+    sys.path.insert(0, ROOT)  # zone-tiler and its modules
 TILER = os.path.join(ROOT, "zone-tiler.py")
 
 
@@ -50,7 +50,7 @@ WA1 = (1000, 0, 800, 600)
 
 
 class FakeX11:
-    """Поддельное X-соединение: запоминает, что и кому послали."""
+    """A fake X connection: remembers what was sent and to whom."""
 
     def __init__(self, desktop=0):
         self.iconified = []
@@ -74,15 +74,15 @@ class FakeX11:
 
 
 class TestFocusCandidates(unittest.TestCase):
-    """Какие окна сворачивает режим: тот же стол и монитор, кроме цели."""
+    """Which windows the mode minimizes: the same workspace and monitor, except the target."""
 
     def test_same_workspace_and_monitor_only(self):
         entries = [
-            (0x1, 0, WA),  # цель
-            (0x2, 0, WA),  # сворачиваем
-            (0x3, 1, WA),  # чужой стол
-            (0x4, 0, WA1),  # чужой монитор
-            (0x5, 0, WA),  # сворачиваем
+            (0x1, 0, WA),  # the target
+            (0x2, 0, WA),  # we minimize this one
+            (0x3, 1, WA),  # another workspace
+            (0x4, 0, WA1),  # another monitor
+            (0x5, 0, WA),  # we minimize this one
         ]
         self.assertEqual(zt.focus_candidates(entries, 0x1, 0, WA), [0x2, 0x5])
 
@@ -95,12 +95,12 @@ class TestFocusCandidates(unittest.TestCase):
         self.assertEqual(zt.focus_candidates(entries, 0x7, 0, WA), [])
 
     def test_sticky_window_visible_everywhere(self):
-        # `None` — липкое окно (`_NET_WM_DESKTOP = 0xFFFFFFFF`): видно на любом столе.
+        # `None` — a sticky window (`_NET_WM_DESKTOP = 0xFFFFFFFF`): visible on any workspace.
         entries = [(0x2, None, WA)]
         self.assertEqual(zt.focus_candidates(entries, 0x1, 3, WA), [0x2])
 
     def test_unknown_active_workspace_keeps_only_sticky(self):
-        # Активный стол не прочитан: сворачивать окна чужих столов вслепую нельзя.
+        # The active workspace was not read: minimizing the windows of other workspaces blindly is not allowed.
         entries = [(0x2, None, WA), (0x3, 0, WA), (0x4, 2, WA)]
         self.assertEqual(zt.focus_candidates(entries, 0x1, None, WA), [0x2])
 
@@ -109,13 +109,13 @@ class TestFocusCandidates(unittest.TestCase):
 
 
 class TestFocusPrimitives(unittest.TestCase):
-    """EWMH-запросы сворачивания и разворота — на поддельном соединении."""
+    """The EWMH requests for minimizing and restoring — on a fake connection."""
 
     def test_iconify_uses_given_connection_and_keeps_it(self):
         x11 = FakeX11()
         zt.iconify(0x2A, x11=x11, quiet=True)
         self.assertEqual(x11.iconified, [0x2A])
-        self.assertEqual(x11.closed, 0)  # чужое соединение не закрываем
+        self.assertEqual(x11.closed, 0)  # we do not close a foreign connection
 
     def test_deiconify_activates_and_keeps_connection(self):
         x11 = FakeX11()
@@ -148,7 +148,7 @@ class TestFocusPrimitives(unittest.TestCase):
 
 
 class TestFocusStateFile(unittest.TestCase):
-    """`focus.json` — состояние режима для ветки без демона."""
+    """`focus.json` — the state of the mode for the branch without the daemon."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-focus-")
@@ -178,7 +178,7 @@ class TestFocusStateFile(unittest.TestCase):
         zt.save_focus_state(self.state(), path=self.path)
         zt.clear_focus_state(self.path)
         self.assertEqual(zt.load_focus_state(self.path), {})
-        zt.clear_focus_state(self.path)  # повторный вызов не падает
+        zt.clear_focus_state(self.path)  # a repeated call does not fail
 
     def test_foreign_version_is_inactive(self):
         with open(self.path, "w", encoding="utf-8") as fh:
@@ -208,11 +208,11 @@ class TestFocusStateFile(unittest.TestCase):
 
 
 class TestFocusRestore(unittest.TestCase):
-    """Разворот по записи: только свои окна, цель последней, остаток не теряется.
+    """Restoring from a record: only its own windows, the target last, the remainder is not lost.
 
-    `window_iconic` подменён на «всё развернулось», иначе проверка состояния
-    трогала бы настоящий `xprop` без дисплея; отдельный тест оставляет окно
-    свёрнутым и проверяет «остаток». Паузы проверки сведены к нулю.
+    `window_iconic` is replaced with "everything restored", otherwise the state check
+    would touch the real `xprop` without a display; a separate test leaves a window
+    minimized and checks the "remainder". The verification pauses are reduced to zero.
     """
 
     def state(self):
@@ -247,13 +247,13 @@ class TestFocusRestore(unittest.TestCase):
         x11, restored, remaining = self.restore(self.state(), alive, classes)
         self.assertEqual(restored, [0x11, 0x12, 0x13, 0x10])
         self.assertEqual(remaining, [])
-        # цель активируется последней — внимание остаётся на ней
+        # the target is activated last — the attention stays on it
         self.assertEqual(x11.activated, [0x11, 0x12, 0x13, 0x10])
         self.assertEqual(x11.closed, 0)
-        self.assertEqual(x11.desktops, [])  # стол записи уже активен
+        self.assertEqual(x11.desktops, [])  # the workspace of the record is already active
 
     def test_switches_to_record_workspace_before_restoring(self):
-        # Активация окна не на активном столе muffin-ом игнорируется: сначала стол.
+        # Activation of a window on a non-active workspace is ignored by muffin: the workspace first.
         alive = [0x10, 0x11, 0x12, 0x13]
         classes = {0x10: "Code", 0x11: "firefox", 0x12: "chromium", 0x13: "Telegram"}
         x11, restored, _ = self.restore(self.state(), alive, classes, desktop=2)
@@ -269,7 +269,7 @@ class TestFocusRestore(unittest.TestCase):
         self.assertNotIn(0x12, x11.activated)
 
     def test_skips_window_with_reused_xid(self):
-        # XID переиспользован другой программой — разворачивать чужое нельзя.
+        # The XID was reused by another program — restoring a foreign window is not allowed.
         alive = [0x10, 0x11, 0x12, 0x13]
         classes = {0x10: "Code", 0x11: "firefox", 0x12: "Другое", 0x13: "Telegram"}
         x11, restored, remaining = self.restore(self.state(), alive, classes)
@@ -277,7 +277,7 @@ class TestFocusRestore(unittest.TestCase):
         self.assertEqual(remaining, [])
 
     def test_leftover_windows_are_reported_not_dropped(self):
-        # Развернуть не вышло (не тот стол, отказ WM) — это не «развёрнуто».
+        # The restore did not work (the wrong workspace, a WM refusal) — that is not "restored".
         alive = [0x10, 0x11, 0x12, 0x13]
         classes = {0x10: "Code", 0x11: "firefox", 0x12: "chromium", 0x13: "Telegram"}
         x11, restored, remaining = self.restore(
@@ -305,7 +305,7 @@ class TestFocusRestore(unittest.TestCase):
 
 
 class TestFocusResponse(unittest.TestCase):
-    """Печать ответа демона `--quiet` и без."""
+    """Printing the daemon response with `--quiet` and without."""
 
     def printed(self, response, quiet=False):
         buf = io.StringIO()
@@ -330,7 +330,7 @@ class TestFocusResponse(unittest.TestCase):
 
 
 class TestFocusCommand(unittest.TestCase):
-    """CLI без демона: `--off` при неактивном режиме не падает и не шумит."""
+    """The CLI without the daemon: `--off` in an inactive mode does not fail and does not make noise."""
 
     def args(self, **kw):
         base = {"zone": None, "off": False, "window": None, "quiet": False, "dry_run": False}
@@ -338,7 +338,7 @@ class TestFocusCommand(unittest.TestCase):
         return types.SimpleNamespace(**base)
 
     def test_focus_without_zone_requests_mode_without_zone(self):
-        # Форма клавиши `[focus]` без `zone`: «свернуть всё, кроме этого окна».
+        # The shape of the `[focus]` key without `zone`: "minimize everything except this window".
         seen = {}
 
         def fake(request, timeout=None):
@@ -370,8 +370,8 @@ class TestFocusCommand(unittest.TestCase):
                 zt.cmd_focus(None, self.args(zone="main"))
 
     def test_record_kept_when_restore_not_confirmed(self):
-        # Подтверждённого разворота не было — запись обязана остаться (иначе окно
-        # залипло бы свёрнутым без хозяина), и её надо переписать на остаток.
+        # There was no confirmed restore — the record must stay (otherwise the window
+        # would be stuck minimized without an owner), and it must be rewritten to the remainder.
         cleared, kept = [], []
         state = {"windows": [{"window": "0x2"}]}
         with mock.patch.object(zt, "daemon_request", return_value=None), \
@@ -399,8 +399,8 @@ class TestFocusCommand(unittest.TestCase):
         self.assertEqual(kept, [])
 
     def test_entry_writes_state_before_minimizing(self):
-        # Не записалось (нет XDG_STATE_HOME, нет места) — ни одно окно ещё не
-        # свёрнуто: команда падает честно, а не оставляет окна свёрнутыми молча.
+        # Nothing was written (no XDG_STATE_HOME, no space) — not a single window has been
+        # minimized yet: the command fails honestly instead of leaving the windows minimized silently.
         calls = []
         wa = (0, 0, 1000, 1000)
         grid = types.SimpleNamespace(ignore=())

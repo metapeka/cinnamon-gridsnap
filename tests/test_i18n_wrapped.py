@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Строки интерфейса обёрнуты в `_()` — и это проверяет тест, а не надежда.
+"""The interface strings are wrapped in `_()` — and a test checks that, not hope.
 
-Правило волны локализации: каждая пользовательская строка — один литерал
-внутри `_()` (подстановки — `.format(...)`), а не f-строка и не склейка
-фрагментов: иначе строки нет в каталоге, а перевод ломает порядок слов.
+The rule of the localization wave: every user-facing string is one literal
+inside `_()` (substitutions go through `.format(...)`), not an f-string and not a concatenation
+of fragments: otherwise the string is not in the catalog, and translation breaks the word order.
 
-Тест разбирает исходники через `ast` и ругается на кириллицу в строковых
-литералах, которые не являются аргументом `_()`/`translate`. Не считаются
-нарушением:
+The test parses the sources with `ast` and complains about Cyrillic in string
+literals that are not an argument of `_()`/`translate`. The following do not count
+as violations:
 
-* докстринги (это документация кода, а не текст для пользователя);
-* строки на строке с пометкой ``# i18n: do not translate`` — регулярки, ключи
-  конфига и заголовки, которые код пишет в файлы (они не текст интерфейса).
+* docstrings (that is code documentation, not user-facing text);
+* strings on a line marked ``# i18n: do not translate`` — regular expressions, config
+  keys and headings that the code writes into files (they are not interface text).
 
-Запуск:
+Running:
     python3 tests/test_i18n_wrapped.py
     python3 -m unittest discover -s tests -v
 """
@@ -30,11 +30,11 @@ ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-# Файлы с пользовательскими строками (апплет — JavaScript, у него свой тест).
-# Список — все модули приложения, а не только те, где строки были на момент
-# обёртки: иначе следующая строка, добавленная в «тихий» модуль, осталась бы
-# русской только на русском (так и случилось с `zone_geom.set_origin_text`,
-# который видно в статусе редактора и на демонстрации).
+# The files with user-facing strings (the applet is JavaScript and has its own test).
+# The list is all modules of the application, not only those that had strings when the
+# wrapping was done: otherwise the next string added to a "quiet" module would stay
+# Russian only in Russian (which is exactly what happened with `zone_geom.set_origin_text`,
+# which shows in the editor status and in the demo).
 SOURCES = (
     "window_backend.py",
     "zone-editor.py",
@@ -56,24 +56,24 @@ SOURCES = (
     "gridsnap-ctl",
 )
 
-# Пометка «эта строка не текст для пользователя» (регулярка, ключ, заголовок файла).
-# Пометка «строка не текст для пользователя». Старая русская форма живёт
-# до конца инверсии: её снимают воркеры, переводящие комментарии модулей.
+# The mark "this string is not user-facing text" (a regex, a key, a file heading).
+# The mark "the string is not user-facing text". The old Russian form lives on
+# until the end of the inversion: the workers translating module comments remove it.
 SKIP_MARK = ("i18n: do not translate", "i18n: не переводится")
 
 CYRILLIC = re.compile(r"[\u0400-\u04ff]")
 
-# Имена, которыми оборачивают строку: `_` из `zone_i18n` и полное `translate`.
+# The names that wrap a string: `_` from `zone_i18n` and the full `translate`.
 WRAPPERS = ("_", "translate")
 
 
 def is_cyrillic(text):
-    """Есть ли в строке кириллица (текст для пользователя, а не идентификатор)."""
+    """Whether the string contains Cyrillic (user-facing text, not an identifier)."""
     return bool(CYRILLIC.search(text))
 
 
 def docstring_ids(tree):
-    """`id()` строковых констант-докстрингов: модуль, класс, функция."""
+    """The `id()`s of the string constants that are docstrings: module, class, function."""
     found = set()
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -89,7 +89,7 @@ def docstring_ids(tree):
 
 
 def wrapper_arg_ids(tree):
-    """`id()` констант, которые стоят прямым аргументом `_()`/`translate()`."""
+    """The `id()`s of the constants standing as a direct argument of `_()`/`translate()`."""
     found = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -103,19 +103,19 @@ def wrapper_arg_ids(tree):
 
 
 def marked_lines(source):
-    """Номера строк с пометкой «не переводится» (1-нумерация)."""
+    """Line numbers with the "do not translate" mark (1-based)."""
     return {n for n, line in enumerate(source.splitlines(), start=1)
             if any(mark in line for mark in SKIP_MARK)}
 
 
 def unwrapped(source, path):
-    """Список нарушений: `(строка, текст, почему)` — по порядку строк."""
+    """The list of violations: `(line, text, why)` — in line order."""
     tree = ast.parse(source)
     skip_doc = docstring_ids(tree)
     skip_arg = wrapper_arg_ids(tree)
     skip_mark = marked_lines(source)
 
-    # Родитель нужен, чтобы отличить обычную строку от части f-строки.
+    # The parent is needed to tell a plain string from a part of an f-string.
     parents = {}
     for node in ast.walk(tree):
         for child in ast.iter_child_nodes(node):

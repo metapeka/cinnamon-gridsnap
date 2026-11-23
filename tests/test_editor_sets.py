@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Юнит-тесты наборов зон редактора — без X, GDK и GTK.
+"""Unit tests for the editor zone sets - without X, GDK and GTK.
 
-Покрыто: какой набор показать для монитора (`set_for_monitor`: свой из секции
-или копия общего `[zones]`), текст статуса (`set_origin_text`), отпечаток набора
-(`zone_set_signature`) и правило записи секций `[zones:<выход>]`
-(`save_plan`): отличается от общего или монитор правили — пишем, совпал и не
-правили — секция удаляется только у монитора на экране, отключённый выход не
-трогаем. Сквозные проверки (`apply_save_plan`) идут через настоящий
-`zone_config.save_zone_sets`: чужие секции (`[rules]`, `[daemon]`), наборы соседних
-и отключённых мониторов и `[keys]` без дублей (повтор имени в двух наборах не
-даёт повтора в секции — это забота писателя, а не текстовой чистки).
+Covered: which set to show for a monitor (`set_for_monitor`: its own from the section
+or a copy of the common `[zones]`), the status text (`set_origin_text`), the set signature
+(`zone_set_signature`) and the rule for writing the `[zones:<output>]` sections
+(`save_plan`): it differs from the common one or the monitor was edited - we write it;
+it matched and was not edited - the section is deleted only for the monitor on screen,
+an output that is off is left alone. End-to-end checks (`apply_save_plan`) go through the real
+`zone_config.save_zone_sets`: foreign sections (`[rules]`, `[daemon]`), the sets of neighbouring
+and switched-off monitors, and `[keys]` without duplicates (a repeated name in two sets
+does not give a duplicate in the section - that is the writer's job, not a text scrub).
 
-Отдельно — диалог «Профили экранов»: строки `zone_config.monitor_dialog_rows`
-(порядок выходов, пометка отсутствующего, «общий набор») и запись `[monitors]`
-по этим строкам через `zone_config.save_monitor_map`. Чистая функция переехала в
-`zone_config.py` (как её аналог для столов), поэтому эти тесты идут без GTK —
-в CI, где `python3-gi` нет, они больше не пропускаются.
+Separately, the "Monitor profiles" dialog: the rows of `zone_config.monitor_dialog_rows`
+(the order of the outputs, the mark of a missing one, "default set") and the writing of `[monitors]`
+by these rows through `zone_config.save_monitor_map`. The pure function has moved to
+`zone_config.py` (like its counterpart for workspaces), so these tests run without GTK -
+in CI, where `python3-gi` is missing, they are no longer skipped.
 
-Запуск:
+Run:
     python3 -m unittest discover -s tests -v
     python3 tests/test_editor_sets.py
 """
@@ -32,8 +32,8 @@ import tempfile
 import unittest
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # run as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -53,9 +53,9 @@ def zone(name, rect=(0, 0, 1, 1), binding=""):
 
 BASE = "[grid]\ncols = 1.0\nrows = 1.0\n"
 
-# Файл «как после ручной правки»: общий набор, свой набор монитора, копия
-# общего в секции второго монитора (лишняя — её и надо убрать), набор
-# отключённого выхода (остаться) и чужие секции.
+# The file "as after a manual edit": the default set, a monitor's own set, a copy of
+# the default in the section of the second monitor (a surplus one - it is the one to remove), the set
+# of an output that is off (to stay) and foreign sections.
 CONF = (
     BASE
     + "[zones]\nmain = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\n"
@@ -69,7 +69,7 @@ CONF = (
 
 
 class ConfCase(unittest.TestCase):
-    """Временный каталог с `zones.conf`."""
+    """A temporary directory with `zones.conf`."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-editor-sets-")
@@ -86,7 +86,7 @@ class ConfCase(unittest.TestCase):
             return fh.read()
 
 
-# ----------------------------------------------------------- какой набор показать
+# ---------------------------------------------------- which set to show
 
 
 class TestSetForMonitor(unittest.TestCase):
@@ -149,7 +149,7 @@ class TestZoneSetSignature(unittest.TestCase):
         self.assertEqual(geom.zone_set_signature(a), geom.zone_set_signature(b))
 
     def test_bindings_are_not_part_of_signature(self):
-        # [keys] общая на файл: другая клавиша у той же зоны — тот же набор.
+        # [keys] is common to the file: a different key for the same zone - the same set.
         a = [zone("main", (0, 0, 1, 1), "<Super><Alt>1")]
         b = [zone("main", (0, 0, 1, 1), "<Super><Alt>7")]
         self.assertEqual(geom.zone_set_signature(a), geom.zone_set_signature(b))
@@ -165,11 +165,11 @@ class TestZoneSetSignature(unittest.TestCase):
         )
 
 
-# ----------------------------------------------- [keys] без повторов
+# ---------------------------------------------- [keys] without duplicates
 
 
 def keys_body(text):
-    """Тело секции `[keys]` по строкам — без заголовков комментариев-подсказок."""
+    """The body of the `[keys]` section line by line - without the hint comment headers."""
     body, inside = [], False
     for line in text.splitlines():
         stripped = line.strip()
@@ -182,10 +182,10 @@ def keys_body(text):
 
 
 class TestKeysWithoutDuplicates(ConfCase):
-    """Повтор имени в двух наборах не даёт повтора в `[keys]`.
+    """A repeated name in two sets does not give a duplicate in `[keys]`.
 
-    Чистка живёт в самом писателе (`zone_config`), а не в тексте файла после
-    записи: `[keys]` собирается без повторов, поэтому `ConfigParser` файл читает.
+    The scrub lives in the writer itself (`zone_config`), not in the text of the file after
+    the write: `[keys]` is collected without duplicates, so `ConfigParser` reads the file.
     """
 
     def test_same_name_in_two_sets_yields_one_key_line(self):
@@ -196,7 +196,7 @@ class TestKeysWithoutDuplicates(ConfCase):
         keys = keys_body(self.read())
         self.assertEqual(sum(1 for line in keys if line.startswith("main =")), 1, keys)
         self.assertIn("wide = <Super><Alt>2", keys)
-        # ключ берётся из набора по умолчанию — он пишется первым
+        # the key comes from the default set - it is written first
         self.assertIn("main = <Super><Alt>1", keys)
 
     def test_broken_keys_file_reads_after_rewrite(self):
@@ -208,7 +208,7 @@ class TestKeysWithoutDuplicates(ConfCase):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(
             SystemExit
         ) as caught:
-            zc.load_zones(self.conf)  # руками испорченный файл — код 3, не трассировка
+            zc.load_zones(self.conf)  # a file broken by hand - code 3, not a traceback
         self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
         zc.save_zone_sets(
             self.conf,
@@ -310,8 +310,8 @@ class TestSavePlan(unittest.TestCase):
         self.assertEqual(len(self.other), 1)
 
     def test_binding_of_shared_name_is_not_duplicated(self):
-        # [keys] одна на файл: у зоны с именем из общего набора привязка не
-        # повторяется в секции монитора, у своей зоны — остаётся.
+        # [keys] is one per file: for a zone with a name from the default set the binding is not
+        # repeated in the monitor section, for its own zone it stays.
         monitor = [zone("main", (0, 0, 1, 1), "<Super><Alt>5"), zone("wide", (0, 0, 1, 1),
                                                                    "<Super><Alt>6")]
         write, _drop = self.plan({"HDMI-1": monitor})
@@ -328,7 +328,7 @@ class TestSavePlan(unittest.TestCase):
         self.assertEqual(write["DP-1"][0].binding, "")
 
 
-# ------------------------------------------------- запись файла по плану
+# -------------------------------------------- writing the file by plan
 
 
 class TestApplySavePlan(ConfCase):
@@ -356,8 +356,8 @@ class TestApplySavePlan(ConfCase):
         sections = self.sections()
         self.assertIn("zones", sections)
         self.assertIn("zones:HDMI-1", sections)
-        self.assertIn("zones:VGA-1", sections)      # отключённый выход остался
-        self.assertNotIn("zones:DP-1", sections)    # копия общего набора убрана
+        self.assertIn("zones:VGA-1", sections)      # the switched-off output stayed
+        self.assertNotIn("zones:DP-1", sections)    # the copy of the default set was removed
         self.assertEqual(
             [z.name for z in zc.load_zone_sets(self.conf)[None]], ["main", "right"]
         )
@@ -408,11 +408,11 @@ class TestApplySavePlan(ConfCase):
 
 
 class WorkspaceDialogRowsTest(unittest.TestCase):
-    """Строки диалога «Профили столов» — чистая функция без GTK.
+    """The rows of the "Workspace profiles" dialog - a pure function without GTK.
 
-    Диалог показывает столько строк, сколько столов в Cinnamon, и не теряет
-    запись стола, даже если профиля is not on disk: её видно в списке, и она
-    остаётся в конфиге до сохранения.
+    The dialog shows as many rows as there are workspaces in Cinnamon, and does not lose
+    a workspace record even if the profile is not on disk: it is visible in the list, and it
+    stays in the config until saving.
     """
 
     def test_row_per_desktop(self):
@@ -449,7 +449,7 @@ class WorkspaceDialogRowsTest(unittest.TestCase):
         self.assertIn("is not on disk", warning)
 
     def test_mapping_beyond_desktops_is_shown(self):
-        # Иначе сохранение молча потеряло бы сопоставление стола 5.
+        # Otherwise saving would silently lose the mapping of workspace 5.
         rows = zc.workspace_dialog_rows({5: "cinema"}, ["cinema"], 2)
         self.assertEqual([row[0] for row in rows], [1, 2, 5])
 
@@ -458,17 +458,17 @@ class WorkspaceDialogRowsTest(unittest.TestCase):
         self.assertEqual(options, [zc.WORKSPACE_SHARED, "cinema", "work"])
 
 
-# ----------------------------------------- «Профили экранов»: строки диалога
+# ------------------------------------- "Monitor profiles": the dialog rows
 
 
 class MonitorDialogRowsTest(unittest.TestCase):
-    """Строки диалога «Профили экранов» — чистая функция без окон.
+    """The rows of the "Monitor profiles" dialog - a pure function without windows.
 
-    Порядок строк значим: профиль первого экрана решает спор при слиянии
-    (`profile use-monitors`), поэтому строки идут в порядке `xrandr --listmonitors`,
-    а записи про отсутствующие выходы — следом, в порядке файла. Имя профиля из
-    `[monitors]` остаётся в списке, даже если файла профиля нет: иначе запись
-    нельзя было бы ни поправить, ни убрать.
+    The order of the rows matters: the profile of the first screen settles a dispute when merging
+    (`profile use-monitors`), so the rows follow the order of `xrandr --listmonitors`,
+    and the records of missing outputs come after them, in the order of the file. A profile name from
+    `[monitors]` stays in the list even if the profile file is missing: otherwise the record
+    could be neither corrected nor removed.
     """
 
     def rows(self, mapping, profiles=(), outputs=()):
@@ -483,7 +483,7 @@ class MonitorDialogRowsTest(unittest.TestCase):
         self.assertTrue(all(row[4] for row in rows))
 
     def test_screen_order_beats_file_order(self):
-        # В файле HDMI-2 раньше HDMI-1, а на экране — наоборот: порядок задаёт xrandr.
+        # In the file HDMI-2 comes before HDMI-1, while on screen it is the other way round: xrandr sets the order.
         rows = self.rows(
             {"hdmi-2": "cinema", "hdmi-1": "work"}, ["cinema", "work"],
             ["HDMI-1", "HDMI-2"],
@@ -492,9 +492,9 @@ class MonitorDialogRowsTest(unittest.TestCase):
         self.assertEqual([row[1] for row in rows], ["work", "cinema"])
 
     def test_screen_name_is_taken_from_xrandr(self):
-        # Из файла ключ приходит в нижнем регистре (`ConfigParser`), на экране —
-        # `HDMI-1`: показываем и записываем имя выхода, а не ключ из файла, и не
-        # заводим вторую строку на тот же экран.
+        # From the file the key comes in lowercase (`ConfigParser`), on screen it is
+        # `HDMI-1`: we show and write the output name, not the key from the file, and do not
+        # start a second row for the same screen.
         rows = self.rows({"hdmi-1": "work"}, ["work"], ["HDMI-1"])
         self.assertEqual(len(rows), 1, rows)
         output, profile, _options, warning, on_screen = rows[0]
@@ -553,7 +553,7 @@ class MonitorDialogRowsTest(unittest.TestCase):
 
 
 class MonitorMapSaveTest(ConfCase):
-    """Выбор в диалоге -> `save_monitor_map`: порядок строк и целые чужие секции."""
+    """A choice in the dialog -> `save_monitor_map`: the order of the rows and whole foreign sections."""
 
     CONF = (
         BASE
@@ -564,7 +564,7 @@ class MonitorMapSaveTest(ConfCase):
     )
 
     def monitors_body(self):
-        """Строки секции `[monitors]` в файле — порядок в них и проверяем."""
+        """The rows of the `[monitors]` section in the file - the order in them is what we check."""
         body, inside = [], False
         for line in self.read().splitlines():
             stripped = line.strip()
@@ -576,7 +576,7 @@ class MonitorMapSaveTest(ConfCase):
         return body
 
     def save_choices(self, picks, outputs=("HDMI-1", "HDMI-2"), profiles=("work", "cinema", "old")):
-        """Пройти те же шаги, что диалог: строки -> выбор -> `save_monitor_map`."""
+        """Walk the same steps as the dialog: rows -> choice -> `save_monitor_map`."""
         rows = zc.monitor_dialog_rows(
             zc.load_monitor_map(self.conf), list(profiles), list(outputs)
         )
@@ -590,7 +590,7 @@ class MonitorMapSaveTest(ConfCase):
 
     def test_saved_in_screen_order_and_shared_removes_the_binding(self):
         self.write(self.CONF)
-        # vga-1 «на экране» нет — его строку видно в диалоге; «общий набор» убирает запись.
+        # vga-1 is not "on screen" - its row is visible in the dialog; "default set" removes the record.
         rows, chosen = self.save_choices(
             {"HDMI-1": "cinema", "HDMI-2": "work", "vga-1": zc.WORKSPACE_SHARED}
         )
@@ -601,7 +601,7 @@ class MonitorMapSaveTest(ConfCase):
         self.assertEqual(zc.load_monitor_map(self.conf)["hdmi-1"], "cinema")
 
     def test_absent_output_is_not_lost_when_left_as_is(self):
-        # Отключённый выход не трогали — его запись остаётся, и не в начале секции.
+        # The switched-off output was not touched - its record stays, and not at the start of the section.
         self.write(self.CONF)
         _rows, chosen = self.save_choices({})
         self.assertEqual(list(chosen), ["HDMI-1", "HDMI-2", "vga-1"])

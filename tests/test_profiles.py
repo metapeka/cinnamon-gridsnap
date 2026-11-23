@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Юнит-тесты профилей раскладок — чистый слой `zone_config` и CLI `profile`.
+"""Unit tests for layout profiles — the pure `zone_config` layer and the `profile` CLI.
 
-Без X и GTK: `zone_config` их не импортирует, поэтому профили проверяются
-обычными юнит-тестами. Покрытие: каталог/список/сохранение/чтение/удаление,
-активация (зоны, правила и клавиши меняются, `[daemon]` и прочие секции
-остаются), отказ на плохом имени и CLI `zone-tiler.py profile …` без дисплея.
+Without X and GTK: `zone_config` does not import them, so profiles are checked
+by ordinary unit tests. Coverage: directory/list/save/read/remove,
+activation (zones, rules and keys change, `[daemon]` and the other sections
+stay), refusal on a bad name, and the `zone-tiler.py profile …` CLI without a display.
 
-Запуск:
+Running:
     python3 tests/test_profiles.py
 """
 
@@ -19,8 +19,8 @@ import unittest
 from unittest import mock
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -56,7 +56,7 @@ ACTIVE_SETS = (
 
 
 class ConfMixin:
-    """Временный ``zones.conf`` и каталог профилей рядом с ним."""
+    """A temporary ``zones.conf`` and the profile directory next to it."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-profiles-")
@@ -152,8 +152,8 @@ class TestProfileCatalog(ConfMixin, unittest.TestCase):
                 zc.profile_path(bad, self.conf)
 
     def test_bad_name_does_not_escape_templates(self):
-        # `..` уходит в имя зоны-подобное (`..` после санитайза превращается в «..-», см. ниже),
-        # но результат всё равно остаётся внутри каталога профилей.
+        # `..` turns into a zone-like name (`..` becomes "..-" after the sanitizer, see below),
+        # but the result still stays inside the profile directory.
         path = zc.profile_path("../evil", self.conf)
         self.assertEqual(os.path.dirname(path), os.path.join(self.dir, "templates"))
         self.assertNotIn(os.sep, os.path.basename(path))
@@ -179,7 +179,7 @@ class TestApplyProfile(ConfMixin, unittest.TestCase):
         self.assertEqual([z.name for z in zones], ["left", "right"])
         text = self.read_conf()
         sections = sections_in(text)
-        self.assertIn("grid", sections)  # из активного конфига
+        self.assertIn("grid", sections)  # from the active config
         self.assertIn("rules", sections)
         self.assertIn("keys", sections)
         self.assertIn("daemon", sections)
@@ -234,7 +234,7 @@ class TestApplyProfile(ConfMixin, unittest.TestCase):
 
 
 class TestProfileZoneSets(ConfMixin, unittest.TestCase):
-    """Профиль переносит все наборы зон: ``[zones]`` и ``[zones:<монитор>]``."""
+    """The profile carries all zone sets: ``[zones]`` and ``[zones:<monitor>]``."""
 
     def test_save_profile_with_two_sets(self):
         zc.save_profile("multi", PROFILE_ZONES, PROFILE_RULES, self.conf,
@@ -254,7 +254,7 @@ class TestProfileZoneSets(ConfMixin, unittest.TestCase):
         self.assertEqual(ignore, [])
 
     def test_read_profile_keeps_three_value_contract(self):
-        # редактор распаковывает ``zones, rules, ignore = read_profile(...)`` — три величины
+        # the editor unpacks ``zones, rules, ignore = read_profile(...)`` — three values
         zc.save_profile("multi", PROFILE_ZONES, PROFILE_RULES, self.conf,
                         monitor_sets={"HDMI-1": MONITOR_ZONES})
         zones, rules, ignore = zc.read_profile("multi", self.conf)
@@ -283,7 +283,7 @@ class TestProfileZoneSets(ConfMixin, unittest.TestCase):
             zc.list_zone_sets(self.conf),
             {None: ["left", "right"], "DP-2": ["top", "bottom"]},
         )
-        self.assertNotIn("zones:HDMI-1", sections_in(text))  # наборы конфига заменены набором профиля
+        self.assertNotIn("zones:HDMI-1", sections_in(text))  # the config's sets are replaced by the profile's set
         self.assertIn("[grid]", text)
         self.assertIn("reflow = off   # off | neighbors", text)
         self.assertIn("Firefox = right", text)
@@ -355,10 +355,10 @@ class TestHeadless(unittest.TestCase):
             self.assertEqual(cli("profile", "list", "--conf", conf).stdout.strip(), "")
 
     def test_cli_profile_rejects_extra_positional_words(self):
-        """Лишнее слово у действия `profile` — ошибка, а не молча съеденный аргумент.
+        """An extra word on the `profile` action is an error, not a silently eaten argument.
 
-        `profile from-gallery work mine` раньше создавал профиль «work», а `mine`
-        уходило в никуда: ошибка в команде выглядела как успех.
+        `profile from-gallery work mine` used to create the profile "work", and `mine`
+        went nowhere: a mistake in the command looked like success.
         """
         with tempfile.TemporaryDirectory() as tmp:
             conf = os.path.join(tmp, "zones.conf")
@@ -378,10 +378,10 @@ class TestHeadless(unittest.TestCase):
                 self.assertEqual(r.returncode, 2, f"profile {action}: {r.stdout}{r.stderr}")
                 self.assertIn("extra word", r.stderr)
                 self.assertIn(words[-1], r.stderr)
-            # Подсказка про `--name` нужна там, где имя и задаётся: у from-gallery.
+            # The `--name` hint is needed where the name is actually given: on from-gallery.
             r = cli("profile", "from-gallery", "work", "mine")
             self.assertIn("--name", r.stderr)
-            # А второе слово у `export` — файл, и оно не лишнее.
+            # And the second word of `export` is a file, and it is not extra.
             r = cli("profile", "save", "demo")
             self.assertEqual(r.returncode, 0, r.stderr)
             exported = os.path.join(tmp, "demo.json")
@@ -390,8 +390,8 @@ class TestHeadless(unittest.TestCase):
             self.assertTrue(os.path.exists(exported))
 
     def test_cli_profile_export_import_keeps_zones_rules_keys(self):
-        # JSON — обмен, а не второй формат: круг export → rm → import
-        # возвращает тот же профиль (зоны, правила, клавиши) под новым именем.
+        # JSON is an exchange, not a second format: the round export → rm → import
+        # gives back the same profile (zones, rules, keys) under a new name.
         with tempfile.TemporaryDirectory() as tmp:
             conf = os.path.join(tmp, "zones.conf")
             with open(conf, "w", encoding="utf-8") as fh:
