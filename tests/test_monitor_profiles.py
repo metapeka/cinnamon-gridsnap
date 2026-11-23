@@ -225,7 +225,7 @@ class MergeMonitorProfilesTest(unittest.TestCase):
         }
         self.assertEqual(seen["main"], "<Super><Alt>1")
         self.assertTrue(any("firefox" in m and "main" in m for m in plan["overrides"]))
-        self.assertTrue(any("клавиша зоны «main»" in m for m in plan["overrides"]))
+        self.assertTrue(any('zone key "main"' in m for m in plan["overrides"]))
 
     def test_rule_for_zone_outside_snapshot_is_dropped_with_reason(self):
         screens = [
@@ -368,7 +368,7 @@ big = <Super><Alt>3
         self.assertIn("[keys]\nmain = <Super><Alt>1\nside = <Super><Alt>2", text)
         # Старое правило активного конфига заменяется, а не копится.
         self.assertNotIn("old = main", text)
-        self.assertIn("переопределено", out)
+        self.assertIn("overridden", out)
 
     def test_keeps_other_sections_verbatim(self):
         self.run_cli()
@@ -381,8 +381,8 @@ big = <Super><Alt>3
         os.remove(os.path.join(self.templates, "cinema.conf"))
         code, _out, err = self.run_cli()
         self.assertEqual(code, 0)
-        self.assertIn("профиля «cinema» нет на диске", err)
-        self.assertIn("экран HDMI-2 пропущен", err)
+        self.assertIn('profile "cinema" is not on disk', err)
+        self.assertIn("monitor HDMI-2 skipped", err)
         text = self.read_conf()
         # Строка остаётся и заработает, когда профиль вернут; снимка для экрана нет.
         self.assertIn("HDMI-2 = cinema", text)
@@ -396,7 +396,7 @@ big = <Super><Alt>3
         os.remove(os.path.join(self.templates, "cinema.conf"))
         code, _out, err = self.run_cli()
         self.assertEqual(code, 0)
-        self.assertIn("правило «firefox = ghost» пропущено", err)
+        self.assertIn('rule "firefox = ghost" skipped', err)
         text = self.read_conf()
         self.assertIn("[rules]\nxterm = main", text)
         self.assertNotIn("ghost", text)
@@ -410,7 +410,7 @@ big = <Super><Alt>3
         )
         code, out, err = self.run_cli()
         self.assertEqual(code, 0, err)
-        self.assertIn("клавиша зоны «main»", out)
+        self.assertIn('zone key "main"', out)
         self.assertIn("<Super><Alt>1", out)
         keys = self.read_conf().split("[keys]", 1)[1]
         self.assertIn("main = <Super><Alt>1", keys)
@@ -441,19 +441,19 @@ big = <Super><Alt>3
         code, out, err = self.run_cli("--quiet")
         self.assertEqual(code, 0)
         self.assertEqual(out, "")
-        self.assertIn("нет на диске", err)
+        self.assertIn("is not on disk", err)
 
     def test_explicit_profile_name_is_usage_error(self):
         code, _out, err = self.run_cli("work")
         self.assertEqual(code, 2)
-        self.assertIn("не берёт имени профиля", err)
+        self.assertIn("takes no profile name", err)
 
     def test_no_monitors_section_leaves_config_alone(self):
         self.write_conf(BASE)
         before = self.read_conf()
         code, out, _err = self.run_cli()
         self.assertEqual(code, 0)
-        self.assertIn("нет ни одного экрана", out)
+        self.assertIn("has no monitors", out)
         self.assertEqual(self.read_conf(), before)
 
     def test_missing_config_is_config_error(self):
@@ -461,13 +461,13 @@ big = <Super><Alt>3
         self.conf = os.path.join(self.dir, "нет.conf")
         code, _out, err = self.run_cli()
         self.assertEqual(code, 3)
-        self.assertIn("не найден конфиг", err)
+        self.assertIn("config not found", err)
 
     def test_empty_profile_name_is_config_error(self):
         self.write_conf(BASE + "[monitors]\nHDMI-1 =\n")
         code, _out, err = self.run_cli()
         self.assertEqual(code, 3)
-        self.assertIn("пустое имя профиля", err)
+        self.assertIn("empty profile name", err)
 
     def test_hotkeys_registered_after_write_unless_disabled(self):
         with mock.patch.object(zt, "_run_hotkeys") as called:

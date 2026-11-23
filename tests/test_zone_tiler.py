@@ -283,7 +283,7 @@ class TestApplyZone(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             zt.apply_zone(0x1, (0, 0, 100, 100), label="main", x11=FakeX11(), quiet=False)
-        self.assertIn("зона 'main'", buf.getvalue())
+        self.assertIn("zone 'main'", buf.getvalue())
         self.assertIn("0x1", buf.getvalue())
 
 
@@ -336,13 +336,13 @@ class TestCli(ConfMixin, unittest.TestCase):
         # конфига и профиля, а не опечатка в аргументе: код 3 и перечень зон.
         r = self.run_cli("apply", "no-such-zone")
         self.assertEqual(r.returncode, 3)
-        self.assertIn("нет зоны", r.stderr)
-        self.assertIn("Есть:", r.stderr)
+        self.assertIn("no zone", r.stderr)
+        self.assertIn("Known:", r.stderr)
 
     def test_missing_conf_is_config_error(self):
         r = self.run_cli("list", "--conf", "/nonexistent/definitely.conf")
         self.assertEqual(r.returncode, 3)
-        self.assertIn("не найден конфиг", r.stderr)
+        self.assertIn("config not found", r.stderr)
 
     def test_keys_command(self):
         path = self.conf(
@@ -414,8 +414,8 @@ class TestTabsArrangement(ConfMixin, unittest.TestCase):
         self.assertEqual(code, 0)
         lines = out.splitlines()
         self.assertEqual(len(lines), 2, out)
-        self.assertIn("вкладка 1 из 2", lines[0])
-        self.assertIn("вкладка 2 из 2", lines[1])
+        self.assertIn("tab 1 of 2", lines[0])
+        self.assertIn("tab 2 of 2", lines[1])
         for line in lines:
             self.assertIn("x=0 y=30 1000x970", line)
 
@@ -486,7 +486,7 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
         # `[zones:MON2]` профиля, а не общий `[zones]` активного конфига.
         code, out, err = self.run_cli("apply", "right", "--monitor", "MON2")
         self.assertEqual(code, 0, err)
-        self.assertIn("right: x=1500 y=0 500x1000 (монитор 1: MON2)", out)
+        self.assertIn("right: x=1500 y=0 500x1000 (monitor 1: MON2)", out)
 
     def test_apply_without_monitor_takes_the_window_screen(self):
         # Без `--monitor` адресат — экран окна (по подмене `read_frame` оно на
@@ -495,21 +495,21 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
         with mock.patch.object(zt, "read_active_window", lambda: (0x1, None)):
             code, out, err = self.run_cli("apply", "right")
         self.assertEqual(code, 0, err)
-        self.assertIn("right: x=1500 y=0 500x1000 (монитор 1: MON2)", out)
+        self.assertIn("right: x=1500 y=0 500x1000 (monitor 1: MON2)", out)
 
     def test_monitor_flag_overrides_the_window_screen(self):
         # `--monitor` важнее экрана окна: осознанный перенос на первый экран.
         with mock.patch.object(zt, "read_active_window", lambda: (0x1, None)):
             code, out, err = self.run_cli("apply", "global", "--monitor", "MON1")
         self.assertEqual(code, 0, err)
-        self.assertIn("global: x=0 y=0 1000x1000 (монитор 0: MON1)", out)
+        self.assertIn("global: x=0 y=0 1000x1000 (monitor 0: MON1)", out)
 
     def test_without_window_falls_back_to_the_first_screen(self):
         # Окна нет (—dry-run в скрипте): первый экран, как было раньше, а не отказ.
         with mock.patch.object(zt, "active_window_quiet", lambda: None):
             code, out, err = self.run_cli("apply", "global")
         self.assertEqual(code, 0, err)
-        self.assertIn("global: x=0 y=0 1000x1000 (монитор 0: MON1)", out)
+        self.assertIn("global: x=0 y=0 1000x1000 (monitor 0: MON1)", out)
 
     def test_stack_without_monitor_takes_the_active_window_screen(self):
         with mock.patch.object(zt, "read_active_window", lambda: (0x1, None)):
@@ -530,21 +530,21 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
         # Экран задаётся явно: без `--monitor` адресат — экран окна (MON2), где `left` есть.
         code, _out, err = self.run_cli("apply", "left", "--monitor", "MON1")
         self.assertEqual(code, 3)
-        self.assertIn("нет зоны 'left'", err)
+        self.assertIn("no zone 'left'", err)
         self.assertIn("global", err)
 
     def test_apply_names_the_screen_profile_in_the_error(self):
         code, _out, err = self.run_cli("apply", "nosuch", "--monitor", "MON2")
         self.assertEqual(code, 3)
-        self.assertIn("в сетке экрана MON2 (профиль «wide»)", err)
+        self.assertIn("in the grid of monitor MON2 (profile \"wide\")", err)
 
     def test_apply_falls_back_when_profile_file_is_gone(self):
         os.remove(self.profile_path)
         code, out, err = self.run_cli("apply", "global", "--monitor", "MON2")
         self.assertEqual(code, 0, err)
         self.assertIn("global: x=1000 y=0 1000x1000", out)
-        self.assertIn("профиля «wide» нет на диске", err)
-        self.assertIn("беру набор стола или общий", err)
+        self.assertIn("profile \"wide\" is not on disk", err)
+        self.assertIn("using the workspace set or the default one", err)
 
     def test_stack_uses_the_screen_profile_zone(self):
         code, out, err = self.run_cli("stack", "right", "--monitor", "MON2")
@@ -556,15 +556,15 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
         code, out, err = self.run_cli("move", "right", "--window", "0x1")
         self.assertEqual(code, 0, err)
         # Окно на MON2 в зоне left профиля; сосед справа — right, а не global.
-        self.assertIn("зона 'left' -> 'right'", out)
-        self.assertIn("монитор 1: MON2", out)
+        self.assertIn("zone 'left' -> 'right'", out)
+        self.assertIn("monitor 1: MON2", out)
 
     def test_arrange_uses_the_screen_profile(self):
         code, out, err = self.run_cli("arrange", "--by", "order")
         self.assertEqual(code, 0, err)
         # На MON2 — зоны профиля (left/right), а не `global` активного конфига;
         # одно окно в зоне занимает её целиком.
-        self.assertIn("зона 'left': x=1000 y=0 500x1000", out)
+        self.assertIn("zone 'left': x=1000 y=0 500x1000", out)
 
 
 if __name__ == "__main__":

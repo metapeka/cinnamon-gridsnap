@@ -191,7 +191,7 @@ class TestTilerWrappers(unittest.TestCase):
         self.assertEqual(ctx.exception.code, zt.EXIT_FAIL)
         self.assertEqual(
             err.getvalue().strip(),
-            "zone-tiler: не удалось определить рабочую область экрана",
+            "zone-tiler: failed to determine the work area of the monitor",
         )
 
     def test_read_frame_missing_field_is_value_error_with_old_text(self):
@@ -201,12 +201,12 @@ class TestTilerWrappers(unittest.TestCase):
         with mock.patch.object(wb, "read_frame", boom):
             with self.assertRaises(ValueError) as ctx:
                 zt.read_frame(0x1, (0, 0, 0, 0))
-        self.assertEqual(str(ctx.exception), "xwininfo: нет поля 'Width'")
+        self.assertEqual(str(ctx.exception), "xwininfo: no field 'Width'")
 
     def test_read_active_window_reasons_become_the_old_texts(self):
         cases = (
-            (wb.ACTIVE_WINDOW_NO_XPROP, "zone-tiler: xprop не найден (пакет x11-utils)"),
-            (wb.ACTIVE_WINDOW_NO_WINDOW, "zone-tiler: нет активного окна"),
+            (wb.ACTIVE_WINDOW_NO_XPROP, "zone-tiler: xprop not found (x11-utils package)"),
+            (wb.ACTIVE_WINDOW_NO_WINDOW, "zone-tiler: no active window"),
         )
         for reason, text in cases:
             with mock.patch.object(

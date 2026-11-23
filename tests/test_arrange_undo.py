@@ -285,7 +285,7 @@ class TestCli(unittest.TestCase):
         # см. `require_zone` в zone-tiler.py.
         r = self.run_cli("stack", "no-such-zone")
         self.assertEqual(r.returncode, 3)
-        self.assertIn("нет зоны", r.stderr)
+        self.assertIn("no zone", r.stderr)
 
     def test_arrange_bad_mode_is_usage_error(self):
         r = self.run_cli("arrange", "--by", "nonsense")
@@ -297,7 +297,7 @@ class TestCli(unittest.TestCase):
             env.pop("DISPLAY", None)
             r = self.run_cli("undo", env=env)
         self.assertEqual(r.returncode, 0)
-        self.assertIn("история раскладок пуста", r.stdout)
+        self.assertIn("layout history is empty", r.stdout)
 
     def test_arrange_without_display_fails(self):
         with tempfile.TemporaryDirectory() as tmp:

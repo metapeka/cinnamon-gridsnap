@@ -157,14 +157,14 @@ class ApplyWorkspaceTest(WorkspaceCliCase):
         # На столе без профиля зоны профиля не существует — ошибка конфига.
         code, _, err = self.run_cli("apply", "video", "--workspace", "0", "--dry-run")
         self.assertEqual(code, self.zt.EXIT_CONFIG)
-        self.assertIn("нет зоны 'video'", err)
+        self.assertIn("no zone 'video'", err)
         self.assertIn("main", err)
 
     def test_unknown_zone_on_profile_workspace_lists_profile_zones(self):
         code, _, err = self.run_cli("apply", "main", "--workspace", "1", "--dry-run")
         self.assertEqual(code, self.zt.EXIT_CONFIG)
-        self.assertIn("нет зоны 'main'", err)
-        self.assertIn("стола 2", err)
+        self.assertIn("no zone 'main'", err)
+        self.assertIn("workspace 2", err)
         self.assertIn("cinema", err)
         # перечень доступных зон — из профиля, а не из общего набора
         self.assertIn("side", err)
@@ -187,7 +187,7 @@ class CurrentWorkspaceTest(WorkspaceCliCase):
             self.assertIn("1920x750", out)
 
     def test_default_is_current_workspace(self):
-        # Без --workspace вообще: тот же активный стол, без X.
+        # Без --workspace вообще: тот же active workspace, без X.
         with mock.patch.object(self.zt, "current_workspace", return_value=1):
             code, out, _ = self.run_cli("apply", "side", "--dry-run")
         self.assertEqual(code, 0)
@@ -205,7 +205,7 @@ class CurrentWorkspaceTest(WorkspaceCliCase):
         with mock.patch.object(self.zt, "current_workspace", return_value=None):
             code, _, err = self.run_cli("apply", "video", "--dry-run")
         self.assertEqual(code, self.zt.EXIT_CONFIG)
-        self.assertIn("нет зоны 'video'", err)
+        self.assertIn("no zone 'video'", err)
 
 
 class BadWorkspaceValueTest(WorkspaceCliCase):
@@ -236,7 +236,7 @@ class ListWorkspaceTest(WorkspaceCliCase):
         self.assertEqual(code, 0)
         lines = out.splitlines()
         # Формат первой строки не сломан: его разбирает апплет.
-        self.assertTrue(lines[0].startswith("рабочая область монитора 0: 0,0 1920x1000"))
+        self.assertTrue(lines[0].startswith("monitor 0 work area: 0,0 1920x1000"))
         self.assertIn("cinema", lines[0])
         self.assertIn("video", out)
         self.assertIn("side", out)
@@ -248,17 +248,17 @@ class ListWorkspaceTest(WorkspaceCliCase):
         code, out, _ = self.run_cli("list", "--workspace", "0")
         self.assertEqual(code, 0)
         lines = out.splitlines()
-        self.assertEqual(lines[0], "рабочая область монитора 0: 0,0 1920x1000")
+        self.assertEqual(lines[0], "monitor 0 work area: 0,0 1920x1000")
         self.assertIn("main", out)
         self.assertNotIn("video", out)
-        self.assertNotIn("профиль", out)
+        self.assertNotIn("profile", out)
 
     def test_list_without_mapping_is_unchanged(self):
         # В конфиге нет [workspaces] — прежнее поведение и прежняя строка.
         self.write_conf(BASE)
         code, out, _ = self.run_cli("list")
         self.assertEqual(code, 0)
-        self.assertEqual(out.splitlines()[0], "рабочая область монитора 0: 0,0 1920x1000")
+        self.assertEqual(out.splitlines()[0], "monitor 0 work area: 0,0 1920x1000")
         self.assertIn("main", out)
 
 
@@ -277,7 +277,7 @@ class ArrangeAndStackWorkspaceTest(WorkspaceCliCase):
             code, out, _ = self.run_cli("arrange", "--workspace", "1", "--dry-run")
             self.assertEqual(code, 0)
             # первая свободная зона профиля по порядку файла — video
-            self.assertIn("зона 'video'", out)
+            self.assertIn("zone 'video'", out)
             self.assertIn("1920x750", out)
 
     def test_arrange_on_general_workspace_uses_general_zones(self):
@@ -291,7 +291,7 @@ class ArrangeAndStackWorkspaceTest(WorkspaceCliCase):
                 ):
             code, out, _ = self.run_cli("arrange", "--workspace", "0", "--dry-run")
         self.assertEqual(code, 0)
-        self.assertIn("зона 'main'", out)
+        self.assertIn("zone 'main'", out)
 
     def test_stack_unknown_zone_on_profile_workspace(self):
         code, _, err = self.run_cli("stack", "main", "--workspace", "1", "--dry-run")
@@ -323,7 +323,7 @@ class ConfWorkspaceTest(WorkspaceCliCase):
     """`--workspace conf` — сетка zones.conf без профилей столов.
 
     Это нужно редактору: холст показывает зоны самого `zones.conf`, поэтому
-    «проверить зону» обязано считать ту же сетку, даже когда активный стол
+    «проверить зону» обязано считать ту же сетку, даже когда active workspace
     сопоставлен профилю.
     """
 
@@ -345,7 +345,7 @@ class ConfWorkspaceTest(WorkspaceCliCase):
         self.assertEqual(code, 0)
         self.assertIn("main", out)
         self.assertNotIn("video", out)
-        self.assertNotIn("профиль", out)
+        self.assertNotIn("profile", out)
 
     def test_apply_uses_general_zones(self):
         # Зона профиля на этом столе недоступна: сетка взята из zones.conf.

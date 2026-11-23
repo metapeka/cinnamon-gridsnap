@@ -217,7 +217,7 @@ class ActionsSectionTest(unittest.TestCase):
     def test_empty_builtin_name_is_config_error(self):
         # `builtin:` без имени — опечатка: известно ли имя, решает ядро действий.
         message = self.config_error(BASE + "[action:own]\nrun = builtin:\n", "builtin:")
-        self.assertIn("встроенное действие", message)
+        self.assertIn("built-in action", message)
 
     def test_empty_run_is_config_error(self):
         self.config_error(BASE + "[action:own]\nrun =\n", "run")
@@ -233,7 +233,7 @@ class ActionsSectionTest(unittest.TestCase):
             + "[action:Main]\nrun = builtin:mirror\n"
             + "[action:main]\nrun = builtin:show-window\n",
             "main",
-            "дважды",
+            "twice",
         )
 
     def test_section_name_with_space_is_config_error(self):
@@ -243,7 +243,7 @@ class ActionsSectionTest(unittest.TestCase):
         self.config_error(BASE + "[action:main.left]\nrun = builtin:mirror\n", "main.left")
 
     def test_empty_action_name_is_config_error(self):
-        self.config_error(BASE + "[action:]\nrun = builtin:mirror\n", "пустое имя действия")
+        self.config_error(BASE + "[action:]\nrun = builtin:mirror\n", "empty action name")
 
     # ------------------------------------------------------------------ поля
 
@@ -394,7 +394,7 @@ class ActionsSurviveSavingTest(unittest.TestCase):
                 zc.load_extra_sections(self.path),
             )
         self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
-        self.assertIn("только регистром", err.getvalue())
+        self.assertIn("only in case", err.getvalue())
         self.assertEqual(self.read(), original)
 
     def test_duplicate_section_is_config_error(self):
@@ -406,7 +406,7 @@ class ActionsSurviveSavingTest(unittest.TestCase):
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
             zc.load_zones(self.path)
         self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
-        self.assertIn("не разобрать конфиг", err.getvalue())
+        self.assertIn("cannot parse config", err.getvalue())
         self.assertIn("action:x", err.getvalue())
 
     def test_duplicate_section_in_extra_sections_is_config_error(self):
@@ -417,7 +417,7 @@ class ActionsSurviveSavingTest(unittest.TestCase):
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
             zc.load_extra_sections(self.path)
         self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
-        self.assertIn("задана дважды", err.getvalue())
+        self.assertIn("defined twice", err.getvalue())
 
     def test_profile_use_keeps_actions(self):
         # `profile use` — та же запись конфига: профиль меняет зоны и правила, а

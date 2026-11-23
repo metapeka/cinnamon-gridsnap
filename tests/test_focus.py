@@ -317,13 +317,13 @@ class TestFocusResponse(unittest.TestCase):
         text = self.printed(
             {"ok": True, "zone": "main", "window": "0x1a", "minimized": ["0x2", "0x3"]}
         )
-        self.assertIn("0x1a -> зона 'main'", text)
-        self.assertIn("свёрнуто окон — 2", text)
+        self.assertIn("0x1a -> zone 'main'", text)
+        self.assertIn("windows minimized - 2", text)
 
     def test_exit_summary(self):
         text = self.printed({"ok": True, "off": True, "restored": ["0x2"]})
-        self.assertIn("выключен", text)
-        self.assertIn("развёрнуто окон — 1", text)
+        self.assertIn("off", text)
+        self.assertIn("windows unminimized - 1", text)
 
     def test_quiet_prints_nothing(self):
         self.assertEqual(self.printed({"ok": True, "off": True}, quiet=True), "")
@@ -360,10 +360,10 @@ class TestFocusCommand(unittest.TestCase):
                 mock.patch.object(zt, "clear_focus_state"), \
                 contextlib.redirect_stdout(buf):
             zt.cmd_focus(None, self.args(off=True))
-        self.assertIn("развёрнуто окон — 0", buf.getvalue())
+        self.assertIn("windows unminimized - 0", buf.getvalue())
 
     def test_daemon_response_errors_are_fatal(self):
-        with mock.patch.object(zt, "daemon_request", return_value={"ok": False, "error": "нет зоны"}), \
+        with mock.patch.object(zt, "daemon_request", return_value={"ok": False, "error": "no zone"}), \
                 mock.patch.object(zt, "load_focus_state", return_value={}), \
                 mock.patch.object(zt, "fail", side_effect=SystemExit(1)):
             with self.assertRaises(SystemExit):
