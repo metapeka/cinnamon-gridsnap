@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Полнота каталогов переводов — держит тест, а не надежда.
+"""The completeness of the translation catalogs — a test holds it, not hope.
 
-Три обещания волны локализации:
+Three promises of the localization wave:
 
-* каждый `msgid` из шаблона (`.pot`) имеет непустой `msgstr` в `en.po` и
-  `zh_CN.po` — и наоборот, в каталоге нет строк, которых нет в коде (иначе
-  перевод тихо гниёт);
-* то же для отдельного домена апплета `gridsnap@metapeka`;
-* под `GRIDSNAP_LANG=en` CLI действительно печатает по-английски, а под
-  `GRIDSNAP_LANG=ru` — по-русски: каталог не просто лежит на диске, а работает.
+* every `msgid` from the template (`.pot`) has a non-empty `msgstr` in `en.po` and
+  `zh_CN.po` — and conversely, the catalog has no strings that are not in the code (otherwise
+  the translation quietly rots);
+* the same for the separate applet domain `gridsnap@metapeka`;
+* under `GRIDSNAP_LANG=en` the CLI really prints in English, and under
+  `GRIDSNAP_LANG=ru` — in Russian: the catalog does not just lie on disk, it works.
 
-Шаблон и каталоги читаются собственным разбором `zone_i18n.parse_po`, так что
-ни `xgettext`, ни `msgfmt` тестам не нужны (в CI их ставит только job каталогов).
-Сверку шаблона с кодом делает `make check-i18n`.
+The template and the catalogs are read by our own `zone_i18n.parse_po` parser, so
+the tests need neither `xgettext` nor `msgfmt` (in CI only the catalogs job installs them).
+The template is cross-checked against the code by `make check-i18n`.
 
-Запуск:
+Running:
     python3 tests/test_i18n_catalogs.py
     python3 -m unittest discover -s tests -v
 """
@@ -33,15 +33,15 @@ if ROOT not in sys.path:
 
 import zone_i18n as i18n  # noqa: E402
 
-# Языки, у которых обязан быть полный каталог. `en` тут нет: английский — язык
-# исходника, каталога у него нет и быть не должно.
+# The languages that must have a complete catalog. `en` is not here: English is the
+# source language, it has no catalog and must not have one.
 LANGUAGES = ("ru", "zh_CN")
 
 CYRILLIC = re.compile(r"[\u0400-\u04ff]")
 
-# Команды, которые обязаны говорить на выбранном языке и запускаются без X:
-# раскладчик подтягивает `gi` только внутри `monitors()`, клиент сокета и
-# установщик сочетаний вообще без GTK.
+# The commands that must speak the chosen language and run without X:
+# the tiler pulls `gi` in only inside `monitors()`, the socket client and the
+# keybinding installer need no GTK at all.
 ENGLISH_COMMANDS = (
     ["zone-tiler.py", "--help"],
     ["zone-daemon.py", "--help"],
@@ -56,12 +56,12 @@ def read_po(path):
 
 
 def entries_only(table):
-    """Записи каталога без служебной шапки (`msgid ""`)."""
+    """The catalog entries without the service header (`msgid ""`)."""
     return {key: value for key, value in table.items() if key}
 
 
 def run(argv, lang):
-    """Запустить команду с заданным языком интерфейса и вернуть текст вывода."""
+    """Run a command with the given interface language and return the output text."""
     env = dict(os.environ)
     env["GRIDSNAP_LANG"] = lang
     env["PYTHONPATH"] = ROOT + os.pathsep + env.get("PYTHONPATH", "")
@@ -74,7 +74,7 @@ def run(argv, lang):
 
 
 class TestPotMatchesCode(unittest.TestCase):
-    """Шаблон собран из кода: он и есть список того, что надо перевести."""
+    """The template is built from the code: it is the list of what has to be translated."""
 
     def test_main_pot_has_entries_and_utf8(self):
         path = os.path.join(ROOT, "po", "gridsnap.pot")
@@ -91,7 +91,7 @@ class TestPotMatchesCode(unittest.TestCase):
 
 
 class CatalogChecks:
-    """Сверка одного домена: шаблон против каталогов языков (миксин)."""
+    """Cross-check of one domain: the template against the language catalogs (a mixin)."""
 
     domain = None
 
@@ -123,7 +123,7 @@ class CatalogChecks:
             self.assertEqual(extra, [], "%s: перевода нет в коде: %s" % (lang, extra))
 
     def test_languages_differ(self):
-        # Не тот же язык под другим именем: хоть одна строка должна отличаться.
+        # Not the same language under another name: at least one string must differ.
         ru, zh = self.po("ru"), self.po("zh_CN")
         self.assertNotEqual(ru, zh, "ru и zh_CN совпали — перевод не сделан")
 
@@ -137,10 +137,10 @@ class TestAppletCatalog(CatalogChecks, unittest.TestCase):
 
 
 class TestInterfaceLanguage(unittest.TestCase):
-    """Каталог не просто лежит на диске: под ru интерфейс русский."""
+    """The catalog does not just lie on disk: under ru the interface is Russian."""
 
     def test_english_has_no_cyrillic(self):
-        # Английский — язык исходника: кириллицы в выводе быть не должно.
+        # English is the source language: there must be no Cyrillic in the output.
         for argv in ENGLISH_COMMANDS:
             out = run(argv, "en")
             left = sorted(set(CYRILLIC.findall(out)))

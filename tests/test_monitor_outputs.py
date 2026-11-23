@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Юнит-тесты мониторов по именам выходов — без X, без GDK и без реального xrandr.
+"""Unit tests for monitors by output names — without X, without GDK and without a real xrandr.
 
-Покрыто: разбор `xrandr --listmonitors`, сшивка имён выходов с рабочими
-областями GDK (`stitch_monitor_names`, `monitor_outputs`), выбор монитора по
-имени/номеру (`resolve_monitor`), наборы зон на монитор (`[zones:<выход>]`:
-`zones_for`, `zone_spec`, `all_zone_names`) и вывод `list` с зонами монитора.
+Covered: parsing `xrandr --listmonitors`, stitching output names to the GDK work
+areas (`stitch_monitor_names`, `monitor_outputs`), choosing a monitor by
+name/index (`resolve_monitor`), per-monitor zone sets (`[zones:<output>]`:
+`zones_for`, `zone_spec`, `all_zone_names`) and the `list` output with the zones of a monitor.
 
-xrandr, GDK и рабочие области подменяются целиком: реальные утилиты и дисплей
-тестам не нужны.
+xrandr, GDK and the work areas are replaced wholesale: the tests need neither the real utilities
+nor a display.
 
-Запуск:
+Running:
     python3 -m unittest discover -s tests -v
     python3 tests/test_monitor_outputs.py
 """
@@ -27,14 +27,14 @@ from unittest import mock
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (tests run in the source language)
+except ImportError:  # launched as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)  # zone-tiler и его модули
+    sys.path.insert(0, ROOT)  # zone-tiler and its modules
 TILER = os.path.join(ROOT, "zone-tiler.py")
 
 
@@ -50,8 +50,8 @@ zt = load_tiler()
 
 BASE_GRID = "[grid]\ncols = 1.0\nrows = 1.0\n"
 
-# Реальный вывод `xrandr --listmonitors` на машине с двумя выходами: у первого
-# стоит флаг `+*` (авто + основной), имя — последнее поле строки.
+# The real output of `xrandr --listmonitors` on a machine with two outputs: the first one
+# carries the `+*` flags (automatic + primary), and the name is the last field of the line.
 XRANDR_TWO = (
     "Monitors: 2\n"
     " 0: +*eDP-1 1920/344x1080/194+0+0  eDP-1\n"
@@ -60,7 +60,7 @@ XRANDR_TWO = (
 
 
 class ConfCase(unittest.TestCase):
-    """Пишет временный zones.conf и убирает его после теста."""
+    """Writes a temporary zones.conf and removes it after the test."""
 
     def conf(self, text):
         fd, path = tempfile.mkstemp(suffix=".conf", text=True)
@@ -79,7 +79,7 @@ class TestParseXrandr(unittest.TestCase):
         )
 
     def test_flags_are_not_part_of_name(self):
-        # `+*` — состояние монитора (авто/основной), а не имя выхода.
+        # `+*` is the monitor state (automatic/primary), not the output name.
         parsed = zt.parse_xrandr_monitors(" 0: +*HDMI-1 1920/698x1080/393+0+0  HDMI-1\n")
         self.assertEqual(parsed, [("HDMI-1", (0, 0, 1920, 1080))])
 
@@ -88,7 +88,7 @@ class TestParseXrandr(unittest.TestCase):
         self.assertEqual(parsed, [("DP-1", (-1280, 0, 1280, 1024))])
 
     def test_name_falls_back_to_field_after_index(self):
-        # Старый xrandr без последнего поля: имя берём из `+*eDP-1`, сняв флаги.
+        # An old xrandr without the last field: the name is taken from `+*eDP-1`, flags stripped.
         parsed = zt.parse_xrandr_monitors(" 0: +*eDP-1 1920/344x1080/194+0+0\n")
         self.assertEqual(parsed, [("eDP-1", (0, 0, 1920, 1080))])
 
@@ -98,7 +98,7 @@ class TestParseXrandr(unittest.TestCase):
         self.assertEqual(zt.parse_xrandr_monitors(""), [])
 
     def test_xrandr_missing_gives_empty_list(self):
-        # Утилиты нет — имён нет, поведение прежнее (синтетические имена).
+        # No utility — no names, the behaviour as before (synthetic names).
         with mock.patch.object(zt.subprocess, "check_output", side_effect=FileNotFoundError):
             self.assertEqual(zt.xrandr_monitors(), [])
 
@@ -123,7 +123,7 @@ class TestStitch(unittest.TestCase):
         )
 
     def test_unequal_counts_pair_by_overlap(self):
-        # GDK отдала одну область — она перекрывается с первым выходом.
+        # GDK gave one area — it overlaps with the first output.
         stitched = zt.stitch_monitor_names(self.outputs, [(0, 40, 1920, 1040)])
         self.assertEqual(stitched, [("eDP-1", (0, 40, 1920, 1040))])
 
@@ -132,8 +132,8 @@ class TestStitch(unittest.TestCase):
         self.assertEqual(stitched, [("HDMI-1", (1920, 40, 1920, 1040))])
 
     def test_two_areas_under_one_output(self):
-        # Имён меньше, чем областей: второе имя уже занято, область без
-        # пересечения получает синтетическое имя.
+        # There are fewer names than areas: the second name is already taken, so an area without
+        # an overlap gets a synthetic name.
         outputs = [("HDMI-1", (0, 0, 1920, 1080))]
         areas = [(0, 40, 1920, 500), (0, 540, 1920, 540)]
         stitched = zt.stitch_monitor_names(outputs, areas)
@@ -185,7 +185,7 @@ class TestResolveMonitor(unittest.TestCase):
         self.assertEqual(zt.resolve_monitor("HDMI-1", self.OUTPUTS), (1, "HDMI-1"))
 
     def test_name_wins_over_index(self):
-        # Монитор с именем "1" стоит первым: имя приоритетнее номера.
+        # The monitor named "1" comes first: a name takes priority over an index.
         outputs = [("1", (0, 0, 100, 100)), ("0", (100, 0, 100, 100))]
         self.assertEqual(zt.resolve_monitor("1", outputs), (0, "1"))
 
@@ -238,7 +238,7 @@ class TestGridMonitorZones(ConfCase):
         self.assertEqual(grid.rect("main", (0, 0, 1000, 1000), "HDMI-1"), (0, 0, 500, 1000))
 
     def test_zone_missing_on_monitor_falls_back_to_default(self):
-        # Зона есть только в общем [zones]: на мониторе со своей секцией её нет.
+        # The zone is only in the shared [zones]: the monitor with its own section does not have it.
         grid = zt.Grid(self.conf(self.TWO_SETS))
         self.assertEqual(
             grid.rect("main", (0, 0, 1000, 1000), "HDMI-1"), (0, 0, 1000, 1000)
@@ -287,7 +287,7 @@ class TestGridMonitorZones(ConfCase):
 
 
 class TestCmdList(ConfCase):
-    """`list --monitor` показывает зоны выбранного монитора (GDK не нужен)."""
+    """`list --monitor` shows the zones of the chosen monitor (no GDK needed)."""
 
     OUTPUTS = [("eDP-1", (0, 40, 1000, 1000)), ("HDMI-1", (1000, 40, 960, 1000))]
 
@@ -319,7 +319,7 @@ class TestCmdList(ConfCase):
         self.assertEqual(lines[1].split()[0], "main")
 
     def test_list_first_line_stays_applet_compatible(self):
-        # Апплет ждёт строку без имени выхода: `рабочая область монитора N: ...`.
+        # The applet expects the line without the output name: `monitor N work area: ...`.
         path = self.conf(BASE_GRID + "[zones]\nmain = 0, 0, 1, 1\n")
         buf = io.StringIO()
         with mock.patch.object(

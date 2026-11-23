@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты установки сочетаний `setup-hotkeys.py` — без Cinnamon и без gsettings.
+"""Unit tests for installing the keybindings of `setup-hotkeys.py` — no Cinnamon, no gsettings.
 
-Проверяют ровно то, на чём спотыкались руками в живой сессии:
+They check exactly what we stumbled over by hand in a live session:
 
-* путь `--conf` в команде сочетания приводится к **абсолютному** — Cinnamon
-  запускает сочетание не из каталога проекта, и относительный путь давал
-  «config not found» (код 3), то есть молча неработающую клавишу;
-* `custom-list` пишется **двумя разными значениями**: Cinnamon (`keybindings.js`)
-  перечитывает записи только по изменению списка, а при переиспользовании id
-  новый список совпадает со старым, и клавиша продолжает звать прежнюю команду.
+* the `--conf` path in the keybinding command is made **absolute** — Cinnamon
+  runs the keybinding not from the project directory, and a relative path gave
+  "config not found" (code 3), that is, a silently broken key;
+* `custom-list` is written **twice with different values**: Cinnamon (`keybindings.js`)
+  re-reads the entries only when the list changes, and when an id is reused
+  the new list matches the old one, and the key keeps calling the previous command.
 
-`gsettings` и запуск процессов подменяются заглушками: тесты не трогают живую
-сессию и не зависят от Cinnamon.
+`gsettings` and process launching are replaced with stubs: the tests do not touch the live
+session and do not depend on Cinnamon.
 
-Запуск:
+Running:
     python3 tests/test_hotkeys_install.py
     python3 -m unittest discover -s tests -v
 """
@@ -28,8 +28,8 @@ from unittest import mock
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (tests run in the source language)
+except ImportError:  # launched as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -45,7 +45,7 @@ def load_module():
 
 
 class WithConfTest(unittest.TestCase):
-    """`with_conf`: в команду сочетания попадает только абсолютный путь."""
+    """`with_conf`: only an absolute path reaches the keybinding command."""
 
     def setUp(self):
         self.mod = load_module()
@@ -79,7 +79,7 @@ class WithConfTest(unittest.TestCase):
 
 
 class InstallWriteTest(unittest.TestCase):
-    """Что и в каком порядке пишется в `gsettings` при установке."""
+    """What is written to `gsettings` on install, and in which order."""
 
     def setUp(self):
         self.mod = load_module()
@@ -87,11 +87,11 @@ class InstallWriteTest(unittest.TestCase):
         self.resets = []
 
     def run_main(self, argv):
-        """Прогнать `main()` с подменёнными gsettings, списком id и планом.
+        """Run `main()` with gsettings, the id list and the plan replaced.
 
-        Хранилище подменено маленькой моделью: `custom-list` и сброс ключа `name`
-        меняют её так же, как это делает настоящий Cinnamon (после первого наша
-        запись перестаёт быть нашей).
+        The store is replaced by a small model: `custom-list` and resetting the `name` key
+        change it the same way the real Cinnamon does (after the first one our
+        entry stops being ours).
         """
         state = {"ids": ["custom0", "custom1"], "owned": {"custom0"}}
 
@@ -141,9 +141,9 @@ class InstallWriteTest(unittest.TestCase):
         self.run_main([])
         lists = self.custom_list_writes()
         self.assertEqual(len(lists), 2, lists)
-        # Одинаковый список Cinnamon не заметил бы — и оставил бы старые команды.
+        # Cinnamon would not notice an identical list — and would keep the old commands.
         self.assertNotEqual(lists[0], lists[1])
-        # Первый — без наших id (custom0 был нашим и ушёл), второй — с новыми.
+        # The first has none of our ids (custom0 was ours and is gone), the second has the new ones.
         self.assertNotIn("custom0", lists[0])
         self.assertIn("custom0", lists[1])
         self.assertIn("custom2", lists[1])
@@ -156,8 +156,8 @@ class InstallWriteTest(unittest.TestCase):
             self.assertNotIn("custom0", value)
 
     def test_remove_writes_the_list_before_clearing_the_entries(self):
-        # Порядок нарочный: список без наших id идёт первым — Cinnamon перестаёт
-        # держать записи в памяти, и его перезапись списка их уже не вернёт.
+        # The order is deliberate: the list without our ids goes first — Cinnamon stops
+        # keeping the entries in memory, and its rewrite of the list will not bring them back.
         self.run_main(["--remove"])
         first_list = self.written[0]
         self.assertEqual(list(first_list[:2]), [self.mod.LIST_SCHEMA, "custom-list"])
@@ -165,8 +165,8 @@ class InstallWriteTest(unittest.TestCase):
         self.assertTrue(self.resets, "записи должны сбрасываться")
 
     def test_remove_resets_every_key_separately(self):
-        # `reset-recursively` для перемещаемой схемы на живом Cinnamon не сбрасывает
-        # зарегистрированную запись (замер) — поэтому ключи сбрасываются по одному.
+        # On a live Cinnamon `reset-recursively` for a relocatable schema does not reset
+        # a registered entry (measured) — so the keys are reset one by one.
         self.run_main(["--remove"])
         self.assertFalse(
             [cmd for cmd in self.resets if "reset-recursively" in cmd], self.resets
@@ -177,8 +177,8 @@ class InstallWriteTest(unittest.TestCase):
         self.assertTrue(all("custom0" in cmd[2] for cmd in self.resets))
 
     def test_remove_reports_leftovers_instead_of_pretending(self):
-        # Хранилище не поддаётся: наши id возвращаются в список сколько угодно раз.
-        # Тогда команда обязана сказать об этом и вернуть код 1.
+        # The store does not give in: our ids come back into the list any number of times.
+        # Then the command has to say so and return code 1.
         mod = self.mod
         err = io.StringIO()
         with mock.patch.object(mod, "custom_ids", lambda: ["custom0"]), \
@@ -198,8 +198,8 @@ class InstallWriteTest(unittest.TestCase):
         self.assertIn("custom0", err.getvalue())
 
     def test_entry_keys_are_written_before_the_list(self):
-        # Записи заполняются до того, как список позовёт Cinnamon их читать: иначе
-        # он зарегистрировал бы пустые сочетания.
+        # The entries are filled in before the list makes Cinnamon read them: otherwise
+        # it would register empty keybindings.
         self.run_main([])
         kinds = [call[1] for call in self.written]
         first_list = kinds.index("custom-list")
@@ -214,13 +214,13 @@ class InstallWriteTest(unittest.TestCase):
 
 
 class PlannedActionsTest(unittest.TestCase):
-    """Действия `[action:<имя>]` в плане сочетаний и снятие их по префиксу."""
+    """`[action:<name>]` actions in the keybinding plan, and removing them by prefix."""
 
     def setUp(self):
         self.mod = load_module()
 
     def planned(self, actions, conf=None):
-        """`planned` без зон и прочих секций: только записи действий."""
+        """`planned` without zones and other sections: action entries only."""
         with mock.patch.object(
             self.mod, "zone_pairs", lambda conf=None, *flags: []
         ), mock.patch.object(
@@ -265,8 +265,8 @@ class PlannedActionsTest(unittest.TestCase):
         self.assertTrue(command.endswith(os.path.abspath("zones.conf")), command)
 
     def test_default_conf_is_read_when_flag_missing(self):
-        # Без `--conf` читается тот же файл, что у раскладчика; в команду сочетания
-        # `--conf` при этом не попадает.
+        # Without `--conf` the same file as the tiler's is read; the keybinding command
+        # does not get `--conf` into it in that case.
         seen = {}
 
         def fake_actions(path):
@@ -299,7 +299,7 @@ class PlannedActionsTest(unittest.TestCase):
                 ):
             kept = self.mod.drop_owned(["custom0", "custom1"])
         self.assertEqual(kept, ["custom1"])
-        # Ключи нашей записи сброшены по одному, рекурсивного сброса нет вовсе.
+        # The keys of our entry are reset one by one, there is no recursive reset at all.
         self.assertEqual(
             sorted(call[3] for call in calls), ["binding", "command", "name"]
         )

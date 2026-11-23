@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Тесты «поверхности» вкладок в зоне: `[tabs]`, сочетание, CLI.
+"""Tests of the tab "surface" in a zone: `[tabs]`, the keybinding, the CLI.
 
-Вкладки живут в демоне (`zone_tabs` — контракт волны), а здесь проверяется то,
-что вокруг них: разбор необязательной секции `[tabs]` в `zone_config` (нет
-секции — умолчания полосы, мусор в `height` и чужой ключ — код 3), пара
-`tabs-next` в плане `setup-hotkeys.py`, удаление каскада (`--offset` больше не
-флаг, а ошибка аргументов) и команда `zone-tiler.py tabs-next`: какой запрос
-уходит демону и что считается ошибкой.
+Tabs live in the daemon (`zone_tabs` is the wave's contract), and what is checked here is
+what surrounds them: parsing of the optional `[tabs]` section in `zone_config` (no
+section — the strip defaults, garbage in `height` and a foreign key — code 3), the
+`tabs-next` pair in the `setup-hotkeys.py` plan, the removal of the cascade (`--offset` is no longer
+a flag but an argument error) and the `zone-tiler.py tabs-next` command: which request
+goes to the daemon and what counts as an error.
 
-Без X-сервера и GTK: `zone_pairs` у `setup-hotkeys.py` и `daemon_request` у
-раскладчика подменяются заглушками, поэтому реальный демон и дисплей не нужны.
+No X server and no GTK: `zone_pairs` in `setup-hotkeys.py` and `daemon_request` in
+the tiler are replaced with stubs, so a real daemon and display are not needed.
 
-Запуск:
+Running:
     python3 tests/test_tabs_config.py
     python3 -m unittest discover -s tests -v
 """
@@ -29,8 +29,8 @@ import unittest
 from unittest import mock
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (tests run in the source language)
+except ImportError:  # launched as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -68,7 +68,7 @@ BASE = (
 
 
 class TabsSectionTest(unittest.TestCase):
-    """Разбор `[tabs]` в `zone_config` — без X и GTK."""
+    """Parsing `[tabs]` in `zone_config` — without X and GTK."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-tabs-conf-")
@@ -100,7 +100,7 @@ class TabsSectionTest(unittest.TestCase):
         )
 
     def test_height_only(self):
-        # Клавиши нет — секция всё равно читается: высота полосы нужна и без неё.
+        # There is no key — the section is still read: the strip height is needed without one too.
         self.write(BASE + "[tabs]\nheight = 30\n")
         self.assertEqual(zc.load_tabs_config(self.path), {"key": None, "height": 30})
 
@@ -126,8 +126,8 @@ class TabsSectionTest(unittest.TestCase):
         self.assertIn("key, height", message)
 
     def test_garbage_height_is_config_error(self):
-        # Полоса нулевой высоты не рисуется: молча принять мусор — оставить
-        # человека без видимых вкладок и без объяснения.
+        # A strip of zero height is not drawn: silently accepting garbage would leave
+        # a person without visible tabs and without an explanation.
         for value in ("abc", "0", "-5", "1.5", ""):
             with self.subTest(height=value):
                 self.write(BASE + f"[tabs]\nheight = {value}\n")
@@ -140,8 +140,8 @@ class TabsSectionTest(unittest.TestCase):
                 self.assertIn("height", err.getvalue())
 
     def test_section_is_foreign_and_survives_saving(self):
-        # `[tabs]` не в RESERVED_SECTIONS: редактор переносит её дословно,
-        # поэтому сохранение раскладки не должно её терять.
+        # `[tabs]` is not in RESERVED_SECTIONS: the editor carries it over verbatim,
+        # so saving the layout must not lose it.
         self.write(BASE + "[tabs]\nkey = <Super>g\nheight = 28\n")
         self.assertIn("tabs", zc.load_extra_sections(self.path))
         zc.save_zones(
@@ -153,7 +153,7 @@ class TabsSectionTest(unittest.TestCase):
 
 
 class TabsHotkeyPlanTest(unittest.TestCase):
-    """Пара `tabs-next` в `setup-hotkeys.planned`: после зон, `move` и `focus`."""
+    """The `tabs-next` pair in `setup-hotkeys.planned`: after the zones, `move` and `focus`."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-tabs-hotkeys-")
@@ -205,13 +205,13 @@ class TabsHotkeyPlanTest(unittest.TestCase):
 
 
 class TabsCliTest(unittest.TestCase):
-    """`zone-tiler.py`: `--offset` — ошибка аргументов, `tabs-next` — запрос демону."""
+    """`zone-tiler.py`: `--offset` is an argument error, `tabs-next` is a request to the daemon."""
 
     def setUp(self):
         self.zt = load_tiler()
 
     def run_main(self, *argv):
-        """(код, stdout, stderr) — `main` в процессе, без подпроцесса и X."""
+        """(code, stdout, stderr) — `main` in-process, without a subprocess and X."""
         out, err = io.StringIO(), io.StringIO()
         code = 0
         try:
@@ -222,7 +222,7 @@ class TabsCliTest(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_offset_is_argument_error(self):
-        # Каскада больше нет: старый флаг не должен молча ничего не делать.
+        # There is no cascade any more: the old flag must not silently do nothing.
         code, _out, err = self.run_main("--offset", "20", "list")
         self.assertEqual(code, 2)
         self.assertIn("--offset", err)
@@ -267,7 +267,7 @@ class TabsCliTest(unittest.TestCase):
         self.assertIn("nothing to switch", out)
 
     def test_tabs_next_without_daemon_is_code_1(self):
-        # Демона нет — это не падение, а понятное сообщение и код 1.
+        # No daemon — that is not a crash but a clear message and code 1.
         with mock.patch.object(self.zt, "daemon_request", lambda request, timeout=0: None):
             code, out, err = self.run_main("tabs-next", "--quiet")
         self.assertEqual(code, 1)
@@ -284,7 +284,7 @@ class TabsCliTest(unittest.TestCase):
         self.assertIn("the daemon refused: zone not found", err)
 
     def test_tabs_next_needs_no_conf(self):
-        # Команда не читает ни конфиг, ни сетку: зону выбирает демон по окну.
+        # The command reads neither config nor grid: the daemon picks the zone by the window.
         with mock.patch.object(
             self.zt, "daemon_request", lambda request, timeout=0: {"ok": True, "window": 1}
         ):

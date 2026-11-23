@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты привязки профиля к экрану: секция `[monitors]` и разбор «чей профиль».
+"""Unit tests for binding a profile to a screen: `[monitors]` and the "whose profile" lookup.
 
-Без X и GTK: и карта экранов, и резолвер живут в чистом конфиг-слое. Проверяется
-главное: экран важнее стола, стол важнее активного конфига; имена выходов
-сравниваются без учёта регистра (парсер опускает регистр ключей, как и у
-`[zones:<выход>]`); порядок секции сохраняется, потому что профиль **первого**
-экрана решает спор при слиянии в `profile use-monitors`; отсутствующий профиль
-разбор не ломает — откат на следующий уровень делает вызывающий.
+No X and no GTK: both the screen map and the resolver live in the pure config layer.
+What is checked is the main thing: a screen beats a desk, a desk beats the active config;
+output names are compared case-insensitively (the parser lowercases the keys, as it does
+for `[zones:<output>]`); the order of the section is kept, because the profile of the
+**first** screen settles the conflict when merging in `profile use-monitors`; a missing
+profile does not break the lookup — the caller does the fallback to the next level.
 
-Запуск:
+Running:
     python3 tests/test_monitor_profiles.py
     python3 -m unittest discover -s tests -v
 """
@@ -25,8 +25,8 @@ import unittest
 from unittest import mock
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (tests run in the source language)
+except ImportError:  # launched as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -39,7 +39,7 @@ import zone_config as zc  # noqa: E402
 
 
 def load_tiler():
-    """`zone-tiler.py` как модуль: слияние и команда `profile use-monitors` живут там."""
+    """`zone-tiler.py` as a module: the merge and the `profile use-monitors` command live there."""
     spec = importlib.util.spec_from_file_location(
         "zone_tiler_monitor_profiles", os.path.join(ROOT, "zone-tiler.py")
     )
@@ -57,7 +57,7 @@ BASE = (
 
 
 class MonitorMapTest(unittest.TestCase):
-    """Секция `[monitors]`: чтение, запись и её границы."""
+    """The `[monitors]` section: reading, writing and the limits of writing."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-monitors-")
@@ -71,11 +71,11 @@ class MonitorMapTest(unittest.TestCase):
     def test_missing_section_is_empty_map(self):
         self.write(BASE)
         self.assertEqual(zc.load_monitor_map(self.conf), {})
-        # Нет файла — тоже пустая карта, а не ошибка: секция необязательная.
+        # No file is also an empty map, not an error: the section is optional.
         self.assertEqual(zc.load_monitor_map(os.path.join(self.dir, "нет.conf")), {})
 
     def test_reads_in_file_order_and_lowercases_keys(self):
-        # Порядок значим: профиль первого экрана решает спор при слиянии.
+        # The order matters: the profile of the first screen settles the conflict when merging.
         self.write(BASE + "[monitors]\nHDMI-2 = cinema\nHDMI-1 = work\n")
         self.assertEqual(
             zc.load_monitor_map(self.conf), {"hdmi-2": "cinema", "hdmi-1": "work"}
@@ -121,7 +121,7 @@ class MonitorMapTest(unittest.TestCase):
 
 
 class ResolveProfileTest(unittest.TestCase):
-    """Разбор «чей профиль»: экран важнее стола, стол важнее активного конфига."""
+    """The "whose profile" lookup: a screen beats a desk, a desk beats the active config."""
 
     def test_screen_wins_over_desk(self):
         self.assertEqual(
@@ -134,7 +134,7 @@ class ResolveProfileTest(unittest.TestCase):
         )
 
     def test_desk_code_is_translated_from_ewmh_zero_based(self):
-        # В `[workspaces]` номера столов с 1, как в интерфейсе Cinnamon, а в EWMH — с нуля.
+        # In `[workspaces]` desk numbers start at 1, as in the Cinnamon UI, in EWMH at zero.
         self.assertIsNone(zc.resolve_profile({}, {1: "work"}, "eDP-1", 1))
         self.assertEqual(zc.resolve_profile({}, {2: "cinema"}, "eDP-1", 1), "cinema")
 
@@ -149,7 +149,7 @@ class ResolveProfileTest(unittest.TestCase):
             )
 
     def test_string_keys_of_desk_map_are_accepted(self):
-        # Диалог редактора и тесты могут собрать словарь со строковыми ключами.
+        # The editor dialog and the tests may build a dict with string keys.
         self.assertEqual(zc.resolve_profile({}, {"2": "cinema"}, None, 1), "cinema")
 
     def test_unknown_screen_falls_back_to_the_desk(self):
@@ -159,7 +159,7 @@ class ResolveProfileTest(unittest.TestCase):
 
 
 class MergeMonitorProfilesTest(unittest.TestCase):
-    """Слияние профилей экранов: первый экран решает спор, чужие правила — прочь."""
+    """Merging screen profiles: the first screen settles the conflict, foreign rules are dropped."""
 
     @staticmethod
     def zone(name, binding=""):
@@ -178,9 +178,9 @@ class MergeMonitorProfilesTest(unittest.TestCase):
             ("HDMI-2", "cinema", [self.zone("big")], ["mpv = big"], {}, []),
         ]
         plan = zt.merge_monitor_profiles(screens)
-        # [zones] — набор по умолчанию первого экрана, а не второго.
+        # [zones] is the default set of the first screen, not of the second.
         self.assertEqual([z.name for z in plan["default"]], ["main"])
-        # У каждого экрана — свой набор профиля; у первого это [zones:HDMI-1].
+        # Each screen has its own profile set; for the first one it is [zones:HDMI-1].
         self.assertEqual([z.name for z in plan["monitor_sets"]["HDMI-1"]], ["wide"])
         self.assertEqual([z.name for z in plan["monitor_sets"]["HDMI-2"]], ["big"])
         self.assertEqual(plan["rules"], [("firefox", "main"), ("mpv", "big")])
@@ -188,7 +188,7 @@ class MergeMonitorProfilesTest(unittest.TestCase):
         self.assertEqual(plan["overrides"], [])
 
     def test_profile_without_default_zone_set_takes_its_screen_set(self):
-        # Профиль может состоять из одного [zones:<выход>] (так его собирает JSON-импорт).
+        # A profile may consist of one [zones:<output>] (that is how the JSON import builds it).
         screens = [
             ("HDMI-1", "work", [], ["firefox = main"], {"HDMI-1": [self.zone("main")]}, [])
         ]
@@ -217,7 +217,7 @@ class MergeMonitorProfilesTest(unittest.TestCase):
         ]
         plan = zt.merge_monitor_profiles(screens)
         self.assertEqual(plan["rules"], [("firefox", "main")])
-        # Проигравшее сочетание не должно перебить первое в записанных наборах.
+        # The losing keybinding must not override the first one in the written sets.
         seen = {
             zone.name: zone.binding
             for chunk in [plan["default"]] + list(plan["monitor_sets"].values())
@@ -239,7 +239,7 @@ class MergeMonitorProfilesTest(unittest.TestCase):
             )
         ]
         plan = zt.merge_monitor_profiles(screens)
-        # Правило на несуществующую зону сделало бы config невалидным (код 3).
+        # A rule for a non-existent zone would make the config invalid (code 3).
         self.assertEqual(plan["dropped_rules"], [("firefox", "ghost")])
         self.assertEqual(plan["rules"], [("xterm", "main")])
         self.assertEqual(plan["ignore"], [("steam", "не трогать")])
@@ -256,7 +256,7 @@ class MergeMonitorProfilesTest(unittest.TestCase):
 
 
 class UseMonitorsTest(unittest.TestCase):
-    """`profile use-monitors`: снимок профилей экранов в активный zones.conf."""
+    """`profile use-monitors`: a snapshot of the screen profiles into the active zones.conf."""
 
     CONF = """# шапка
 [grid]
@@ -333,7 +333,7 @@ big = <Super><Alt>3
             return fh.read()
 
     def run_cli(self, *argv, hotkeys=False):
-        """(код, stdout, stderr) в процессе — без X и без setup-hotkeys.py."""
+        """(code, stdout, stderr) in-process — without X and without setup-hotkeys.py."""
         out, err = io.StringIO(), io.StringIO()
         args = ["profile", "use-monitors", *argv, "--conf", self.conf]
         if not hotkeys:
@@ -350,7 +350,7 @@ big = <Super><Alt>3
         code, _out, err = self.run_cli()
         self.assertEqual(code, 0, err)
         text = self.read_conf()
-        # [zones] — набор по умолчанию профиля первого экрана, [zones:<выход>] — каждого.
+        # [zones] is the default set of the first screen's profile, [zones:<output>] of each screen.
         self.assertIn("[zones]\nmain = 0, 0, 0.5, 1\nside = 0.5, 0, 0.5, 1", text)
         self.assertIn("[zones:HDMI-1]\nwide = 0, 0, 1, 1", text)
         self.assertIn("[zones:HDMI-2]\nbig = 0, 0, 1, 1", text)
@@ -366,7 +366,7 @@ big = <Super><Alt>3
         self.assertIn("[rules]\nfirefox = side\nmpv = big", text)
         self.assertIn("[ignore]\nsteam = не трогать", text)
         self.assertIn("[keys]\nmain = <Super><Alt>1\nside = <Super><Alt>2", text)
-        # Старое правило активного конфига заменяется, а не копится.
+        # An old rule of the active config is replaced, not accumulated.
         self.assertNotIn("old = main", text)
         self.assertIn("overridden", out)
 
@@ -384,7 +384,7 @@ big = <Super><Alt>3
         self.assertIn('profile "cinema" is not on disk', err)
         self.assertIn("monitor HDMI-2 skipped", err)
         text = self.read_conf()
-        # Строка остаётся и заработает, когда профиль вернут; снимка для экрана нет.
+        # The line stays and works once the profile is back; there is no snapshot for the screen.
         self.assertIn("HDMI-2 = cinema", text)
         self.assertNotIn("[zones:HDMI-2]", text)
 
@@ -400,7 +400,7 @@ big = <Super><Alt>3
         text = self.read_conf()
         self.assertIn("[rules]\nxterm = main", text)
         self.assertNotIn("ghost", text)
-        # Конфиг остался читаемым: правило на несуществующую зону — код 3 у Grid.
+        # The config stays readable: a rule for a non-existent zone gives code 3 in Grid.
         self.assertEqual(list(zt.Grid(self.conf).rules), [("xterm", "main")])
 
     def test_key_conflict_keeps_first_screen_and_reports_it(self):
@@ -457,7 +457,7 @@ big = <Super><Alt>3
         self.assertEqual(self.read_conf(), before)
 
     def test_missing_config_is_config_error(self):
-        # Писать снимок некуда: опечатка в --conf — ошибка конфига (код 3), а не «нечего менять».
+        # Nowhere to write it: a typo in --conf is a config error (code 3), not "nothing to change".
         self.conf = os.path.join(self.dir, "нет.conf")
         code, _out, err = self.run_cli()
         self.assertEqual(code, 3)
