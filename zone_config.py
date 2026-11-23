@@ -1268,10 +1268,10 @@ def _write_config(path, default_zones, monitor_sets=None, extra=None):
     extra = {str(k).strip().lower(): list(v) for k, v in (extra or {}).items()}
     lines = [
         # The file header is not UI text but the content of zones.conf.
-        "# Сетка окон для zone-tiler. Файл создан визуальным редактором zone-editor.py.",  # i18n: do not translate
-        "# Зона = x,y,w,h в долях рабочей области (0..1), без панели задач.",  # i18n: do not translate
-        "# Горячие клавиши — в секции [keys].",  # i18n: do not translate
-        "# Набор монитора — секция вида zones:<имя выхода>, например zones:HDMI-1.",  # i18n: do not translate
+        "# Window grid for zone-tiler. The file is created by the zone-editor.py visual editor.",  # i18n: do not translate
+        "# A zone = x,y,w,h as work-area fractions (0..1), without the taskbar.",  # i18n: do not translate
+        "# Hotkeys live in the [keys] section.",  # i18n: do not translate
+        "# A monitor set is a section like zones:<output>, for example zones:HDMI-1.",  # i18n: do not translate
         "",
         "[grid]",
         "cols = 1.0",
@@ -1579,9 +1579,9 @@ def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None, ign
     path = profile_path(name, conf_path)
     safe = sanitize_profile_name(name)
     lines = [
-        f"# Профиль раскладки GridSnap: {safe}.",  # i18n: do not translate
-        "# Секции [zones], [zones:<монитор>], [rules], [ignore], [keys]; "  # i18n: do not translate
-        "активация — zone-tiler.py profile use <имя>.",
+        f"# GridSnap layout profile: {safe}.",  # i18n: do not translate
+        "# Sections [zones], [zones:<monitor>], [rules], [ignore], [keys]; "  # i18n: do not translate
+        "activation - zone-tiler.py profile use <name>.",
     ]
     written = []
     if zones:
