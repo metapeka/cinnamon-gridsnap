@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-make-icon.py — рисует иконку Gridsnap (SVG + PNG всех размеров).
+make-icon.py — draws the Gridsnap icon (SVG + PNG of every size).
 
-Идея: тёмная плитка-экран, разбитая на три зоны; нижняя правая зона подсвечена
-янтарным контуром — «сюда встанет окно». PNG рисуются через cairo (librsvg не нужен).
+Idea: a dark screen tile split into three zones; the bottom-right zone is outlined
+in amber — "a window lands here". PNGs are drawn through cairo (librsvg is not needed).
 """
 
 import os
@@ -16,7 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-from zone_i18n import _  # noqa: E402  (строки интерфейса и их перевод)
+from zone_i18n import _  # noqa: E402  (UI strings and their translation)
 
 ICONS = os.path.join(HERE, "icons")
 SIZES = (16, 22, 24, 32, 48, 64, 128, 256, 512)
@@ -26,7 +26,7 @@ BG_BOT = (0.09, 0.10, 0.13)
 INSET = 0.115
 GAP = 0.040
 ACCENT = (1.0, 0.70, 0.33)
-# (x, y, w, h, сверху, снизу)
+# (x, y, w, h, top, bottom)
 PANE = [
     (0.00, 0.00, 0.46, 1.00, (0.36, 0.65, 0.96), (0.24, 0.48, 0.80)),
     (0.46, 0.00, 0.54, 0.48, (0.46, 0.82, 0.63), (0.32, 0.64, 0.47)),
@@ -52,7 +52,7 @@ def grad(cr, x, y, w, h, top, bot):
 
 
 def draw(cr, size):
-    # фон
+    # background
     rounded(cr, 0.6, 0.6, size - 1.2, size - 1.2, size * 0.22)
     cr.set_source(grad(cr, 0, 0, size, size, BG_TOP, BG_BOT))
     cr.fill_preserve()
@@ -73,12 +73,12 @@ def draw(cr, size):
         rounded(cr, x, y, w, h, r)
         cr.set_source(grad(cr, x, y, w, h, top, bot))
         cr.fill()
-        if i == 2:  # активная зона — янтарный контур
+        if i == 2:  # active zone — amber outline
             cr.set_line_width(max(1.2, size * 0.030))
             cr.set_source_rgba(*ACCENT, 1)
             rounded(cr, x, y, w, h, r)
             cr.stroke()
-        # блик сверху — объём
+        # highlight on top — volume
         cr.set_line_width(max(0.7, size * 0.008))
         cr.set_source_rgba(1, 1, 1, 0.16)
         cr.move_to(x + r, y + max(0.7, size * 0.008))
@@ -125,7 +125,7 @@ def main():
         make_png(os.path.join(ICONS, f"gridsnap-{size}.png"), size)
     with open(os.path.join(ICONS, "gridsnap.svg"), "w", encoding="utf-8") as fh:
         fh.write(SVG)
-    print(_("иконки Gridsnap: {sizes}").format(sizes=", ".join(str(s) for s in SIZES)))
+    print(_("Gridsnap icons: {sizes}").format(sizes=", ".join(str(s) for s in SIZES)))
 
 
 if __name__ == "__main__":

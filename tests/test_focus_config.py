@@ -115,7 +115,7 @@ class FocusSectionTest(unittest.TestCase):
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
             zc.load_focus_keys(self.path)
         self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
-        self.assertIn("неизвестный ключ", err.getvalue())
+        self.assertIn("unknown key", err.getvalue())
         self.assertIn("zona", err.getvalue())
         self.assertIn("key, zone", err.getvalue())
 
@@ -125,7 +125,7 @@ class FocusSectionTest(unittest.TestCase):
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
             zc.load_focus_keys(self.path)
         self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
-        self.assertIn("пустое значение zone", err.getvalue())
+        self.assertIn("empty zone value", err.getvalue())
 
     def test_section_is_foreign_and_survives_saving(self):
         # `[focus]` не в RESERVED_SECTIONS: редактор переносит её дословно,

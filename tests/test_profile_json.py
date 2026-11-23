@@ -241,7 +241,7 @@ class TestProfileFromDictErrors(ConfMixin, unittest.TestCase):
         zc.profile_from_dict(dict(GOOD, rules=["Chrome = top"]), conf_path=self.conf)
 
     def test_rule_without_equals(self):
-        self.assertIn("селектор", self.assertJsonError(dict(GOOD, rules=["Chrome main"])))
+        self.assertIn("selector", self.assertJsonError(dict(GOOD, rules=["Chrome main"])))
 
     def test_rules_must_be_list(self):
         self.assertJsonError(dict(GOOD, rules="Chrome = main"))
@@ -364,7 +364,7 @@ class TestCliJson(ConfMixin, unittest.TestCase):
         r = self.cli("profile", "import", exported, "--name", "home", "--conf", self.conf)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn(self.profile_path("home"), r.stdout)
-        self.assertIn("4 зон", r.stdout)
+        self.assertIn("4 zones", r.stdout)
         self.assertEqual(self.cli("profile", "list", "--conf", self.conf).stdout.split(),
                          ["home"])
         self.assertEqual(
@@ -397,8 +397,8 @@ class TestCliJson(ConfMixin, unittest.TestCase):
         self.assertEqual(self.cli("profile", "show", "cinema", "--conf", self.conf).returncode, 0)
         r = self.cli("profile", "use", "cinema", "--no-hotkeys", "--conf", self.conf)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("применён", r.stdout)
-        self.assertIn("2 зон", r.stdout)
+        self.assertIn("applied", r.stdout)
+        self.assertIn("2 zones", r.stdout)
         self.assertEqual(self.cli("profile", "rm", "cinema", "--conf", self.conf).returncode, 0)
 
 

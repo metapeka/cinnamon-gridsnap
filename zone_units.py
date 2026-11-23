@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
-"""zone_units — единственное место перевода логических пикселей GTK в физические X.
+"""zone_units — the single place that converts GTK logical pixels to physical X ones.
 
-Зачем два пространства: GTK (и `Gdk.Monitor.get_workarea()`) считает в
-**логических** пикселях — при `GDK_SCALE=2` монитор 1920x1080 виден как 960x540, —
-а сырой X11, которым двигает окна раскладчик, — в **физических**. Доли зоны
-безразмерны, поэтому расходятся не доли, а то, от чего их считают: 0.8358 от 960
-дают 802, а от 1920 — 1605.
+Why two spaces: GTK (and `Gdk.Monitor.get_workarea()`) counts in **logical**
+pixels — with `GDK_SCALE=2` a 1920x1080 monitor looks like 960x540, — while raw
+X11, which the tiler moves windows through, counts in **physical** ones. Zone
+fractions are dimensionless, so it is not the fractions that diverge but what they
+are counted from: 0.8358 of 960 gives 802, and of 1920 — 1605.
 
-Правило: арифметика зон — в физических пикселях (это то, что уходит в X), а
-логические нужны там, где координаты читает или задаёт GTK — окно оверлея пикера,
-окно HUD, полоса вкладок. Обе стороны считает этот модуль, поэтому `round` в
-переводе один на всю программу.
+The rule: zone arithmetic is in physical pixels (that is what goes to X), while
+logical ones are needed wherever GTK reads or sets coordinates — the picker overlay
+window, the HUD window, the tabstrip. Both sides are counted by this module, so the
+`round` in the conversion is one for the whole program.
 
-Дробный масштаб: `GDK_SCALE` у GTK3 целочисленный, а дробный масштаб Cinnamon на
-X11 делается растяжением выхода, где `_NET_WORKAREA` и GDK уже в одних и тех же
-(масштабированных) пикселях и переводить нечего. Поэтому отдельного правила
-округления для 1.5 тут нет: края переводятся от общих линий — `round` от левого и
-от правого края, ширина — их разность, — и при любом масштабе соседние зоны
-остаются без щелей, тем же правилом, что и `Grid._px`.
+Fractional scale: `GDK_SCALE` in GTK3 is an integer, and Cinnamon's fractional
+scale on X11 is done by stretching the output, where `_NET_WORKAREA` and GDK are
+already in the same (scaled) pixels and there is nothing to convert. That is why
+there is no separate rounding rule for 1.5 here: edges are converted from common
+lines — `round` from the left and from the right edge, the width being their
+difference — and at any scale neighbouring zones stay gapless, by the same rule as
+`Grid._px`.
 
-Модуль чистый: ни GTK, ни X, ни подпроцессов — только арифметика над кортежами
-`(x, y, w, h)`; масштаб ему передаёт вызывающий.
+The module is pure: no GTK, no X, no subprocesses — only arithmetic over
+`(x, y, w, h)` tuples; the caller passes the scale in.
 """
 
 import os
@@ -32,10 +33,10 @@ if HERE not in sys.path:
 
 
 def scale_value(scale):
-    """Масштаб как целое не меньше 1; `None`, 0 и мусор — 1.
+    """Scale as an integer of at least 1; `None`, 0 and garbage mean 1.
 
-    Масштаба нет (обычный экран, GDK не ответил) — это ровно 1, а не ошибка:
-    тогда перевод не меняет ничего, и вызывающему не нужна особая ветка.
+    No scale (plain screen, GDK did not answer) is exactly 1, not an error: the
+    conversion then changes nothing, and the caller needs no special branch.
     """
     try:
         value = int(scale)
@@ -45,11 +46,11 @@ def scale_value(scale):
 
 
 def physical_rect(rect, scale):
-    """Логическая рамка `(x, y, w, h)` → физическая.
+    """Logical frame `(x, y, w, h)` → physical.
 
-    Края считаются от одних и тех же линий: `x1 = round(x*s)`,
-    `x2 = round((x+w)*s)`, ширина — их разность. Так соседние рамки, сомкнутые в
-    логических пикселях, остаются сомкнутыми и в физических.
+    Edges are counted from the same lines: `x1 = round(x*s)`,
+    `x2 = round((x+w)*s)`, the width being their difference. That way neighbouring
+    frames that touch in logical pixels stay touching in physical ones too.
     """
     x, y, w, h = rect
     s = scale_value(scale)
@@ -61,7 +62,7 @@ def physical_rect(rect, scale):
 
 
 def logical_rect(rect, scale):
-    """Физическая рамка `(x, y, w, h)` → логическая; обратна :func:`physical_rect`."""
+    """Physical frame `(x, y, w, h)` → logical; inverse of :func:`physical_rect`."""
     x, y, w, h = rect
     s = scale_value(scale)
     if s == 1:
@@ -72,7 +73,7 @@ def logical_rect(rect, scale):
 
 
 def physical_point(point, scale):
-    """Логическая точка `(x, y)` → физическая."""
+    """Logical point `(x, y)` → physical."""
     x, y = point
     s = scale_value(scale)
     if s == 1:
@@ -81,7 +82,7 @@ def physical_point(point, scale):
 
 
 def logical_point(point, scale):
-    """Физическая точка `(x, y)` → логическая."""
+    """Physical point `(x, y)` → logical."""
     x, y = point
     s = scale_value(scale)
     if s == 1:
@@ -90,10 +91,11 @@ def logical_point(point, scale):
 
 
 def scale_at(scales, index):
-    """Масштаб монитора `index` из списка `scales`; нет его — 1.
+    """Scale of monitor `index` from the `scales` list; no such entry means 1.
 
-    Список масштабов короче списка областей — обычное дело, когда GDK недоступен
-    (резерв `_NET_WORKAREA`): тогда масштаба нет и перевод ничего не меняет.
+    A list of scales shorter than the list of areas is the usual thing when GDK is
+    unavailable (the `_NET_WORKAREA` fallback): then there is no scale and the
+    conversion changes nothing.
     """
     try:
         if 0 <= index < len(scales):
@@ -104,11 +106,11 @@ def scale_at(scales, index):
 
 
 def scale_for_point(areas, scales, point):
-    """Масштаб монитора, в чью область попала физическая точка.
+    """Scale of the monitor whose area the physical point fell into.
 
-    Точка мимо всех областей (стык мониторов, окно утащили за край) — масштаб
-    ближайшего по центру, как выбирает монитор `zone-tiler.monitor_for_point`;
-    областей нет — 1.
+    A point outside every area (a seam between monitors, a window dragged past the
+    edge) gets the scale of the one nearest by centre, the way
+    `zone-tiler.monitor_for_point` picks a monitor; no areas at all mean 1.
     """
     if not areas:
         return 1

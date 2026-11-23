@@ -1,67 +1,83 @@
-# AGENTS.md — правила работы в этом репозитории
+# AGENTS.md — how work is done in this repository
 
-Этот файл читают все агенты автоматически (pi/ThinkRail подхватывают `AGENTS.md`/`AGENTS.override.md`/
-`CLAUDE.md` как контекст проекта). Здесь только правила процесса; устройство продукта — в `SPEC.md`,
-`docs/architecture.md`, `docs/specs/`, план — в `docs/ROADMAP.md`.
+Every agent reads this file automatically (pi/ThinkRail pick up `AGENTS.md`/`AGENTS.override.md`/
+`CLAUDE.md` as project context). Only process rules live here; the product itself is described in
+`SPEC.md`, `docs/architecture.md`, `docs/specs/`, and the plan in `docs/ROADMAP.md`.
 
-## Язык
+## Language
 
-Всё в репозитории — по-русски: код, комментарии, сообщения об ошибках, коммиты, спеки, PR. Коммит —
-проза в императиве («Добавить man-страницы для команд пакета»), без префиксов вроде `feat:`.
+**Everything in the repository is in English**: code, comments, docstrings, messages, tests, specs, man
+pages, commit messages, pull requests, handoffs. Talk with the owner in Russian; anything written into
+the repository is English.
 
-## Что делаем сами, а что отдаём воркерам
+An English source string is the rule for the code: user-visible messages are English literals inside
+`_()`, and Russian and Chinese are catalogs (`po/ru.po`, `po/zh_CN.po`) — see `docs/specs/zone-i18n.md`.
+A commit message is prose in the imperative (“Add man pages for the package commands”), without prefixes
+like `feat:`.
 
-Отдаём (Orca-воркер в своём worktree, отдельная ветка):
+Documents and scripts written before the language inversion are still Russian: `SPEC.md`, `docs/**`
+(except `docs/specs/zone-i18n.md` and `docs/specs/man-i18n.md`, which the inversion rewrote),
+`README.ru.md`, the site, `debian/control`, and the build, packaging and test scripts (`Makefile`,
+`install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh`). They are translated as they are
+touched, not in one sweep.
 
-- реализацию в известных файлах, когда контракт уже зафиксирован;
-- рутину: списки упаковки (`Makefile`, `install.sh`, `PKGBUILD`, `debian/install`), man-страницы,
-  тесты по описанному поведению, разведку с письменным отчётом.
+## What we do ourselves and what goes to a worker
 
-Не отдаём — держим в одном контексте:
+Delegated (an Orca worker in its own worktree, its own branch):
 
-- швы между параллельными ветками (два воркера проходят свои тесты и ломают общий);
-- решения и «почему»: спеки, приоритеты, формат конфига;
-- интеграцию, ревью и проверку чужих результатов;
-- правки меньше ~15 минут — накладные расходы больше пользы.
+- implementation in known files once the contract is fixed;
+- routine work: packaging lists (`Makefile`, `install.sh`, `PKGBUILD`, `debian/install`), man pages,
+  tests for described behaviour, reconnaissance with a written report.
 
-## Делегирование: три обязательных правила
+Not delegated — kept in one context:
 
-1. **Контракт сначала в код.** Перед спавном пары воркеров интерфейс (сигнатуры + докстринги или
-   падающий тест) коммитится в `main`. Прозаического описания в двух заданиях недостаточно: расхождение
-   на стыке находится только прогоном тестов после слияния.
-2. **Один владелец на файл.** Максимум два параллельных воркера, и их файлы не пересекаются. В задании
-   воркеру перечисляй, что можно править, и что нельзя.
-3. **Интеграция — координатор.** Ветки воркеров сливаются в одноразовый бранч, там прогоняются тесты,
-   и только потом открывается PR. PR — один на волну, а не на воркера.
+- the seams between parallel branches (two workers each pass their own tests and break the shared one);
+- decisions and the “why”: specs, priorities, the config format;
+- integration, review and checking other people's results;
+- changes under ~15 minutes — the overhead is worth more than the work.
 
-В задании воркеру обязательно: зачем задача, какие API уже есть, что можно и нельзя править, какие
-команды запустить, и «если чего-то не хватает — не правь это, напиши в отчёте».
+## Delegation: three mandatory rules
 
-## Проверка
+1. **The contract goes into the code first.** Before spawning a pair of workers the interface (signatures
+   plus docstrings, or a failing test) is committed to `main`. A prose description in the two task
+   messages is not enough: a mismatch at the seam is only found by running the tests after the merge.
+2. **One owner per file.** At most two workers in parallel, and their files do not overlap. List in the
+   worker's task what it may edit and what it may not.
+3. **The coordinator integrates.** Worker branches are merged into a throwaway branch, the tests are run
+   there, and only then is a pull request opened. One PR per wave, not per worker.
 
-- В отчёте воркера — **сырой вывод команд**, а не «проверено». Гейты всё равно перепрогоняет
-  координатор: `env -u DISPLAY python3 -m unittest discover -s tests` и один дымовой сценарий.
-- Формулировки вроде «должно работать» считаются отсутствием проверки.
+A worker's task must always say: why the task exists, which APIs already exist, what may and may not be
+edited, which commands to run, and “if something is missing, do not fix it — write it in the report”.
 
-## Наблюдатели (чтобы не ждать молча)
+## Verification
 
-- `tools/ci-watch.sh --pr <N>` или `tools/ci-watch.sh <run-id>` — CI: следит за шагами job'ов, выходит с
-  кодом 0 (зелено), 1 (упало), 2 (зависло: нет прогресса дольше `--stall` или вышел `--deadline`).
-- `tools/worker-watch.sh <dispatch-id>` (или `--all` — все незакончившие) — воркеры Orca: то же самое по
-  `worker-show`; без него повисший воркер просто ждёт, потому что Orca будит координатора только на отчёт,
-  падение или потерю терминала.
+- A worker's report carries **raw command output**, not “verified”. The coordinator re-runs the gates
+  anyway: `env -u DISPLAY python3 -m unittest discover -s tests` and one smoke scenario.
+- Wording like “should work” counts as no verification at all.
 
-**Каждый спавн — вместе с наблюдателем.** Orca не умеет замечать зависшего воркера: молчание для неё не
-повод будить координатора (и это правильно — иначе она будила бы на каждую паузу в размышлении). Поэтому
-сразу после `worker-start` наблюдатель ставится в фоновую команду, и очередь заканчивается по его
-сигналу, а не по надежде: код 0 — все отчитались, 1 — кто-то упал, 2 — молчание дольше `--stall`.
-Ожидание воркера без такого наблюдателя — ошибка процесса, а не оптимизация.
+## Watchers (so we never wait in silence)
 
-## Порядок работы над изменением
+- `tools/ci-watch.sh --pr <N>` or `tools/ci-watch.sh <run-id>` — CI: watches job steps and exits with
+  code 0 (green), 1 (failed), 2 (stalled: no progress longer than `--stall`, or `--deadline` passed).
+  Right after `gh pr create` the `--pr` form sometimes finds no run yet — take the `databaseId` from
+  `gh run list` instead.
+- `tools/worker-watch.sh <dispatch-id>` (or `--all` — every worker that has not finished) — Orca workers:
+  the same over `worker-show`; without it a stuck worker simply waits, because Orca wakes the coordinator
+  only on a report, a failure or a lost terminal.
 
-1. Брейншторм: продуктовые вопросы владельцу, затем технические развилки — и только потом код.
-2. Временный task-spec в `.thinkrail/context/TASK-<слаг>.md`; он не коммитится.
-3. Работа (см. правила делегирования), затем `docs/specs/**` и README догоняют код — в том же PR.
-4. PR: тело из трёх разделов — `## Summary`, `## Changes`, `## Testing` (команды и их результат, не
-   «тесты проходят»). CI должен быть зелёным; смотреть его наблюдателем, а не глазами.
-5. После мержа — удалить ветку и Orca-воркспейс. Влитое не архивируем: коммиты уже в `main`.
+**Every spawn goes together with a watcher.** Orca cannot notice a stuck worker: silence is not a reason
+for it to wake the coordinator (and rightly so — otherwise it would wake on every thinking pause). So
+right after `worker-start` the watcher is put into a background command, and waiting ends on its signal
+rather than on hope: code 0 — everyone reported, 1 — someone failed, 2 — silence longer than `--stall`.
+Waiting for a worker without such a watcher is a process error, not an optimisation.
+
+## Order of work on a change
+
+1. Brainstorm: product questions to the owner, then the technical forks — and only then code.
+2. A temporary task-spec in `.thinkrail/context/TASK-<slug>.md`; it is not committed.
+3. Work (see the delegation rules), then `docs/specs/**` and the README catch up with the code — in the
+   same pull request.
+4. The PR body has three sections — `## Summary`, `## Changes`, `## Testing` (commands and their result,
+   not “tests pass”). CI must be green; watch it with the watcher, not with your eyes.
+5. After the merge — delete the branch and the Orca workspace. Merged work is not archived: the commits
+   are already in `main`.

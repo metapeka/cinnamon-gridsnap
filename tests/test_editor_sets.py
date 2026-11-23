@@ -128,18 +128,18 @@ class TestSetForMonitor(unittest.TestCase):
 class TestSetOriginText(unittest.TestCase):
     def test_shared_set(self):
         text = geom.set_origin_text("eDP-1", False, shared=True)
-        self.assertIn("общий набор [zones]", text)
+        self.assertIn("default [zones] set", text)
 
     def test_own_set_names_section(self):
-        self.assertEqual(geom.set_origin_text("HDMI-1", True), "свой набор [zones:HDMI-1]")
+        self.assertEqual(geom.set_origin_text("HDMI-1", True), "own [zones:HDMI-1] set")
 
     def test_inherited_set_points_to_default(self):
-        self.assertEqual(geom.set_origin_text("DP-1", False), "наследует [zones]")
+        self.assertEqual(geom.set_origin_text("DP-1", False), "inherits [zones]")
 
     def test_offline_monitor_is_marked(self):
         text = geom.set_origin_text("VGA-1", True, offline=True)
-        self.assertIn("свой набор [zones:VGA-1]", text)
-        self.assertIn("нет на экране", text)
+        self.assertIn("own [zones:VGA-1] set", text)
+        self.assertIn("not on screen", text)
 
 
 class TestZoneSetSignature(unittest.TestCase):
@@ -411,7 +411,7 @@ class WorkspaceDialogRowsTest(unittest.TestCase):
     """Строки диалога «Профили столов» — чистая функция без GTK.
 
     Диалог показывает столько строк, сколько столов в Cinnamon, и не теряет
-    запись стола, даже если профиля нет на диске: её видно в списке, и она
+    запись стола, даже если профиля is not on disk: её видно в списке, и она
     остаётся в конфиге до сохранения.
     """
 
@@ -446,7 +446,7 @@ class WorkspaceDialogRowsTest(unittest.TestCase):
         self.assertEqual(profile, "cinema")
         self.assertIn("cinema", options)
         self.assertIn("cinema", warning)
-        self.assertIn("нет на диске", warning)
+        self.assertIn("is not on disk", warning)
 
     def test_mapping_beyond_desktops_is_shown(self):
         # Иначе сохранение молча потеряло бы сопоставление стола 5.
@@ -517,7 +517,7 @@ class MonitorDialogRowsTest(unittest.TestCase):
         self.assertEqual((output, profile), ("vga-1", "old"))
         self.assertFalse(on_screen)
         self.assertIn("vga-1", warning)
-        self.assertIn("нет на экране", warning)
+        self.assertIn("not on screen", warning)
         self.assertEqual(options, [zc.WORKSPACE_SHARED, "old"])
 
     def test_absent_outputs_keep_file_order(self):
@@ -532,12 +532,12 @@ class MonitorDialogRowsTest(unittest.TestCase):
         self.assertEqual(profile, "cinema")
         self.assertIn("cinema", options)
         self.assertIn("cinema", warning)
-        self.assertIn("нет на диске", warning)
+        self.assertIn("is not on disk", warning)
 
     def test_absent_output_with_missing_profile_has_both_notes(self):
         warning = self.rows({"vga-1": "cinema"}, [], ["HDMI-1"])[1][3]
-        self.assertIn("нет на диске", warning)
-        self.assertIn("нет на экране", warning)
+        self.assertIn("is not on disk", warning)
+        self.assertIn("not on screen", warning)
 
     def test_profile_names_from_disk_are_sorted_and_unique(self):
         options = self.rows({}, ["work", "cinema", "work"], ["eDP-1"])[0][2]

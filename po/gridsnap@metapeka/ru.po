@@ -1,0 +1,95 @@
+# Русский каталог апплета Cinnamon (домен gridsnap@metapeka).
+#
+# Язык исходника — английский: строки в коде английские, а этот каталог
+# ложится поверх них. Русский — такой же перевод, как китайский.
+msgid ""
+msgstr ""
+"Project-Id-Version: gridsnap 0.2.0\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2026-11-22 00:00+0000\n"
+"Last-Translator: русский текст — прежний язык исходника\n"
+"Language-Team: \n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "GridSnap — window zones"
+msgstr "GridSnap — зоны окон"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Current zone:"
+msgstr "Текущая зона:"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Open editor"
+msgstr "Открыть редактор"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Apply shortcuts"
+msgstr "Применить сочетания"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Zones"
+msgstr "Зоны"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Profiles"
+msgstr "Профили"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Work areas"
+msgstr "Рабочие области"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Arrange windows by rules"
+msgstr "Разложить окна по правилам"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Undo last arrangement"
+msgstr "Отменить последнюю раскладку"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "the command failed"
+msgstr "команда завершилась с ошибкой"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Could not read the profile list"
+msgstr "Не удалось прочитать список профилей"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "No profiles"
+msgstr "Профилей нет"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "zones:"
+msgstr "зон:"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "No zones"
+msgstr "Зон нет"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Could not read the zone list"
+msgstr "Не удалось прочитать список зон"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "No monitors found"
+msgstr "Мониторы не найдены"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "Monitor "
+msgstr "Монитор "
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "no data"
+msgstr "нет данных"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "could not apply the zone"
+msgstr "не удалось применить зону"
+
+#: contrib/applet/gridsnap@metapeka/applet.js
+msgid "could not apply the profile"
+msgstr "не удалось применить профиль"

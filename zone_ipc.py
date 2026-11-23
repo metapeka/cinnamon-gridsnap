@@ -52,21 +52,21 @@ def parse_command(raw):
         try:
             raw = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise ProtocolError(_("строка не в UTF-8: {error}").format(error=exc)) from None
+            raise ProtocolError(_("line is not UTF-8: {error}").format(error=exc)) from None
     if not isinstance(raw, str):
-        raise ProtocolError(_("строка протокола должна быть str или bytes"))
+        raise ProtocolError(_("a protocol line must be str or bytes"))
     text = raw.strip()
     if not text:
-        raise ProtocolError(_("пустая строка протокола"))
+        raise ProtocolError(_("empty protocol line"))
     try:
         request = json.loads(text)
     except ValueError as exc:
-        raise ProtocolError(_("не разобрать JSON: {error}").format(error=exc)) from None
+        raise ProtocolError(_("cannot parse JSON: {error}").format(error=exc)) from None
     if not isinstance(request, dict):
-        raise ProtocolError(_("команда должна быть JSON-объектом"))
+        raise ProtocolError(_("the command must be a JSON object"))
     cmd = request.get("cmd")
     if not isinstance(cmd, str) or not cmd.strip():
-        raise ProtocolError(_("в команде нет непустого строкового поля 'cmd'"))
+        raise ProtocolError(_("the command has no non-empty string field 'cmd'"))
     request["cmd"] = cmd.strip()
     return request
 
@@ -95,7 +95,7 @@ def event_group(kind):
     for group, kinds in EVENT_GROUPS.items():
         if kind in kinds:
             return group
-    raise ProtocolError(_("неизвестный вид события '{kind}'").format(kind=kind))
+    raise ProtocolError(_("unknown event kind '{kind}'").format(kind=kind))
 
 
 def parse_subscription(request):
@@ -112,7 +112,7 @@ def parse_subscription(request):
         return ALL_EVENT_GROUPS
     if not isinstance(raw, list) or not raw:
         raise ProtocolError(
-            _("поле 'events' должно быть непустым списком групп: {known}").format(
+            _("'events' must be a non-empty list of groups: {known}").format(
                 known=", ".join(ALL_EVENT_GROUPS)
             )
         )
@@ -120,7 +120,7 @@ def parse_subscription(request):
     for item in raw:
         if not isinstance(item, str) or item not in EVENT_GROUPS:
             raise ProtocolError(
-                _("неизвестная группа событий '{item}': можно {known}").format(
+                _("unknown event group '{item}': available {known}").format(
                     item=item, known=", ".join(ALL_EVENT_GROUPS)
                 )
             )
@@ -224,7 +224,7 @@ class LineReader:
             line, self.buf = self.buf.split(b"\n", 1)
             lines.append(line)
         if len(self.buf) > self.max_line:
-            raise ProtocolError(_("строка длиннее предела протокола"))
+            raise ProtocolError(_("the line is longer than the protocol limit"))
         return lines
 
     def tail(self):
@@ -262,7 +262,7 @@ class Dispatcher:
         if handler is None:
             return {
                 "ok": False,
-                "error": _("неизвестная команда: {name}").format(name=name),
+                "error": _("unknown command: {name}").format(name=name),
                 "code": "unknown_command",
             }
         try:
@@ -279,7 +279,7 @@ class Dispatcher:
         if not isinstance(result, dict):
             return {
                 "ok": False,
-                "error": _("обработчик вернул не объект"),
+                "error": _("the handler did not return an object"),
                 "code": "handler_error",
             }
         response = {"ok": True}
@@ -354,7 +354,7 @@ def read_response(conn, timeout=None):
     while True:
         data = conn.recv(4096)
         if not data:
-            raise ProtocolError(_("соединение закрыто без ответа"))
+            raise ProtocolError(_("the connection was closed without a response"))
         lines = reader.feed(data)
         for line in lines:
             if not line.strip():
@@ -362,9 +362,9 @@ def read_response(conn, timeout=None):
             try:
                 obj = json.loads(line.decode("utf-8"))
             except (UnicodeDecodeError, ValueError) as exc:
-                raise ProtocolError(_("не разобрать ответ: {error}").format(error=exc)) from None
+                raise ProtocolError(_("cannot parse the response: {error}").format(error=exc)) from None
             if not isinstance(obj, dict):
-                raise ProtocolError(_("ответ должен быть JSON-объектом"))
+                raise ProtocolError(_("the response must be a JSON object"))
             return obj
 
 
@@ -530,11 +530,11 @@ class Server:
             try:
                 os.makedirs(parent, mode=0o700, exist_ok=True)
             except OSError as exc:
-                raise OSError(_("не создать каталог сокета {dir}: {error}").format(
+                raise OSError(_("cannot create the socket directory {dir}: {error}").format(
                     dir=parent, error=exc)) from None
         if os.path.exists(path):
             if _is_live_socket(path):
-                raise OSError(_("сокет {path} уже обслуживается другим процессом").format(
+                raise OSError(_("socket {path} is already served by another process").format(
                     path=path))
             _unlink_quiet(path)  # мёртвый сокет от упавшего демона
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

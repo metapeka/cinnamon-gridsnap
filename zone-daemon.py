@@ -111,7 +111,7 @@ def _load_sibling(name, filename):
     path = os.path.join(HERE, filename)
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
-        raise ImportError(_("не удалось загрузить модуль {path}").format(path=path))
+        raise ImportError(_("failed to load module {path}").format(path=path))
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
     spec.loader.exec_module(mod)
@@ -226,7 +226,7 @@ class TabStripProcess:
         if not os.path.exists(self.script):
             self.failed = True
             self.log(
-                _("полосы вкладок нет: {script} не найден").format(script=self.script)
+                _("no tab bar: {script} not found").format(script=self.script)
             )
             return False
         try:
@@ -240,7 +240,7 @@ class TabStripProcess:
             )
         except OSError as exc:
             self.failed = True
-            self.log(_("полоса вкладок не запустилась: {exc}").format(exc=exc))
+            self.log(_("the tab bar failed to start: {exc}").format(exc=exc))
             return False
         code = self._launch_failure()
         if code is not None:
@@ -248,11 +248,11 @@ class TabStripProcess:
             self.stop()  # закрыть stdin мёртвого ребёнка
             self.log(
                 _(
-                    "полоса вкладок не запустилась: {script} вышел с кодом {code}"
+                    "the tab bar failed to start: {script} exited with code {code}"
                 ).format(script=self.script, code=code)
             )
             return False
-        self.log(_("полоса вкладок запущена: {script}").format(script=self.script))
+        self.log(_("tab bar started: {script}").format(script=self.script))
         return True
 
     def _launch_failure(self):
@@ -517,7 +517,7 @@ def fractions_to_pixels(fx, fy, fw, fh, wa):
 
 def workspace_label(workspace):
     """Стол для журнала: номер EWMH (с нуля) или пометка «неизвестен»."""
-    return _("неизвестен") if workspace is None else f"#{workspace}"
+    return _("unknown") if workspace is None else f"#{workspace}"
 
 
 # ----------------------------------------------------------------------- демон
@@ -741,7 +741,7 @@ class Daemon:
             return subscribers.broadcast(kind, build())
         except (Exception, SystemExit) as exc:
             self.log(
-                _("не удалось разослать событие '{kind}': {exc}").format(
+                _("failed to broadcast event '{kind}': {exc}").format(
                     kind=kind, exc=exc
                 )
             )
@@ -777,7 +777,7 @@ class Daemon:
         try:
             return self.read_current_workspace()
         except (Exception, SystemExit) as exc:
-            self.log(_("не удалось определить активный стол: {exc}").format(exc=exc))
+            self.log(_("failed to determine the active workspace: {exc}").format(exc=exc))
             return None
 
     def _window_workspace(self, win):
@@ -786,7 +786,7 @@ class Daemon:
             return self.read_window_workspace(win)
         except (Exception, SystemExit) as exc:
             self.log(
-                _("не удалось определить стол окна 0x{win:x}: {exc}").format(
+                _("failed to determine the workspace of window 0x{win:x}: {exc}").format(
                     win=win, exc=exc
                 )
             )
@@ -829,11 +829,10 @@ class Daemon:
         except (Exception, SystemExit) as exc:
             self.log(
                 _(
-                    "не удалось взять сетку профиля ({desk}, экран {output}): "
-                    "{exc} — беру общий набор"
+                    "failed to take the profile grid ({desk}, monitor {output}): {exc} - using the default set"
                 ).format(
                     desk=workspace_label(workspace),
-                    output=output or _("неизвестен"),
+                    output=output or _("unknown"),
                     exc=exc,
                 )
             )
@@ -856,10 +855,10 @@ class Daemon:
         levels = []
         if output:
             levels.append(
-                (output, workspace, _("экрана {output}").format(output=output))
+                (output, workspace, _("of monitor {output}").format(output=output))
             )
         if workspace is not None:
-            desk = _("стола {desk}").format(desk=workspace_label(workspace))
+            desk = _("of workspace {desk}").format(desk=workspace_label(workspace))
             levels.append((None, workspace, desk))
         tried = set()
         for monitor, desk, where in levels:
@@ -872,16 +871,14 @@ class Daemon:
             except ValueError as exc:
                 self.log(
                     _(
-                        "плохое имя профиля «{name}» ({where}): {exc} — "
-                        "беру следующий уровень"
+                        "bad profile name \"{name}\" ({where}): {exc} - falling back to the next level"
                     ).format(name=name, where=where, exc=exc)
                 )
                 continue
             if not os.path.exists(path):
                 self.log(
                     _(
-                        "профиля «{name}» ({where}) нет на диске: {path} — "
-                        "беру следующий уровень"
+                        "profile \"{name}\" ({where}) is not on disk: {path} - falling back to the next level"
                     ).format(name=name, where=where, path=path)
                 )
                 continue
@@ -898,7 +895,7 @@ class Daemon:
             except (Exception, SystemExit) as exc:
                 self.log(
                     _(
-                        "не удалось прочитать [monitors]: {exc} — экраны не привязаны"
+                        "failed to read [monitors]: {exc} - monitors are not bound"
                     ).format(exc=exc)
                 )
                 self._monitor_map_cache = {}
@@ -914,7 +911,7 @@ class Daemon:
             except (Exception, SystemExit) as exc:
                 self.log(
                     _(
-                        "не удалось прочитать [workspaces]: {exc} — беру общий набор"
+                        "failed to read [workspaces]: {exc} - using the default set"
                     ).format(exc=exc)
                 )
                 self._workspace_map_cache = {}
@@ -936,7 +933,7 @@ class Daemon:
                 ]
             except (Exception, SystemExit) as exc:
                 self.log(
-                    _("не удалось сопоставить выходы мониторов: {exc}").format(
+                    _("failed to match monitor outputs: {exc}").format(
                         exc=exc
                     )
                 )
@@ -969,7 +966,7 @@ class Daemon:
                 self._wa_cache = tuple(cast("tuple[int, int, int, int]", wa))
             except (Exception, SystemExit) as exc:
                 self.log(
-                    _("не удалось получить рабочую область: {exc}").format(exc=exc)
+                    _("failed to get the work area: {exc}").format(exc=exc)
                 )
                 return None
         return self._wa_cache
@@ -1014,7 +1011,7 @@ class Daemon:
             return
         if scale_now == self._mons_scale:
             return
-        self.log(_("масштаб экрана изменился — перечитываю рабочие области"))
+        self.log(_("screen scale changed — re-reading work areas"))
         self._wa_cache = None
         self._mons_cache = None
         self._mons_scale = scale_now
@@ -1038,7 +1035,7 @@ class Daemon:
                 )
                 self._mons_cache = [tuple(wa) for wa in mons]
             except (Exception, SystemExit) as exc:
-                self.log(_("не удалось получить мониторы: {exc}").format(exc=exc))
+                self.log(_("failed to get monitors: {exc}").format(exc=exc))
                 return None
         return self._mons_cache
 
@@ -1060,7 +1057,7 @@ class Daemon:
             point = self.window_center(win)
         except (Exception, SystemExit) as exc:
             self.log(
-                _("не удалось определить положение окна 0x{win:x}: {exc}").format(
+                _("failed to determine the position of window 0x{win:x}: {exc}").format(
                     win=win, exc=exc
                 )
             )
@@ -1096,7 +1093,7 @@ class Daemon:
             self.apply(win, rect, label=zone, quiet=True)
         except (Exception, SystemExit) as exc:  # окно могло исчезнуть/отказ X
             self.log(
-                _("не удалось вложить окно 0x{win:x} в зону '{zone}': {exc}").format(
+                _("failed to place window 0x{win:x} into zone '{zone}': {exc}").format(
                     win=win, zone=zone, exc=exc
                 )
             )
@@ -1112,7 +1109,7 @@ class Daemon:
             rect = self.read_rect(win)
         except (Exception, SystemExit) as exc:
             self.log(
-                _("не удалось прочитать рамку окна 0x{win:x}: {exc}").format(
+                _("failed to read the frame of window 0x{win:x}: {exc}").format(
                     win=win, exc=exc
                 )
             )
@@ -1167,7 +1164,7 @@ class Daemon:
             save_placed_state(self.state_path, state, self.session_id)
         except OSError as exc:
             self.log(
-                _("не удалось сохранить память об укладках: {exc}").format(exc=exc)
+                _("failed to save the memory of placements: {exc}").format(exc=exc)
             )
 
     def _detach(self, win):
@@ -1195,7 +1192,7 @@ class Daemon:
             }
         self._save_state()
         self.log(
-            _("окно 0x{win:x} вышло из зоны '{zone}' — больше его не двигаю").format(
+            _("window 0x{win:x} left zone '{zone}' - not moving it anymore").format(
                 win=win, zone=zone
             )
         )
@@ -1254,7 +1251,7 @@ class Daemon:
         except (Exception, SystemExit) as exc:
             self.log(
                 _(
-                    "не удалось посчитать зону '{zone}' записи 0x{win:x}: {exc}"
+                    "failed to compute zone '{zone}' of record 0x{win:x}: {exc}"
                 ).format(zone=record["zone"], win=win, exc=exc)
             )
             return None
@@ -1274,7 +1271,7 @@ class Daemon:
             meta = self.read_meta(win)
         except (Exception, SystemExit) as exc:
             self.log(
-                _("не удалось прочитать метаданные 0x{win:x}: {exc}").format(
+                _("failed to read metadata of 0x{win:x}: {exc}").format(
                     win=win, exc=exc
                 )
             )
@@ -1293,8 +1290,7 @@ class Daemon:
                 # конфига, и новое окно не ляжет поверх.
                 self.log(
                     _(
-                        "окно 0x{win:x} стоит не в своей зоне '{zone}' — "
-                        "укладываю по правилу"
+                        "window 0x{win:x} is not in its zone '{zone}' - laying it out by the rule"
                     ).format(win=win, zone=record["zone"])
                 )
                 return False
@@ -1306,13 +1302,13 @@ class Daemon:
             self.win_class[win] = wm_class or recorded_class
             self.log(
                 _(
-                    "окно 0x{win:x} осталось в зоне '{zone}' — беру под присмотр"
+                    "window 0x{win:x} stayed in zone '{zone}' - taking it under watch"
                 ).format(win=win, zone=record["zone"])
             )
             return True
         self.detached[win] = dict(record)
         self.log(
-            _("окно 0x{win:x} вышло из зоны '{zone}' — само не вернётся").format(
+            _("window 0x{win:x} left zone '{zone}' - it will not come back on its own").format(
                 win=win, zone=record["zone"]
             )
         )
@@ -1339,7 +1335,7 @@ class Daemon:
                 continue  # окно закрылось, пока демон не работал
             if not self._adopt_placement(win, record):
                 self.log(
-                    _("запись о 0x{win:x} не подошла — укладываю по правилу").format(
+                    _("the record of 0x{win:x} no longer fits - laying it out by the rule").format(
                         win=win
                     )
                 )
@@ -1406,7 +1402,7 @@ class Daemon:
             del self.filled[key]
             self._save_state()
             self.log(
-                _("возвращаю зону '{zone}' к исходной рамке").format(
+                _("returning zone '{zone}' to its original frame").format(
                     zone=holder_zone
                 )
             )
@@ -1427,7 +1423,7 @@ class Daemon:
             clients = [int(win) for win in (source or [])]
         except (Exception, SystemExit) as exc:
             self.log(
-                _("не удалось прочитать список клиентов: {exc}").format(exc=exc)
+                _("failed to read the client list: {exc}").format(exc=exc)
             )
         order = list(dict.fromkeys(clients))
         order.extend(win for win in self.windows if win not in order)
@@ -1511,7 +1507,7 @@ class Daemon:
                 self._drop_coverage(win)
                 self.log(
                     _(
-                        "вкладки: окно 0x{win:x} встало на общую рамку зоны '{zone}'"
+                        "tabs: window 0x{win:x} took the shared frame of zone '{zone}'"
                     ).format(win=win, zone=self.windows.get(win))
                 )
 
@@ -1580,8 +1576,7 @@ class Daemon:
         self._save_state()
         self.log(
             _(
-                "в зоне '{zone}' осталась одна вкладка — окно 0x{win:x} "
-                "занимает зону целиком"
+                "zone '{zone}' has a single tab left - window 0x{win:x} fills the zone"
             ).format(zone=zone, win=win)
         )
         return True
@@ -1605,7 +1600,7 @@ class Daemon:
             return getattr(self.read_meta(win), "wm_title", "") or ""
         except (Exception, SystemExit) as exc:
             self.log(
-                _("не удалось прочитать заголовок 0x{win:x}: {exc}").format(
+                _("failed to read the title of 0x{win:x}: {exc}").format(
                     win=win, exc=exc
                 )
             )
@@ -1616,7 +1611,7 @@ class Daemon:
         try:
             active = self.active_window()
         except (Exception, SystemExit) as exc:
-            self.log(_("не удалось определить активное окно: {exc}").format(exc=exc))
+            self.log(_("failed to determine the active window: {exc}").format(exc=exc))
             return None
         return None if active is None else int(active)
 
@@ -1712,8 +1707,7 @@ class Daemon:
             moved = True
             self.log(
                 _(
-                    "в зоне '{zone}' осталась одна вкладка — окно 0x{win:x} "
-                    "занимает зону целиком"
+                    "zone '{zone}' has a single tab left - window 0x{win:x} fills the zone"
                 ).format(zone=zone, win=win)
             )
         if moved:
@@ -1733,7 +1727,7 @@ class Daemon:
         try:
             records = self.tabs_picture(client_ids)
         except (Exception, SystemExit) as exc:
-            self.log(_("не удалось собрать снимок вкладок: {exc}").format(exc=exc))
+            self.log(_("failed to build the tab snapshot: {exc}").format(exc=exc))
             return False
         payload = zone_tabs.strips_payload(records)
         if payload == self._strips_last:
@@ -1744,13 +1738,13 @@ class Daemon:
         try:
             accepted = self.strip.feed(payload)
         except (Exception, SystemExit) as exc:
-            self.log(_("полоса вкладок: {exc}").format(exc=exc))
+            self.log(_("tab bar: {exc}").format(exc=exc))
             accepted = False
         if not accepted:
             # Полоса не приняла снимок (упала/не запустилась): в следующий раз
             # отдадим тот же снимок заново — уже новому процессу.
             self._strips_last = None
-            self.log(_("полоса вкладок снимок не приняла"))
+            self.log(_("the tab bar did not accept the snapshot"))
         return accepted
 
     def _raise_window(self, win):
@@ -1759,10 +1753,10 @@ class Daemon:
             self.deiconify(win, x11=self.x11)
         except (Exception, SystemExit) as exc:
             self.log(
-                _("не удалось поднять окно 0x{win:x}: {exc}").format(win=win, exc=exc)
+                _("failed to raise window 0x{win:x}: {exc}").format(win=win, exc=exc)
             )
             return False
-        self.log(_("окно 0x{win:x} поднято").format(win=win))
+        self.log(_("window 0x{win:x} raised").format(win=win))
         return True
 
     # -- IPC: обработчики команд сокета
@@ -1778,7 +1772,7 @@ class Daemon:
         закрыть соединение.
         """
         groups = zone_ipc.parse_subscription(request or {})
-        self.log(_("подписка на события: {groups}").format(groups=", ".join(groups)))
+        self.log(_("event subscription: {groups}").format(groups=", ".join(groups)))
         return zone_ipc.Subscription(groups)
 
     def ipc_arrange(self, request):
@@ -1799,7 +1793,7 @@ class Daemon:
         placements = request.get("placements")
         if not isinstance(placements, list) or not placements:
             raise ValueError(
-                _("команда arrange: нужен непустой список 'placements'")
+                _("arrange: a non-empty 'placements' list is required")
             )
         workspace = request.get("workspace")
         if not isinstance(workspace, int):
@@ -1830,12 +1824,12 @@ class Daemon:
         (или `None`, если окно легло в зону).
         """
         if not isinstance(item, dict):
-            return None, _("запись раскладки должна быть объектом")
+            return None, _("a placement entry must be an object")
         raw = item.get("window")
         try:
             window = int(raw, 0) if isinstance(raw, str) else int(raw)
         except (TypeError, ValueError):
-            return None, _("не понять окно '{raw}'").format(raw=raw)
+            return None, _("cannot read window id '{raw}'").format(raw=raw)
         zone = item.get("zone")
         wa = item.get("monitor")
         try:
@@ -1844,15 +1838,15 @@ class Daemon:
             wa = None
         if wa is None:
             return window, _(
-                "не удалось определить монитор окна 0x{window:x}"
+                "failed to determine the monitor of window 0x{window:x}"
             ).format(window=window)
         grid = self._grid_for(workspace, self._output_for(wa))
         if not isinstance(zone, str) or zone not in grid.all_zone_names():
-            return window, _("нет зоны '{zone}'").format(zone=zone)
+            return window, _("no such zone '{zone}'").format(zone=zone)
         try:
             meta = self.read_meta(window)
         except (Exception, SystemExit) as exc:
-            return window, _("не прочитать окно 0x{window:x}: {exc}").format(
+            return window, _("failed to read window 0x{window:x}: {exc}").format(
                 window=window, exc=exc
             )
         wm_class = getattr(meta, "wm_class", "") or ""
@@ -1863,14 +1857,13 @@ class Daemon:
             grid.ignore or self.grid.ignore,
         ):
             return window, _(
-                "окно 0x{window:x} под исключением ([ignore]/служебный тип) — "
-                "не двигаю"
+                "window 0x{window:x} is excluded ([ignore]/utility window type) - not moving it"
             ).format(window=window)
         if self._settle_in_zone(
             window, zone, wa, workspace, wm_class, grid=grid
         ) is None:
             return window, _(
-                "не удалось вложить окно 0x{window:x} в зону '{zone}'"
+                "failed to place window 0x{window:x} into zone '{zone}'"
             ).format(window=window, zone=zone)
         return window, None
 
@@ -1996,7 +1989,7 @@ class Daemon:
             index = int(index)
             if not 0 <= index < len(monitors):
                 raise ValueError(
-                    _("монитора {index} нет (всего {total})").format(
+                    _("no monitor {index} ({total} in total)").format(
                         index=index, total=len(monitors)
                     )
                 )
@@ -2031,7 +2024,7 @@ class Daemon:
         known = self._known_zone_names()
         if not isinstance(zone, str) or zone not in known:
             raise ValueError(
-                _("нет зоны '{zone}'. Есть: {known}").format(
+                _("no zone '{zone}'. Known: {known}").format(
                     zone=zone, known=", ".join(sorted(known))
                 )
             )
@@ -2045,7 +2038,7 @@ class Daemon:
         wa = self._monitor_for_command(request, window)
         if wa is None:
             raise ValueError(
-                _("не удалось определить монитор окна 0x{window:x}").format(
+                _("failed to determine the monitor of window 0x{window:x}").format(
                     window=window
                 )
             )
@@ -2060,8 +2053,7 @@ class Daemon:
         ):
             raise ValueError(
                 _(
-                    "окно 0x{window:x} под исключением ([ignore]/служебный тип) — "
-                    "не двигаю"
+                    "window 0x{window:x} is excluded ([ignore]/utility window type) - not moving it"
                 ).format(window=window)
             )
         # Окно вкладывается там, где сейчас пользователь: занятость считаем по
@@ -2071,7 +2063,7 @@ class Daemon:
         )
         if rect is None:
             raise ValueError(
-                _("не удалось вложить окно 0x{window:x} в зону '{zone}'").format(
+                _("failed to place window 0x{window:x} into zone '{zone}'").format(
                     window=window, zone=zone
                 )
             )
@@ -2100,7 +2092,7 @@ class Daemon:
                 "switched": False,
                 "zone": None,
                 "window": None,
-                "reason": _("активное окно не прочитано — переключать нечего"),
+                "reason": _("the active window is not read - nothing to switch"),
             }
         zone = self.windows.get(active)
         if zone is None:
@@ -2108,7 +2100,7 @@ class Daemon:
                 "switched": False,
                 "zone": None,
                 "window": None,
-                "reason": _("окно 0x{active:x} вне зон — переключать нечего").format(
+                "reason": _("window 0x{active:x} is outside zones - nothing to switch").format(
                     active=active
                 ),
             }
@@ -2123,13 +2115,13 @@ class Daemon:
                 "switched": False,
                 "zone": zone,
                 "window": None,
-                "reason": _("в зоне '{zone}' одна вкладка — переключать нечего").format(
+                "reason": _("zone '{zone}' has a single tab - nothing to switch").format(
                     zone=zone
                 ),
             }
         if not self._raise_window(target):
             raise ValueError(
-                _("не удалось поднять окно 0x{target:x} зоны '{zone}'").format(
+                _("failed to raise window 0x{target:x} of zone '{zone}'").format(
                     target=target, zone=zone
                 )
             )
@@ -2152,23 +2144,23 @@ class Daemon:
         request = request or {}
         zone = request.get("zone")
         if not isinstance(zone, str) or not zone:
-            raise ValueError(_("в команде tabs-switch нет зоны"))
+            raise ValueError(_("no zone in the tabs-switch command"))
         window = request.get("window")
         if window is None:
-            raise ValueError(_("в команде tabs-switch нет окна"))
+            raise ValueError(_("no window in the tabs-switch command"))
         window = int(window, 0) if isinstance(window, str) else int(window)
         stack = self._zone_stack(
             zone, self.win_monitor.get(window), self.win_workspace.get(window)
         )
         if window not in stack:
             raise ValueError(
-                _("окно 0x{window:x} не вкладка зоны '{zone}' — не поднимаю").format(
+                _("window 0x{window:x} is not a tab of zone '{zone}' - not raising it").format(
                     window=window, zone=zone
                 )
             )
         if not self._raise_window(window):
             raise ValueError(
-                _("не удалось поднять окно 0x{window:x} зоны '{zone}'").format(
+                _("failed to raise window 0x{window:x} of zone '{zone}'").format(
                     window=window, zone=zone
                 )
             )
@@ -2203,7 +2195,7 @@ class Daemon:
             return False
         if win in self._focus_zone_tabs(state["target"]):
             self.log(
-                _("окно 0x{win:x} — вкладка зоны режима — не сворачиваю").format(
+                _("window 0x{win:x} is a tab of the mode's zone - not minimizing it").format(
                     win=win
                 )
             )
@@ -2244,7 +2236,7 @@ class Daemon:
             client_ids = self.read_clients() or []
         except (Exception, SystemExit) as exc:
             self.log(
-                _("не удалось прочитать список клиентов: {exc}").format(exc=exc)
+                _("failed to read the client list: {exc}").format(exc=exc)
             )
             return []
         entries = [
@@ -2258,7 +2250,7 @@ class Daemon:
                 continue  # дубль в списке клиентов
             if win in keep:
                 self.log(
-                    _("окно 0x{win:x} — вкладка зоны режима — остаётся видимой").format(
+                    _("window 0x{win:x} is a tab of the mode's zone - stays visible").format(
                         win=win
                     )
                 )
@@ -2267,7 +2259,7 @@ class Daemon:
                 meta = self.read_meta(win)
             except (Exception, SystemExit) as exc:
                 self.log(
-                    _("не удалось прочитать метаданные 0x{win:x}: {exc}").format(
+                    _("failed to read metadata of 0x{win:x}: {exc}").format(
                         win=win, exc=exc
                     )
                 )
@@ -2280,7 +2272,7 @@ class Daemon:
             ):
                 self.log(
                     _(
-                        "окно 0x{win:x} под исключением — в режиме остаётся видимым"
+                        "window 0x{win:x} is excluded - stays visible in the mode"
                     ).format(win=win)
                 )
                 continue
@@ -2288,14 +2280,14 @@ class Daemon:
                 iconic = tiler.window_iconic(win)
             except (Exception, SystemExit) as exc:
                 self.log(
-                    _("не удалось узнать состояние окна 0x{win:x}: {exc}").format(
+                    _("failed to learn the state of window 0x{win:x}: {exc}").format(
                         win=win, exc=exc
                     )
                 )
                 iconic = False
             if iconic:
                 self.log(
-                    _("окно 0x{win:x} свёрнуто не режимом — не трогаю").format(
+                    _("window 0x{win:x} was minimized not by the mode - leaving it alone").format(
                         win=win
                     )
                 )
@@ -2309,7 +2301,7 @@ class Daemon:
             self.iconify(win, x11=self.x11, quiet=True)
         except (Exception, SystemExit) as exc:
             self.log(
-                _("не удалось свернуть окно 0x{win:x}: {exc}").format(
+                _("failed to minimize window 0x{win:x}: {exc}").format(
                     win=win, exc=exc
                 )
             )
@@ -2317,7 +2309,7 @@ class Daemon:
         if self.focus is not None:
             self.focus["minimized"].add(win)
         self.log(
-            _("окно 0x{win:x} свёрнуто режимом «только эта зона»").format(win=win)
+            _("window 0x{win:x} minimized by focus mode").format(win=win)
         )
         return True
 
@@ -2347,7 +2339,7 @@ class Daemon:
                 tiler.switch_workspace(state["workspace"], x11=self.x11)
             except (Exception, SystemExit) as exc:  # стол нужен, но не обязателен
                 self.log(
-                    _("не удалось переключить рабочий стол: {exc}").format(exc=exc)
+                    _("failed to switch the workspace: {exc}").format(exc=exc)
                 )
         order = [win for win in sorted(state["minimized"]) if win != state["target"]]
         try:
@@ -2355,7 +2347,7 @@ class Daemon:
                 order + [state["target"]], x11=self.x11, deiconify_fn=self.deiconify
             )
         except (Exception, SystemExit) as exc:
-            self.log(_("не удалось развернуть окна режима: {exc}").format(exc=exc))
+            self.log(_("failed to unminimize the mode's windows: {exc}").format(exc=exc))
             remaining = list(order) + [state["target"]]
         restored = [
             win
@@ -2364,10 +2356,9 @@ class Daemon:
         ]
         self.log(
             _(
-                "режим «только эта зона» выключен (зона '{zone}'): "
-                "развёрнуто {restored} из {total}"
+                "focus mode off (zone '{zone}'): restored {restored} of {total}"
             ).format(
-                zone=state["zone"] or _("без зоны"),
+                zone=state["zone"] or _("without a zone"),
                 restored=len(restored),
                 total=len(state["minimized"]),
             )
@@ -2397,7 +2388,7 @@ class Daemon:
                 wm_class = getattr(self.read_meta(win), "wm_class", "") or ""
             except (Exception, SystemExit) as exc:
                 self.log(
-                    _("не удалось прочитать метаданные 0x{win:x}: {exc}").format(
+                    _("failed to read metadata of 0x{win:x}: {exc}").format(
                         win=win, exc=exc
                     )
                 )
@@ -2432,8 +2423,7 @@ class Daemon:
         if not path:
             self.log(
                 _(
-                    "{count} окон режима развернуть не удалось, но файла "
-                    "состояния нет — разверните их вручную"
+                    "{count} mode windows could not be unminimized, but there is no state file - unminimize them manually"
                 ).format(count=len(remaining))
             )
             return
@@ -2467,12 +2457,11 @@ class Daemon:
                 path,
             )
         except OSError as exc:
-            self.log(_("не удалось сохранить остаток режима: {exc}").format(exc=exc))
+            self.log(_("failed to save the rest of the mode: {exc}").format(exc=exc))
             return
         self.log(
             _(
-                "{count} окон режима остались свёрнутыми — запись в {path}: "
-                "развернуть командой focus --off"
+                "{count} mode windows stayed minimized - record in {path}: unminimize with focus --off"
             ).format(count=len(remaining), path=path)
         )
 
@@ -2523,7 +2512,7 @@ class Daemon:
         known = self._known_zone_names()
         if zone is not None and (not isinstance(zone, str) or zone not in known):
             raise ValueError(
-                _("нет зоны '{zone}'. Есть: {known}").format(
+                _("no zone '{zone}'. Known: {known}").format(
                     zone=zone, known=", ".join(sorted(known))
                 )
             )
@@ -2544,15 +2533,13 @@ class Daemon:
         ):
             raise ValueError(
                 _(
-                    "окно 0x{window:x} под исключением ([ignore]/служебный тип) — "
-                    "режим «только эта зона» не включаю"
+                    "window 0x{window:x} is excluded ([ignore]/utility window type) - not enabling focus mode"
                 ).format(window=window)
             )
         if self.workspace is None:
             raise ValueError(
                 _(
-                    "активный стол не прочитан — режим «только эта зона» не включаю: "
-                    "сворачивать окна чужих столов вслепую хуже, чем не включать"
+                    "the active workspace is not read - not enabling focus mode: minimizing windows of other workspaces blindly is worse than not enabling it"
                 )
             )
         # Монитор берётся только у цели и не угадывается: режим сворачивает окна
@@ -2563,8 +2550,7 @@ class Daemon:
         if wa is None:
             raise ValueError(
                 _(
-                    "не удалось определить монитор окна 0x{window:x} — режим "
-                    "«только эта зона» не включаю: его область зависит от монитора цели"
+                    "failed to determine the monitor of window 0x{window:x} - not enabling focus mode: its area depends on the target's monitor"
                 ).format(window=window)
             )
         # Геометрия зоны — профиля того экрана, где стоит цель.
@@ -2577,7 +2563,7 @@ class Daemon:
             )
             if rect is None:
                 raise ValueError(
-                    _("не удалось вложить окно 0x{window:x} в зону '{zone}'").format(
+                    _("failed to place window 0x{window:x} into zone '{zone}'").format(
                         window=window, zone=zone
                     )
                 )
@@ -2621,7 +2607,7 @@ class Daemon:
         self._outputs_cache = None
         self._monitor_map_cache = None
         self._workspace_map_cache = None
-        self.log(_("конфиг перечитан: {path}").format(path=self.conf_path))
+        self.log(_("config re-read: {path}").format(path=self.conf_path))
         self.sync_strips()
         return {
             "conf": self.conf_path,
@@ -2632,7 +2618,7 @@ class Daemon:
     def ipc_quit(self, request=None):
         """Попросить цикл демона завершиться после текущего события."""
         self.stop_requested = True
-        self.log(_("получена команда quit — завершаюсь"))
+        self.log(_("got the quit command - exiting"))
         return {"bye": True}
 
     # -- события
@@ -2657,7 +2643,7 @@ class Daemon:
         previous_seen = set(self.seen)
         new = [win for win in dict.fromkeys(client_ids) if win not in self.seen]
         for win in new:
-            self.log(_("новое окно 0x{win:x} в _NET_CLIENT_LIST").format(win=win))
+            self.log(_("new window 0x{win:x} in _NET_CLIENT_LIST").format(win=win))
             self.on_map(win)
             # Событие — после укладки: в нём уже есть зона, стол и монитор окна.
             # Шлётся и на окно без зоны (под `[ignore]`, без правила).
@@ -2699,7 +2685,7 @@ class Daemon:
         workspace = self._read_current_workspace()
         if workspace is None:
             self.log(
-                _("активный стол не прочитался — остаётся {desk}").format(
+                _("the active workspace could not be read - keeping {desk}").format(
                     desk=workspace_label(previous)
                 )
             )
@@ -2707,14 +2693,14 @@ class Daemon:
         self.workspace = workspace
         if workspace == previous:
             self.log(
-                _("активный стол не изменился: {desk}").format(
+                _("the active workspace did not change: {desk}").format(
                     desk=workspace_label(workspace)
                 )
             )
         else:
             self.log(
                 _(
-                    "активный стол: {desk} (был {previous}) — окна не двигаю"
+                    "active workspace: {desk} (was {previous}) - not moving windows"
                 ).format(
                     desk=workspace_label(workspace),
                     previous=workspace_label(previous),
@@ -2728,8 +2714,7 @@ class Daemon:
             # хозяина. Выход работает на своём столе или сам переводит на него.
             self.log(
                 _(
-                    "режим «только эта зона» живёт на столе {desk} — "
-                    "оставляю его на месте"
+                    "focus mode lives on workspace {desk} - leaving it in place"
                 ).format(desk=workspace_label(self.focus["workspace"]))
             )
         # Полосы — только у зон текущего стола: снимок пересобирается на смену.
@@ -2776,8 +2761,7 @@ class Daemon:
         ):
             self.log(
                 _(
-                    "окно 0x{win:x} под исключением ([ignore]/служебный тип) — "
-                    "не трогаю"
+                    "window 0x{win:x} is excluded ([ignore]/utility window type) - leaving it alone"
                 ).format(win=win)
             )
             return
@@ -2793,12 +2777,11 @@ class Daemon:
         if zone not in grid.all_zone_names():
             self.log(
                 _(
-                    "зоны '{zone}' нет в наборе (стол {desk}, экран {output}) — "
-                    "окно 0x{win:x} не укладываю"
+                    "no zone '{zone}' in the set (workspace {desk}, monitor {output}) - not placing window 0x{win:x}"
                 ).format(
                     zone=zone,
                     desk=workspace_label(workspace),
-                    output=self._output_for(wa) or _("неизвестен"),
+                    output=self._output_for(wa) or _("unknown"),
                     win=win,
                 )
             )
@@ -2812,7 +2795,7 @@ class Daemon:
         if self._settle_in_zone(win, zone, wa, workspace, wm_class, grid=grid) is None:
             return  # не запоминаем: окно не уложено, зону занятой не считаем
         self.log(
-            _("окно 0x{win:x} -> зона '{zone}' (стол {desk})").format(
+            _("window 0x{win:x} -> zone '{zone}' (workspace {desk})").format(
                 win=win, zone=zone, desk=workspace_label(workspace)
             )
         )
@@ -2839,8 +2822,7 @@ class Daemon:
             if win == state["target"]:
                 self.log(
                     _(
-                        "цель режима «только эта зона» 0x{win:x} исчезла — "
-                        "выхожу из режима"
+                        "the focus mode target 0x{win:x} is gone - leaving the mode"
                     ).format(win=win)
                 )
                 _unused, remaining, consumed = self.leave_focus()
@@ -2851,7 +2833,7 @@ class Daemon:
         wa = self.win_monitor.pop(win, None)
         workspace = self.win_workspace.pop(win, None)
         self.log(
-            _("окно 0x{win:x} ушло из зоны '{zone}'").format(win=win, zone=zone)
+            _("window 0x{win:x} left zone '{zone}'").format(win=win, zone=zone)
         )
         # Зона занята, пока в ней есть хоть одна вкладка: ушла последняя — ниже
         # reflow увидит зону свободной, а пока в стопке осталась одна — ей
@@ -2863,7 +2845,7 @@ class Daemon:
             return
         if not self._visible(workspace):
             self.log(
-                _("стол {desk} не виден (сейчас {current}) — reflow не делаю").format(
+                _("workspace {desk} is not visible (currently {current}) - not doing reflow").format(
                     desk=workspace_label(workspace),
                     current=workspace_label(self.workspace),
                 )
@@ -2888,7 +2870,7 @@ class Daemon:
                 # неё одно окно — значит разложить стопку. Такую зону не
                 # расширяем, а зону не считаем покрытой.
                 self.log(
-                    _("reflow: в зоне '{zone}' вкладки — не расширяю").format(
+                    _("reflow: zone '{zone}' has tabs - not expanding").format(
                         zone=name
                     )
                 )
@@ -2901,7 +2883,7 @@ class Daemon:
                 continue  # окно не переехало: зону покрытой не считаем
             self.filled[(self.workspace, wa, zone)] = target
             self.log(
-                _("reflow: окно 0x{win:x} -> зона '{zone}'").format(
+                _("reflow: window 0x{win:x} -> zone '{zone}'").format(
                     win=target, zone=name
                 )
             )
@@ -2916,7 +2898,7 @@ class Daemon:
         только когда окно исчезает из `_NET_CLIENT_LIST` (`on_destroy`), и там
         же стоит проверка «стол окна виден»: перестраивать здесь нечего.
         """
-        self.log(_("окно 0x{win:x} скрыто — оставляем в трекере").format(win=win))
+        self.log(_("window 0x{win:x} is hidden - keeping it in the tracker").format(win=win))
 
 
 # ------------------------------------------------------------------ X11-контур
@@ -2958,7 +2940,7 @@ def handle_property_event(dae, buf, client_list_atom, read_clients, desktop_atom
     if client_ids is None:
         log = getattr(dae, "log", None)
         if log is not None:
-            log(_("_NET_CLIENT_LIST недоступен — реконсиляцию пропускаю"))
+            log(_("_NET_CLIENT_LIST is unavailable - skipping reconciliation"))
         return True
     dae.reconcile(client_ids)
     return True
@@ -2968,7 +2950,7 @@ def _reconcile_if_known(dae, read_clients):
     """Прочитать список клиентов и свести состояние; `None` — пропустить."""
     client_ids = read_clients()
     if client_ids is None:
-        dae.log(_("_NET_CLIENT_LIST недоступен — реконсиляцию пропускаю"))
+        dae.log(_("_NET_CLIENT_LIST is unavailable - skipping reconciliation"))
         return
     dae.reconcile(client_ids)
 
@@ -2996,14 +2978,14 @@ def _serve_ipc(dae, ipc):
     try:
         responses = ipc.accept_all()
     except (Exception, SystemExit) as exc:
-        dae.log(_("ошибка IPC-сокета: {exc}").format(exc=exc))
+        dae.log(_("IPC socket error: {exc}").format(exc=exc))
         return
     for response in responses:
         if response.get("ok"):
             dae.log("IPC: " + json.dumps(response, ensure_ascii=False))
         else:
             dae.log(
-                _("IPC-ошибка: {error}").format(error=response.get("error", "?"))
+                _("IPC error: {error}").format(error=response.get("error", "?"))
             )
 
 
@@ -3021,7 +3003,7 @@ def _restore_focus_on_exit(dae):
     if getattr(dae, "x11", None) is None:
         dae.focus = None
         if log is not None:
-            log(_("X-соединения нет — окна режима «только эта зона» не разворачиваю"))
+            log(_("no X connection - not unminimizing focus mode windows"))
         return
     try:
         _unused, remaining, state = dae.leave_focus()
@@ -3029,7 +3011,7 @@ def _restore_focus_on_exit(dae):
     except (Exception, SystemExit) as exc:
         if log is not None:
             log(
-                _("не удалось выйти из режима «только эта зона»: {exc}").format(
+                _("failed to leave focus mode: {exc}").format(
                     exc=exc
                 )
             )
@@ -3074,12 +3056,12 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     if ipc is not None:
         watch.append(ipc.fileno())
     dae.log(
-        _("демон слушает X11 (root 0x{root:x}, reflow={reflow})").format(
+        _("the daemon listens on X11 (root 0x{root:x}, reflow={reflow})").format(
             root=x11.root, reflow=dae.reflow
         )
     )
     if ipc is not None:
-        dae.log(_("IPC-сокет: {path}").format(path=getattr(ipc, "path", "?")))
+        dae.log(_("IPC socket: {path}").format(path=getattr(ipc, "path", "?")))
     try:
         # Раскладываем окна, уже открытые к запуску (вход в готовую сессию).
         _reconcile_if_known(dae, read_clients)
@@ -3134,31 +3116,31 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description=_(
-            "Автоукладка окон GridSnap по правилам [rules] и reflow (Cinnamon/X11)"
+            "GridSnap automatic window layout by [rules] and reflow (Cinnamon/X11)"
         )
     )
     ap.add_argument(
         "--conf",
         default=None,
-        help=_("путь к zones.conf (по умолчанию XDG/рядом с кодом)"),
+        help=_("path to zones.conf (XDG or next to the code by default)"),
     )
     ap.add_argument(
-        "--verbose", action="store_true", help=_("печатать, что делает демон")
+        "--verbose", action="store_true", help=_("print what the daemon does")
     )
     ap.add_argument(
         "--once",
         action="store_true",
-        help=_("обработать одно изменение _NET_CLIENT_LIST и выйти"),
+        help=_("handle one _NET_CLIENT_LIST change and exit"),
     )
     ap.add_argument(
         "--socket",
         default=None,
         help=_(
-            "путь UNIX-сокета IPC (по умолчанию $XDG_RUNTIME_DIR/gridsnap/daemon.sock)"
+            "UNIX IPC socket path ($XDG_RUNTIME_DIR/gridsnap/daemon.sock by default)"
         ),
     )
     ap.add_argument(
-        "--no-socket", action="store_true", help=_("не поднимать IPC-сокет")
+        "--no-socket", action="store_true", help=_("do not raise the IPC socket")
     )
     ap.add_argument("--version", action="version", version=f"zone-daemon {VERSION}")
     args = ap.parse_args(argv)
@@ -3181,7 +3163,7 @@ def main(argv=None):
             )
         except OSError as exc:
             print(
-                "zone-daemon: " + _("IPC-сокет: {exc}").format(exc=exc),
+                "zone-daemon: " + _("IPC socket: {exc}").format(exc=exc),
                 file=sys.stderr,
             )
             return tiler.EXIT_FAIL

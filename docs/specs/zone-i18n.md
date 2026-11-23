@@ -2,134 +2,146 @@
 id: zone-i18n
 type: submodule-design
 status: active
-title: "Подмодуль: локализация интерфейса zone_i18n"
+title: "Submodule: interface localisation zone_i18n"
 parent: gridsnap-architecture
 references: [man-i18n]
 ---
 
-_Описано вместе с реализацией (волна 5); владельцем не сверено._
+_Described together with the implementation (wave 5); rewritten for the language inversion (wave 8).
+Not yet reviewed by the owner._
 
-## Ответственность
+## Responsibility
 
-`zone_i18n.py` — весь выбор языка интерфейса GridSnap и загрузка каталогов перевода. Чистый модуль:
-ни X, ни GTK, ни `gi`. Его импортируют редактор, пикер, полоса вкладок, горячие края, раскладчик,
-демон, клиент сокета, установщик сочетаний и конфиг-слой, поэтому правило выбора языка живёт ровно в
-одном месте и не расходится между процессами.
+`zone_i18n.py` owns the whole choice of the GridSnap interface language and the loading of translation
+catalogs. A pure module: no X, no GTK, no `gi`. It is imported by the editor, the picker, the tab strip,
+the hot corners watcher, the tiler, the daemon, the socket client, the hotkey installer and the config
+layer, so the language rule lives in exactly one place and cannot drift between processes.
 
-Публичная поверхность: `_` / `translate`, `language`, `set_language`, `normalize_language`,
-`resolve_language`, `catalog`, `parse_po`, `unescape_po`, `module_dir`, `localedirs`, `po_dir`,
-`mo_path`, `po_path`, `reset_cache` и константы `DOMAIN`, `APPLET_DOMAIN`, `SOURCE_LANGUAGE`,
-`DEFAULT_LANGUAGE`, `LANGUAGES`.
+Public surface: `_` / `translate`, `language`, `set_language`, `normalize_language`, `resolve_language`,
+`catalog`, `parse_po`, `unescape_po`, `module_dir`, `localedirs`, `po_dir`, `mo_path`, `po_path`,
+`reset_cache` and the constants `DOMAIN`, `APPLET_DOMAIN`, `SOURCE_LANGUAGE`, `DEFAULT_LANGUAGE`,
+`LANGUAGES`, `LANGUAGE_ALIASES`.
 
-## Язык исходника — русский
+## The source language is English
 
-Строки в коде остаются русскими: это язык исходника и правило репозитория. Каталог `ru.po` **не
-заводится** — русский интерфейс это и есть `msgid` как есть. Отсутствие каталога не ошибка: любая
-непереведённая строка возвращается как есть.
+The strings in the code are English: that is the source language and the repository rule. There is
+**no `en.po` catalog** — the English interface *is* the `msgid` as it stands. A missing catalog is not an
+error: any untranslated string comes back as it is, in English.
 
-Раскладка каталогов:
+Catalog layout:
 
-| Что | Где |
+| What | Where |
 |---|---|
-| Шаблон Python-инструментов | `po/gridsnap.pot` (из `xgettext`) |
-| Каталоги Python-инструментов | `po/en.po`, `po/zh_CN.po` |
-| Шаблон и каталоги апплета | `po/gridsnap@metapeka/gridsnap@metapeka.pot`, `en.po`, `zh_CN.po` |
-| Собранные `.mo` | `locale/<язык>/LC_MESSAGES/{gridsnap,gridsnap@metapeka}.mo` (в `.gitignore`) |
+| Template for the Python tools | `po/gridsnap.pot` (from `xgettext`) |
+| Catalogs for the Python tools | `po/ru.po`, `po/zh_CN.po` |
+| Template and catalogs of the applet | `po/gridsnap@metapeka/gridsnap@metapeka.pot`, `ru.po`, `zh_CN.po` |
+| Built `.mo` files | `locale/<language>/LC_MESSAGES/{gridsnap,gridsnap@metapeka}.mo` (in `.gitignore`) |
 
-## Выбор языка
+Before the inversion (wave 8) the source language was Russian: the Russian text lived in the `msgid`
+and the English one in `po/en.po`. The inversion moved the English text into the code and the Russian
+one into `po/ru.po`; the Russian strings are the same text as before, now a translation.
 
-Порядок — от первого непустого значения:
+## Choosing the language
 
-1. `GRIDSNAP_LANG` — явное перекрытие (тесты, «хочу английский сейчас»);
+The order is the first non-empty value:
+
+1. `GRIDSNAP_LANG` — an explicit override (tests, “I want Russian right now”);
 2. `LC_ALL`; 3. `LC_MESSAGES`; 4. `LANG`.
 
-Значение разбирается по префиксу до `_`/`-` и без кодировки с модификатором (`ru_RU.UTF-8@euro` →
-`ru`). `ru*` → исходные строки, `zh*` (и `zh_CN`, и `zh_TW`) → `zh_CN`, **всё остальное** — `de`, `fr`,
-`C`, `POSIX`, мусор — → английский. Английский же язык по умолчанию, когда не задано ничего.
+The value is parsed by the prefix before `_`/`-` and without the encoding modifier
+(`ru_RU.UTF-8@euro` → `ru`). `ru*` → the `ru` catalog, `zh*` (both `zh_CN` and `zh_TW`) → `zh_CN`,
+**everything else** — `en`, `de`, `fr`, `C`, `POSIX`, junk — → English, which is also the source
+language and the default. `DEFAULT_LANGUAGE` and `SOURCE_LANGUAGE` are both `en`, and
+`LANGUAGE_ALIASES` maps `zh` to `zh_CN`.
 
-`LANGUAGE` нарочно **не читается**: правило должно быть одно и явное, а `GRIDSNAP_LANG` перекрывает
-всё. Цена решения: расхождение с апплетом, который идёт штатным путём xlet'ов и о `GRIDSNAP_LANG` не
-знает (см. «Апплет»).
+`LANGUAGE` is deliberately **not** read: the rule must be one and explicit, and `GRIDSNAP_LANG`
+overrides everything. The price of that decision: the applet differs, because it goes the standard xlet
+way and knows nothing about `GRIDSNAP_LANG` (see “The Cinnamon applet”).
 
-`set_language(code)` переопределяет выбор в процессе (`None`/`""`/`"auto"` — снять переопределение);
-`language()` возвращает `ru`, `zh_CN` или `en`.
+`set_language(code)` overrides the choice in the process (`None`/`""`/`"auto"` clears the override);
+`language()` returns `ru`, `zh_CN` or `en`.
 
-## Поиск каталога и запуск из чекаута
+## Catalog lookup and running from a checkout
 
-Порядок поиска:
+Lookup order:
 
-1. собранный `.mo` в каталогах: `$GRIDSNAP_LOCALEDIR`, `<каталог модуля>/locale`,
-   `<каталог модуля>/../../share/locale` (для `/usr/lib/gridsnap` это `/usr/share/locale`, для
+1. the built `.mo` in the catalogs: `$GRIDSNAP_LOCALEDIR`, `<module dir>/locale`,
+   `<module dir>/../../share/locale` (for `/usr/lib/gridsnap` that is `/usr/share/locale`, for
    `~/.local/lib/gridsnap` — `~/.local/share/locale`);
-2. если `.mo` нет — `po/<язык>.po` рядом с модулем (небольшой собственный разбор `msgid`/`msgstr`:
-   многострочные строки, эскейпы, шапка, `#, fuzzy`, без множественных форм).
+2. if there is no `.mo` — `po/<language>.po` next to the module (a small parser of its own for
+   `msgid`/`msgstr`: multi-line strings, escapes, the header, `#, fuzzy`, no plural forms).
 
-Так владелец работает прямо из чекаута, ничего не собирая, а пакет пользуется стандартным `.mo`.
-Каталог читается лениво и кэшируется на язык.
+That way the owner works straight from a checkout without building anything, while an installed package
+uses the standard `.mo`. A catalog is read lazily and cached per language.
 
-## Обёртка строк
+## Wrapping strings
 
-Правило одно на весь код: **всякое сообщение — один литерал внутри `_()`**, подстановки — `{}`-полями
-и `.format(...)`. F-строка или склейка кусков внутрь `_()` не попадают: `xgettext` их не увидит, а
-перевод внутри куска ломает порядок слов. Обёрнуты в том числе `--help`/`description`/`epilog`
-argparse и журнал демона.
+One rule for the whole code base: **every message is one literal inside `_()`**, with substitutions as
+`{}` fields and `.format(...)`. An f-string or a concatenation of pieces does not go inside `_()`:
+`xgettext` would not see it, and a translation inside a piece would break the word order. Wrapped are
+also `--help`/`description`/`epilog` of argparse and the daemon journal.
 
-Не переводятся (и помечаются `# i18n: не переводится`, если строка с кириллицей): докстринги,
-комментарии, регулярные выражения, ключи конфига и заголовки, которые код пишет в `zones.conf` и
-профили. Это содержимое файлов, а не текст интерфейса.
+Not translated (marked with `# i18n: do not translate` if the string contains anything non-ASCII):
+docstrings, comments, regular expressions, config keys and the headers the code writes into
+`zones.conf` and profiles. That is file content, not interface text.
 
-Ловушка имени: в функции, где `_` уже занята мусорной переменной (`for _ in ...`), `_` становится
-локальной и `_(...)` падает с `UnboundLocalError` — мусорную переменную переименовывают.
+A name trap: in a function where `_` is already taken by a throwaway variable (`for _ in ...`), `_`
+becomes local and `_(...)` fails with `UnboundLocalError` — rename the throwaway variable.
 
-## Апплет Cinnamon — отдельный домен
+## The Cinnamon applet — a domain of its own
 
-Апплет — не Python, а xlet: он получает перевод штатным `Gettext.bindtextdomain(uuid, dir)`, поэтому у
-него **своё имя домена** `gridsnap@metapeka` и свой `.mo`. Каталог апплет ищет в
-`~/.local/share/locale` — там, куда его кладёт `install.sh` с префиксом `~/.local` (префикс по
-умолчанию). Язык апплета — локаль сессии Cinnamon; `GRIDSNAP_LANG` на него не влияет.
+The applet is not Python but an xlet: it gets its translation through the standard
+`Gettext.bindtextdomain(uuid, dir)`, so it has **its own domain name** `gridsnap@metapeka` and its own
+`.mo`. The applet looks for the catalog in `~/.local/share/locale` — where `install.sh` puts it with
+the default `~/.local` prefix. The applet language is the locale of the Cinnamon session;
+`GRIDSNAP_LANG` does not affect it.
 
-Строки апплета собирает `xgettext --language=JavaScript`; строки обёрнуты в `_()` так же, как в Python.
-Первая строка `zone-tiler.py list` («рабочая область монитора N: x,y WxH») тоже переводится, поэтому
-апплет разбирает в ней **числа** (`N: x,y WxH`), а не слова — иначе меню апплета ломалось бы на
-английском и китайском.
+The applet strings are extracted with `xgettext --language=JavaScript`; the strings are wrapped in `_()`
+just as in Python. The first line of `zone-tiler.py list` (“monitor N work area: x,y WxH”) is translated
+too, so the applet parses **numbers** in it (`N: x,y WxH`) rather than words — otherwise the applet menu
+would break in Russian and Chinese.
 
-## Сборка и установка
+## Building and installing
 
-- `make pot` — пересобрать оба `.pot` из кода (`xgettext --keyword=_`); `make mo` — собрать четыре
-  `.mo` через `msgfmt --check`; `make check-i18n` — то и другое плюс сверка шаблонов с кодом по
-  набору `msgid` и проверка, что каталога `ru` нет. `check-i18n` гоняет CI.
-- `.mo` ставятся в `<префикс>/share/locale/<язык>/LC_MESSAGES/`: `install.sh` (и снимаются его
-  `--uninstall`), `make deb`, штатный `debian/` и `PKGBUILD`. Релизный `tar.gz` собирает `locale/` в
-  себя — иначе `install.sh` из архива нечего ставить.
-- Перевод машинный: китайский носителем не вычитан (пометка в README и на сайте). Английский — язык
-  по умолчанию, а не «второй перевод».
+- `make pot` — rebuild both `.pot` files from the code (`xgettext --keyword=_`); `make mo` — build the
+  four `.mo` files through `msgfmt --check`; `make check-i18n` — both of those plus comparing the
+  templates with the code by `msgid` set and checking that there is no `en` catalog. `check-i18n` runs
+  in CI.
+- `.mo` files are installed into `<prefix>/share/locale/<language>/LC_MESSAGES/`: `install.sh` (and
+  removed by its `--uninstall`), `make deb`, the stock `debian/` and `PKGBUILD`. The release `tar.gz`
+  packs `locale/` into itself — otherwise `install.sh` from the archive would have nothing to install.
+- The Russian translation is the former source language, so it reads like a native text; the Chinese one
+  is machine-made and has not been proofread by a native speaker (a note in the README and on the site).
+  English is the language of the source, not a “second translation”.
 
-## Проверки
+## Checks
 
-Полноту и обёрнутость держат тесты, а не дисциплина:
+Completeness and wrapping are held by tests, not by discipline:
 
-- `tests/test_zone_i18n.py` — контракт модуля: разбор локали, порядок выбора, `GRIDSNAP_LANG` важнее
-  локали, `.mo` важнее `.po`, отсутствие каталога не ошибка, разбор `.po`;
-- `tests/test_i18n_catalogs.py` — каждый `msgid` шаблона имеет непустой `msgstr` в `en` и `zh_CN` (и
-  наоборот, лишних записей нет) для обоих доменов, плюс под `GRIDSNAP_LANG=en` команды печатают без
-  единой кириллической буквы;
-- `tests/test_i18n_wrapped.py` — ни одной пользовательской кириллической строки вне `_()`; проверяются
-  **все** модули приложения (включая `zone_geom`, `zone_ipc` и `make-icon`), а не только те, где строки
-  были на момент обёртки: так забытая строка не останется русской при английском интерфейсе;
-- `tests/i18n_env.py` ставит тестам `GRIDSNAP_LANG=ru`, дымовые сценарии делают то же сами: тесты
-  проверяют поведение по русским сообщениям и не зависят от локали машины и CI (там это английский).
+- `tests/test_zone_i18n.py` — the module contract: locale parsing, the choice order, `GRIDSNAP_LANG`
+  beating the locale, `.mo` beating `.po`, a missing catalog not being an error, `.po` parsing;
+- `tests/test_i18n_catalogs.py` — every `msgid` of the template has a non-empty `msgstr` in `ru` and
+  `zh_CN` (and the other way round: no extra entries) for both domains, plus under `GRIDSNAP_LANG=en`
+  the commands print without a single Cyrillic letter and under `ru` with Cyrillic;
+- `tests/test_i18n_wrapped.py` — not a single user-visible string outside `_()`; **all** application
+  modules are checked (including `zone_geom`, `zone_ipc` and `make-icon`), not only the ones that had
+  strings when the wrapping was introduced: that is how a forgotten string would otherwise stay
+  untranslated;
+- `tests/i18n_env.py` sets `GRIDSNAP_LANG=en` for the tests, and the smoke scenarios do the same
+  themselves: the tests check behaviour against the English messages and do not depend on the machine
+  locale or CI.
 
-## Инварианты
+## Invariants
 
-- Ни X, ни GTK, ни конфига: модуль импортируется без дисплея (инвариант проекта).
-- Отсутствие каталога, битый `.mo` и отсутствие строки — не ошибка: возвращается исходный текст.
-- Выбор языка — из окружения процесса; переопределение действует на процесс целиком.
-- Русский интерфейс не требует ни одного файла каталога.
+- No X, no GTK, no config: the module imports without a display (a project invariant).
+- A missing catalog, a broken `.mo` and a missing entry are not errors: the source text is returned.
+- The language comes from the process environment; an override applies to the whole process.
+- The English interface needs no catalog file at all.
 
-## Известные ограничения
+## Known limitations
 
-- Man-страницы переводятся отдельным конвейером (po4a, `docs/specs/man-i18n.md`), а не этим
-  модулем: `.mo` тут не подходит, man-db выбирает страницу по каталогу языка.
-- `debian/control` (описание пакета) остаётся русским: решим при работе над архивом Debian.
-- `GRIDSNAP_LANG` не действует на апплет — он следует локали сессии Cinnamon.
-- Китайский перевод машинный и носителем не вычитан.
+- Man pages are translated by a separate pipeline (po4a, `docs/specs/man-i18n.md`), not by this module:
+  `.mo` does not fit there, man-db picks a page by language directory.
+- `debian/control` (the package description) is still Russian: to be decided in the docs wave.
+- `GRIDSNAP_LANG` does not affect the applet — it follows the locale of the Cinnamon session.
+- The Chinese translation is machine-made and has not been proofread by a native speaker.

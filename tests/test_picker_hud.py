@@ -8,7 +8,7 @@
   (та же `zone_at`, только экранные пиксели переводятся в доли рабочей области);
   этот класс тестов идёт без GTK и без X;
 * разбор аргументов `--hud`/`--at`/`--follow`: без источника точки — код 2,
-  с интерактивными флагами — код 2, `--at` и `--follow` взаимоисключающие,
+  с интерактивными флагами — код 2, `--at` и `--follow` mutually exclusive,
   `--at` понимает и «X,Y», и «X Y»;
 * снимок `--hud --at X,Y --shot FILE.png` — файл непустой, а разные точки
   (разные зоны) дают разные файлы, то есть подсветка действительно рисуется.
@@ -166,7 +166,7 @@ class PickerHudArgsCase(unittest.TestCase):
     def test_hud_without_point_source_exits_2(self):
         code, err = self.parse_error(["--hud"])
         self.assertEqual(code, 2)
-        self.assertIn("нужен источник точки", err)
+        self.assertIn("--hud needs a point source", err)
 
     def test_hud_with_at(self):
         args = self.parse(["--hud", "--at", "100,100"])
@@ -183,33 +183,33 @@ class PickerHudArgsCase(unittest.TestCase):
     def test_at_and_follow_are_mutually_exclusive(self):
         code, err = self.parse_error(["--hud", "--at", "1,2", "--follow"])
         self.assertEqual(code, 2)
-        self.assertIn("взаимоисключающие", err)
+        self.assertIn("mutually exclusive", err)
 
     def test_at_without_hud_exits_2(self):
         code, err = self.parse_error(["--at", "100,100"])
         self.assertEqual(code, 2)
-        self.assertIn("только вместе с --hud", err)
+        self.assertIn("only work together with --hud", err)
 
     def test_follow_without_hud_exits_2(self):
         code, err = self.parse_error(["--follow"])
         self.assertEqual(code, 2)
-        self.assertIn("только вместе с --hud", err)
+        self.assertIn("only work together with --hud", err)
 
-    # ---- --hud несовместим с интерактивным режимом
+    # ---- --hud is incompatible с интерактивным режимом
 
     def test_hud_with_interactive_flags_exits_2(self):
         for extra in (["--select", "left"], ["--window", "0x1"], ["--dry-run"], ["--verify"]):
             with self.subTest(extra=extra):
                 code, err = self.parse_error(["--hud", "--at", "1,2"] + extra)
                 self.assertEqual(code, 2)
-                self.assertIn("--hud несовместим", err)
+                self.assertIn("--hud is incompatible", err)
                 flag = extra[0]
                 self.assertIn(flag, err)
 
     def test_shot_with_follow_exits_2(self):
         code, err = self.parse_error(["--hud", "--follow", "--shot", "/tmp/x.png"])
         self.assertEqual(code, 2)
-        self.assertIn("--shot не работает с --follow", err)
+        self.assertIn("--shot does not work with --follow", err)
 
     def test_hud_keeps_common_flags(self):
         # --conf/--monitor/--workspace/--shot общие: HUD их принимает.
@@ -241,13 +241,13 @@ class PickerHudArgsCase(unittest.TestCase):
     def test_bad_at_value_exits_2(self):
         code, err = self.parse_error(["--hud", "--at", "12"])
         self.assertEqual(code, 2)
-        self.assertIn("нужны экранные координаты", err)
+        self.assertIn("screen coordinates", err)
 
     # ---- подпись профиля
 
     def test_hud_caption(self):
         caption = self.picker.hud_caption
-        self.assertEqual(caption("cinema"), "профиль «cinema»")
+        self.assertEqual(caption("cinema"), 'profile "cinema"')
         self.assertEqual(caption(None), "")
         self.assertEqual(caption(""), "")
 
@@ -255,8 +255,8 @@ class PickerHudArgsCase(unittest.TestCase):
         """Профиль экрана важнее стола и в подписи HUD, а не только в оверлее."""
         caption = self.picker.hud_caption
         self.assertEqual(caption("cinema", "HDMI-1", "studio"),
-                         "экран HDMI-1 · профиль «studio»")
-        self.assertEqual(caption("cinema", "HDMI-1", None), "профиль «cinema»")
+                         'monitor HDMI-1 · profile "studio"')
+        self.assertEqual(caption("cinema", "HDMI-1", None), 'profile "cinema"')
         self.assertEqual(caption(None, "HDMI-1", None), "")
 
     # ---- HUD рисуется без подсказки про клавиши
@@ -272,7 +272,7 @@ class PickerHudArgsCase(unittest.TestCase):
             cr = cairo.Context(surface)
             cr.set_source_rgb(0, 0, 0)
             cr.paint()
-            self.picker.draw_zones(cr, 400, 300, [zone], 0, "профиль «cinema»", hint)
+            self.picker.draw_zones(cr, 400, 300, [zone], 0, 'profile "cinema"', hint)
             surface.flush()
             return bytes(surface.get_data())
 

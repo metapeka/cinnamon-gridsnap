@@ -198,7 +198,7 @@ class PickerWorkspaceCase(unittest.TestCase):
                          ["main", "top-right", "bottom"])
 
     def test_missing_screen_profile_falls_back_to_workspace_with_message(self):
-        """Профиля экрана нет на диске — откат на стол и предупреждение в stderr."""
+        """Профиля экрана is not on disk — откат на стол и предупреждение в stderr."""
         self.write(self.conf, BASE + "[monitors]\nHDMI-1 = ghost\n[workspaces]\n2 = cinema\n")
         self.write("cinema.conf", PROFILE)  # profiles/ghost.conf не создаём
         err = io.StringIO()
@@ -210,7 +210,7 @@ class PickerWorkspaceCase(unittest.TestCase):
                          ["video", "chat"])
         warning = err.getvalue()
         self.assertIn("ghost", warning)
-        self.assertIn("нет на диске", warning)
+        self.assertIn("is not on disk", warning)
         self.assertIn("HDMI-1", warning)
 
     def test_missing_screen_profile_falls_back_to_common_set(self):
@@ -223,7 +223,7 @@ class PickerWorkspaceCase(unittest.TestCase):
         self.assertIsNone(desk)
         self.assertEqual([z.name for z in self.picker.zones_from_grid(grid)],
                          ["main", "top-right", "bottom"])
-        self.assertIn("нет на диске", err.getvalue())
+        self.assertIn("is not on disk", err.getvalue())
 
     def test_workspace_conf_ignores_monitor_bindings(self):
         """`--workspace conf` — сам zones.conf: ни [monitors], ни [workspaces]."""
@@ -251,9 +251,9 @@ class PickerWorkspaceCase(unittest.TestCase):
 
     def test_workspace_caption(self):
         caption = self.picker.workspace_caption
-        self.assertEqual(caption(1, "cinema"), "стол 2 · профиль «cinema»")
-        self.assertEqual(caption(0, None), "стол 1 · общий набор")
-        self.assertEqual(caption(self.zt.WORKSPACE_CONF, None), "zones.conf, без профилей столов")
+        self.assertEqual(caption(1, "cinema"), 'workspace 2 · profile "cinema"')
+        self.assertEqual(caption(0, None), "workspace 1 · default set")
+        self.assertEqual(caption(self.zt.WORKSPACE_CONF, None), "zones.conf, without workspace profiles")
         # стол неизвестен (нет _NET_CURRENT_DESKTOP) — подписывать нечего
         self.assertEqual(caption(None, None), "")
         self.assertEqual(caption(self.zt.WORKSPACE_CURRENT, None), "")
@@ -262,29 +262,29 @@ class PickerWorkspaceCase(unittest.TestCase):
         """Подпись называет экран, если сетку дал его профиль, иначе — стол."""
         caption = self.picker.screen_caption
         self.assertEqual(caption(1, "cinema", "HDMI-1", "studio"),
-                         "экран HDMI-1 · профиль «studio»")
-        self.assertEqual(caption(1, "cinema", "HDMI-1", None), "стол 2 · профиль «cinema»")
-        self.assertEqual(caption(0, None, "HDMI-1", None), "стол 1 · общий набор")
+                         'monitor HDMI-1 · profile "studio"')
+        self.assertEqual(caption(1, "cinema", "HDMI-1", None), 'workspace 2 · profile "cinema"')
+        self.assertEqual(caption(0, None, "HDMI-1", None), "workspace 1 · default set")
         self.assertEqual(caption(self.zt.WORKSPACE_CONF, None, "HDMI-1", None),
-                         "zones.conf, без профилей столов")
+                         "zones.conf, without workspace profiles")
 
     def test_describe_grid(self):
         path = self.write(self.conf, BASE)
         zones = self.picker.zones_from_grid(self.zt.Grid(path))
         self.assertEqual(
-            self.picker.describe_grid(zones, "стол 1 · общий набор"),
-            "стол 1 · общий набор · зон 3: main, top-right, bottom",
+            self.picker.describe_grid(zones, "workspace 1 · default set"),
+            "workspace 1 · default set · zones 3: main, top-right, bottom",
         )
         self.assertEqual(
             self.picker.describe_grid(zones[:1], ""),
-            "зон 1: main",
+            "zones 1: main",
         )
 
     # ---- --workspace разбирается тем же кодом, что у zone-tiler
 
     def test_workspace_flag_is_parsed_by_tiler(self):
         parse = self.picker.parse_args
-        self.assertIsNone(parse([]).workspace)  # по умолчанию активный стол
+        self.assertIsNone(parse([]).workspace)  # по умолчанию active workspace
         self.assertEqual(parse(["--workspace", "2"]).workspace, 2)
         self.assertEqual(parse(["--workspace", "current"]).workspace, self.zt.WORKSPACE_CURRENT)
         self.assertEqual(parse(["--workspace", "conf"]).workspace, self.zt.WORKSPACE_CONF)
@@ -297,7 +297,7 @@ class PickerWorkspaceCase(unittest.TestCase):
                 self.picker.parse_args(["--workspace", "-1"])
         self.assertEqual(ctx.exception.code, 2)
         # текст тот же, что у zone-tiler.py: разбор не скопирован, а переиспользован
-        self.assertIn("нужен номер стола", err.getvalue())
+        self.assertIn("a workspace number", err.getvalue())
 
 
 if __name__ == "__main__":

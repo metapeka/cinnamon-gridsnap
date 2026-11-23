@@ -11,7 +11,7 @@
 нарушением:
 
 * докстринги (это документация кода, а не текст для пользователя);
-* строки на строке с пометкой ``# i18n: не переводится`` — регулярки, ключи
+* строки на строке с пометкой ``# i18n: do not translate`` — регулярки, ключи
   конфига и заголовки, которые код пишет в файлы (они не текст интерфейса).
 
 Запуск:
@@ -57,7 +57,9 @@ SOURCES = (
 )
 
 # Пометка «эта строка не текст для пользователя» (регулярка, ключ, заголовок файла).
-SKIP_MARK = "i18n: не переводится"
+# Пометка «строка не текст для пользователя». Старая русская форма живёт
+# до конца инверсии: её снимают воркеры, переводящие комментарии модулей.
+SKIP_MARK = ("i18n: do not translate", "i18n: не переводится")
 
 CYRILLIC = re.compile(r"[\u0400-\u04ff]")
 
@@ -102,7 +104,8 @@ def wrapper_arg_ids(tree):
 
 def marked_lines(source):
     """Номера строк с пометкой «не переводится» (1-нумерация)."""
-    return {n for n, line in enumerate(source.splitlines(), start=1) if SKIP_MARK in line}
+    return {n for n, line in enumerate(source.splitlines(), start=1)
+            if any(mark in line for mark in SKIP_MARK)}
 
 
 def unwrapped(source, path):

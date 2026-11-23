@@ -6,7 +6,7 @@
 проверяется именно логика — откуда и куда едет окно, что бывает на краю сетки
 и с окном вне зон, что `--dry-run` ничего не двигает, а `undo` получает запись
 истории. Отдельно — разбор необязательной секции `[move]`
-(`zone_config.load_move_keys`: нет секции — умолчания, неизвестный ключ — код 3),
+(`zone_config.load_move_keys`: нет секции — умолчания, unknown key — код 3),
 `keys --move` и то, что сохранение зон из `zone_config` секцию не теряет.
 
 Запуск:
@@ -168,7 +168,7 @@ class MoveNeighbourTest(MoveCase):
         self.assertEqual(code, 0)
         self.assertEqual(self.applied, [])
         self.assertEqual(self.history, [])
-        self.assertIn("соседа right нет", err)
+        self.assertIn("has no neighbour to the right", err)
         self.assertIn("right", err)
 
     def test_quiet_hides_edge_message(self):
@@ -191,7 +191,7 @@ class MoveNeighbourTest(MoveCase):
         code, _out, err = self.run_cli("move", "right")
         self.assertEqual(code, 0)
         self.assertEqual(self.applied, [])
-        self.assertIn("соседа right нет", err)
+        self.assertIn("has no neighbour to the right", err)
 
     def test_window_on_monitor_uses_its_zone_set(self):
         self.write_conf(WITH_HDMI)
@@ -228,7 +228,7 @@ class MoveNeighbourTest(MoveCase):
     def test_bad_direction_is_usage_error(self):
         code, _out, err = self.run_cli("move", "sideways")
         self.assertEqual(code, 2)
-        self.assertIn("направление", err)
+        self.assertIn("direction", err)
         self.assertEqual(self.applied, [])
 
 
@@ -242,7 +242,7 @@ class MoveFailuresTest(MoveCase):
         with mock.patch.object(self.zt, "read_frame", boom):
             code, _out, err = self.run_cli("move", "left")
         self.assertEqual(code, 1)
-        self.assertIn("не удалось прочитать рамку окна 0x1234", err)
+        self.assertIn("failed to read the frame of window 0x1234", err)
         self.assertIn("нет такого окна", err)
         self.assertEqual(self.applied, [])
 
@@ -250,7 +250,7 @@ class MoveFailuresTest(MoveCase):
         env = {k: v for k, v in os.environ.items() if k != "DISPLAY"}
         r = self.run_cli_subprocess("move", "left", env=env)
         self.assertEqual(r.returncode, 1)
-        self.assertIn("рабочую область экрана", r.stderr)
+        self.assertIn("work area of the monitor", r.stderr)
 
 
 class MoveGeometryTest(unittest.TestCase):
@@ -337,7 +337,7 @@ class MoveSectionTest(unittest.TestCase):
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
             zc.load_move_keys(self.path)
         self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
-        self.assertIn("неизвестное направление", err.getvalue())
+        self.assertIn("unknown direction", err.getvalue())
         self.assertIn("sideways", err.getvalue())
 
     def test_empty_binding_is_config_error(self):
@@ -346,7 +346,7 @@ class MoveSectionTest(unittest.TestCase):
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
             zc.load_move_keys(self.path)
         self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
-        self.assertIn("пустое сочетание", err.getvalue())
+        self.assertIn("empty shortcut", err.getvalue())
 
     def test_section_is_not_a_foreign_section(self):
         # `[move]` — своя секция: редактор не должен таскать её как «чужую».
@@ -445,7 +445,7 @@ class KeysMoveCliTest(unittest.TestCase):
             fh.write(TWO_HALVES + "[move]\nleft = <Super>h\nsideways = <Super>s\n")
         r = self.run_cli("keys", "--move")
         self.assertEqual(r.returncode, 3)
-        self.assertIn("неизвестное направление", r.stderr)
+        self.assertIn("unknown direction", r.stderr)
 
     def test_keys_without_flag_work_as_before(self):
         r = self.run_cli("keys")

@@ -1,51 +1,54 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""zone_tabstrip_nav — чистая раскладка полосы вкладок для ``zone-tabstrip.py``.
+"""zone_tabstrip_nav — pure tabstrip layout for ``zone-tabstrip.py``.
 
-Здесь живёт всё, что полоса вкладок делает с числами и строками: разбор
-построчного снимка от демона, рамки вкладок по ширине полосы, подпись под
-ширину вкладки и вкладка под точкой клика. Модуль намеренно не импортирует ни
-GTK, ни cairo, ни X: его можно и нужно проверять обычными юнит-тестами без
-X-сервера (инвариант проекта, как у ``zone_picker_nav``/``zone_tabs``).
+Everything the tabstrip does with numbers and strings lives here: parsing the
+line-wise snapshot from the daemon, tab frames by strip width, a label fitted to
+the tab width and the tab under a click point. The module deliberately imports
+neither GTK nor cairo nor X: it can and should be checked with ordinary unit tests
+without an X server (a project invariant, as with ``zone_picker_nav``/``zone_tabs``).
 
-Что здесь есть:
+What is here:
 
-* :func:`parse_snapshot` — строка снимка ``{"strips": [...]}`` от демона →
-  список полос; ``None`` — строка не снимок (её пропускают молча), ``[]`` —
-  снимок «рисовать нечего», и это разные вещи;
-* :func:`tab_frames` — рамки вкладок по ширине полосы: поровну, последняя
-  вкладка забирает остаток деления, поэтому вкладки не вылезают за зону;
-* :func:`fit_title` — подпись, обрезанная под ширину вкладки (``…`` вместо
-  хвоста). Скролла и второй строки в полосе нет: лишние подписи обрезаются;
-* :func:`layout` — по записи снимка то, что рисуется: окно, подпись, рамка,
-  активность;
-* :func:`tab_at` — индекс вкладки под точкой клика (клик уходит в сокет демона).
+* :func:`parse_snapshot` — the snapshot line ``{"strips": [...]}`` from the daemon →
+  a list of strips; ``None`` means the line is not a snapshot (it is skipped
+  silently), ``[]`` is a "nothing to draw" snapshot, and these are different
+  things;
+* :func:`tab_frames` — tab frames by strip width: evenly, the last tab takes the
+  remainder of the division, so tabs do not stick out of the zone;
+* :func:`fit_title` — a label cut to the tab width (``…`` instead of the tail).
+  There is no scroll and no second line in the strip: extra labels are cut;
+* :func:`layout` — from a snapshot record, what is drawn: window, label, frame,
+  activity;
+* :func:`tab_at` — index of the tab under the click point (the click goes to the
+  daemon socket).
 
-Рамки — пиксельные ``(x, y, w, h)`` в координатах экрана, как в
-``zone_tabs.strip_record``: полоса рисуется поверх рабочего стола.
+Frames are pixel ``(x, y, w, h)`` in screen coordinates, as in
+``zone_tabs.strip_record``: the strip is drawn over the desktop.
 """
 
 import json
 import math
 
-# Зазор между вкладками и отступ подписи от краёв вкладки, px. Полоса узкая,
-# поэтому зазор в один пиксель: он отделяет вкладки, не съедая ширину подписей.
+# Gap between tabs and label padding from the tab edges, px. The strip is narrow,
+# so the gap is one pixel: it separates the tabs without eating label width.
 TAB_GAP = 1
 TAB_PADDING = 8
 
-# Подпись обрезается «на глаз», без Pango и cairo: ширина одного символа
-# оценивается средним числом для шрифта полосы. Точный расчёт был бы заботой
-# рисующего, а обрезать надо до него, чтобы не заказывать подпись шире вкладки.
+# The label is cut "by eye", without Pango and cairo: the width of one character
+# is estimated by the average for the strip font. An exact calculation would be
+# the drawing side's business, and the cut has to happen before it, so as not to
+# order a label wider than the tab.
 CHAR_WIDTH = 7
 
-# Многоточие вместо обрезанного хвоста подписи.
+# Ellipsis instead of the cut tail of the label.
 ELLIPSIS = "…"
 
 EPS = 1e-9
 
 
 def _rect_values(value):
-    """``(x, y, w, h)`` из чего угодно похожего на рамку; ``None`` — мусор."""
+    """``(x, y, w, h)`` from anything resembling a frame; ``None`` means garbage."""
     try:
         x, y, w, h = (float(v) for v in value)
     except (TypeError, ValueError):
@@ -56,11 +59,10 @@ def _rect_values(value):
 
 
 def record_rect(record):
-    """Рамка полосы из записи снимка; ``None`` — рисовать по ней нечего.
+    """Strip frame from a snapshot record; ``None`` means there is nothing to draw by it.
 
-    Нулевая или отрицательная ширина — тоже ``None``: окно нулевого размера не
-    покажет ни одной подписи, а рисовать его «на всякий случай» значит плодить
-    невидимые окна поверх рабочего стола.
+    Zero or negative width is ``None`` too: a zero-size window will show no label,
+    and drawing it "just in case" means breeding invisible windows over the desktop.
     """
     if not isinstance(record, dict):
         return None
@@ -76,13 +78,13 @@ def _tabs_of(record):
 
 
 def parse_snapshot(line):
-    """Снимок из строки stdin → список полос; ``None`` — это не снимок.
+    """Snapshot from a stdin line → list of strips; ``None`` means this is not a snapshot.
 
-    Снимок полный, а не дельта, поэтому ``[]`` (пустой список) значит «полос
-    нет, окна убрать», а ``None`` — «строку не разобрали, состояние не менять»:
-    демон может прислать мусор или недописанную строку, и полоса не должна из-за
-    этого исчезать с экрана. Записи без вкладок и с битой рамкой отсеиваются:
-    рисовать по ним нечего.
+    The snapshot is full, not a delta, so ``[]`` (an empty list) means "there are no
+    strips, remove the windows", while ``None`` means "the line was not parsed, do
+    not change the state": the daemon may send garbage or a half-written line, and
+    the strip must not disappear from the screen because of that. Records without
+    tabs and with a broken frame are filtered out: there is nothing to draw by them.
     """
     if isinstance(line, bytes):
         try:
@@ -108,12 +110,12 @@ def parse_snapshot(line):
 
 
 def tab_frames(rect, count, gap=TAB_GAP):
-    """Рамки ``count`` вкладок в полосе `rect` — слева направо, без выхода за зону.
+    """Frames of ``count`` tabs in the strip `rect` — left to right, without leaving the zone.
 
-    Ширина полосы делится поровну; последняя вкладка забирает остаток деления,
-    поэтому сумма рамок и зазоров ровно равна ширине полосы. Полоса уже, чем
-    зазоры между вкладками, — зазоры отбрасываются: вкладки делят её целиком,
-    но всё равно остаются в её пределах.
+    The strip width is divided evenly; the last tab takes the remainder of the
+    division, so the sum of frames and gaps is exactly the strip width. When the
+    strip is narrower than the gaps between tabs, the gaps are dropped: the tabs
+    divide it entirely but still stay within its bounds.
     """
     count = int(count)
     if count <= 0:
@@ -138,16 +140,17 @@ def tab_frames(rect, count, gap=TAB_GAP):
 
 
 def label_width(frame, padding=TAB_PADDING):
-    """Сколько пикселей остаётся подписи внутри вкладки `frame` (может быть 0)."""
+    """How many pixels a label gets inside the tab `frame` (may be 0)."""
     return max(0.0, float(frame[2]) - 2 * max(0.0, float(padding)))
 
 
 def fit_title(title, width, char_width=CHAR_WIDTH):
-    """Подпись, влезающая в `width` пикселей: хвост заменяется на ``…``.
+    """A label that fits into `width` pixels: the tail is replaced with ``…``.
 
-    Ширина символа оценивается средним (`char_width`), а не измеряется: точная
-    раскладка текста — забота рисующего, а решение «сколько символов оставить»
-    принимается здесь, до него. Не влезает даже многоточие — подписи нет.
+    The character width is estimated by an average (`char_width`), not measured:
+    exact text layout is the drawing side's business, while the decision "how many
+    characters to keep" is made here, before it. If even the ellipsis does not fit,
+    there is no label.
     """
     title = "" if title is None else str(title)
     width = float(width)
@@ -164,11 +167,11 @@ def fit_title(title, width, char_width=CHAR_WIDTH):
 
 
 def layout(record):
-    """Что рисовать по записи снимка: ``[{window, title, label, active, rect}]``.
+    """What to draw by a snapshot record: ``[{window, title, label, active, rect}]``.
 
-    ``[]`` — рисовать нечего (полоса без вкладок или её рамка не разобралась).
-    Подписи уже обрезаны под ширину своей вкладки, поэтому рисующему не надо
-    считать ни ширину шрифта, ни зазоры.
+    ``[]`` means there is nothing to draw (a strip without tabs or its frame was not
+    parsed). The labels are already cut to the width of their tab, so the drawing
+    side has to count neither font width nor gaps.
     """
     rect = record_rect(record)
     if rect is None:
@@ -191,12 +194,12 @@ def layout(record):
 
 
 def tab_at(frames, point):
-    """Индекс вкладки под точкой ``point = (x, y)``; ``None`` — мимо вкладок.
+    """Index of the tab under the point ``point = (x, y)``; ``None`` means past the tabs.
 
-    Точка — в тех же координатах, что и рамки (экранные пиксели). Соседние
-    вкладки делят границу, поэтому левый край вкладки принадлежит ей, а правый
-    уже нет — как у ``zone_picker_nav.zone_at``: клик на границе не может
-    попасть в две вкладки сразу.
+    The point is in the same coordinates as the frames (screen pixels). Neighbouring
+    tabs share a border, so the left edge of a tab belongs to it while the right one
+    does not — as in ``zone_picker_nav.zone_at``: a click on the border cannot fall
+    into two tabs at once.
     """
     if not frames or point is None:
         return None
@@ -211,11 +214,11 @@ def tab_at(frames, point):
 
 
 def tab_under(record, point):
-    """Окно под точкой клика; ``None`` — точка мимо вкладок или окна нет.
+    """Window under the click point; ``None`` means the point is past the tabs or there is no window.
 
-    Одна функция на клик: по записи снимка считает и рамки, и попадание, —
-    чтобы ``zone-tabstrip.py`` не собирал их сам по частям и не разошёлся с
-    тестами.
+    One function per click: from a snapshot record it counts both the frames and the
+    hit, so that ``zone-tabstrip.py`` does not assemble them itself piece by piece
+    and drift away from the tests.
     """
     rows = layout(record)
     index = tab_at([row["rect"] for row in rows], point)

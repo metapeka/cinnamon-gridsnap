@@ -258,7 +258,7 @@ class TestGridMonitorZones(ConfCase):
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as ctx:
             zt.Grid(path)
         self.assertEqual(ctx.exception.code, zt.EXIT_CONFIG)
-        self.assertIn("обязательной [zones] нет", err.getvalue())
+        self.assertIn("the required [zones] is missing", err.getvalue())
 
     def test_empty_monitor_section_is_config_error(self):
         path = self.conf(
@@ -276,7 +276,7 @@ class TestGridMonitorZones(ConfCase):
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as ctx:
             zt.Grid(self.conf(self.TWO_SETS + "[rules]\nFirefox = nope\n"))
         self.assertEqual(ctx.exception.code, zt.EXIT_CONFIG)
-        self.assertIn("неизвестную зону 'nope'", err.getvalue())
+        self.assertIn("unknown zone 'nope'", err.getvalue())
 
     def test_keys_may_use_zone_of_one_monitor(self):
         grid = zt.Grid(self.conf(self.TWO_SETS + "[keys]\nleft = <Super><Alt>1\n"))
@@ -305,7 +305,7 @@ class TestCmdList(ConfCase):
         )
         lines = self.run_list(zt.Grid(path), "HDMI-1")
         self.assertEqual(
-            lines[0], "рабочая область монитора 1: 1000,40 960x1000  (выход HDMI-1)"
+            lines[0], "monitor 1 work area: 1000,40 960x1000  (output HDMI-1)"
         )
         self.assertEqual(lines[1].split()[0], "left")
         self.assertIn("480x1000", lines[1])
@@ -315,7 +315,7 @@ class TestCmdList(ConfCase):
             BASE_GRID + "[zones]\nmain = 0, 0, 1, 1\n[zones:HDMI-1]\nleft = 0, 0, 0.5, 1\n"
         )
         lines = self.run_list(zt.Grid(path), 0)
-        self.assertEqual(lines[0], "рабочая область монитора 0: 0,40 1000x1000  (выход eDP-1)")
+        self.assertEqual(lines[0], "monitor 0 work area: 0,40 1000x1000  (output eDP-1)")
         self.assertEqual(lines[1].split()[0], "main")
 
     def test_list_first_line_stays_applet_compatible(self):
@@ -327,7 +327,7 @@ class TestCmdList(ConfCase):
         ), contextlib.redirect_stdout(buf):
             zt.cmd_list(zt.Grid(path), argparse.Namespace(monitor="0"))
         self.assertEqual(
-            buf.getvalue().splitlines()[0], "рабочая область монитора 0: 0,40 1000x1000"
+            buf.getvalue().splitlines()[0], "monitor 0 work area: 0,40 1000x1000"
         )
 
     def test_unknown_monitor_name_is_usage_error(self):
@@ -336,7 +336,7 @@ class TestCmdList(ConfCase):
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as ctx:
             self.run_list(zt.Grid(path), "DP-9")
         self.assertEqual(ctx.exception.code, zt.EXIT_USAGE)
-        self.assertIn("Доступны", err.getvalue())
+        self.assertIn("Available", err.getvalue())
 
 
 if __name__ == "__main__":

@@ -54,7 +54,7 @@ $PROG — установка GridSnap в префикс (по умолчанию
   КАТАЛОГ/share/man/ru/man1/, .../zh_CN/man1/
                           страницы ru и zh_CN: man-db выбирает их по локали
                           (маны ставятся всегда: это документация, а не ярлык)
-  КАТАЛОГ/share/locale/   каталоги переводов en и zh_CN (домены gridsnap и gridsnap@metapeka)
+  КАТАЛОГ/share/locale/   каталоги переводов ru и zh_CN (домены gridsnap и gridsnap@metapeka)
   КАТАЛОГ/share/...       ярлык, иконки, документация (если не --no-launcher)
 
 Автозапуск в сессии ставится отдельно и только для текущего пользователя:
@@ -111,7 +111,7 @@ mandir_for() {  # $1 = en | ru | zh_CN
 # Каталоги переводов: по домену на язык. Апплет Cinnamon берёт
 # `gridsnap@metapeka.mo` из ~/.local/share/locale (префикс по умолчанию).
 LOCALEDIR="$PREFIX/share/locale"
-LANGUAGES="en zh_CN"
+LANGUAGES="ru zh_CN"
 DOMAINS="gridsnap gridsnap@metapeka"
 
 MODULES="zone-tiler.py zone-daemon.py zone-editor.py zone_config.py zone_geom.py
@@ -215,7 +215,7 @@ fi
 
 # --- каталоги переводов ----------------------------------------------------
 # Собраны `make mo` (в tar.gz попадают из каталога locale/). Без них код
-# работает на русских строках — исходном языке, поэтому их отсутствие не
+# работает на английских строках — исходном языке, поэтому их отсутствие не
 # ошибка, а просто отсутствие перевода (например, в чекауте без сборки).
 for lang in $LANGUAGES; do
     for domain in $DOMAINS; do

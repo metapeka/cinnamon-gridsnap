@@ -99,7 +99,7 @@ class TestParseSnapshot(unittest.TestCase):
                 {"zone": "b", "rect": [0, 0, 10, 10]},
                 {"zone": "c", "rect": [0, 0, 0, 10], "tabs": [{"window": 1}]},
                 {"zone": "d", "rect": [0, 0, 10, 10],
-                 "tabs": ["не вкладка", {"window": 2, "title": "ok"}]},
+                 "tabs": ["is not a tab", {"window": 2, "title": "ok"}]},
             ]
         }
         parsed = nav.parse_snapshot(line(payload))
@@ -199,7 +199,7 @@ class TestTabAt(unittest.TestCase):
 
     def test_left_edge_belongs_to_tab_right_edge_does_not(self):
         self.assertEqual(nav.tab_at(self.FRAMES, (0, 0)), 0)
-        # Правый край первой вкладки — уже зазор, а не вкладка.
+        # Правый край первой вкладки — уже зазор, а is not a tab.
         self.assertIsNone(nav.tab_at(self.FRAMES, (50, 10)))
 
     def test_outside_and_bad_point(self):

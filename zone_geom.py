@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""zone_geom — чистая геометрия редактора зон (без GTK и без X).
+"""zone_geom — pure zone-editor geometry (no GTK and no X).
 
-Вынесена из `zone-editor.py`, чтобы расчёты перемещения, изменения размера,
-прилипания и границ проверялись юнит-тестами без X-сервера. Координаты — доли
-рабочей области (0..1), как в `zones.conf`.
+Moved out of `zone-editor.py` so that the calculations of moving, resizing,
+snapping and bounds are checked by unit tests without an X server. Coordinates are
+work-area fractions (0..1), as in `zones.conf`.
 
-Модуль не импортирует ни GTK, ни `zone_config`: он работает с чем угодно, у чего
-есть атрибуты `x, y, w, h`, и с кортежами `(x, y, w, h)`.
+The module imports neither GTK nor `zone_config`: it works with anything that has
+`x, y, w, h` attributes and with `(x, y, w, h)` tuples.
 
-Здесь же лежат чистые правила наборов зон на монитор: какой набор показать для
-монитора (`set_for_monitor`), что писать в статусе (`set_origin_text`) и какие
-секции `[zones:<выход>]` записать (`save_plan`). Они не про пиксели, но живут в
-этом модуле по той же причине: `zone-editor.py` тянет GTK, а эти решения нужны
-юнит-тестам без X и без GTK.
+The pure rules of per-monitor zone sets live here too: which set to show for a
+monitor (`set_for_monitor`), what to write in the status (`set_origin_text`) and
+which `[zones:<output>]` sections to write (`save_plan`). They are not about
+pixels, but they live in this module for the same reason: `zone-editor.py` pulls
+in GTK, while these decisions are needed by unit tests without X and without GTK.
 """
 
 import os
@@ -22,25 +22,25 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-from zone_i18n import _  # noqa: E402  (строки интерфейса и их перевод)
+from zone_i18n import _  # noqa: E402  (UI strings and their translation)
 
-MIN_SIZE = 0.05          # минимальный размер зоны (доля экрана)
-SNAP_PX = 9              # прилипание, пикселей
-MARGIN = 26              # поля холста редактора вокруг «экрана», пикселей
-EDGE_PX = 7              # полоса захвата края/угла, пикселей
-SLACK_PX = 4             # допуск попадания в зону мимо её границы, пикселей
+MIN_SIZE = 0.05          # minimum zone size (fraction of the screen)
+SNAP_PX = 9              # snapping, pixels
+MARGIN = 26              # editor canvas margins around the "screen", pixels
+EDGE_PX = 7              # edge/corner grab band, pixels
+SLACK_PX = 4             # tolerance for hitting a zone past its border, pixels
 GUIDES = [0.0, 0.25, 1 / 3, 0.5, 2 / 3, 0.75, 1.0]
 
 
 def _xywh(rect):
-    """Рамка как (x, y, w, h): и из объекта с атрибутами, и из кортежа."""
+    """Frame as (x, y, w, h): from an object with attributes and from a tuple alike."""
     if hasattr(rect, "x"):
         return rect.x, rect.y, rect.w, rect.h
     return tuple(rect)
 
 
 def screen_rect(canvas_w, canvas_h, workarea, margin=MARGIN):
-    """Прямоугольник «экрана» на холсте: (sx, sy, sw, sh) с полями и центровкой."""
+    """The rectangle of the "screen" on the canvas: (sx, sy, sw, sh) with margins and centring."""
     _, _, mw, mh = workarea
     avail_w = max(50, canvas_w - 2 * margin)
     avail_h = max(50, canvas_h - 2 * margin)
@@ -50,28 +50,28 @@ def screen_rect(canvas_w, canvas_h, workarea, margin=MARGIN):
 
 
 def to_px(screen, rect):
-    """Доли -> пиксели холста."""
+    """Fractions -> canvas pixels."""
     sx, sy, sw, sh = screen
     x, y, w, h = _xywh(rect)
     return (sx + x * sw, sy + y * sh, w * sw, h * sh)
 
 
 def to_frac(screen, px, py):
-    """Пиксели холста -> доли."""
+    """Canvas pixels -> fractions."""
     sx, sy, sw, sh = screen
     return ((px - sx) / sw, (py - sy) / sh)
 
 
 def snap_tol(screen, axis, snap_px=SNAP_PX):
-    """Допуск прилипания в долях по оси (из пикселей)."""
+    """Snap tolerance in fractions along an axis (from pixels)."""
     _, _, sw, sh = screen
     return snap_px / (sw if axis == "x" else sh)
 
 
 def snap_frac(frac, axis, tol, zones, skip=None):
-    """Подтянуть долю к ближайшей направляющей/краю зоны в пределах `tol`.
+    """Pull a fraction towards the nearest guide/zone edge within `tol`.
 
-    `skip` — индекс перетаскиваемой зоны, её края в приманки не берутся.
+    `skip` is the index of the zone being dragged; its edges are not used as bait.
     """
     cand = list(GUIDES)
     for i, z in enumerate(zones):
@@ -91,7 +91,7 @@ def snap_frac(frac, axis, tol, zones, skip=None):
 
 
 def snap_move(pos, size, axis, tol, zones, skip=None):
-    """Двигаемое ребро: сначала левый/верхний край, иначе правый/нижний."""
+    """The edge being moved: the left/top edge first, otherwise the right/bottom one."""
     left = snap_frac(pos, axis, tol, zones, skip)
     if abs(left - pos) > 1e-9:
         return min(max(0.0, left), 1.0 - size)
@@ -103,11 +103,11 @@ def snap_move(pos, size, axis, tol, zones, skip=None):
 
 def drag_rect(start, mode, edges, start_f, cur_f, zones, tol_x, tol_y,
               skip=None, min_size=MIN_SIZE):
-    """Новая рамка (x, y, w, h) при перетаскивании мышью.
+    """The new frame (x, y, w, h) while dragging with the mouse.
 
-    start — рамка на момент нажатия (кортеж или объект), mode — "move" или
-    "resize", edges — множество сторон ("l", "r", "t", "b"),
-    start_f/cur_f — доли курсора в начале и сейчас.
+    start is the frame at the moment of the press (tuple or object), mode is
+    "move" or "resize", edges is a set of sides ("l", "r", "t", "b"),
+    start_f/cur_f are the cursor fractions at the start and now.
     """
     x, y, w, h = _xywh(start)
     dx, dy = cur_f[0] - start_f[0], cur_f[1] - start_f[1]
@@ -137,7 +137,7 @@ def drag_rect(start, mode, edges, start_f, cur_f, zones, tol_x, tol_y,
 
 
 def nudge(rect, dx, dy, resize=False, min_size=MIN_SIZE):
-    """Сдвиг/изменение размера с клавиатуры; те же границы, что у мыши."""
+    """Move/resize from the keyboard; the same bounds as with the mouse."""
     x, y, w, h = _xywh(rect)
     if resize:
         w = min(1 - x, max(min_size, w + dx))
@@ -149,16 +149,16 @@ def nudge(rect, dx, dy, resize=False, min_size=MIN_SIZE):
 
 
 def scroll_resize(rect, delta, min_size=MIN_SIZE):
-    """Ширина зоны от колеса мыши: границы [min_size, 1 - x]."""
+    """Zone width from the mouse wheel: bounds [min_size, 1 - x]."""
     x, y, w, h = _xywh(rect)
     return (x, y, min(1 - x, max(min_size, w + delta)), h)
 
 
 def hit_test(px, py, screen, zones, edge_px=EDGE_PX, slack_px=SLACK_PX):
-    """Что под курсором: (индекс, "move"/"resize", стороны) или (None, "", set()).
+    """What is under the cursor: (index, "move"/"resize", sides) or (None, "", set()).
 
-    Зоны проверяются сверху вниз (последняя нарисованная — первая), мимо границы
-    допускается `slack_px`, захват края/угла — `edge_px`.
+    Zones are checked top to bottom (the last drawn one first), `slack_px` is
+    allowed past the border, and the edge/corner grab is `edge_px`.
     """
     for i in reversed(range(len(zones))):
         x, y, w, h = to_px(screen, zones[i])
@@ -178,17 +178,17 @@ def hit_test(px, py, screen, zones, edge_px=EDGE_PX, slack_px=SLACK_PX):
     return None, "", set()
 
 
-# ------------------------------------------------- наборы зон на монитор
+# ------------------------------------------------- zone sets per monitor
 #
-# Набор по умолчанию живёт в `[zones]`, набор монитора — в `[zones:<выход>]`.
-# Монитор без своей секции наследует общий набор, поэтому секция нужна только
-# там, где набор реально отличается (иначе файл обрастает копиями `[zones]`).
+# The default set lives in `[zones]`, a monitor set in `[zones:<output>]`.
+# A monitor without its own section inherits the common set, so a section is only
+# needed where the set really differs (otherwise the file grows copies of `[zones]`).
 
-SIG_DIGITS = 4           # точность сравнения геометрии — как у Zone.fmt()
+SIG_DIGITS = 4           # geometry comparison precision — as in Zone.fmt()
 
 
 def _zone_fields(zone):
-    """`(имя, x, y, w, h, привязка)` зоны или кортежа — без требований к типу."""
+    """`(name, x, y, w, h, binding)` of a zone or tuple — no type requirements."""
     if hasattr(zone, "name"):
         return (
             str(zone.name),
@@ -200,17 +200,17 @@ def _zone_fields(zone):
         )
     values = tuple(zone)
     if len(values) < 4:
-        raise ValueError(_("zone_geom: в наборе не зона, а {zone!r}").format(zone=zone))
+        raise ValueError(_("zone_geom: the item in the set is not a zone: {zone!r}").format(zone=zone))
     name = str(values[0]) if len(values) > 4 else ""
     x, y, w, h = values[-4], values[-3], values[-2], values[-1]
     return name, float(x), float(y), float(w), float(h), ""
 
 
 def zone_set_signature(zones):
-    """Отпечаток набора для сравнения: имена и геометрия в порядке файла.
+    """Fingerprint of a set for comparison: names and geometry in file order.
 
-    Привязки в отпечаток не входят: `[keys]` общая на файл и живёт по имени
-    зоны, так что набор с теми же зонами и другими клавишами — тот же набор.
+    Bindings are not part of the fingerprint: `[keys]` is shared per file and lives
+    by zone name, so a set with the same zones and different keys is the same set.
     """
     out = []
     for zone in zones:
@@ -221,11 +221,11 @@ def zone_set_signature(zones):
 
 
 def set_for_monitor(monitor, monitor_sets, default_zones):
-    """Набор, который показать для монитора: ``(зоны, своя ли секция)``.
+    """The set to show for a monitor: ``(zones, whether the section is its own)``.
 
-    Есть набор монитора — его копия и ``True`` (свой); нет — копия общего
-    ``[zones]`` и ``False`` (наследует). Копии обязательны: правка холста одного
-    монитора не должна молча менять набор другого.
+    A monitor set exists — its copy and ``True`` (its own); it does not — a copy of
+    the common ``[zones]`` and ``False`` (inherits). The copies are mandatory:
+    editing one monitor's canvas must not silently change another monitor's set.
     """
     own = (monitor_sets or {}).get(monitor)
     if own:
@@ -234,32 +234,32 @@ def set_for_monitor(monitor, monitor_sets, default_zones):
 
 
 def set_origin_text(monitor, own, shared=False, offline=False):
-    """Что показано на холсте — одной строкой для статуса редактора.
+    """What is shown on the canvas — one line for the editor status.
 
-    ``shared`` — это общий набор `[zones]`, ``own`` — своя секция монитора,
-    иначе набор унаследован. Отключённый выход помечается отдельно.
+    ``shared`` is the common `[zones]` set, ``own`` is the monitor's own section,
+    otherwise the set is inherited. A disabled output is marked separately.
     """
     if shared:
-        text = _("общий набор [zones] — его наследуют остальные мониторы")
+        text = _("default [zones] set - the other monitors inherit it")
     elif own:
-        text = _("свой набор [zones:{monitor}]").format(monitor=monitor)
+        text = _("own [zones:{monitor}] set").format(monitor=monitor)
     else:
-        text = _("наследует [zones]")
+        text = _("inherits [zones]")
     if offline:
-        return _("{text} · нет на экране").format(text=text)
+        return _("{text} · not on screen").format(text=text)
     return text
 
 
 def _binding_of(zone):
-    """Привязка зоны (``[keys]``) как строка; у кортежа её нет."""
+    """Zone binding (``[keys]``) as a string; a tuple has none."""
     return str(getattr(zone, "binding", "") or "").strip()
 
 
 def _without_seen_bindings(zones, seen):
-    """Копии зон, у которых имя уже встречалось в `[keys]`: привязка гасится.
+    """Copies of zones whose name already appeared in `[keys]`: the binding is cleared.
 
-    `[keys]` одна на файл, поэтому две секции с зоной одного имени не должны
-    писать клавишу дважды. Сами наборы не меняются — пишутся копии.
+    `[keys]` is one per file, so two sections with a zone of the same name must not
+    write the key twice. The sets themselves are not changed — copies are written.
     """
     out = []
     for zone in zones:
@@ -273,17 +273,18 @@ def _without_seen_bindings(zones, seen):
 
 
 def save_plan(default_zones, monitor_sets, edited=(), onscreen=None, existing=None):
-    """План записи: ``({монитор: зоны}, [монитор])`` — что писать и что удалять.
+    """Write plan: ``({monitor: zones}, [monitor])`` — what to write and what to delete.
 
-    Секция ``[zones:<монитор>]`` пишется, если набор монитора отличается от
-    общего ``[zones]`` или монитор правили явно (``edited``); секции, где набор
-    совпал с общим и правок не было, удаляются — но только у мониторов на
-    экране (``onscreen``) и только если секция уже есть в файле (``existing``).
-    Отключённый выход не удаляется никогда: его секцию либо пишем как есть
-    (если правили), либо не трогаем. Пустой набор монитора не пишется.
+    A ``[zones:<monitor>]`` section is written if the monitor's set differs from the
+    common ``[zones]`` or the monitor was explicitly edited (``edited``); sections
+    whose set matched the common one with no edits are deleted — but only for
+    monitors on screen (``onscreen``) and only if the section is already in the file
+    (``existing``). A disabled output is never deleted: its section is either
+    written as is (if it was edited) or left alone. An empty monitor set is not
+    written.
 
-    Зоны возвращаются копиями: у зон, чьё имя уже есть в общем наборе, гасится
-    привязка — `[keys]` общая, и дублей в ней быть не должно.
+    Zones are returned as copies: zones whose name is already in the common set get
+    their binding cleared — `[keys]` is shared, and there must be no duplicates in it.
     """
     default_sig = zone_set_signature(default_zones)
     onscreen = None if onscreen is None else set(onscreen)
@@ -301,20 +302,20 @@ def save_plan(default_zones, monitor_sets, edited=(), onscreen=None, existing=No
 
 
 def apply_save_plan(path, default_zones, plan, extra=None):
-    """Записать `zones.conf` по плану :func:`save_plan`; возвращает путь.
+    """Write `zones.conf` according to the :func:`save_plan` plan; returns the path.
 
-    ``zone_config`` импортируется здесь, а не наверху модуля: геометрия не
-    должна тянуть конфиг-слой и `zone-tiler.py` только ради импорта. Файл
-    переписывается одним проходом через :func:`zone_config.save_zone_sets`:
-    наборы мониторов читаются из файла один раз, из них убираются секции из
-    ``drop``, к ним добавляются записываемые из ``write``. Чужие секции самого
-    файла (`[rules]`, `[daemon]`, `[zones:*]` отключённых выходов) при этом
-    сохраняются — их берёт из файла сам `save_zone_sets`.
+    ``zone_config`` is imported here rather than at the top of the module: geometry
+    must not pull in the config layer and `zone-tiler.py` just for an import. The
+    file is rewritten in one pass through :func:`zone_config.save_zone_sets`: the
+    monitor sets are read from the file once, the sections from ``drop`` are removed
+    from them, and the ones to write from ``write`` are added. Foreign sections of
+    the file itself (`[rules]`, `[daemon]`, `[zones:*]` of disabled outputs) are
+    kept — `save_zone_sets` takes them from the file itself.
 
-    Повторов в `[keys]` не будет: их отсекает сам писатель, поэтому никакой
-    текстовой чистки после записи не нужно.
+    There will be no repeats in `[keys]`: the writer filters them out, so no textual
+    cleanup after writing is needed.
     """
-    import zone_config as zc  # noqa: PLC0415 — ленивый импорт, см. docstring
+    import zone_config as zc  # noqa: PLC0415 — lazy import, see the docstring
 
     write, drop = plan
     monitors = {

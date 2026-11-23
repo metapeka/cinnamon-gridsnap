@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""zone_reflow — чистая геометрия reflow для GridSnap (без X11 и без GTK).
+"""zone_reflow — pure reflow geometry for GridSnap (no X11 and no GTK).
 
-Когда окно, поставленное GridSnap, закрывается и его зона освобождается, занятая
-соседняя зона расширяется на освободившуюся площадь — если объединение двух зон
-снова прямоугольник. Работает в долях рабочей области (0..1), как `zones.conf`.
+When a window placed by GridSnap closes and its zone is freed, a neighbouring
+occupied zone grows into the freed area — if the union of the two zones is a
+rectangle again. It works in work-area fractions (0..1), like `zones.conf`.
 
-Публичная функция одна: `reflow(zones, freed, occupied)`.
+The public function is one: `reflow(zones, freed, occupied)`.
 """
 
-# Допуск сравнения долей. Доли приходят из конфига и арифметики 0..1, поэтому
-# точного равенства float недостаточно.
+# Tolerance for comparing fractions. Fractions come from the config and from 0..1
+# arithmetic, so exact float equality is not enough.
 EPS = 1e-9
 
 
 def _close(a, b):
-    """Равны ли доли `a` и `b` в пределах EPS."""
+    """Are fractions `a` and `b` equal within EPS."""
     return abs(a - b) <= EPS
 
 
 def _union(a, b):
-    """Bounding box двух rect'ов (x, y, w, h)."""
+    """Bounding box of two rects (x, y, w, h)."""
     x = min(a[0], b[0])
     y = min(a[1], b[1])
     x2 = max(a[0] + a[2], b[0] + b[2])
@@ -29,13 +29,13 @@ def _union(a, b):
 
 
 def _shared_edge(freed, cand):
-    """Длина общего ребра `freed` и `cand`, если они соседи с прямоугольным
-    объединением; иначе None.
+    """Length of the shared edge of `freed` and `cand`, if they are neighbours
+    with a rectangular union; otherwise None.
 
-    Вертикальные соседи (один над другим) — совпадают x и w, y-диапазоны
-    стыкуются; общее ребро горизонтально, его длина равна w.
-    Горизонтальные соседи (бок о бок) — совпадают y и h, x-диапазоны стыкуются;
-    общее ребро вертикально, его длина равна h.
+    Vertical neighbours (one above the other) — x and w match, the y ranges meet;
+    the shared edge is horizontal, its length equals w.
+    Horizontal neighbours (side by side) — y and h match, the x ranges meet;
+    the shared edge is vertical, its length equals h.
     """
     fx, fy, fw, fh = freed
     cx, cy, cw, ch = cand
@@ -52,16 +52,16 @@ def _shared_edge(freed, cand):
 
 
 def reflow(zones, freed, occupied):
-    """Вернуть {zone: (x, y, w, h)} — новые rect'ы после освобождения `freed`.
+    """Return {zone: (x, y, w, h)} — the new rects after `freed` is released.
 
-    zones:    {имя: (x, y, w, h)} в долях 0..1
-    freed:    имя освобождённой зоны
-    occupied: множество имён занятых зон
+    zones:    {name: (x, y, w, h)} in fractions 0..1
+    freed:    name of the freed zone
+    occupied: set of names of occupied zones
 
-    Кандидат — занятая зона, делящая с `freed` ребро, объединение с которой —
-    прямоугольник. Выигрывает кандидат с самым длинным общим ребром; при равной
-    длине — лексикографически меньшее имя. v1 — без каскада: возвращается ровно
-    один расширенный rect (или {}).
+    A candidate is an occupied zone that shares an edge with `freed` and whose
+    union with it is a rectangle. The candidate with the longest shared edge wins;
+    on equal length the lexicographically smaller name does. v1 has no cascade:
+    exactly one expanded rect is returned (or {}).
     """
     if freed not in zones or freed in occupied:
         return {}

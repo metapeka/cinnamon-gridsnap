@@ -43,9 +43,9 @@ INSTALL_SH := install.sh install-launcher.sh install-daemon.sh
 # моменту, но так список версионируемых файлов растёт вместе с ними.
 VERSIONED = $(shell grep -l '^VERSION = ' $(MODULES) $(CLIENTS) 2>/dev/null | sort | tr '\n' ' ')
 
-# Локализация: каталоги переводов. Язык исходника — русский, поэтому `ru.po`
-# нет; `en` и `zh_CN` ложатся поверх русских строк.
-LANGS       := en zh_CN
+# Локализация: каталоги переводов. Язык исходника — английский, поэтому `en.po`
+# нет; `ru` и `zh_CN` ложатся поверх английских строк.
+LANGS       := ru zh_CN
 LOCALEDIR   := locale
 POT_FILES   := $(MODULES) $(CLIENTS)
 POT_DIR     ?= po
@@ -57,17 +57,16 @@ APPLET_DIR  := po/$(APPLET_NAME)
 
 # Man-страницы — не gettext-домен, а локализованные страницы: po4a делает .po из
 # roff, а собранные страницы ставятся в /usr/share/man/<язык>/man1/ (man-db сам
-# выбирает по локали). Язык-источник — русский, как и у строк: каталога `ru.po`
-# нет, русская страница кладётся копией источника. `po4a-translate` переливает
-# roff (абзацы, `.B x` → `\fBx\fP`), поэтому пересобирать ею рукописную
-# русскую страницу нельзя — она бы перестала быть тем, что вычитывали.
+# выбирает по локали). Язык-источник — английский: каталога `en.po` нет,
+# английская страница ложится копией источника, а русская и китайская собираются
+# po4a (`po4a-translate` переливает roff: абзацы, `.B x` → `\fBx\fP`).
 MAN_BUILD      := man/build
 MAN_SOURCE     := man/gridsnap.1
 MAN_ALIASES    := gridsnap-tiler.1 gridsnap-daemon.1 gridsnap-editor.1 \
                   gridsnap-picker.1 gridsnap-hotcorners.1 gridsnap-ctl.1 setup-hotkeys.1
 MAN_DEFAULT    := en
-MAN_TRANSLATED := en zh_CN
-MAN_LANGS      := $(MAN_TRANSLATED) ru
+MAN_TRANSLATED := ru zh_CN
+MAN_LANGS      := $(MAN_DEFAULT) $(MAN_TRANSLATED)
 # Языки без пробелов: groff не разрывает строку между иероглифами, поэтому
 # собранной странице нужны точки переноса `\:` (см. tools/man-cjk.py).
 MAN_CJK        := zh_CN
@@ -161,9 +160,9 @@ mo:
 
 # `make check-i18n` — то, что проверяет CI: каталоги собираются, шаблоны не
 # разошлись с кодом (сверяются наборы `msgid`, а не файлы целиком: дата сборки
-# в шапке меняется каждый раз), а каталога `ru` нет — русский это msgid как есть.
+# в шапке меняется каждый раз), а каталога `en` нет — английский это msgid как есть.
 check-i18n: mo
-	@test ! -e "po/ru.po" || { echo "make: po/ru.po не нужен: русский — исходные строки" >&2; exit 1; }
+	@test ! -e "po/en.po" || { echo "make: po/en.po не нужен: английский — исходные строки" >&2; exit 1; }
 	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
 		$(MAKE) --no-print-directory -s pot POT_DIR="$$tmp" >/dev/null; \
 		grep '^msgid ' "po/$(PKG).pot" > "$$tmp/a"; \
@@ -187,8 +186,8 @@ man-pot:
 	po4a --no-translations "$(MAN_PO4A_CONF)"
 	@echo "обновлён $(MAN_POT)"
 
-# `make man` — собрать страницы в man/build/<язык>/man1/: en и zh_CN через
-# po4a, ru — копией источника, шесть `.so`-псевдонимов — копией во все три
+# `make man` — собрать страницы в man/build/<язык>/man1/: ru и zh_CN через
+# po4a, en — копией источника, шесть `.so`-псевдонимов — копией во все три
 # языка (man-db резолвит `.so man1/gridsnap.1` внутри языка — проверено).
 # `--keep 0` — писать страницу и при неполном каталоге: полноту проверяет
 # `check-man-i18n`, а не молчаливое отсутствие файла.
@@ -200,7 +199,7 @@ man:
 		$(PYTHON) tools/man-cjk.py "$(MAN_BUILD)/$$lang/man1/gridsnap.1"; \
 	done
 	@mkdir -p $(foreach l,$(MAN_LANGS),"$(MAN_BUILD)/$(l)/man1")
-	cp "$(MAN_SOURCE)" "$(MAN_BUILD)/ru/man1/gridsnap.1"
+	cp "$(MAN_SOURCE)" "$(MAN_BUILD)/$(MAN_DEFAULT)/man1/gridsnap.1"
 	@for lang in $(MAN_LANGS); do \
 		for page in $(MAN_ALIASES); do \
 			cp "man/$$page" "$(MAN_BUILD)/$$lang/man1/$$page"; \
@@ -210,12 +209,12 @@ man:
 
 # `check-man-i18n` — то, что гоняет CI: страницы собираются и проходят
 # `tests/test_man_i18n.py` — он же меряет то, что видит пользователь: выбор языка
-# по локали, ширину в колонках и «cannot break line»; а русская страница
+# по локали, ширину в колонках и «cannot break line»; а английская страница
 # байт-в-байт равна источнику.
 check-man-i18n: man
 	@$(PYTHON) tests/test_man_i18n.py
-	@cmp -s "$(MAN_SOURCE)" "$(MAN_BUILD)/ru/man1/gridsnap.1" || { \
-		echo "make: русская страница разошлась с $(MAN_SOURCE)" >&2; exit 1; }
+	@cmp -s "$(MAN_SOURCE)" "$(MAN_BUILD)/$(MAN_DEFAULT)/man1/gridsnap.1" || { \
+		echo "make: английская страница разошлась с $(MAN_SOURCE)" >&2; exit 1; }
 	@echo "man-страницы в порядке"
 
 # --------------------------------------------------------------- tar.gz

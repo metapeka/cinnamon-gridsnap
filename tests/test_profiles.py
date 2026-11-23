@@ -349,7 +349,7 @@ class TestHeadless(unittest.TestCase):
             self.assertIn("demo", r.stdout.splitlines()[0])
             r = cli("profile", "use", "demo", "--no-hotkeys", "--conf", conf)
             self.assertEqual(r.returncode, 0, r.stderr)
-            self.assertIn("применён", r.stdout)
+            self.assertIn("applied", r.stdout)
             r = cli("profile", "rm", "demo", "--conf", conf)
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertEqual(cli("profile", "list", "--conf", conf).stdout.strip(), "")
@@ -376,7 +376,7 @@ class TestHeadless(unittest.TestCase):
                                   ("show", ("demo", "extra"))):
                 r = cli("profile", action, *words)
                 self.assertEqual(r.returncode, 2, f"profile {action}: {r.stdout}{r.stderr}")
-                self.assertIn("лишнее слово", r.stderr)
+                self.assertIn("extra word", r.stderr)
                 self.assertIn(words[-1], r.stderr)
             # Подсказка про `--name` нужна там, где имя и задаётся: у from-gallery.
             r = cli("profile", "from-gallery", "work", "mine")

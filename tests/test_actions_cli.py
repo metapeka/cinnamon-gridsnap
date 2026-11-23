@@ -4,7 +4,7 @@
 
 Проверяют то, что не требует дисплея: разбор записи `[action:<имя>]` и коды
 ошибок (3 — конфиг, 1 — отказ по состоянию, 0 — успех и честный no-op), выбор
-предмета действия (зона из записи, активное окно, окно вне зон), контекст
+предмета действия (зона из записи, активное окно, окно outside zones), контекст
 `zone_actions.ActionContext`, `--dry-run` для встроенного действия и для
 команды, запуск внешней команды с `GRIDSNAP_*` и готовым `argv`, а также
 встроенные `show-window`, `mirror`, `terminal` и `minimize-others`.
@@ -136,7 +136,7 @@ class ActionCase(unittest.TestCase):
 
     def _frame(self, window, extents):
         if window not in self.frames:
-            raise OSError(f"нет окна 0x{window:x}")
+            raise OSError(f"no window 0x{window:x}")
         return self.frames[window]
 
     def _meta(self, window):
@@ -198,13 +198,13 @@ class ActionRecordTest(ActionCase):
     def test_missing_name_is_config_error(self):
         code, _out, err = self.run_cli("action")
         self.assertEqual(code, 3)
-        self.assertIn("имя действия", err)
+        self.assertIn("specify an action name", err)
 
     def test_unknown_action_lists_existing(self):
         self.actions = {"probe": {"run": "/bin/true"}}
         code, _out, err = self.run_cli("action", "nope")
         self.assertEqual(code, 3)
-        self.assertIn("нет действия 'nope'", err)
+        self.assertIn("no action 'nope'", err)
         self.assertIn("probe", err)
 
     def test_unknown_builtin_is_config_error(self):
@@ -213,23 +213,23 @@ class ActionRecordTest(ActionCase):
         self.actions = {"bad": {"run": "builtin:что-то"}}
         code, _out, err = self.run_cli("action", "bad")
         self.assertEqual(code, 3)
-        self.assertIn("неизвестное встроенное действие", err)
+        self.assertIn("unknown built-in action", err)
 
     def test_unknown_placeholder_is_config_error(self):
         self.action("probe", run="/bin/echo {nope}")
         code, _out, err = self.run_cli("action", "probe", "--dry-run")
         self.assertEqual(code, 3)
-        self.assertIn("неизвестная подстановка", err)
+        self.assertIn("unknown substitution", err)
 
     def test_empty_command_is_config_error(self):
         self.action("probe", run="")
         code, _out, err = self.run_cli("action", "probe")
         self.assertEqual(code, 3)
-        self.assertIn("пустая команда", err)
+        self.assertIn("empty command", err)
 
 
 class ActionSubjectTest(ActionCase):
-    """Предмет действия: зона из записи, активное окно, окно вне зон."""
+    """Предмет действия: зона из записи, активное окно, окно outside zones."""
 
     def test_active_window_in_record_zone_is_the_subject(self):
         self.action("probe", run="/bin/echo {window}", zone="left")
@@ -237,11 +237,11 @@ class ActionSubjectTest(ActionCase):
         self.active = 0x11
         code, out, err = self.run_cli("action", "probe", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("окно 0x11", out)
-        self.assertIn("зона 'left'", out)
+        self.assertIn("window 0x11", out)
+        self.assertIn("zone 'left'", out)
         self.assertIn("x=0 y=0 500x1000", out)
-        self.assertIn("монитор eDP-1", out)
-        self.assertIn("стол 1", out)
+        self.assertIn("monitor eDP-1", out)
+        self.assertIn("workspace 1", out)
 
     def test_active_window_outside_zone_takes_topmost_in_client_list(self):
         # Список идёт снизу вверх: верхнее — последнее; активное окно в другой зоне.
@@ -251,35 +251,35 @@ class ActionSubjectTest(ActionCase):
         self.active = 0x11
         code, out, err = self.run_cli("action", "probe", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("окно 0x13", out)
+        self.assertIn("window 0x13", out)
 
     def test_empty_zone_has_no_window(self):
         self.action("probe", run="/bin/echo {window}", zone="left")
         self.place(0x11, rect=RIGHT)
         code, out, err = self.run_cli("action", "probe", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("окна нет", out)
-        self.assertIn("зона 'left'", out)
+        self.assertIn("no window", out)
+        self.assertIn("zone 'left'", out)
 
     def test_zone_missing_in_grid_is_config_error(self):
         self.action("probe", run="/bin/echo", zone="nope")
         code, _out, err = self.run_cli("action", "probe", "--dry-run")
         self.assertEqual(code, 3)
-        self.assertIn("нет зоны 'nope'", err)
+        self.assertIn("no zone 'nope'", err)
 
     def test_window_zone_found_by_tab_frame(self):
         self.action("probe", run="/bin/echo {zone}")
         self.place(0x11, rect=RIGHT_TAB)
         code, out, err = self.run_cli("action", "probe", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("зона 'right'", out)
+        self.assertIn("zone 'right'", out)
 
     def test_window_outside_zones_has_no_zone(self):
         self.action("probe", run="/bin/echo {zone}")
         self.place(0x11, rect=(10, 10, 10, 10))
         code, out, err = self.run_cli("action", "probe", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("вне зон", out)
+        self.assertIn("outside zones", out)
 
     def test_explicit_window_overrides_active(self):
         self.action("probe", run="/bin/echo {window}", zone="left")
@@ -288,13 +288,13 @@ class ActionSubjectTest(ActionCase):
         self.active = 0x11
         code, out, err = self.run_cli("action", "probe", "--dry-run", "--window", "0x12")
         self.assertEqual(code, 0, err)
-        self.assertIn("окно 0x12", out)
+        self.assertIn("window 0x12", out)
 
     def test_unknown_monitor_is_usage_error(self):
         self.action("probe", run="/bin/echo")
         code, _out, err = self.run_cli("action", "probe", "--monitor", "HDMI-9")
         self.assertEqual(code, 2)
-        self.assertIn("монитора 'HDMI-9' нет", err)
+        self.assertIn("no monitor 'HDMI-9'", err)
 
 
 class ActionCommandTest(ActionCase):
@@ -310,8 +310,8 @@ class ActionCommandTest(ActionCase):
         with mock.patch.object(self.zt.subprocess, "Popen", self._popen):
             code, out, err = self.run_cli("action", "probe", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("действие 'probe'", out)
-        self.assertIn("план: argv = ", out)
+        self.assertIn("action 'probe'", out)
+        self.assertIn("plan: argv = ", out)
         self.assertIn("echo left 500 1000 0x11", out)
         self.assertEqual(self.popen, [])
 
@@ -336,7 +336,7 @@ class ActionCommandTest(ActionCase):
         self.assertEqual(env["GRIDSNAP_WORKSPACE"], "0")  # EWMH: столы с нуля
         self.assertEqual(env["GRIDSNAP_CLASS"], "xterm")
         self.assertEqual(env["GRIDSNAP_CONF"], os.path.abspath(self.conf))
-        self.assertIn("запущено", out)
+        self.assertIn("started", out)
 
     def test_quiet_spawn_prints_nothing(self):
         self.action("probe", run="/bin/true")
@@ -352,7 +352,7 @@ class ActionCommandTest(ActionCase):
         ):
             code, _out, err = self.run_cli("action", "probe")
         self.assertEqual(code, 1)
-        self.assertIn("не удалось запустить действие", err)
+        self.assertIn("failed to run the action", err)
 
 
 class ActionShowWindowTest(ActionCase):
@@ -396,14 +396,14 @@ class ActionShowWindowTest(ActionCase):
         self.action("show", run="builtin:show-window", zone="left")
         code, _out, err = self.run_cli("action", "show")
         self.assertEqual(code, 0)
-        self.assertIn("зона 'left' пуста", err)
+        self.assertIn("zone 'left' is empty", err)
 
     def test_window_outside_zones_is_noop(self):
         self.action("show", run="builtin:show-window")
         self.place(0x11, rect=(10, 10, 10, 10))
         code, _out, err = self.run_cli("action", "show")
         self.assertEqual(code, 0)
-        self.assertIn("вне зон", err)
+        self.assertIn("outside zones", err)
 
     def test_dry_run_does_not_activate(self):
         self.action("show", run="builtin:show-window", zone="left")
@@ -411,7 +411,7 @@ class ActionShowWindowTest(ActionCase):
         code, out, err = self.run_cli("action", "show", "--dry-run")
         self.assertEqual(code, 0, err)
         self.assertEqual(self.activated, [])
-        self.assertIn("план: поднять окно 0x12", out)
+        self.assertIn("plan: raise window 0x12", out)
 
     def test_dry_run_on_empty_zone_prints_context_and_plan(self):
         # `--dry-run` обещан любому действию: и на пустой зоне он печатает
@@ -420,8 +420,8 @@ class ActionShowWindowTest(ActionCase):
         self.place(0x11, rect=RIGHT)
         code, out, err = self.run_cli("action", "show", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("действие 'show'", out)
-        self.assertIn("зона 'left' пуста", out)
+        self.assertIn("action 'show'", out)
+        self.assertIn("zone 'left' is empty", out)
         self.assertEqual(self.activated, [])
 
 
@@ -462,7 +462,7 @@ class ActionMirrorTest(ActionCase):
         self.action("mir", run="builtin:mirror", zone="left")
         self.place(0x11, 0x12, rect=LEFT_TAB)
         self.place(0x22, rect=RIGHT)
-        self.active = 0x99  # активное окно вне зон: предмета в зоне нет
+        self.active = 0x99  # активное окно outside zones: предмета в зоне нет
         code, _out, err = self.run_cli("action", "mir", "--quiet")
         self.assertEqual(code, 0, err)
         self.assertEqual(self.frames[0x12], RIGHT)
@@ -479,15 +479,15 @@ class ActionMirrorTest(ActionCase):
         self.action("mir", run="builtin:mirror", zone="left")
         code, _out, err = self.run_cli("action", "mir")
         self.assertEqual(code, 0)
-        self.assertIn("пусты", err)
+        self.assertIn("are empty", err)
         self.assertEqual(self.applied, [])
 
     def test_both_empty_dry_run_prints_plan(self):
         self.action("mir", run="builtin:mirror", zone="left")
         code, out, err = self.run_cli("action", "mir", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("действие 'mir'", out)
-        self.assertIn("пусты", out)
+        self.assertIn("action 'mir'", out)
+        self.assertIn("are empty", out)
         self.assertEqual(self.applied, [])
 
     def test_no_mirror_zone_is_exit_1(self):
@@ -497,14 +497,14 @@ class ActionMirrorTest(ActionCase):
         self.place(0x11, 0x22, rect=(0, 0, 1000, 1000))
         code, _out, err = self.run_cli("action", "mir")
         self.assertEqual(code, 1)
-        self.assertIn("нет зеркальной зоны для 'full'", err)
+        self.assertIn("no mirror zone for 'full'", err)
 
     def test_window_outside_zones_is_exit_1(self):
         self.action("mir", run="builtin:mirror")
         self.place(0x11, rect=(10, 10, 10, 10))
         code, _out, err = self.run_cli("action", "mir")
         self.assertEqual(code, 1)
-        self.assertIn("вне зон", err)
+        self.assertIn("outside zones", err)
 
     def test_dry_run_plans_and_does_nothing(self):
         self.action("mir", run="builtin:mirror", zone="left")
@@ -512,7 +512,7 @@ class ActionMirrorTest(ActionCase):
         self.place(0x22, rect=RIGHT)
         code, out, err = self.run_cli("action", "mir", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("план: обмен зон 'left' и 'right'", out)
+        self.assertIn("plan: swap zones 'left' and 'right'", out)
         self.assertEqual(self.applied, [])
         self.assertEqual(self.history, [])
 
@@ -556,7 +556,7 @@ class ActionTerminalTest(ActionCase):
         self.place(0x11, rect=LEFT)
 
         def spawn(argv, **kwargs):
-            # Первым в списке появляется «splash» 0x33: он под исключением, и брать
+            # Первым в списке появляется «splash» 0x33: он под is excluded, и брать
             # его вместо терминала нельзя.
             self.popen.append((argv, kwargs))
             self.place(0x33, 0x44, rect=(0, 0, 100, 100))
@@ -577,14 +577,14 @@ class ActionTerminalTest(ActionCase):
                 mock.patch.object(self.zt.subprocess, "Popen", self._popen):
             code, _out, err = self.run_cli("action", "term")
         self.assertEqual(code, 1)
-        self.assertIn("не появился", err)
+        self.assertIn("did not appear", err)
 
     def test_zone_required(self):
         self.action("term", run="builtin:terminal")
         self.place(0x11, rect=(10, 10, 10, 10))
         code, _out, err = self.run_cli("action", "term")
         self.assertEqual(code, 1)
-        self.assertIn("задайте zone в [action:term]", err)
+        self.assertIn("set zone in [action:term]", err)
 
     def test_dry_run_does_not_spawn(self):
         self.action("term", run="builtin:terminal", zone="left")
@@ -592,7 +592,7 @@ class ActionTerminalTest(ActionCase):
         with mock.patch.object(self.zt.subprocess, "Popen", self._popen):
             code, out, err = self.run_cli("action", "term", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("план: запустить", out)
+        self.assertIn("plan: run", out)
         self.assertEqual(self.popen, [])
 
 
@@ -628,7 +628,7 @@ class ActionMinimizeOthersTest(ActionCase):
         with mock.patch.object(self.zt, "cmd_focus", side_effect=AssertionError("нельзя")):
             code, out, err = self.run_cli("action", "min", "--dry-run")
         self.assertEqual(code, 0, err)
-        self.assertIn("свёрнуты", out)
+        self.assertIn("minimized", out)
 
     def test_no_zone_in_record_means_this_window_only(self):
         self.action("min", run="builtin:minimize-others")

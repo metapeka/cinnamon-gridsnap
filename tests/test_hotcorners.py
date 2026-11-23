@@ -12,9 +12,9 @@
   правильной пиксельной рамкой; край сетки (последний пиксель и точка ровно на
   правой/нижней границе) относится к крайней зоне, а не теряется;
 * edge-tiling: исходное значение запоминается, гасится на время HUD и
-  возвращается на дропе; уже выключенную настройку не трогаем; если исходное
+  возвращается на дропе; уже offную настройку не трогаем; если исходное
   значение не прочиталось, возвращаем «включено» (true), а не оставляем
-  выключенной; восстановление — данными (argv gsettings), без запуска утилиты;
+  offной; восстановление — данными (argv gsettings), без запуска утилиты;
 * fallback: `poll_events` по двум срезам XQueryPointer даёт press/motion/release
   и не повторяет события;
 * разбор аргументов: `--conf`, `--dry-run`, `--verbose`, `--no-hud`, `--version`.
@@ -533,7 +533,7 @@ class TestZones(unittest.TestCase):
             watcher.on_press(INSIDE_TITLE, 1)
             self.assertFalse(watcher.on_release((150, 600), 1))
             self.assertEqual(len(applied), 1)
-            self.assertTrue(any("не вложено" in text for text in errors))
+            self.assertTrue(any("not placed" in text for text in errors))
             # HUD погашен и состояние сброшено: следующее перетаскивание работает.
             self.assertFalse(watcher.pressed or watcher.armed)
         finally:
@@ -565,7 +565,7 @@ class TestZones(unittest.TestCase):
             self.assertEqual(len(applied), 1)
             kind, text = applied[0]
             self.assertEqual(kind, "вывод")
-            self.assertIn("зона 'bl'", text)
+            self.assertIn("zone 'bl'", text)
             self.assertIn("dry-run", text)
         finally:
             watcher.finish_drag()
@@ -753,7 +753,7 @@ class TestArguments(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 hc.parse_args(["--help"])
         text = out.getvalue()
-        self.assertIn("Перетаскивание окна за титлбар", text)
+        self.assertIn("Dragging a window by its title bar", text)
         self.assertIn("--no-hud", text)
 
     def test_missing_conf_returns_config_code(self):
@@ -763,7 +763,7 @@ class TestArguments(unittest.TestCase):
             with contextlib.redirect_stderr(err):
                 code = hc.main(["--conf", missing])
         self.assertEqual(code, hc.EXIT_CONFIG)
-        self.assertIn("не найден конфиг", err.getvalue())
+        self.assertIn("config not found", err.getvalue())
 
 
 class TestHudCommand(unittest.TestCase):

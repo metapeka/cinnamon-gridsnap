@@ -179,7 +179,7 @@ class ExpandCommandTest(unittest.TestCase):
         for text in ("echo {зона}", "notify-send {что-то}"):
             with self.assertRaises(za.ActionError) as caught:
                 za.expand_command(text, self.context())
-            self.assertIn("неизвестная подстановка", str(caught.exception))
+            self.assertIn("unknown substitution", str(caught.exception))
 
     def test_shell_and_awk_braces_stay_literal(self):
         # Не подстановки: `${HOME}` — переменная оболочки, `{}` из find,
@@ -199,7 +199,7 @@ class ExpandCommandTest(unittest.TestCase):
     def test_broken_quotes_are_action_error(self):
         with self.assertRaises(za.ActionError) as caught:
             za.expand_command('my-cmd "не закрыто', self.context())
-        self.assertIn("не разобрать", str(caught.exception))
+        self.assertIn("failed to parse", str(caught.exception))
 
     def test_non_string_command_is_handled_like_text(self):
         self.assertEqual(za.expand_command(" {zone} ", self.context()), ["main"])

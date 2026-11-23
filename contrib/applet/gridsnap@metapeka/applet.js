@@ -167,9 +167,9 @@ class GridSnapApplet extends Applet.TextIconApplet {
 
         this.set_applet_label(this.use_label ? (zone ? base + " — " + zone : base) : "");
 
-        let tooltip = _("GridSnap — зоны окон");
+        let tooltip = _("GridSnap — window zones");
         if (zone)
-            tooltip += "\n" + _("Текущая зона:") + " " + zone;
+            tooltip += "\n" + _("Current zone:") + " " + zone;
         this.set_applet_tooltip(tooltip);
     }
 
@@ -183,23 +183,23 @@ class GridSnapApplet extends Applet.TextIconApplet {
         menu.addMenuItem(section.header);
         menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        menu.addMenuItem(this._action(_("Открыть редактор"), () => this._spawn(EDITOR, [])));
-        menu.addMenuItem(this._action(_("Применить сочетания"), () => this._spawn(HOTKEYS, [])));
+        menu.addMenuItem(this._action(_("Open editor"), () => this._spawn(EDITOR, [])));
+        menu.addMenuItem(this._action(_("Apply shortcuts"), () => this._spawn(HOTKEYS, [])));
         menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        section.zones = new PopupMenu.PopupSubMenuMenuItem(_("Зоны"));
+        section.zones = new PopupMenu.PopupSubMenuMenuItem(_("Zones"));
         menu.addMenuItem(section.zones);
 
-        section.profiles = new PopupMenu.PopupSubMenuMenuItem(_("Профили"));
+        section.profiles = new PopupMenu.PopupSubMenuMenuItem(_("Profiles"));
         menu.addMenuItem(section.profiles);
 
-        section.workareas = new PopupMenu.PopupSubMenuMenuItem(_("Рабочие области"));
+        section.workareas = new PopupMenu.PopupSubMenuMenuItem(_("Work areas"));
         menu.addMenuItem(section.workareas);
 
         menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        menu.addMenuItem(this._action(_("Разложить окна по правилам"),
+        menu.addMenuItem(this._action(_("Arrange windows by rules"),
                                       () => this._spawn(TILER, ["arrange"])));
-        menu.addMenuItem(this._action(_("Отменить последнюю раскладку"),
+        menu.addMenuItem(this._action(_("Undo last arrangement"),
                                       () => this._spawn(TILER, ["undo"])));
 
         this._sections.push(section);
@@ -243,17 +243,17 @@ class GridSnapApplet extends Applet.TextIconApplet {
 
             let reason = "";
             if (!ok) {
-                reason = this._reason(stderr) || _("команда завершилась с ошибкой");
+                reason = this._reason(stderr) || _("the command failed");
             }
 
             for (let section of this._sections) {
                 if (!ok) {
                     this._placeholder(section.profiles.menu,
-                        _("Не удалось прочитать список профилей") + ": " + reason);
+                        _("Could not read the profile list") + ": " + reason);
                     continue;
                 }
                 if (names.length === 0) {
-                    this._placeholder(section.profiles.menu, _("Профилей нет"));
+                    this._placeholder(section.profiles.menu, _("No profiles"));
                     continue;
                 }
                 for (let name of names)
@@ -302,10 +302,10 @@ class GridSnapApplet extends Applet.TextIconApplet {
             }
 
             for (let section of this._sections) {
-                section.header.setLabel("GridSnap — " + _("зон:") + " " + zones.length);
+                section.header.setLabel("GridSnap — " + _("zones:") + " " + zones.length);
                 if (!ok || zones.length === 0) {
                     this._placeholder(section.zones.menu,
-                        ok ? _("Зон нет") : _("Не удалось прочитать список зон"));
+                        ok ? _("No zones") : _("Could not read the zone list"));
                     continue;
                 }
                 for (let zone of zones) {
@@ -325,7 +325,7 @@ class GridSnapApplet extends Applet.TextIconApplet {
         let monitors = Main.layoutManager.monitors || [];
         if (monitors.length === 0) {
             for (let section of this._sections)
-                this._placeholder(section.workareas.menu, _("Мониторы не найдены"));
+                this._placeholder(section.workareas.menu, _("No monitors found"));
             return;
         }
 
@@ -341,12 +341,12 @@ class GridSnapApplet extends Applet.TextIconApplet {
                 if (ok && m) {
                     // Номер из строки CLI — если он там есть; иначе индекс Cinnamon.
                     let monitorIndex = m[1] !== undefined ? m[1] : String(index);
-                    lines[index] = _("Монитор ") + monitorIndex + ": " + m[4] + "×" + m[5] +
+                    lines[index] = _("Monitor ") + monitorIndex + ": " + m[4] + "×" + m[5] +
                                    "   " + m[2] + "," + m[3];
                 } else if (ok && first) {
                     lines[index] = first;
                 } else {
-                    lines[index] = _("Монитор ") + index + ": " + _("нет данных");
+                    lines[index] = _("Monitor ") + index + ": " + _("no data");
                 }
 
                 pending--;
@@ -415,7 +415,7 @@ class GridSnapApplet extends Applet.TextIconApplet {
     _applyZone(name) {
         this._run([TILER, "apply", name], (_stdout, stderr, ok) => {
             if (!ok) {
-                let message = (stderr || "").trim() || _("не удалось применить зону");
+                let message = (stderr || "").trim() || _("could not apply the zone");
                 Main.notify("GridSnap", message);
             }
         });
@@ -425,7 +425,7 @@ class GridSnapApplet extends Applet.TextIconApplet {
     _applyProfile(name) {
         this._run([TILER, "profile", "use", name], (_stdout, stderr, ok) => {
             if (!ok) {
-                let message = (stderr || "").trim() || _("не удалось применить профиль");
+                let message = (stderr || "").trim() || _("could not apply the profile");
                 Main.notify("GridSnap", message);
             }
         });

@@ -103,7 +103,7 @@ def filled_key(wa, zone, workspace=None):
 
     Покрытие расширенного соседа живёт на конкретном столе и мониторе: одна и
     та же зона на разных столах/экранах — разные записи. `workspace=None` —
-    липкое окно или неизвестный активный стол.
+    липкое окно или неизвестный active workspace.
     """
     return (workspace, wa, zone)
 
@@ -145,7 +145,7 @@ def property_buffer(atom, window=0x2):
 class DaemonTestCase(unittest.TestCase):
     """Общая обвязка сценариев демона: без X, с подменой apply/метаданных/столов.
 
-    `self.current` — активный стол, `self.workspaces` — стол каждого окна;
+    `self.current` — active workspace, `self.workspaces` — стол каждого окна;
     читатели столов подменены, поэтому тесты не зависят от живого `xprop` и от
     того, какой стол открыт на машине сборки.
     """
@@ -943,7 +943,7 @@ class TestWorkspaces(DaemonTestCase):
 
     def test_sticky_window_uses_default_zones(self):
         # «Липкое» окно (стол неизвестен) живёт в общем наборе, даже если
-        # активный стол — профильный.
+        # active workspace — профильный.
         self.metas[0x1] = self.meta("firefox-esr")
         self.workspaces = {0x1: None}
         d = self.desktop_daemon()
@@ -959,7 +959,7 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(self.applied, [(0x1, (500, 0, 500, 1000), "video", True)])
 
     def test_rule_zone_missing_in_profile_is_not_placed(self):
-        # В профиле нет зоны правила — окно не укладываем, а не падаем.
+        # В профиле no zone правила — окно не укладываем, а не падаем.
         self.metas[0x1] = self.meta("firefox-esr")
         self.workspaces = {0x1: 1}
         d = self.desktop_daemon(profile="[zones]\nmain = 0, 0, 1, 1\n")
@@ -1009,7 +1009,7 @@ class TestWorkspaces(DaemonTestCase):
         d.on_map(0x3)
         d.on_map(0x4)
         self.applied.clear()
-        d.on_destroy(0x3)  # окно стола 2; на столе 1 зона left пуста
+        d.on_destroy(0x3)  # окно workspace 2; на столе 1 зона left пуста
         self.assertEqual(self.applied, [])
         self.assertEqual(d.filled, {})
         self.assertEqual(d.windows, {0x2: "right", 0x4: "right"})
@@ -1034,8 +1034,8 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(d.filled, {filled_key(WA, "left", 1): 0x2})
 
     def test_reflow_target_is_on_visible_workspace(self):
-        # Окно стола 2 в той же зоне заведено раньше окна стола 1: расширять
-        # надо соседа видимого стола (0x2), а не 0x9 со стола 2.
+        # Окно workspace 2 в той же зоне заведено раньше окна стола 1: расширять
+        # надо соседа видимого стола (0x2), а не 0x9 со workspace 2.
         self.metas = {
             0x9: self.meta("chromium"),
             0x1: self.meta("firefox-esr"),
@@ -1095,7 +1095,7 @@ class TestWorkspaces(DaemonTestCase):
         self.assertEqual(d.windows, {0x2: "right"})
 
     def test_new_window_on_other_workspace_does_not_restore_holder(self):
-        # Покрытие появилось на столе 1; окно стола 2 в ту же зону его не снимает.
+        # Покрытие появилось на столе 1; окно workspace 2 в ту же зону его не снимает.
         self.metas = {
             0x1: self.meta("firefox-esr"),
             0x2: self.meta("chromium"),
@@ -1109,7 +1109,7 @@ class TestWorkspaces(DaemonTestCase):
         d.on_destroy(0x1)
         self.assertEqual(d.filled, {filled_key(WA, "left", 1): 0x2})
         self.applied.clear()
-        d.on_map(0x3)  # окно стола 2 в зону left
+        d.on_map(0x3)  # окно workspace 2 в зону left
         self.assertEqual(self.applied, [(0x3, (0, 0, 500, 1000), "left", True)])
         self.assertEqual(d.filled, {filled_key(WA, "left", 1): 0x2})
 
@@ -1141,7 +1141,7 @@ class TestWorkspaces(DaemonTestCase):
         with mock.patch("builtins.print") as printed:
             d.on_workspace_change()
         lines = " ".join(str(call.args[0]) for call in printed.call_args_list)
-        self.assertIn("активный стол: #2", lines)
+        self.assertIn("active workspace: #2", lines)
         self.assertEqual(d.workspace, 2)
 
     def test_workspace_change_without_readable_desktop_keeps_previous(self):
@@ -1335,8 +1335,8 @@ class TestMonitorProfiles(DaemonTestCase):
         with mock.patch("builtins.print") as printed:
             d.on_map(0x1)
         lines = " ".join(str(call.args[0]) for call in printed.call_args_list)
-        self.assertIn("профиля «cinema» (экрана HDMI-2) нет на диске", lines)
-        self.assertIn("беру следующий уровень", lines)
+        self.assertIn('profile "cinema" (of monitor HDMI-2) is not on disk', lines)
+        self.assertIn("falling back to the next level", lines)
         self.assertEqual(self.applied, [(0x1, (1000, 0, 800, 600), "main", True)])
         # Демон продолжает работать: окно на первом экране встаёт в work.
         self.applied.clear()
@@ -1499,7 +1499,7 @@ class TestDaemonIgnore(DaemonTestCase):
         d = self.multi_daemon(self.IGNORE_LEFT)
         with self.assertRaises(ValueError) as caught:
             d.ipc_apply({"zone": "left", "window": 0x1})
-        self.assertIn("исключением", str(caught.exception))
+        self.assertIn("is excluded", str(caught.exception))
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {})
 
@@ -1632,7 +1632,7 @@ class TestFocusMode(DaemonTestCase):
         d = self.focus_daemon()
         with self.assertRaises(ValueError) as caught:
             d.ipc_focus({"zone": "nope", "window": 0x1})
-        self.assertIn("нет зоны 'nope'", str(caught.exception))
+        self.assertIn("no zone 'nope'", str(caught.exception))
         self.assertEqual(self.applied, [])
         self.assertIsNone(d.focus)
 
@@ -1644,7 +1644,7 @@ class TestFocusMode(DaemonTestCase):
         d = self.focus_daemon()
         with self.assertRaises(ValueError) as caught:
             d.ipc_focus({"zone": "left", "window": 0x1})
-        self.assertIn("исключением", str(caught.exception))
+        self.assertIn("is excluded", str(caught.exception))
         self.assertEqual(self.applied, [])
         self.assertEqual(self.iconified, [])
         self.assertIsNone(d.focus)
@@ -1657,7 +1657,7 @@ class TestFocusMode(DaemonTestCase):
         d = self.focus_daemon()
         with self.assertRaises(ValueError) as caught:
             d.ipc_focus({"zone": "left", "window": 0x1})
-        self.assertIn("активный стол", str(caught.exception))
+        self.assertIn("active workspace", str(caught.exception))
         self.assertEqual(self.applied, [])
         self.assertEqual(self.iconified, [])
         self.assertIsNone(d.focus)
@@ -2336,7 +2336,7 @@ class TestZoneTabs(DaemonTestCase):
         d = self.two_tabs()
         reply = d.ipc_tabs_next()
         self.assertFalse(reply["switched"])
-        self.assertIn("переключать нечего", reply["reason"])
+        self.assertIn("nothing to switch", reply["reason"])
         self.assertEqual(self.deiconified, [])
 
     def test_tabs_next_outside_zones_is_a_honest_noop(self):
@@ -2372,7 +2372,7 @@ class TestZoneTabs(DaemonTestCase):
         d.reconcile([0x1, 0x2])
         with self.assertRaises(ValueError) as caught:
             d.ipc_tabs_switch({"zone": "left", "window": 0x2})
-        self.assertIn("не вкладка", str(caught.exception))
+        self.assertIn("is not a tab", str(caught.exception))
         self.assertEqual(self.deiconified, [])
 
     def test_tabs_switch_refuses_unknown_window(self):
@@ -3444,7 +3444,7 @@ class TestCli(unittest.TestCase):
     def test_missing_conf_is_config_error(self):
         r = self.run_cli("--conf", "/nonexistent/definitely.conf", "--once")
         self.assertEqual(r.returncode, 3)
-        self.assertIn("не найден конфиг", r.stderr)
+        self.assertIn("config not found", r.stderr)
 
 
 if __name__ == "__main__":

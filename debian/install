@@ -85,9 +85,9 @@ icons/gridsnap.svg => /usr/share/icons/hicolor/scalable/apps/gridsnap.svg
 
 # --- каталоги переводов (их собирает `make mo` в debian/rules) ---
 # Два домена: Python-инструменты (`gridsnap`) и апплет Cinnamon
-# (`gridsnap@metapeka`). Язык исходника — русский, каталога `ru` нет.
-locale/en/LC_MESSAGES/gridsnap.mo => /usr/share/locale/en/LC_MESSAGES/gridsnap.mo
-locale/en/LC_MESSAGES/gridsnap@metapeka.mo => /usr/share/locale/en/LC_MESSAGES/gridsnap@metapeka.mo
+# (`gridsnap@metapeka`). Язык исходника — английский, каталога `en` нет.
+locale/ru/LC_MESSAGES/gridsnap.mo => /usr/share/locale/ru/LC_MESSAGES/gridsnap.mo
+locale/ru/LC_MESSAGES/gridsnap@metapeka.mo => /usr/share/locale/ru/LC_MESSAGES/gridsnap@metapeka.mo
 locale/zh_CN/LC_MESSAGES/gridsnap.mo => /usr/share/locale/zh_CN/LC_MESSAGES/gridsnap.mo
 locale/zh_CN/LC_MESSAGES/gridsnap@metapeka.mo => /usr/share/locale/zh_CN/LC_MESSAGES/gridsnap@metapeka.mo
 

@@ -33,9 +33,9 @@ if ROOT not in sys.path:
 
 import zone_i18n as i18n  # noqa: E402
 
-# Языки, у которых обязан быть полный каталог. `ru` тут нет: русский — исходные
-# строки, отдельного каталога у него нет и не должно быть.
-LANGUAGES = ("en", "zh_CN")
+# Языки, у которых обязан быть полный каталог. `en` тут нет: английский — язык
+# исходника, каталога у него нет и быть не должно.
+LANGUAGES = ("ru", "zh_CN")
 
 CYRILLIC = re.compile(r"[\u0400-\u04ff]")
 
@@ -124,8 +124,8 @@ class CatalogChecks:
 
     def test_languages_differ(self):
         # Не тот же язык под другим именем: хоть одна строка должна отличаться.
-        en, zh = self.po("en"), self.po("zh_CN")
-        self.assertNotEqual(en, zh, "en и zh_CN совпали — перевод не сделан")
+        ru, zh = self.po("ru"), self.po("zh_CN")
+        self.assertNotEqual(ru, zh, "ru и zh_CN совпали — перевод не сделан")
 
 
 class TestMainCatalog(CatalogChecks, unittest.TestCase):
@@ -137,15 +137,16 @@ class TestAppletCatalog(CatalogChecks, unittest.TestCase):
 
 
 class TestInterfaceLanguage(unittest.TestCase):
-    """Каталог не просто лежит на диске: под en интерфейс английский."""
+    """Каталог не просто лежит на диске: под ru интерфейс русский."""
 
     def test_english_has_no_cyrillic(self):
+        # Английский — язык исходника: кириллицы в выводе быть не должно.
         for argv in ENGLISH_COMMANDS:
             out = run(argv, "en")
             left = sorted(set(CYRILLIC.findall(out)))
             self.assertEqual(left, [], "%s: под en осталась кириллица %s" % (" ".join(argv), left))
 
-    def test_russian_keeps_source(self):
+    def test_russian_has_cyrillic(self):
         for argv in ENGLISH_COMMANDS:
             out = run(argv, "ru")
             self.assertTrue(CYRILLIC.search(out), "%s: под ru нет русских строк" % " ".join(argv))

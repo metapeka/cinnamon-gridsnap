@@ -121,7 +121,7 @@ class TabsSectionTest(unittest.TestCase):
             zc.load_tabs_config(self.path)
         self.assertEqual(caught.exception.code, zc.zt.EXIT_CONFIG)
         message = err.getvalue()
-        self.assertIn("неизвестный ключ", message)
+        self.assertIn("unknown key", message)
         self.assertIn("hieght", message)
         self.assertIn("key, height", message)
 
@@ -235,7 +235,7 @@ class TabsCliTest(unittest.TestCase):
         self.assertIn("tabs-next", r.stdout)
         self.assertIn("[tabs]", r.stdout)
         self.assertNotIn("--offset", r.stdout)
-        self.assertNotIn("каскад", r.stdout)
+        self.assertNotIn("cascade", r.stdout)
 
     def test_tabs_next_sends_contract_request(self):
         sent = {}
@@ -264,7 +264,7 @@ class TabsCliTest(unittest.TestCase):
         ):
             code, out, _err = self.run_main("tabs-next")
         self.assertEqual(code, 0)
-        self.assertIn("переключать нечего", out)
+        self.assertIn("nothing to switch", out)
 
     def test_tabs_next_without_daemon_is_code_1(self):
         # Демона нет — это не падение, а понятное сообщение и код 1.
@@ -272,16 +272,16 @@ class TabsCliTest(unittest.TestCase):
             code, out, err = self.run_main("tabs-next", "--quiet")
         self.assertEqual(code, 1)
         self.assertEqual(out, "")
-        self.assertIn("демон не запущен", err)
+        self.assertIn("the daemon is not running", err)
 
     def test_tabs_next_refusal_is_code_1(self):
-        response = {"ok": False, "error": "зона не найдена"}
+        response = {"ok": False, "error": "zone not found"}
         with mock.patch.object(
             self.zt, "daemon_request", lambda request, timeout=0: response
         ):
             code, _out, err = self.run_main("tabs-next")
         self.assertEqual(code, 1)
-        self.assertIn("демон отказал: зона не найдена", err)
+        self.assertIn("the daemon refused: zone not found", err)
 
     def test_tabs_next_needs_no_conf(self):
         # Команда не читает ни конфиг, ни сетку: зону выбирает демон по окну.
