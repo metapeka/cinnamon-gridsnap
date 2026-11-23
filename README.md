@@ -14,11 +14,12 @@ Tested on Debian 13, Cinnamon 6.4.10 (Muffin, X11), a 1920×1040 work area.
 ## Interface languages
 
 The interface speaks **English**, **Simplified Chinese** and **Russian**. The strings in the source
-are Russian — that is the source language — and English is the default for every other locale:
+are English — that is the source language — and English is the default for every other locale:
 
-- `ru*` (`ru`, `ru_RU.UTF-8`) — Russian, the source strings themselves; no catalog is needed;
+- `ru*` (`ru`, `ru_RU.UTF-8`) — Russian, from the `po/ru.po` catalog;
 - `zh*` (`zh_CN`, `zh_CN.UTF-8`, `zh-Hans`) — Simplified Chinese;
-- everything else (`en`, `de`, `C`, nothing set) — English.
+- everything else (`en`, `de`, `C`, nothing set) — English, the source strings themselves; no catalog
+  is needed.
 
 The language comes from `GRIDSNAP_LANG` first and then from `LC_ALL`, `LC_MESSAGES`, `LANG`, so it
 can be switched for a single command:
