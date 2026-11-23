@@ -1,45 +1,45 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""zone_tabs — чистое ядро вкладок внутри зоны для GridSnap.
+"""zone_tabs — the pure core of tabs inside a zone for GridSnap.
 
-Вкладки — это когда в одной зоне стоит несколько окон: одно видно целиком,
-остальные лежат на той же рамке и ждут переключения. Здесь живёт вся арифметика
-этого и оба протокола, которыми обмениваются демон, полоса и раскладчик; X, GTK
-и сокета тут нет, поэтому модуль проверяется обычными юнит-тестами без X-сервера
-(инвариант проекта, как у ``zone_geom``/``zone_reflow``/``zone_picker_nav``).
+Tabs are when several windows stand in one zone: one is visible in full,
+the rest lie on the same frame and wait to be switched to. All the arithmetic
+of this lives here, together with both protocols the daemon, the strip and the tiler speak;
+X, GTK and sockets are not here, so the module is covered by ordinary unit tests without an X server
+(a project invariant, as with ``zone_geom``/``zone_reflow``/``zone_picker_nav``).
 
-Что здесь есть:
+What is here:
 
-* геометрия — :func:`strip_rect` (где полоса вкладок), :func:`tab_rect` (рамка
-  окна-вкладки: зона минус полоса) и :func:`stack_rect` (то же правило по числу вкладок:
-  одна — вся зона). Узкая зона полосы не получает: `strip_rect` вернёт ``None``, а
-  `tab_rect` — рамку зоны целиком;
-* выбор окон — :func:`tabs_of_zone` (какие окна стоят вкладками этой зоны, в
-  порядке списка клиентов) и :func:`next_tab` (следующее по кругу);
-* протокол «демон → полоса» — :func:`strip_record`/:func:`strips_payload`:
-  построчный JSON в stdin процесса ``zone-tabstrip.py``;
-* протокол «полоса/клавиша → демон» — :func:`tabs_switch_command` (клик по
-  вкладке) и :func:`tabs_next_command` (``zone-tiler.py tabs-next`` по клавише):
-  обычные запросы сокета демона, как у ``zone_ipc``.
+* geometry — :func:`strip_rect` (where the tab strip is), :func:`tab_rect` (the frame
+  of a tab window: the zone minus the strip) and :func:`stack_rect` (the same rule by the number of tabs:
+  one — the whole zone). A narrow zone gets no strip: `strip_rect` returns ``None``, and
+  `tab_rect` — the frame of the whole zone;
+* window selection — :func:`tabs_of_zone` (which windows stand as tabs of this zone, in
+  client list order) and :func:`next_tab` (the next one around the ring);
+* the daemon → strip protocol — :func:`strip_record`/:func:`strips_payload`:
+  line-by-line JSON into the stdin of the ``zone-tabstrip.py`` process;
+* the strip/key → daemon protocol — :func:`tabs_switch_command` (a click on a
+  tab) and :func:`tabs_next_command` (``zone-tiler.py tabs-next`` from a key):
+  ordinary daemon socket requests, as in ``zone_ipc``.
 
-Рамки — пиксельные ``(x, y, w, h)`` в координатах экрана: полоса рисуется поверх
-рабочего стола, а не в долях, поэтому доли в пиксели переводит вызывающий
-(``Grid.rect``), как и везде в проекте.
+Frames are pixel ``(x, y, w, h)`` in screen coordinates: the strip is drawn over
+the desktop, not in fractions, so fractions are turned into pixels by the caller
+(``Grid.rect``), as everywhere in the project.
 """
 
 import json
 
-# Высота полосы вкладок и минимум, который обязан остаться окну под ней.
-# Величины с умолчаниями, а не догмы: высота приходит из ``[tabs] height``.
+# The height of the tab strip and the minimum that must be left to the window under it.
+# Values with defaults, not dogmas: the height comes from ``[tabs] height``.
 STRIP_HEIGHT = 22
 MIN_WINDOW_H = 44
 
-# Допуск сравнения рамок при поиске вкладок зоны, px. Тот же смысл и та же
-# величина, что у ``PLACED_TOLERANCE`` в демоне: рамку ставит оконный менеджер,
-# точного равенства float недостаточно.
+# The tolerance for comparing frames when looking for the tabs of a zone, px. The same meaning and the same
+# value as ``PLACED_TOLERANCE`` in the daemon: the window manager places the frame,
+# exact float equality is not enough.
 FRAME_TOLERANCE = 8
 
-# Имена команд сокета демона, которые приходят не от ``gridsnap-ctl``.
+# The names of the daemon socket commands that do not come from ``gridsnap-ctl``.
 TABS_NEXT = "tabs-next"
 TABS_SWITCH = "tabs-switch"
 
@@ -47,12 +47,12 @@ EPS = 1e-9
 
 
 def strip_rect(zone_rect, height=STRIP_HEIGHT, min_window_h=MIN_WINDOW_H):
-    """Рамка полосы вкладок вверху зоны — или ``None``, если полоса не влезает.
+    """The frame of the tab strip at the top of the zone — or ``None`` if the strip does not fit.
 
-    Полоса отнимает высоту у окна, поэтому в узкой зоне (окну не остаётся
-    `min_window_h`) она не рисуется совсем. Вкладки при этом работают: окна всё
-    равно собираются на общей рамке и переключаются клавишей, просто на экране
-    нет подсказки, что их несколько.
+    The strip takes height from the window, so in a narrow zone (less than
+    `min_window_h` is left to the window) it is not drawn at all. The tabs still work: the windows still
+    gather on the shared frame and are switched by key, there is just no hint on
+    the screen that there are several of them.
     """
     x, y, w, h = (float(v) for v in zone_rect)
     if h - float(height) < float(min_window_h):
@@ -61,11 +61,11 @@ def strip_rect(zone_rect, height=STRIP_HEIGHT, min_window_h=MIN_WINDOW_H):
 
 
 def tab_rect(zone_rect, height=STRIP_HEIGHT, min_window_h=MIN_WINDOW_H):
-    """Рамка окна-вкладки: зона минус полоса; без полосы — сама зона.
+    """The frame of a tab window: the zone minus the strip; without a strip — the zone itself.
 
-    Считается через :func:`strip_rect`, поэтому полоса и окно не могут
-    разойтись: либо есть полоса и окно сдвинуто вниз на её высоту, либо полосы
-    нет и окно занимает зону целиком.
+    It is computed through :func:`strip_rect`, so the strip and the window cannot
+    drift apart: either there is a strip and the window is moved down by its height, or there is no
+    strip and the window takes the whole zone.
     """
     x, y, w, h = (float(v) for v in zone_rect)
     if strip_rect(zone_rect, height, min_window_h) is None:
@@ -74,11 +74,11 @@ def tab_rect(zone_rect, height=STRIP_HEIGHT, min_window_h=MIN_WINDOW_H):
 
 
 def stack_rect(zone_rect, count, height=STRIP_HEIGHT, min_window_h=MIN_WINDOW_H):
-    """Рамка окон зоны по числу её вкладок.
+    """The frame of the windows of a zone by the number of its tabs.
 
-    Одна вкладка — зона целиком: полосы нет, и окно занимает всю зону, как до волны вкладок. Две и
-    больше — рамка вкладки (:func:`tab_rect`), потому что сверху появилась полоса. Правило одно на
-    демон и раскладчик (`apply`/`arrange`/`stack`), иначе они разойдутся на одном и том же числе окон.
+    One tab — the whole zone: there is no strip, and the window takes the whole zone, as before the tabs wave. Two and
+    more — the tab frame (:func:`tab_rect`), because a strip has appeared on top. One rule for the
+    daemon and the tiler (`apply`/`arrange`/`stack`), otherwise they drift apart on the same number of windows.
     """
     if count < 2:
         return tuple(float(v) for v in zone_rect)
@@ -86,23 +86,23 @@ def stack_rect(zone_rect, count, height=STRIP_HEIGHT, min_window_h=MIN_WINDOW_H)
 
 
 def _same_rect(left, right, tolerance):
-    """Совпали ли две рамки с точностью `tolerance` по каждой стороне."""
+    """Did the two frames match with `tolerance` on every side."""
     return all(abs(float(a) - float(b)) <= tolerance for a, b in zip(left, right))
 
 
 def tabs_of_zone(frames, tab_frame, tolerance=FRAME_TOLERANCE):
-    """Окна зоны вкладками — в порядке снизу вверх.
+    """The windows of the zone as tabs — in bottom-to-top order.
 
-    ``frames`` — ``{окно: (x, y, w, h)}`` в том порядке, в каком окна обошёл
-    вызывающий; демон берёт ``_NET_CLIENT_LIST``, а это порядок появления окон,
-    а не z-порядок (стек лежит в ``_NET_CLIENT_LIST_STACKING``, и в живом muffin
-    они расходятся). ``tab_frame`` — рамка, на которой стоят вкладки
+    ``frames`` — ``{window: (x, y, w, h)}`` in the order in which the caller walked
+    the windows; the daemon takes ``_NET_CLIENT_LIST``, and that is the order in which the windows appeared,
+    not the z-order (the stack lives in ``_NET_CLIENT_LIST_STACKING``, and on a live muffin
+    the two differ). ``tab_frame`` — the frame the tabs stand on
     (:func:`tab_rect`).
 
-    Файла состояния у вкладок нет: состав выводится из того, что видно на
-    экране, — вкладкой считается окно, чья рамка совпала с общей. Поэтому
-    перезапуск демона ничего не теряет, а чистить мёртвые XID не нужно. Рамку
-    не прочитали (окно исчезло) — ``None`` в словаре, окно пропускается.
+    Tabs have no state file: the membership is derived from what is visible on
+    the screen — a window counts as a tab when its frame matched the shared one. That is why
+    a daemon restart loses nothing, and dead XIDs need no cleaning. The frame was
+    not read (the window vanished) — ``None`` in the dict, the window is skipped.
     """
     return [
         win
@@ -112,12 +112,12 @@ def tabs_of_zone(frames, tab_frame, tolerance=FRAME_TOLERANCE):
 
 
 def next_tab(ids, current):
-    """Следующее окно кольца после `current`; ``None`` — если переключать нечего.
+    """The next window of the ring after `current`; ``None`` — if there is nothing to switch to.
 
-    Порядок тот же, что у :func:`tabs_of_zone`: «следующее» поднимает соседа по
-    списку, а с последнего уходит на первый. Если `current` в списке нет (окно
-    ушло, фокус вне зоны), начинаем с первого.
-    Одиночное окно и пустой список переключать некуда.
+    The order is the same as in :func:`tabs_of_zone`: "next" raises the neighbour in the
+    list, and from the last one it goes to the first. If `current` is not in the list (the window
+    is gone, the focus is outside the zone), we start from the first.
+    A single window and an empty list have nowhere to switch to.
     """
     ids = list(ids)
     if len(ids) < 2:
@@ -129,12 +129,12 @@ def next_tab(ids, current):
 
 def strip_record(zone, zone_rect, tabs, active=None, height=STRIP_HEIGHT,
                  min_window_h=MIN_WINDOW_H):
-    """Одна запись снимка для полосы — или ``None``, если полосе тут не место.
+    """One snapshot record for the strip — or ``None`` if the strip has no place here.
 
-    ``tabs`` — ``[(окно, заголовок), ...]`` в порядке списка клиентов,
-    ``active`` — окно поднятой (видимой) вкладки. Полоса не рисуется в двух случаях: вкладка всего
-    одна (полоса — признак стопки, у одиночного окна её нет) и полоса не влезает
-    в зону (:func:`strip_rect`).
+    ``tabs`` — ``[(window, title), ...]`` in client list order,
+    ``active`` — the window of the raised (visible) tab. The strip is not drawn in two cases: there is only one
+    tab (the strip is a sign of a stack, a single window has none) and the strip does not fit
+    into the zone (:func:`strip_rect`).
     """
     tabs = list(tabs)
     if len(tabs) < 2:
@@ -153,11 +153,11 @@ def strip_record(zone, zone_rect, tabs, active=None, height=STRIP_HEIGHT,
 
 
 def strips_payload(records):
-    """Строка снимка для полосы: один JSON в строке, с завершающим ``\\n``.
+    """The snapshot line for the strip: one JSON per line, with a trailing ``\\n``.
 
-    Снимок полный, а не дельта: зон на экране мало, зато полосе не надо помнить
-    прошлое состояние, а демону — считать разницу. ``ensure_ascii=False`` —
-    заголовки окон русские. Записи-``None`` (нечего рисовать) отсеиваются.
+    The snapshot is complete, not a delta: there are few zones on the screen, but the strip does not have to remember
+    the past state, and the daemon does not have to compute the difference. ``ensure_ascii=False`` —
+    window titles are Russian. ``None`` records (nothing to draw) are filtered out.
     """
     return json.dumps(
         {"strips": [record for record in records if record is not None]},
@@ -166,18 +166,18 @@ def strips_payload(records):
 
 
 def tabs_switch_command(zone, window):
-    """Запрос демону от полосы: показать окно `window` в зоне `zone`.
+    """A request to the daemon from the strip: show the window `window` in the zone `zone`.
 
-    Клик по вкладке идёт в тот же сокет демона, что и команды ``gridsnap-ctl``,
-    а не в отдельный канал: полосе для этого довольно ``zone_ipc``.
+    A click on a tab goes to the same daemon socket as the ``gridsnap-ctl`` commands,
+    not to a separate channel: ``zone_ipc`` is enough for the strip.
     """
     return {"cmd": TABS_SWITCH, "zone": zone, "window": int(window)}
 
 
 def tabs_next_command():
-    """Запрос демону от клавиши: поднять следующее окно стопки.
+    """A request to the daemon from a key: raise the next window of the stack.
 
-    Зону демон выбирает сам — по активному окну; окно вне зон переключать некуда,
-    и это не ошибка.
+    The daemon picks the zone itself — by the active window; a window outside the zones has nowhere to switch,
+    and that is not an error.
     """
     return {"cmd": TABS_NEXT}
