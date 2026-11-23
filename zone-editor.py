@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-zone-editor.py — визуальный редактор сетки зон для zone-tiler (Cinnamon, X11).
+zone-editor.py — a visual zone grid editor for zone-tiler (Cinnamon, X11).
 
-Что умеет:
-  * показывает рабочую область монитора и зоны в натуральном масштабе;
-  * зону можно тащить мышью, тянуть за край/угол — размер;
-  * двойной клик по пустому месту — новая зона, Delete — удалить;
-  * прилипание к краям экрана, к другим зонам и к линиям 1/4, 1/3, 1/2, 2/3, 3/4;
-  * шаблоны раскладок (2 колонки, 1+2, 2×2, 3 колонки, главное + стек);
-  * набор зон на каждый монитор: свой (`[zones:<выход>]`) или общий `[zones]`;
-  * сохранение в zones.conf и регистрация горячих клавиш Cinnamon;
-  * привязка профиля к экрану (`[monitors]`) и к столу (`[workspaces]`);
-  * галерея готовых раскладок («Работа», «Кинозал», «Стрим», …): выбор
-    создаёт профиль из каталога `gallery/`, а не рисует сетку с нуля;
-  * кнопка «Проверить на активном окне» — сразу вкладывает активное окно в зону.
+What it does:
+  * shows the work area of the monitor and the zones at natural scale;
+  * a zone can be dragged with the mouse, pulled by the edge/corner — size;
+  * double click on empty space — a new zone, Delete — remove;
+  * snapping to the screen edges, to other zones and to the 1/4, 1/3, 1/2, 2/3, 3/4 lines;
+  * layout templates (2 columns, 1+2, 2×2, 3 columns, main + stack);
+  * a set of zones per monitor: its own (`[zones:<output>]`) or the shared `[zones]`;
+  * saving to zones.conf and registering the Cinnamon hotkeys;
+  * binding a profile to a screen (`[monitors]`) and to a workspace (`[workspaces]`);
+  * a gallery of ready-made layouts ("Work", "Cinema", "Stream", …): a choice
+    creates a profile from the `gallery/` catalog instead of drawing a grid from scratch;
+  * the "Place the active window into the selected zone" button — puts the active window into a zone at once.
 
-Запуск: zone-editor.py [--conf ПУТЬ] [--shot ФАЙЛ.png]
+Usage: zone-editor.py [--conf PATH] [--shot FILE.png]
 """
 
 import argparse
@@ -31,7 +31,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")
-# PyGObject не поставляет стабы для проверки типов — импорт без проверки.
+# PyGObject does not ship type-checking stubs — import without a check.
 from gi.repository import Gdk, Gtk, Pango, PangoCairo  # noqa: E402  # type: ignore
 
 import zone_geom as geom  # noqa: E402
@@ -64,7 +64,7 @@ from zone_config import (  # noqa: E402
     workspace_dialog_rows,
     zt,
 )
-from zone_i18n import _  # noqa: E402  (там же: строки интерфейса и их перевод)
+from zone_i18n import _  # noqa: E402  (the interface strings and their translation live there too)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
@@ -82,10 +82,10 @@ CONF = zt.default_conf()
 
 
 def desktops_count():
-    """Число рабочих столов из ``_NET_NUMBER_OF_DESKTOPS`` или ``None``.
+    """The number of workspaces from ``_NET_NUMBER_OF_DESKTOPS``, or ``None``.
 
-    Читается только когда диалог открывают: свойство меняют настройки
-    Cinnamon, и держать его в строке статуса незачем.
+    Read only when the dialog is opened: the property is changed by the Cinnamon
+    settings, and there is no point in keeping it in the status line.
     """
     try:
         out = subprocess.check_output(
@@ -128,13 +128,13 @@ def templates():
     }
 
 
-# ------------------------------------------------------- проверка правил
+# ------------------------------------------------------- rule checking
 
-DANGLING_SHOWN = 3  # сколько висячих правил перечислять в статусе, остальные — счётом
+DANGLING_SHOWN = 3  # how many dangling rules to list in the status, the rest by count
 
 
 def _dangling_rules_status(dangling):
-    """Текст статуса: почему не сохраняем и какие правила мешают."""
+    """Status text: why we are not saving and which rules are in the way."""
     shown = ", ".join(f"{sel} → {zone}" for sel, zone in dangling[:DANGLING_SHOWN])
     rest = len(dangling) - DANGLING_SHOWN
     if rest > 0:
@@ -146,7 +146,7 @@ def _dangling_rules_status(dangling):
     ).format(shown=shown)
 
 
-# -------------------------------------------------------------- рисование
+# -------------------------------------------------------------- drawing
 
 
 def rounded_path(cr, x, y, w, h, r):
@@ -178,7 +178,7 @@ class Canvas(Gtk.DrawingArea):
         self.drag = None  # (index, mode, edges, start_rect, start_frac)
         self.hover = (None, "")
 
-    # ---- геометрия (расчёты — в zone_geom, без GTK)
+    # ---- geometry (the maths lives in zone_geom, without GTK)
 
     def screen_rect(self):
         a = self.get_allocation()
@@ -193,19 +193,19 @@ class Canvas(Gtk.DrawingArea):
     def hit(self, px, py):
         return geom.hit_test(px, py, self.screen_rect(), self.editor.zones)
 
-    # ---- события
+    # ---- events
 
     def on_draw(self, widget, cr):
         cr.set_source_rgb(0.11, 0.12, 0.14)
         cr.paint()
 
         sx, sy, sw, sh = self.screen_rect()
-        # «экран»
+        # "screen"
         rounded_path(cr, sx - 6, sy - 6, sw + 12, sh + 12, 10)
         cr.set_source_rgb(0.17, 0.18, 0.21)
         cr.fill()
 
-        # подсказки-линии
+        # guide lines
         cr.set_line_width(1)
         for g in geom.GUIDES[1:-1]:
             cr.set_source_rgba(1, 1, 1, 0.05)
@@ -216,7 +216,7 @@ class Canvas(Gtk.DrawingArea):
             cr.stroke()
 
         zones = self.editor.zones
-        # крупные зоны рисуем первыми, мелкие поверх — так подписи не теряются
+        # large zones are drawn first, small ones on top — so the labels are not lost
         order = sorted(range(len(zones)), key=lambda i: zones[i].w * zones[i].h, reverse=True)
         for i in order:
             z = zones[i]
@@ -242,13 +242,13 @@ class Canvas(Gtk.DrawingArea):
             cr.set_source_rgba(*ACCENT, 1)
             cr.stroke()
 
-        # рамка рабочей области
+        # the work area frame
         cr.set_line_width(1.6)
         cr.set_source_rgba(1, 1, 1, 0.35)
         cr.rectangle(sx, sy, sw, sh)
         cr.stroke()
 
-        # легенда
+        # legend
         cr.set_source_rgba(1, 1, 1, 0.45)
         lay = widget.create_pango_layout(
             _(
@@ -286,7 +286,7 @@ class Canvas(Gtk.DrawingArea):
             cr.move_to(x + pad, y + pad + 16)
             PangoCairo.show_layout(cr, layout2)
 
-    # ---- мышь
+    # ---- mouse
 
     def on_button_press(self, widget, ev):
         self.grab_focus()
@@ -316,7 +316,7 @@ class Canvas(Gtk.DrawingArea):
     def on_button_release(self, widget, ev):
         return self.end_drag()
 
-    # ---- логика перетаскивания (отдельно от событий: так её можно тестировать)
+    # ---- drag logic (separate from the events: that makes it testable)
 
     def begin_drag(self, index, mode, edges, fx, fy):
         z = self.editor.zones[index]
@@ -369,7 +369,7 @@ class Canvas(Gtk.DrawingArea):
             cache[name] = Gdk.Cursor.new_from_name(self.get_display(), name) if name else None
         window.set_cursor(cache[name])
 
-    # ---- клавиатура
+    # ---- keyboard
 
     def on_key_press(self, widget, ev):
         ed = self.editor
@@ -392,7 +392,7 @@ class Canvas(Gtk.DrawingArea):
         return False
 
     def on_scroll(self, widget, ev):
-        # колесо мыши меняет ширину выделенной зоны
+        # the mouse wheel changes the width of the selected zone
         if self.editor.selected is None:
             return False
         z = self.editor.zones[self.editor.selected]
@@ -406,7 +406,7 @@ class Canvas(Gtk.DrawingArea):
         return True
 
 
-# ------------------------------------------------------------------- окно
+# ------------------------------------------------------------------- window
 
 
 class Editor(Gtk.Window):
@@ -414,7 +414,7 @@ class Editor(Gtk.Window):
         super().__init__(title=_("Gridsnap - window grid"))
         self.conf_path = conf_path
         self.set_icon_name("gridsnap")
-        # Мониторы — по именам выходов: имя адресует набор зон `[zones:<выход>]`.
+        # Monitors are keyed by output names: the name addresses the zone set `[zones:<output>]`.
         self.outputs = zt.monitor_outputs()
         self.monitors = [rect for _name, rect in self.outputs]
         self.fallback_area = self.monitors[0] if self.monitors else (0, 0, 1920, 1080)
@@ -424,14 +424,14 @@ class Editor(Gtk.Window):
         self.sets = {name: zones for name, zones in sets.items() if name is not None}
         self.edited = set()
         if not self.default_zones:
-            # Конфиг из одних секций мониторов: общий набор заводим с первого
-            # монитора, иначе сохранение записало бы пустой (и нечитаемый) [zones].
+            # A config made of nothing but monitor sections: the shared set is started from the first
+            # monitor, otherwise saving would write an empty (and unreadable) [zones].
             for name in [name for name, _rect in self.outputs] + list(self.sets):
                 if self.sets.get(name):
                     self.default_zones = [z.copy() for z in self.sets[name]]
                     break
-        # Монитор, чей холст и есть общий набор `[zones]`: первый на экране без
-        # своей секции. Правки на нём меняют общий набор, а не создают копию.
+        # The monitor whose canvas is the shared `[zones]` set itself: the first on screen without
+        # its own section. Edits on it change the shared set instead of making a copy.
         self.default_monitor = next(
             (name for name, _rect in self.outputs if name not in self.sets), None
         )
@@ -448,8 +448,8 @@ class Editor(Gtk.Window):
         self.set_default_size(1120, 700)
         self.set_border_width(10)
         self.connect("key-press-event", self.on_key)
-        # Вернулись в окно — возможно, сменили стол: подпись про стол обновляем
-        # здесь, а не в каждом update_status (это вызов xprop).
+        # Back in the window — the workspace may have been switched: update the workspace note
+        # here, not in every update_status (that is an xprop call).
         self.connect("focus-in-event", self.on_focus)
         self.workspace_note = self.workspace_hint()
         self.build_ui()
@@ -459,7 +459,7 @@ class Editor(Gtk.Window):
             self.refresh_panel()
         self.canvas.queue_draw()
 
-    # ---- разметка
+    # ---- layout
 
     def build_ui(self):
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -532,9 +532,9 @@ class Editor(Gtk.Window):
         pitem = Gtk.ToolItem()
         pitem.add(self.prof_btn)
         bar.insert(pitem, -1)
-        # «Рядом с профилями»: галерея — тот же выбор готовой раскладки, но из
-        # поставки, а не из сохранённых. Отдельная кнопка, а не пункт меню:
-        # человеку без своих профилей меню «Профили» ещё не о чем говорить.
+        # "Next to the profiles": the gallery is the same choice of a ready-made layout, but from
+        # the shipped catalog rather than from the saved ones. A separate button, not a menu item:
+        # to someone without profiles of their own the "Profiles" menu has nothing to say yet.
         gal_btn = Gtk.Button(label=_("From the gallery…"))
         gal_btn.set_tooltip_text(
             _("Ready-made layouts: zones, hotkeys and application rules")
@@ -592,8 +592,8 @@ class Editor(Gtk.Window):
         self.mon_combo = Gtk.ComboBoxText()
         for name, rect in self.combo_entries:
             if rect is None:
-                # Секция [zones:<выход>] осталась от прежнего подключения — её
-                # можно посмотреть и поправить, но не удалить.
+                # The [zones:<output>] section is left over from a previous connection — it
+                # can be viewed and fixed, but not deleted.
                 self.mon_combo.append_text(_("{} - not on screen").format(name))
             else:
                 self.mon_combo.append_text(f"{name} — {rect[2]}×{rect[3]}")
@@ -609,17 +609,17 @@ class Editor(Gtk.Window):
         self.status.get_style_context().add_class("dim-label")
         root.pack_start(self.status, False, False, 0)
 
-    # ---- состояние
+    # ---- state
 
     def workarea(self):
-        """Рабочая область текущего монитора; у отключённого — первая на экране."""
+        """The work area of the current monitor; for a disconnected one — the first on screen."""
         if not self.combo_entries:
             return self.fallback_area
         _name, rect = self.combo_entries[self.monitor_index]
         return rect or self.fallback_area
 
     def set_status(self, text):
-        """Сообщение одной строкой; в статусе всегда видно, чей набор на холсте."""
+        """A message on one line; the status always shows whose set is on the canvas."""
         self.message = text
         self.update_status()
 
@@ -632,12 +632,12 @@ class Editor(Gtk.Window):
         self.status.set_text(" · ".join(parts))
 
     def workspace_hint(self):
-        """Подпись про активный стол: какой профиль он использует.
+        """The note about the active workspace: which profile it uses.
 
-        В EWMH столы считаются с нуля, в ``[workspaces]`` — с 1. Кнопка
-        «Проверить зону» ходит в сетку самого ``zones.conf``
-        (``--workspace conf``), поэтому без этой подписи непонятно, почему на
-        столе с профилем зоны редактора не находятся.
+        In EWMH workspaces are counted from zero, in ``[workspaces]`` — from 1. The "place
+        the active window" button goes to the grid of ``zones.conf`` itself
+        (``--workspace conf``), so without this note it is unclear why on a
+        workspace with a profile the editor's zones are not found.
         """
         workspace = zt.current_workspace()
         if workspace is None:
@@ -663,14 +663,14 @@ class Editor(Gtk.Window):
         ).format(number, profile, tail)
 
     def refresh_workspace_hint(self):
-        """Пересчитать подпись про стол и обновить статус."""
+        """Recompute the workspace note and refresh the status."""
         self.workspace_note = self.workspace_hint()
-        # Событие фокуса может прийти до build_ui — тогда статуса ещё нет.
+        # A focus event can arrive before build_ui — then there is no status yet.
         if getattr(self, "status", None) is not None:
             self.update_status()
 
     def set_hint(self):
-        """Свой набор, наследование или общий `[zones]` — по текущему монитору."""
+        """Its own set, inheritance or the shared `[zones]` — by the current monitor."""
         name = self.current_monitor
         if name is None:
             return _("no set selected")
@@ -683,23 +683,23 @@ class Editor(Gtk.Window):
         )
 
     def _is_own(self, monitor):
-        """Есть ли у монитора свой набор: секция в файле или правки в редакторе."""
+        """Whether the monitor has a set of its own: a section in the file or edits in the editor."""
         return monitor in self.file_own or monitor in self.edited
 
     def set_dirty(self, val):
         self.dirty = val
         if val:
-            # Любая правка отменяет прошлое «сохранено…» в статусе.
+            # Any edit cancels the previous "saved…" in the status.
             self.message = ""
         if val and self.current_monitor is not None and self.current_monitor != self.default_monitor:
-            # Правка унаследованного набора делает его своим: при сохранении у
-            # монитора появится своя секция [zones:<выход>].
+            # An edit of an inherited set makes it its own: on saving, the
+            # monitor gets a section of its own, [zones:<output>].
             self.edited.add(self.current_monitor)
         self.set_title(("● " if val else "") + _("Gridsnap - window grid"))
         self.update_status()
 
     def show_monitor(self, name):
-        """Показать набор монитора: секцию из файла или копию общего `[zones]`."""
+        """Show the set of the monitor: the section from the file or a copy of the shared `[zones]`."""
         index = next(
             (i for i, (item, _rect) in enumerate(self.combo_entries) if item == name), 0
         )
@@ -722,17 +722,17 @@ class Editor(Gtk.Window):
         self.canvas.queue_draw()
 
     def set_zones(self, zones):
-        """Заменить содержимое текущего набора на месте (связь с черновиком жива)."""
+        """Replace the contents of the current set in place (the link to the draft stays alive)."""
         self.zones[:] = list(zones)
 
     def select_monitor_index(self, index):
-        """Показать монитор по номеру в комбо — аргумент ``--monitor``."""
+        """Show the monitor by its number in the combo — the ``--monitor`` argument."""
         if index is None or not 0 <= index < len(self.combo_entries):
             return
         self.show_monitor(self.combo_entries[index][0])
 
     def _draft(self, monitor):
-        """Черновик набора монитора: показанный, из файла или копия общего набора."""
+        """The draft of a monitor's set: the shown one, the one from the file or a copy of the shared set."""
         if monitor == self.default_monitor:
             return self.default_zones
         if monitor in self.sets:
@@ -740,11 +740,11 @@ class Editor(Gtk.Window):
         return [z.copy() for z in self.default_zones]
 
     def _all_drafts(self):
-        """Наборы всех мониторов — и на экране, и отключённых (их секции живут)."""
+        """The sets of all monitors — both on screen and disconnected (their sections live on)."""
         return {name: self._draft(name) for name, _rect in self.combo_entries}
 
     def _all_zone_names(self):
-        """Имена зон всех наборов — по ним проверяются цели правил `[rules]`."""
+        """The zone names of all sets — the targets of the `[rules]` rules are checked against them."""
         names = set()
         for zones in self._all_drafts().values():
             names.update(z.name for z in zones)
@@ -819,7 +819,7 @@ class Editor(Gtk.Window):
         cr.set_source_rgb(*col)
         cr.fill()
 
-    # ---- обработчики панели
+    # ---- panel handlers
 
     def on_row_selected(self, _lb, row):
         if self._loading or row is None:
@@ -846,7 +846,7 @@ class Editor(Gtk.Window):
         z = self.zones[self.selected]
         value = entry.get_text().strip()
         z.binding = value
-        # `[keys]` одна на файл: клавиша зоны одна во всех наборах, где есть это имя.
+        # `[keys]` is one per file: a zone's key is one key in every set that has this name.
         for zones in self._all_drafts().values():
             for other in zones:
                 if other is not z and other.name == z.name:
@@ -869,11 +869,11 @@ class Editor(Gtk.Window):
         return False
 
     def on_focus(self, *_args):
-        """Окно снова в фокусе — обновить подпись про активный стол."""
+        """The window is focused again — refresh the note about the active workspace."""
         self.refresh_workspace_hint()
         return False
 
-    # ---- действия
+    # ---- actions
 
     def _unique_name(self, base="zone"):
         return unique_name(self.zones, base)
@@ -937,10 +937,10 @@ class Editor(Gtk.Window):
             _("template \"{}\": {} zones (don't forget to save)").format(name, len(self.zones))
         )
 
-    # ---- профили
+    # ---- profiles
 
     def rebuild_profiles_menu(self):
-        """Пересобрать меню «Профили»: список сохранённых плюс сохранение и удаление."""
+        """Rebuild the "Profiles" menu: the list of saved ones plus saving and deleting."""
         for child in self.prof_box.get_children():
             self.prof_box.remove(child)
         names = list_profiles(self.conf_path)
@@ -970,15 +970,15 @@ class Editor(Gtk.Window):
             self.prof_box.pack_start(rm_btn, False, False, 0)
         self.prof_box.show_all()
 
-    # ---- галерея готовых раскладок
+    # ---- the gallery of ready-made layouts
 
     def gallery_dialog(self):
-        """Диалог «Галерея раскладок»: готовый сценарий → профиль → холст.
+        """The "Layout gallery" dialog: a ready-made scenario → a profile → the canvas.
 
-        Список строится по `zone_config.gallery_layouts()` — название,
-        описание и сколько зон. Выбор **копирует** раскладку в профиль
-        (`install_gallery_layout`), а не правит каталог: после этого её правят
-        как свою, а галерея остаётся галереей.
+        The list is built from `zone_config.gallery_layouts()` — the title, the
+        description and how many zones. A choice **copies** the layout into a profile
+        (`install_gallery_layout`) instead of editing the catalog: after that it is edited
+        as one's own, and the gallery stays a gallery.
         """
         try:
             layouts = gallery_layouts()
@@ -1012,8 +1012,8 @@ class Editor(Gtk.Window):
                 label=_("{} — {} zones").format(item["title"], len(item["zones"])),
                 xalign=0,
             )
-            # Название жирным (Pango напрямую, без разметки): в списке из
-            # восьми строк иначе не видно, где строка кончается и начинается.
+            # The title in bold (Pango directly, without markup): in a list of
+            # eight rows you cannot otherwise see where a row ends and the next begins.
             weight = Pango.AttrList()
             weight.insert(Pango.attr_weight_new(Pango.Weight.BOLD))
             head.set_attributes(weight)
@@ -1033,7 +1033,7 @@ class Editor(Gtk.Window):
         dlg.show_all()
         resp = dlg.run()
         chosen = listbox.get_selected_row()
-        # Индекс снимаем до destroy: у отвязанной строки он может стать -1.
+        # Take the index before destroy: for a detached row it can become -1.
         index = chosen.get_index() if chosen is not None else None
         dlg.destroy()
         if resp != Gtk.ResponseType.OK:
@@ -1044,7 +1044,7 @@ class Editor(Gtk.Window):
         self.install_gallery_dialog(layouts[index])
 
     def install_gallery_dialog(self, item):
-        """Создать профиль из раскладки галереи и предложить загрузить его."""
+        """Create a profile from a gallery layout and offer to load it."""
         gid = item["id"]
         name = self._ask_text(
             _("Add the layout to profiles"),
@@ -1057,8 +1057,8 @@ class Editor(Gtk.Window):
         if not safe:
             self.set_status(_("empty profile name"))
             return
-        # Профиль уже есть — спрашиваем, а не перезаписываем молча: имя могло
-        # быть занято своей раскладкой, и выбор из галереи не должен её стереть.
+        # The profile already exists — ask instead of overwriting silently: the name could
+        # be taken by a layout of one's own, and a choice from the gallery must not wipe it.
         force = os.path.exists(profile_path(safe, self.conf_path))
         if force and not self._ask_yes_no(
             _("Profile \"{}\" already exists. Overwrite it with the layout \"{}\"?").format(
@@ -1083,10 +1083,10 @@ class Editor(Gtk.Window):
             self.load_profile(safe)
 
     def _ask_yes_no(self, question):
-        """Спросить «да/нет» модальным диалогом; ``True`` — нажато «Да».
+        """Ask "yes/no" with a modal dialog; ``True`` — "Yes" was pressed.
 
-        Подписи кнопок — из самого GTK (`YES_NO`): они уже переведены на язык
-        системы, и это те же слова, что у остальных диалогов.
+        The button labels come from GTK itself (`YES_NO`): they are already translated into the
+        system language, and they are the same words as in the other dialogs.
         """
         dlg = Gtk.MessageDialog(
             transient_for=self,
@@ -1138,7 +1138,7 @@ class Editor(Gtk.Window):
         return text if resp == Gtk.ResponseType.OK else ""
 
     def load_profile(self, name):
-        """Загрузить зоны, правила и клавиши профиля в холст как черновик."""
+        """Load the zones, rules and keys of a profile into the canvas as a draft."""
         try:
             zones, rules, ignore = read_profile(name, self.conf_path)
         except (ValueError, OSError, SystemExit) as exc:
@@ -1182,14 +1182,14 @@ class Editor(Gtk.Window):
         self.set_status(_("profile \"{}\" saved: {}").format(safe, path))
 
     def workspace_profiles_dialog(self):
-        """Диалог «Профили столов»: какой профиль использует каждый стол.
+        """The "Workspace profiles" dialog: which profile each workspace uses.
 
-        Строк столько, сколько столов в Cinnamon (`_NET_NUMBER_OF_DESKTOPS`),
-        без X — четыре (:data:`zone_config.WORKSPACE_DESKTOPS_DEFAULT`). В
-        выпадающем списке — сохранённые профили и «общий набор» (без профиля).
-        Пишется только секция `[workspaces]` через `save_workspace_map`: чужие
-        секции файла остаются на месте, а `extra_sections` перечитываются,
-        чтобы следующий Ctrl+S её не откатил.
+        There are as many rows as there are workspaces in Cinnamon (`_NET_NUMBER_OF_DESKTOPS`),
+        without X — four (:data:`zone_config.WORKSPACE_DESKTOPS_DEFAULT`). In
+        the drop-down list — the saved profiles and the "default set" (no profile).
+        Only the `[workspaces]` section is written, through `save_workspace_map`: foreign
+        sections of the file stay in place, and `extra_sections` is re-read
+        so that the next Ctrl+S does not roll it back.
         """
         try:
             mapping = load_workspace_map(self.conf_path)
@@ -1253,11 +1253,11 @@ class Editor(Gtk.Window):
         )
 
     def monitor_names(self):
-        """Имена выходов в порядке `xrandr --listmonitors` — порядок строк диалога.
+        """The output names in the order of `xrandr --listmonitors` — the row order of the dialog.
 
-        Читаем заново при каждом открытии: экран могли подключить после запуска
-        редактора, а `self.outputs` — снимок на момент старта. Без X и без xrandr
-        остаётся снимок: диалог всё равно покажет записи из `[monitors]`.
+        Read anew on every opening: a screen could have been connected after the editor
+        started, and `self.outputs` is a snapshot from the moment of start. Without X and without xrandr
+        the snapshot stays: the dialog shows the records from `[monitors]` anyway.
         """
         try:
             names = [name for name, _rect in zt.monitor_outputs()]
@@ -1266,16 +1266,16 @@ class Editor(Gtk.Window):
         return names or [name for name, _rect in self.outputs]
 
     def monitor_profiles_dialog(self):
-        """Диалог «Профили экранов»: какой профиль использует каждый выход.
+        """The "Monitor profiles" dialog: which profile each output uses.
 
-        Строк столько, сколько выходов видит `xrandr --listmonitors`, плюс записи
-        из `[monitors]` про выходы, которых сейчас нет: их видно и можно поправить
-        или убрать. В выпадающем списке — сохранённые профили и «общий набор»
-        (привязки нет). Строки идут в порядке xrandr, и именно в нём пишется секция:
-        профиль первого экрана решает спор при слиянии (`profile use-monitors`).
-        Пишется только `[monitors]` через `save_monitor_map`; чужие секции файла
-        остаются на месте, а `extra_sections` перечитываются, чтобы следующий Ctrl+S
-        её не откатил. «Отмена» не пишет ничего.
+        There are as many rows as there are outputs `xrandr --listmonitors` sees, plus the records
+        from `[monitors]` about outputs that are not there right now: they are visible and can be fixed
+        or removed. In the drop-down list — the saved profiles and the "default set"
+        (no binding). The rows go in xrandr order, and that is the order the section is written in:
+        the profile of the first screen settles the dispute on a merge (`profile use-monitors`).
+        Only `[monitors]` is written, through `save_monitor_map`; foreign sections of the file
+        stay in place, and `extra_sections` is re-read so that the next Ctrl+S
+        does not roll it back. "Cancel" writes nothing.
         """
         try:
             mapping = load_monitor_map(self.conf_path)
@@ -1346,19 +1346,19 @@ class Editor(Gtk.Window):
         )
 
     def sync_workspace_extra(self):
-        """Перечитать `[workspaces]` в «чужие» секции — чтобы Ctrl+S её не откатил.
+        """Re-read `[workspaces]` into the "foreign" sections — so that Ctrl+S does not roll it back.
 
-        Остальные секции в памяти не трогаем: в `[rules]` может лежать
-        черновик, загруженный из профиля и ещё не сохранённый.
+        The other sections are not touched in memory: `[rules]` may hold a
+        draft loaded from a profile and not saved yet.
         """
         self.sync_extra_section(WORKSPACES_SECTION)
 
     def sync_monitor_extra(self):
-        """Перечитать `[monitors]` в «чужие» секции — чтобы Ctrl+S её не откатил."""
+        """Re-read `[monitors]` into the "foreign" sections — so that Ctrl+S does not roll it back."""
         self.sync_extra_section(MONITORS_SECTION)
 
     def sync_extra_section(self, section):
-        """Обновить одну чужую секцию в памяти по файлу, остальные не трогая."""
+        """Update one foreign section in memory from the file, leaving the others alone."""
         try:
             body = load_extra_sections(self.conf_path, sections=[section]).get(section)
         except OSError:
@@ -1383,9 +1383,9 @@ class Editor(Gtk.Window):
         self.set_status(_("profile \"{}\" deleted").format(name))
 
     def on_save(self):
-        """Сохранить общий набор и секции мониторов.
+        """Save the shared set and the monitor sections.
 
-        ``False`` — конфиг не записан (правила ссылаются на отсутствующие зоны).
+        ``False`` — the config was not written (rules refer to missing zones).
         """
         if not self.default_zones:
             self.set_status(_(
@@ -1431,13 +1431,13 @@ class Editor(Gtk.Window):
         self.set_status(_("shortcuts: {}").format(msg[0] if msg else _("without output")))
 
     def rebuild_target_menu(self):
-        """Меню «На монитор…»: монитор → зоны его набора."""
+        """The "To monitor…" menu: a monitor → the zones of its set."""
         for child in self.target_box.get_children():
             self.target_box.remove(child)
         shown = 0
         for name, rect in self.combo_entries:
             if rect is None:
-                continue  # на отключённый выход окно не уложить
+                continue  # a window cannot be placed into a disconnected output
             zones = self._draft(name)
             head = Gtk.Label(xalign=0)
             head.set_markup(f"<b>{name}</b> — {rect[2]}×{rect[3]}")
@@ -1459,18 +1459,18 @@ class Editor(Gtk.Window):
         self.target_box.show_all()
 
     def apply_on_monitor(self, zone, monitor):
-        """Уложить активное окно в зону набора монитора через ``apply --monitor``."""
+        """Place the active window into a zone of the monitor's set through ``apply --monitor``."""
         if self.dirty and not self.on_save():
             return
         self._apply(zone, monitor)
 
     def _apply(self, zone, monitor=None):
-        """Запустить ``zone-tiler.py apply`` (с монитором, если задан) и сказать итог.
+        """Run ``zone-tiler.py apply`` (with the monitor, if given) and report the result.
 
-        ``--conf`` — тот файл, который открыт в редакторе, а ``--workspace conf``
-        гасит сопоставление «рабочий стол → профиль»: холст показывает зоны самого
-        ``zones.conf``, значит и проверка обязана считать ту же сетку, иначе окно
-        уедет в зону из профиля текущего стола.
+        ``--conf`` — the file opened in the editor, and ``--workspace conf``
+        suppresses the "workspace → profile" mapping: the canvas shows the zones of
+        ``zones.conf`` itself, so the check must count the same grid, otherwise the window
+        would go to a zone from the profile of the current workspace.
         """
         cmd = [sys.executable, ZONEBIN, "apply", zone, "--verify",
                "--conf", self.conf_path, "--workspace", "conf"]
@@ -1512,7 +1512,7 @@ def main():
         win.set_size_request(1140, 720)
         ed = Editor(args.conf)
         ed.select_monitor_index(args.monitor)
-        # редактор — отдельное окно; для снимка переносим его содержимое в offscreen
+        # the editor is a window of its own; for a snapshot we move its contents offscreen
         child = ed.get_child()
         ed.remove(child)
         win.add(child)
