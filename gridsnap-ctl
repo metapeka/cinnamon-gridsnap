@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
-"""gridsnap-ctl — клиент IPC демона GridSnap (`zone-daemon.py`).
+"""gridsnap-ctl — IPC client of the GridSnap daemon (`zone-daemon.py`).
 
-Говорит с локальным UNIX-сокетом демона: одна JSON-команда на соединение,
-ответ — JSON-строка. Зависимостей нет — только стандартная библиотека и
-чистый `zone_ipc.py` (кадрирование протокола).
+Talks to the daemon's local UNIX socket: one JSON command per connection, the
+answer is a JSON line. No dependencies — only the standard library and the
+pure `zone_ipc.py` (protocol framing).
 
-    gridsnap-ctl status                     # состояние демона (зоны, окна, reflow)
-    gridsnap-ctl apply main                 # вложить активное окно в зону main
+    gridsnap-ctl status                     # daemon state (zones, windows, reflow)
+    gridsnap-ctl apply main                 # put the active window into the `main` zone
     gridsnap-ctl apply main --window 0x1a00007
     gridsnap-ctl apply main --monitor 1
-    gridsnap-ctl focus main                 # окно в зону main + свернуть остальные (toggle)
-    gridsnap-ctl focus                      # свернуть всё, кроме активного окна
+    gridsnap-ctl focus main                 # the window into the `main` zone + minimize the rest (toggle)
+    gridsnap-ctl focus                      # minimize everything except the active window
     gridsnap-ctl focus main --window 0x1a00007
-    gridsnap-ctl focus --off                # выйти из режима
-    gridsnap-ctl reload                     # демон перечитает zones.conf
-    gridsnap-ctl quit                       # попросить демон завершиться
-    gridsnap-ctl watch                      # подписаться и печатать события
+    gridsnap-ctl focus --off                # leave the mode
+    gridsnap-ctl reload                     # the daemon re-reads zones.conf
+    gridsnap-ctl quit                       # ask the daemon to finish
+    gridsnap-ctl watch                      # subscribe and print events
 
-`watch` — не команда-запрос: соединение остаётся открытым, демон шлёт в него по
-строке JSON на событие (`window-appeared`/`window-closed`/`window-moved`,
-`focus-on`/`focus-off`), а отписка — закрыть соединение (`Ctrl-C`). Строки
-печатаются как есть — фильтровать и разбирать их можно снаружи (`jq`, `grep`).
+`watch` is not a request command: the connection stays open, the daemon sends one
+JSON line per event (`window-appeared`/`window-closed`/`window-moved`,
+`focus-on`/`focus-off`), and unsubscribing means closing the connection (`Ctrl-C`). The lines
+are printed as they are — filter and parse them on the outside (`jq`, `grep`).
 
-Путь сокета — по умолчанию `$XDG_RUNTIME_DIR/gridsnap/daemon.sock`, как у
-демона; переопределяется `--socket PATH` (тот же флаг у демона).
+The socket path is `$XDG_RUNTIME_DIR/gridsnap/daemon.sock` by default, as for the
+daemon; it is overridden by `--socket PATH` (the same flag on the daemon).
 
-Коды возврата: 0 — успех, 1 — ошибка (нет демона, отказ команды),
-2 — ошибка аргументов.
+Return codes: 0 — success, 1 — a failure (no daemon, the command was refused),
+2 — an argument error.
 """
 
 import argparse
@@ -39,8 +39,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-import zone_ipc  # noqa: E402  (ищем рядом с собой, как устанавливается)
-from zone_i18n import _  # noqa: E402  (строки интерфейса — через каталог)
+import zone_ipc  # noqa: E402  (looked for next to itself, as it is installed)
+from zone_i18n import _  # noqa: E402  (interface strings come from the catalog)
 
 EXIT_OK = 0
 EXIT_FAIL = 1
@@ -48,12 +48,12 @@ EXIT_USAGE = 2
 
 VERSION = "0.2.0"
 
-# Сколько ждать ответа демона, секунд.
+# How long to wait for the daemon's answer, in seconds.
 TIMEOUT = 5.0
 
 
 class _DevNull:
-    """Приёмник, который ничего не печатает: `watch --quiet` без строки о подписке."""
+    """A receiver that prints nothing: `watch --quiet` without the subscription line."""
 
     @staticmethod
     def write(_text):
@@ -65,10 +65,10 @@ class _DevNull:
 
 
 def send_command(request, path, timeout=TIMEOUT):
-    """Отправить одну команду и вернуть ответ-dict.
+    """Send one command and return the answer dict.
 
-    Райзит `OSError` (нет демона/сокета, обрыв) и `zone_ipc.ProtocolError`
-    (битый ответ) — вызывающий печатает понятное сообщение.
+    Raises `OSError` (no daemon/socket, a broken connection) and `zone_ipc.ProtocolError`
+    (a broken answer) - the caller prints a readable message.
     """
     conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     conn.settimeout(timeout)
@@ -81,16 +81,16 @@ def send_command(request, path, timeout=TIMEOUT):
 
 
 def watch(path, stream=None, notice=None, timeout=TIMEOUT):
-    """Подписаться на события демона и печатать их до обрыва или `Ctrl-C`.
+    """Subscribe to the daemon's events and print them until the connection breaks or `Ctrl-C`.
 
-    Подписка (`subscribe`) — единственная команда, после которой соединение
-    только на чтение: демон шлёт по строке JSON на событие, отписка — закрыть
-    соединение. Строки печатаются как есть и сразу (`flush`): `watch` и смотрят
-    глазами, и служит подписчиком скриптам и дымовому тесту. Человеку — одна
-    строка о подписке в `stderr`, чтобы поток в `stdout` оставался чистым.
+    A subscription (`subscribe`) is the only command after which the connection is
+    read-only: the daemon sends one JSON line per event, unsubscribing means closing
+    the connection. The lines are printed as they are and at once (`flush`): `watch` both looks
+    at them with your own eyes and serves as a subscriber for scripts and the smoke test. For a human - one
+    line about the subscription on `stderr`, so that the stream on `stdout` stays clean.
 
-    Возвращает код `EXIT_OK` или `EXIT_FAIL`; `KeyboardInterrupt` и закрытый
-    приёмник (`gridsnap-ctl watch | head`) — не ошибка, а конец наблюдения.
+    Returns `EXIT_OK` or `EXIT_FAIL`; `KeyboardInterrupt` and a closed
+    receiver (`gridsnap-ctl watch | head`) are not an error but the end of watching.
     """
     stream = stream if stream is not None else sys.stdout
     notice = notice if notice is not None else sys.stderr
@@ -116,11 +116,11 @@ def watch(path, stream=None, notice=None, timeout=TIMEOUT):
             file=notice,
             flush=True,
         )
-        conn.settimeout(None)  # события идут, когда захотят
+        conn.settimeout(None)  # events come whenever they want
         reader = zone_ipc.LineReader()
         while True:
             data = conn.recv(4096)
-            if not data:  # демон закрыл соединение (завершился)
+            if not data:  # the daemon closed the connection (it finished)
                 tail = reader.tail().strip()
                 if tail:
                     _print_event(tail, stream)
@@ -128,7 +128,7 @@ def watch(path, stream=None, notice=None, timeout=TIMEOUT):
             for line in reader.feed(data):
                 if line.strip():
                     _print_event(line, stream)
-    except BrokenPipeError:  # приёмник закрылся: watch | head — не ошибка
+    except BrokenPipeError:  # the receiver closed: watch | head is not an error
         return EXIT_OK
     except zone_ipc.ProtocolError as exc:
         print(
@@ -149,13 +149,13 @@ def watch(path, stream=None, notice=None, timeout=TIMEOUT):
 
 
 def _print_event(line, stream):
-    """Напечатать строку события как есть; битую — тоже (разберёт потребитель)."""
+    """Print an event line as it is; a broken one too (the consumer will parse it)."""
     text = line.decode("utf-8", "replace") if isinstance(line, bytes) else str(line)
     print(text, file=stream, flush=True)
 
 
 def build_request(args):
-    """Собрать запрос из аргументов CLI. Неверные сочетания -> `SystemExit(2)`."""
+    """Build the request from the CLI arguments. Bad combinations -> `SystemExit(2)`."""
     request = {"cmd": args.command}
     if args.command == "apply":
         if not args.zone:
@@ -168,8 +168,8 @@ def build_request(args):
             request["monitor"] = args.monitor
     elif args.command == "focus":
         if args.monitor is not None:
-            # Режим сворачивает окна того монитора, где лежит целевое окно:
-            # чужой монитор в запросе ему не нужен.
+            # The mode minimizes the windows of the monitor the target window is on:
+            # a foreign monitor is not needed in the request.
             print(
                 _("gridsnap-ctl: focus takes no --monitor: the mode uses the target window's monitor"),
                 file=sys.stderr,
@@ -185,8 +185,8 @@ def build_request(args):
             request["off"] = True
         elif args.zone:
             request["zone"] = args.zone
-        # Без зоны и без `--off` — «свернуть всё, кроме этого окна»: окно
-        # остаётся на месте, в запросе нет ни `zone`, ни `off`.
+        # No zone and no `--off` - "minimize everything except this window": the window
+        # stays where it is, the request has neither `zone` nor `off`.
         if args.window is not None:
             request["window"] = args.window
     elif args.zone or args.window is not None or args.monitor is not None:
