@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты раскладчика GridSnap — без X-сервера и без GTK.
+"""Unit tests for the GridSnap tiler - without an X server and without GTK.
 
-Проверяют парсер zones.conf, перевод долей рабочей области в пиксели, стыковку
-соседних зон и компенсацию рамки окна. Раскладка окон (EWMH) проверяется отдельно
-поддельным X11, реальный дисплей не нужен.
+They check the zones.conf parser, the conversion of work area fractions into pixels, the joining
+of neighbouring zones and the window frame compensation. Window layout (EWMH) is checked separately
+with a fake X11, a real display is not needed.
 
-Запуск:
+Run:
     python3 -m unittest discover -s tests -v
     python3 tests/test_zone_tiler.py
 """
@@ -24,8 +24,8 @@ from unittest import mock
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # run as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -46,7 +46,7 @@ zt = load_tiler()
 
 
 class ConfMixin:
-    """Пишет временный zones.conf и убирает его после теста."""
+    """Writes a temporary zones.conf and removes it after the test."""
 
     def conf(self, text):
         fd, path = tempfile.mkstemp(suffix=".conf", text=True)
@@ -87,8 +87,8 @@ class TestGridParsing(ConfMixin, unittest.TestCase):
         wa = (0, 40, 1920, 1000)
         lx, ly, lw, lh = grid.rect("left", wa)
         rx, ry, rw, rh = grid.rect("right", wa)
-        self.assertEqual(lx + lw, rx)          # граница общая
-        self.assertEqual(rx + rw, wa[2])       # и доходит до края области
+        self.assertEqual(lx + lw, rx)          # the border is shared
+        self.assertEqual(rx + rw, wa[2])       # and reaches the edge of the area
 
     def test_thirds_tile_exactly(self):
         path = self.conf(
@@ -196,7 +196,7 @@ class TestFrameCompensation(unittest.TestCase):
 
 
 class FakeX11:
-    """Поддельный X11: записывает вызовы, X-сервер не нужен."""
+    """A fake X11: it records the calls, no X server is needed."""
 
     def __init__(self):
         self.calls = []
@@ -209,7 +209,7 @@ class FakeX11:
 
 
 class ClosableX11(FakeX11):
-    """FakeX11 с учётом владения соединением — для проверки отсутствия утечки."""
+    """FakeX11 aware of connection ownership - to check that nothing leaks."""
 
     instances = []
 
@@ -244,7 +244,7 @@ class TestApplyZone(unittest.TestCase):
         self.assertEqual(fake.calls[2], ("move_resize", 0x1234, 100, 40, 797, 572))
 
     def test_apply_zone_closes_connection_it_opened(self):
-        # apply_zone создал соединение сам (x11=None) — обязан его закрыть.
+        # apply_zone opened the connection itself (x11=None) - it must close it.
         original = zt.X11
         zt.X11 = ClosableX11
         self.addCleanup(setattr, zt, "X11", original)
@@ -253,13 +253,13 @@ class TestApplyZone(unittest.TestCase):
         self.assertTrue(ClosableX11.instances[0].closed)
 
     def test_apply_zone_does_not_close_passed_connection(self):
-        # Переданное чужое соединение (соединение демона) трогать нельзя.
+        # A foreign connection that was passed in (the daemon's connection) must not be touched.
         fake = ClosableX11()
         zt.apply_zone(0x1, (0, 0, 100, 100), x11=fake, quiet=True)
         self.assertFalse(fake.closed)
 
     def test_apply_zone_closes_even_if_move_resize_fails(self):
-        # Утечка не должна оставаться и на ошибке в середине раскладки.
+        # No leak must remain even after an error in the middle of the layout.
         original = zt.X11
         zt.X11 = ClosableX11
         self.addCleanup(setattr, zt, "X11", original)
@@ -288,12 +288,12 @@ class TestApplyZone(unittest.TestCase):
 
 
 class TestX11Close(unittest.TestCase):
-    """Реальный `X11.close()` без X-сервера: закрывает `dpy` ровно один раз.
+    """The real `X11.close()` without an X server: it closes `dpy` exactly once.
 
-    Тесты утечки выше подменяют `close()` собственным стабом `ClosableX11`, поэтому
-    реальное поведение `X11.close()` (вызов `XCloseDisplay` и `dpy = None`) там
-    не закреплено. Здесь объект создаётся в обход `__init__` (`object.__new__`),
-    а LibX11-функция `XCloseDisplay` подменяется записывающей заглушкой.
+    The leak tests above replace `close()` with their own stub `ClosableX11`, so the
+    real behaviour of `X11.close()` (a call of `XCloseDisplay` and `dpy = None`) is not
+    pinned down there. Here the object is created past `__init__` (`object.__new__`),
+    and the LibX11 function `XCloseDisplay` is replaced with a recording stub.
     """
 
     class _FakeLib:
@@ -309,9 +309,9 @@ class TestX11Close(unittest.TestCase):
         obj.x = self._FakeLib()
         obj.dpy = 0x1234
         obj.close()
-        self.assertEqual(obj.x.closed, [0x1234])  # первый close — ровно один вызов
+        self.assertEqual(obj.x.closed, [0x1234])  # the first close - exactly one call
         self.assertIsNone(obj.dpy)
-        obj.close()  # повторный close — no-op
+        obj.close()  # a repeated close - a no-op
         self.assertEqual(obj.x.closed, [0x1234])
 
 
@@ -332,8 +332,8 @@ class TestCli(ConfMixin, unittest.TestCase):
         self.assertIn("apply", r.stdout)
 
     def test_unknown_zone_is_config_error(self):
-        # Зона, которой нет ни в сетке стола, ни в общем [zones], — это расхождение
-        # конфига и профиля, а не опечатка в аргументе: код 3 и перечень зон.
+        # A zone that is in neither the workspace grid nor the common [zones] is a discrepancy
+        # of the config and the profile, not a typo in the argument: code 3 and the list of zones.
         r = self.run_cli("apply", "no-such-zone")
         self.assertEqual(r.returncode, 3)
         self.assertIn("no zone", r.stderr)
@@ -355,10 +355,10 @@ class TestCli(ConfMixin, unittest.TestCase):
 
 
 class TestTabsArrangement(ConfMixin, unittest.TestCase):
-    """`arrange`/`stack` кладут окна зоны на общую рамку вкладки, а не каскадом.
+    """`arrange`/`stack` put the windows of a zone onto the shared tab frame, not in a cascade.
 
-    Без X и GTK: список окон, метаданные, монитор и рабочая область
-    подменены, `--dry-run` печатает рамки и ничего не двигает.
+    Without X and GTK: the window list, the metadata, the monitor and the work area
+    are replaced, `--dry-run` prints the frames and moves nothing.
     """
 
     CONF = BASE_GRID + "[zones]\nmain = 0, 0, 1, 1\n[tabs]\nheight = 30\n"
@@ -381,7 +381,7 @@ class TestTabsArrangement(ConfMixin, unittest.TestCase):
             self.addCleanup(patcher.stop)
 
     def run_cli(self, *argv):
-        """(код, stdout, stderr) — `main` в процессе, всегда с `--dry-run`."""
+        """(code, stdout, stderr) - `main` in the process, always with `--dry-run`."""
         out, err = io.StringIO(), io.StringIO()
         code = 0
         try:
@@ -392,13 +392,13 @@ class TestTabsArrangement(ConfMixin, unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_arrange_puts_windows_of_one_zone_on_one_tab_frame(self):
-        # `order`: двум окнам при одной зоне обоим достаётся `main`.
+        # `order`: with one zone for two windows both get `main`.
         code, out, _err = self.run_cli("arrange", "--by", "order")
         self.assertEqual(code, 0)
         self.assertEqual(out.count("x=0 y=30 1000x970"), 2, out)
 
     def test_arrange_uses_strip_height_from_tabs_section(self):
-        # 30 px из `[tabs] height`, а не умолчание 22: окно сдвинуто на высоту полосы.
+        # 30 px from `[tabs] height`, not the default 22: the window is shifted by the strip height.
         _code, out, _err = self.run_cli("arrange", "--by", "order")
         self.assertNotIn("y=22", out)
         self.assertIn("y=30", out)
@@ -427,11 +427,11 @@ class TestTabsArrangement(ConfMixin, unittest.TestCase):
 
 
 class TestScreenProfile(ConfMixin, unittest.TestCase):
-    """Рабочие команды берут сетку из профиля **экрана** (`[monitors]`).
+    """The work commands take the grid from the **screen** profile (`[monitors]`).
 
-    Экран важнее стола, а отсутствующий файл профиля — не отказ укладки, а откат
-    на сетку стола/активного конфига с предупреждением. Без X: мониторы, рамка
-    окна и исключения подменены; всё считается на `--dry-run`.
+    The screen is more important than the workspace, and a missing profile file is not a refusal to
+    tile but a fallback to the grid of the workspace/active config with a warning. Without X: the
+    monitors, the window frame and the exclusions are replaced; everything is computed on `--dry-run`.
     """
 
     CONF = (
@@ -462,7 +462,7 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
             ("current_workspace", lambda: None),
             ("read_client_list", lambda: [0x1]),
             ("read_window_meta", lambda win: zt.WindowMeta("Firefox", f"окно {win}", frozenset())),
-            # Окно — на втором мониторе, в левой половине его области.
+            # The window is on the second monitor, in the left half of its area.
             ("window_monitor", lambda win, areas: areas[1]),
             ("frame_extents", lambda win: (0, 0, 0, 0)),
             ("read_frame", lambda win, extents: (1000, 0, 500, 1000)),
@@ -483,29 +483,29 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_apply_takes_zones_from_the_screen_profile(self):
-        # `[zones:MON2]` профиля, а не общий `[zones]` активного конфига.
+        # `[zones:MON2]` of the profile, not the common `[zones]` of the active config.
         code, out, err = self.run_cli("apply", "right", "--monitor", "MON2")
         self.assertEqual(code, 0, err)
         self.assertIn("right: x=1500 y=0 500x1000 (monitor 1: MON2)", out)
 
     def test_apply_without_monitor_takes_the_window_screen(self):
-        # Без `--monitor` адресат — экран окна (по подмене `read_frame` оно на
-        # MON2), значит и зона берётся из профиля этого экрана: молча уводить окно
-        # на первый экран и искать зону в чужом профиле было бы неправдой.
+        # Without `--monitor` the addressee is the screen of the window (read_frame is replaced, so
+        # it is on MON2), which means the zone also comes from the profile of that screen: silently
+        # moving the window to the first screen and looking for the zone in a foreign profile would be a lie.
         with mock.patch.object(zt, "read_active_window", lambda: (0x1, None)):
             code, out, err = self.run_cli("apply", "right")
         self.assertEqual(code, 0, err)
         self.assertIn("right: x=1500 y=0 500x1000 (monitor 1: MON2)", out)
 
     def test_monitor_flag_overrides_the_window_screen(self):
-        # `--monitor` важнее экрана окна: осознанный перенос на первый экран.
+        # `--monitor` wins over the screen of the window: a deliberate move to the first screen.
         with mock.patch.object(zt, "read_active_window", lambda: (0x1, None)):
             code, out, err = self.run_cli("apply", "global", "--monitor", "MON1")
         self.assertEqual(code, 0, err)
         self.assertIn("global: x=0 y=0 1000x1000 (monitor 0: MON1)", out)
 
     def test_without_window_falls_back_to_the_first_screen(self):
-        # Окна нет (—dry-run в скрипте): первый экран, как было раньше, а не отказ.
+        # There is no window (`--dry-run` in the script): the first screen, as before, not a refusal.
         with mock.patch.object(zt, "active_window_quiet", lambda: None):
             code, out, err = self.run_cli("apply", "global")
         self.assertEqual(code, 0, err)
@@ -515,19 +515,19 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
         with mock.patch.object(zt, "read_active_window", lambda: (0x1, None)):
             code, out, err = self.run_cli("stack", "right")
         self.assertEqual(code, 0, err)
-        # Одно окно — зона профиля второго экрана целиком.
+        # One window - the whole zone of the second screen's profile.
         self.assertIn("x=1500 y=0 500x1000", out)
 
     def test_apply_sees_zones_of_the_profile_default_set_too(self):
-        # Зоны `big` нет в `[zones:MON2]`, но она есть в `[zones]` профиля —
-        # Grid откатывается на этот набор, а не на active config.
+        # The zone `big` is not in `[zones:MON2]`, but it is in the `[zones]` of the profile -
+        # Grid falls back to that set, not to the active config.
         code, out, err = self.run_cli("apply", "big", "--monitor", "MON2")
         self.assertEqual(code, 0, err)
         self.assertIn("big: x=1000 y=0 1000x1000", out)
 
     def test_apply_rejects_zone_of_another_screen(self):
-        # MON1 не привязан к профилю: зоны `left` там нет — код 3, а не молчаливый промах.
-        # Экран задаётся явно: без `--monitor` адресат — экран окна (MON2), где `left` есть.
+        # MON1 is not bound to a profile: the zone `left` is not there - code 3, not a silent miss.
+        # The screen is given explicitly: without `--monitor` the addressee is the screen of the window (MON2), where `left` exists.
         code, _out, err = self.run_cli("apply", "left", "--monitor", "MON1")
         self.assertEqual(code, 3)
         self.assertIn("no zone 'left'", err)
@@ -549,21 +549,21 @@ class TestScreenProfile(ConfMixin, unittest.TestCase):
     def test_stack_uses_the_screen_profile_zone(self):
         code, out, err = self.run_cli("stack", "right", "--monitor", "MON2")
         self.assertEqual(code, 0, err)
-        # Одно окно — вся зона профиля на втором мониторе.
+        # One window - the whole zone of the profile on the second monitor.
         self.assertIn("x=1500 y=0 500x1000", out)
 
     def test_move_finds_the_window_zone_in_the_screen_profile(self):
         code, out, err = self.run_cli("move", "right", "--window", "0x1")
         self.assertEqual(code, 0, err)
-        # Окно на MON2 в зоне left профиля; сосед справа — right, а не global.
+        # A window on MON2 in the left zone of the profile; the neighbour on the right is right, not global.
         self.assertIn("zone 'left' -> 'right'", out)
         self.assertIn("monitor 1: MON2", out)
 
     def test_arrange_uses_the_screen_profile(self):
         code, out, err = self.run_cli("arrange", "--by", "order")
         self.assertEqual(code, 0, err)
-        # На MON2 — зоны профиля (left/right), а не `global` активного конфига;
-        # одно окно в зоне занимает её целиком.
+        # On MON2 there are the zones of the profile (left/right), not `global` of the active config;
+        # one window in a zone takes it whole.
         self.assertIn("zone 'left': x=1000 y=0 500x1000", out)
 
 

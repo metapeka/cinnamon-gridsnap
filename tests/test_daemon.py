@@ -61,14 +61,14 @@ from unittest import mock
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # run as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)  # zone-tiler и его модули
+    sys.path.insert(0, ROOT)  # zone-tiler and its modules
 DAEMON = os.path.join(ROOT, "zone-daemon.py")
 
 
@@ -298,7 +298,7 @@ class TestDaemonEvents(DaemonTestCase):
         d = self.daemon()
         d.on_map(0x1, override_redirect=True)
         self.assertEqual(self.applied, [])
-        self.assertEqual(self.reads, [])  # метаданные даже не читались
+        self.assertEqual(self.reads, [])  # the metadata was not even read
         self.assertEqual(d.windows, {})
 
     def test_dialog_window_type_ignored(self):
@@ -315,7 +315,7 @@ class TestDaemonEvents(DaemonTestCase):
             "_NET_WM_WINDOW_TYPE_SPLASH",
             "_NET_WM_WINDOW_TYPE_TOOLTIP",
             "_NET_WM_WINDOW_TYPE_UTILITY",
-            "TOOLTIP",  # короткое имя тоже распознаётся
+            "TOOLTIP",  # the short name is recognised too
         ):
             with self.subTest(wtype=wtype):
                 self.applied.clear()
@@ -338,7 +338,7 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_map(0x1)
         d.on_map(0x1)
         self.assertEqual(len(self.applied), 1)
-        self.assertEqual(self.reads, [0x1])  # второй раз не перечитывали
+        self.assertEqual(self.reads, [0x1])  # not re-read a second time
 
     def test_empty_class_is_noop(self):
         self.metas[0x1] = self.meta("")
@@ -372,7 +372,7 @@ class TestDaemonEvents(DaemonTestCase):
         self.reads.clear()
         d.reconcile([0x1])
         self.assertEqual(self.applied, [])
-        self.assertEqual(self.reads, [])  # метаданные не перечитывались
+        self.assertEqual(self.reads, [])  # the metadata was not re-read
 
     def test_reconcile_removes_disappeared_window(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -380,7 +380,7 @@ class TestDaemonEvents(DaemonTestCase):
         d = self.daemon(TWO_ZONES)  # reflow off
         d.reconcile([0x1, 0x2])
         self.applied.clear()
-        d.reconcile([0x2])  # 0x1 закрылось и ушло из списка
+        d.reconcile([0x2])  # 0x1 closed and left the list
         self.assertEqual(d.windows, {0x2: "right"})
         self.assertEqual(d.seen, {0x2})
         self.assertEqual(self.applied, [])
@@ -407,13 +407,13 @@ class TestDaemonEvents(DaemonTestCase):
         self.assertEqual(d.windows, {0x1: "left", 0x2: "right"})
 
     def test_reconcile_does_not_recheck_unmatched(self):
-        self.metas[0x1] = self.meta("libreoffice")  # нет правила
+        self.metas[0x1] = self.meta("libreoffice")  # no rule
         d = self.daemon()
         d.reconcile([0x1])
         self.assertEqual(d.windows, {})
         self.assertEqual(d.seen, {0x1})
         self.reads.clear()
-        d.reconcile([0x1])  # тот же список -> метаданные не трогаем
+        d.reconcile([0x1])  # the same list -> the metadata is left alone
         self.assertEqual(self.reads, [])
 
     def test_reconcile_ignored_type_is_seen_but_untracked(self):
@@ -450,7 +450,7 @@ class TestDaemonEvents(DaemonTestCase):
     def test_destroy_with_reflow_off_moves_nothing(self):
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
-        d = self.daemon(TWO_ZONES)  # reflow по умолчанию off
+        d = self.daemon(TWO_ZONES)  # reflow is off by default
         d.on_map(0x1)
         d.on_map(0x2)
         self.applied.clear()
@@ -479,8 +479,8 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_map(0x1)
         d.on_map(0x2)
         self.applied.clear()
-        d.on_unmap(0x1)  # окно свёрнуто, но ещё живо
-        self.assertEqual(self.applied, [])  # соседей не двигаем
+        d.on_unmap(0x1)  # the window is iconified but still alive
+        self.assertEqual(self.applied, [])  # no neighbour is moved
 
     def test_unmap_keeps_window_in_tracker(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -493,10 +493,10 @@ class TestDaemonEvents(DaemonTestCase):
         self.metas[0x1] = self.meta("firefox-esr")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.on_map(0x1)
-        d.on_unmap(0x1)   # свернули
-        d.on_map(0x1)     # развернули обратно
+        d.on_unmap(0x1)   # iconified
+        d.on_map(0x1)     # deiconified back
         self.assertEqual(len(self.applied), 1)
-        self.assertEqual(self.reads, [0x1])  # повторно метаданные не читали
+        self.assertEqual(self.reads, [0x1])  # the metadata was not read again
         self.assertEqual(d.windows, {0x1: "left"})
 
     def test_unmap_then_destroy_still_reflows(self):
@@ -505,9 +505,9 @@ class TestDaemonEvents(DaemonTestCase):
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.on_map(0x1)
         d.on_map(0x2)
-        d.on_unmap(0x1)  # свернули — трекер и раскладка на месте
+        d.on_unmap(0x1)  # iconified - tracker and layout stay in place
         self.applied.clear()
-        d.on_destroy(0x1)  # действительно закрыли
+        d.on_destroy(0x1)  # really closed
         self.assertEqual(self.applied, [(0x2, (0, 0, 1000, 1000), "right", True)])
 
     def test_apply_failure_does_not_track_and_retries(self):
@@ -526,8 +526,8 @@ class TestDaemonEvents(DaemonTestCase):
             workarea=lambda: WA,
         )
         d.on_map(0x1)
-        self.assertEqual(d.windows, {})  # неудача не запоминается
-        d.on_map(0x1)  # следующий MapNotify пробует снова
+        self.assertEqual(d.windows, {})  # a failure is not remembered
+        d.on_map(0x1)  # the next MapNotify tries again
         self.assertEqual(d.windows, {0x1: "left"})
         self.assertEqual(len(calls), 2)
 
@@ -558,7 +558,7 @@ class TestDaemonEvents(DaemonTestCase):
             read_meta=self.read_meta,
             workarea=lambda: WA,
         )
-        d.on_map(0x1)  # не должно выбросить SystemExit
+        d.on_map(0x1)  # must not raise SystemExit
         self.assertEqual(d.windows, {})
         self.assertEqual(d.seen, set())
 
@@ -592,8 +592,8 @@ class TestDaemonEvents(DaemonTestCase):
             read_meta=self.read_meta,
             workarea=boom,
         )
-        d.on_map(0x1)  # не должно выбросить SystemExit
-        self.assertEqual(self.applied, [])  # окно не уложено
+        d.on_map(0x1)  # must not raise SystemExit
+        self.assertEqual(self.applied, [])  # the window is not placed
         self.assertEqual(d.windows, {})
         self.assertEqual(d.seen, set())
 
@@ -653,7 +653,7 @@ class TestDaemonEvents(DaemonTestCase):
         self.metas[0x3] = self.meta("chromium")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.on_map(0x1)
-        d.on_map(0x2)  # оба окна замаплены в left; трекер хранит оба
+        d.on_map(0x2)  # both windows are mapped to left; the tracker holds both
         d.on_map(0x3)
         self.applied.clear()
         d.on_destroy(0x1)
@@ -733,7 +733,7 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_map(0x2)
         d.on_destroy(0x1)
         self.assertEqual(d.filled, {filled_key(WA, "left"): 0x2})
-        d.on_destroy(0x2)  # держатель исчез — возвращать некого
+        d.on_destroy(0x2)  # the holder is gone - there is nobody to return
         self.assertEqual(d.filled, {})
 
     def test_failed_restore_keeps_record_for_retry(self):
@@ -759,10 +759,10 @@ class TestDaemonEvents(DaemonTestCase):
         d.on_destroy(0x1)
         calls.clear()
         fail["restore"] = True
-        d.on_map(0x3)  # новое окно встало, но вернуть соседа не удалось
+        d.on_map(0x3)  # the new window was placed, but the neighbour could not be returned
         self.assertEqual(d.windows, {0x2: "right", 0x3: "left"})
-        self.assertEqual(calls[-1][0], 0x2)  # попытка возврата была
-        self.assertEqual(d.filled, {filled_key(WA, "left"): 0x2})  # запись осталась
+        self.assertEqual(calls[-1][0], 0x2)  # a return attempt was made
+        self.assertEqual(d.filled, {filled_key(WA, "left"): 0x2})  # the record stays
 
     def test_reconcile_restores_neighbor_when_new_window_fills_freed_zone(self):
         self.metas[0x1] = self.meta("firefox-esr")
@@ -770,10 +770,10 @@ class TestDaemonEvents(DaemonTestCase):
         self.metas[0x3] = self.meta("firefox-esr")
         d = self.daemon(TWO_ZONES, reflow="neighbors")
         d.reconcile([0x1, 0x2])
-        d.reconcile([0x2])  # 0x1 закрылось -> right расширился на left
+        d.reconcile([0x2])  # 0x1 closed -> right expanded into left
         self.assertEqual(d.filled, {filled_key(WA, "left"): 0x2})
         self.applied.clear()
-        d.reconcile([0x2, 0x3])  # 0x3 открылось в left
+        d.reconcile([0x2, 0x3])  # 0x3 opened in left
         self.assertEqual(
             self.applied,
             [
@@ -795,7 +795,7 @@ class TestDaemonEvents(DaemonTestCase):
 
     def test_window_center_outside_monitors_picks_nearest(self):
         self.metas[0x1] = self.meta("firefox-esr")
-        self.centers[0x1] = (1400, 700)  # ниже монитора 1, ближе к нему
+        self.centers[0x1] = (1400, 700)  # below monitor 1, closer to it
         d = self.multi_daemon()
         d.on_map(0x1)
         self.assertEqual(self.applied, [(0x1, (1000, 0, 400, 600), "left", True)])
@@ -822,7 +822,7 @@ class TestDaemonEvents(DaemonTestCase):
             monitors=boom,
             window_center=lambda win: self.centers[win],
         )
-        d.on_map(0x1)  # отказ X при получении мониторов не должен уронить демон
+        d.on_map(0x1)  # X refusing to give the monitors must not bring the daemon down
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {})
 
@@ -986,11 +986,11 @@ class TestWorkspaces(DaemonTestCase):
             d.windows, {0x1: "left", 0x2: "right", 0x3: "left", 0x4: "right"}
         )
         self.applied.clear()
-        d.reconcile([0x1, 0x2, 0x4])  # 0x3 закрылось на невидимом столе 2
+        d.reconcile([0x1, 0x2, 0x4])  # 0x3 closed on the invisible workspace 2
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {0x1: "left", 0x2: "right", 0x4: "right"})
         self.assertEqual(d.filled, {})
-        d.reconcile([0x1, 0x2])  # 0x4 там же — тоже без движений
+        d.reconcile([0x1, 0x2])  # 0x4 is there as well - no movement either
         self.assertEqual(self.applied, [])
         self.assertEqual(d.windows, {0x1: "left", 0x2: "right"})
 
@@ -1009,7 +1009,7 @@ class TestWorkspaces(DaemonTestCase):
         d.on_map(0x3)
         d.on_map(0x4)
         self.applied.clear()
-        d.on_destroy(0x3)  # окно workspace 2; на столе 1 зона left пуста
+        d.on_destroy(0x3)  # a workspace 2 window; on workspace 1 the left zone is free
         self.assertEqual(self.applied, [])
         self.assertEqual(d.filled, {})
         self.assertEqual(d.windows, {0x2: "right", 0x4: "right"})
@@ -1109,7 +1109,7 @@ class TestWorkspaces(DaemonTestCase):
         d.on_destroy(0x1)
         self.assertEqual(d.filled, {filled_key(WA, "left", 1): 0x2})
         self.applied.clear()
-        d.on_map(0x3)  # окно workspace 2 в зону left
+        d.on_map(0x3)  # a workspace 2 window into the left zone
         self.assertEqual(self.applied, [(0x3, (0, 0, 500, 1000), "left", True)])
         self.assertEqual(d.filled, {filled_key(WA, "left", 1): 0x2})
 
@@ -1147,7 +1147,7 @@ class TestWorkspaces(DaemonTestCase):
     def test_workspace_change_without_readable_desktop_keeps_previous(self):
         self.current = 3
         d = self.daemon(TWO_ZONES, reflow="neighbors")
-        self.current = None  # xprop не ответил
+        self.current = None  # xprop did not answer
         self.assertEqual(d.on_workspace_change(), 3)
         self.assertEqual(d.workspace, 3)
 
@@ -1548,9 +1548,9 @@ class TestFocusMode(DaemonTestCase):
     def test_entry_minimizes_only_same_workspace_and_monitor(self):
         self.current = 0
         self.setup_clients([0x1, 0x2, 0x3, 0x4, 0x5])
-        self.workspaces[0x5] = 1  # окно другого стола
-        self.centers[0x4] = (1500, 300)  # окно другого монитора
-        self.metas[0x1] = self.meta("firefox-esr")  # правило: left
+        self.workspaces[0x5] = 1  # a window of another workspace
+        self.centers[0x4] = (1500, 300)  # a window of another monitor
+        self.metas[0x1] = self.meta("firefox-esr")  # rule: left
         self.metas[0x2] = self.meta("chromium")
         self.metas[0x3] = self.meta("dialog-x", window_type=self.DIALOG)
         self.metas[0x4] = self.meta("chromium")
@@ -1588,7 +1588,7 @@ class TestFocusMode(DaemonTestCase):
         # The shape of `[focus]` without a zone: the target is not moved and does not reach a tracker.
         self.current = 0
         self.setup_clients([0x1, 0x2, 0x3])
-        self.workspaces[0x3] = 1  # чужой стол — не сворачиваем
+        self.workspaces[0x3] = 1  # another workspace - we do not iconify
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("gimp")
         self.metas[0x3] = self.meta("gimp")
@@ -1670,7 +1670,7 @@ class TestFocusMode(DaemonTestCase):
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
         self.metas[0x3] = self.meta("gimp")
-        self.iconic = {0x3}  # свёрнуто вручную до входа в режим
+        self.iconic = {0x3}  # iconified by hand before entering the mode
         d = self.focus_daemon()
         reply = d.ipc_focus({"zone": "left", "window": 0x1})
         self.assertEqual(reply["minimized"], ["0x2"])
@@ -1701,7 +1701,7 @@ class TestFocusMode(DaemonTestCase):
         self.metas[0x1] = self.meta("firefox-esr")
         self.metas[0x2] = self.meta("chromium")
         d = self.focus_daemon()
-        d.x11 = object()  # «соединение есть»: без него переход пропускается
+        d.x11 = object()  # "there is a connection": without it the switch is skipped
         d.ipc_focus({"zone": "left", "window": 0x1})
         with mock.patch.object(zd.tiler, "switch_workspace") as switch:
             d.ipc_focus({"off": True})
@@ -1717,7 +1717,7 @@ class TestFocusMode(DaemonTestCase):
         d = self.focus_daemon()
         d.ipc_focus({"zone": "left", "window": 0x1})
         d.seen = {0x1, 0x2}
-        d.reconcile([0x2])  # цель 0x1 исчезла из _NET_CLIENT_LIST
+        d.reconcile([0x2])  # target 0x1 disappeared from _NET_CLIENT_LIST
         self.assertIsNone(d.focus)
         self.assertEqual(self.deiconified, [0x2, 0x1])
         self.assertEqual(d.windows, {})
@@ -1727,14 +1727,14 @@ class TestFocusMode(DaemonTestCase):
         # is caught only by the separate target check in the reconciliation.
         self.current = 0
         self.setup_clients([0x1, 0x2])
-        self.metas[0x1] = self.meta("gimp")  # правила нет — цель нигде не учтена
+        self.metas[0x1] = self.meta("gimp")  # no rule - the target is counted nowhere
         self.metas[0x2] = self.meta("gimp")
         d = self.focus_daemon()
         d.ipc_focus({"window": 0x1})
         self.assertIsNone(d.focus["zone"])
         self.assertEqual(self.iconified, [0x2])
         d.seen = {0x1, 0x2}
-        d.reconcile([0x2])  # цель 0x1 исчезла из _NET_CLIENT_LIST
+        d.reconcile([0x2])  # target 0x1 disappeared from _NET_CLIENT_LIST
         self.assertIsNone(d.focus)
         self.assertEqual(self.deiconified, [0x2, 0x1])
 
@@ -1751,7 +1751,7 @@ class TestFocusMode(DaemonTestCase):
         os.close(fd)
         self.addCleanup(os.unlink, path)
         d.focus_path = path
-        d.deiconify = lambda win, x11=None: None  # «разворот не действует»
+        d.deiconify = lambda win, x11=None: None  # "deiconify does nothing"
         d.ipc_focus({"zone": "left", "window": 0x1})
         out = d.ipc_focus({"off": True})
         self.assertEqual(out, {"off": True, "restored": []})
@@ -1777,7 +1777,7 @@ class TestFocusMode(DaemonTestCase):
         os.close(fd)
         self.addCleanup(os.unlink, path)
         d.focus_path = path
-        d.deiconify = lambda win, x11=None: None  # «разворот не действует»
+        d.deiconify = lambda win, x11=None: None  # "deiconify does nothing"
         # A foreign record from a branch without the daemon: a window on the third workspace.
         zd.tiler.save_focus_state(
             {
@@ -1792,7 +1792,7 @@ class TestFocusMode(DaemonTestCase):
             path,
         )
         self.workspaces[0x9] = 2
-        self.iconic = {0x9}  # чужое окно всё ещё свёрнуто — его и надо вернуть
+        self.iconic = {0x9}  # another window is still iconified - that is the one to return
         d.ipc_focus({"zone": "left", "window": 0x1})
         d.ipc_focus({"off": True})
         state = zd.tiler.load_focus_state(path)
@@ -1806,11 +1806,11 @@ class TestFocusMode(DaemonTestCase):
         self.current = 0
         self.setup_clients([0x1, 0x2])
         self.metas[0x1] = self.meta("firefox-esr")
-        self.metas[0x2] = self.meta("gimp")  # правила нет: в windows его нет
+        self.metas[0x2] = self.meta("gimp")  # no rule: it is not in windows
         d = self.focus_daemon()
         d.ipc_focus({"zone": "left", "window": 0x1})
         d.seen = {0x1, 0x2}
-        d.reconcile([0x1])  # свёрнутое 0x2 исчезло, цель жива
+        d.reconcile([0x1])  # the iconified 0x2 is gone, the target is alive
         self.assertIsNotNone(d.focus)
         self.assertEqual(d.focus["minimized"], set())
         self.assertEqual(self.deiconified, [])
@@ -1873,7 +1873,7 @@ class TestFocusMode(DaemonTestCase):
         d = self.focus_daemon()
         d.ipc_focus({"zone": "left", "window": 0x1})
         self.iconified.clear()
-        self.metas[0x9] = self.meta("terminal")  # правила нет
+        self.metas[0x9] = self.meta("terminal")  # no rule
         self.workspaces[0x9] = 0
         self.centers[0x9] = (200, 200)
         d.on_map(0x9)
@@ -2111,7 +2111,7 @@ class TestZoneTabs(DaemonTestCase):
         # the tracker, the stack became single — the remaining window gets the whole
         # zone back, not a tab frame with an empty strip on top.
         d = self.two_tabs()
-        self.frames[0x2] = (600, 600, 300, 300)  # утащили руками
+        self.frames[0x2] = (600, 600, 300, 300)  # dragged by hand
         self.clients = [0x1, 0x2]
         d.reconcile([0x1, 0x2])
         self.assertIn(0x2, d.detached)
@@ -2139,7 +2139,7 @@ class TestZoneTabs(DaemonTestCase):
         d.reconcile([0x1])
         self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
         self.applied.clear()
-        d.reconcile([0x1])  # повторная реконсиляция ничего не двигает
+        d.reconcile([0x1])  # a repeated reconciliation moves nothing
         self.assertEqual(self.applied, [])
         self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
 
@@ -2147,7 +2147,7 @@ class TestZoneTabs(DaemonTestCase):
         # The rule “a strip only from two windows” — the same in the autoplacement and
         # in the IPC `apply`: a second window into a taken zone puts both on the shared frame.
         self.metas[0x1] = self.meta("firefox-esr")
-        self.metas[0x2] = self.meta("libreoffice")  # правила нет — только IPC
+        self.metas[0x2] = self.meta("libreoffice")  # no rule - IPC only
         self.workspaces = {0x1: 0, 0x2: 0}
         self.clients = [0x1, 0x2]
         d = self.tabs_daemon()
@@ -2202,19 +2202,19 @@ class TestZoneTabs(DaemonTestCase):
         d = self.tabs_daemon(TWO_ZONES, reflow="neighbors")
         self.clients = [0x1, 0x2]
         d.reconcile([0x1, 0x2])
-        self.clients = [0x1]  # right закрылась: left расширяется на неё
+        self.clients = [0x1]  # right closed: left expands into it
         d.reconcile([0x1])
         self.assertEqual(self.frames[0x1], (0, 0, 1000, 1000))
         self.assertEqual(d.filled, {(0, WA, "right"): 0x1})
         self.applied.clear()
-        self.clients = [0x1, 0x3]  # второе окно в left: стопка из двух
+        self.clients = [0x1, 0x3]  # a second window in left: a stack of two
         d.reconcile([0x1, 0x3])
         self.assertEqual(self.frames[0x1], (0, 22, 500, 978))
         # The window was moved by grabbing a tab — the coverage of right is no longer its.
         self.assertEqual(d.filled, {})
         self.assertEqual(d.ipc_status()["filled"], [])
         self.applied.clear()
-        self.clients = [0x1, 0x3, 0x4]  # новое окно в right
+        self.clients = [0x1, 0x3, 0x4]  # a new window in right
         d.reconcile([0x1, 0x3, 0x4])
         # 0x1 is already on the shared stack frame: there is nowhere to return it, while 0x4 takes
         # right by its own zone.
@@ -2254,7 +2254,7 @@ class TestZoneTabs(DaemonTestCase):
         self.clients = [0x1]
         d = self.tabs_daemon(three)
         d.on_map(0x1)
-        d.filled[(0, WA, "bottom")] = 0x1  # окно расширялось на bottom
+        d.filled[(0, WA, "bottom")] = 0x1  # the window expanded into bottom
         d.ipc_apply({"zone": "right", "window": 0x1})
         self.assertEqual(d.windows, {0x1: "right"})
         self.assertEqual(d.filled, {})
@@ -2281,7 +2281,7 @@ class TestZoneTabs(DaemonTestCase):
     def test_active_tab_is_the_active_window(self):
         d = self.two_tabs()
         self.active = 0x1
-        d.sync_strips()  # снимок активной вкладки — по активному окну
+        d.sync_strips()  # the snapshot of the active tab - taken from the active window
         tabs = json.loads(self.strip.payloads[-1])["strips"][0]["tabs"]
         self.assertEqual([tab["active"] for tab in tabs], [True, False])
 
@@ -2305,14 +2305,14 @@ class TestZoneTabs(DaemonTestCase):
         self.workspaces = {0x1: 0, 0x2: 0}
         self.clients = [0x1, 0x2]
         d = self.tabs_daemon()
-        d.reconcile([0x1, 0x2])  # полоса снимок не приняла
+        d.reconcile([0x1, 0x2])  # the strip did not accept the snapshot
         self.assertEqual(d.windows, {0x1: "main", 0x2: "main"})
-        self.assertIsNone(d._strips_last)  # снимок отдадим заново
+        self.assertIsNone(d._strips_last)  # the snapshot will be offered again
 
     def test_no_strip_means_no_work(self):
         self.metas[0x1] = self.meta("firefox-esr")
         self.clients = [0x1]
-        d = self.tabs_daemon(use_strip=False)  # полосы нет вовсе
+        d = self.tabs_daemon(use_strip=False)  # there is no strip at all
         self.assertIsNone(d.strip)
         self.assertFalse(d.sync_strips())
 
@@ -2341,7 +2341,7 @@ class TestZoneTabs(DaemonTestCase):
 
     def test_tabs_next_outside_zones_is_a_honest_noop(self):
         d = self.two_tabs()
-        self.active = 0x9  # окно без зоны
+        self.active = 0x9  # a window without a zone
         reply = d.ipc_tabs_next()
         self.assertFalse(reply["switched"])
         self.assertIsNone(reply["zone"])
@@ -2443,10 +2443,10 @@ class TestZoneTabs(DaemonTestCase):
         self.workspaces[0x4] = 0
         self.clients = [0x1, 0x2, 0x3, 0x4]
         d.on_map(0x4)
-        self.assertEqual(self.iconified, [])  # window_iconic/iconify не звались
+        self.assertEqual(self.iconified, [])  # window_iconic/iconify were not called
         self.assertNotIn(0x4, d.focus["minimized"])
         self.assertEqual(d.windows[0x4], "left")
-        self.assertEqual(self.frames[0x4], (0, 22, 500, 978))  # третья вкладка
+        self.assertEqual(self.frames[0x4], (0, 22, 500, 978))  # the third tab
         self.assertEqual(d.tabs_in_zone("left", WA, 0), [0x1, 0x2, 0x4])
 
     def test_exit_from_focus_rebuilds_the_strip_snapshot(self):
@@ -2470,7 +2470,7 @@ class TestZoneTabs(DaemonTestCase):
 
         def deiconify_and_activate(win, x11=None):
             self.deiconify(win, x11=x11)
-            self.active = win  # WM поднимает и фокусирует развёрнутое окно
+            self.active = win  # the WM raises and focuses the deiconified window
 
         d.deiconify = deiconify_and_activate
         self.active = None
@@ -2581,7 +2581,7 @@ class TestTabStripProcess(unittest.TestCase):
         strip = zd.TabStripProcess("/tmp/zones.conf", script=path)
         self.assertFalse(strip.start())
         self.assertTrue(strip.failed)
-        self.assertIsNone(strip.proc)  # мёртвого ребёнка за собой не держим
+        self.assertIsNone(strip.proc)  # we do not keep a dead child behind us
         self.assertFalse(strip.running())
         self.assertFalse(strip.feed('{"strips": []}\n'))
 
@@ -2597,7 +2597,7 @@ class TestTabStripProcess(unittest.TestCase):
         # The strip read the snapshot and finished by itself — that is the death of a working one.
         strip.proc.wait(timeout=5)
         self.assertFalse(strip.running())
-        self.assertTrue(strip.feed('{"strips": []}\n'))  # перезапущена
+        self.assertTrue(strip.feed('{"strips": []}\n'))  # restarted
         self.assertFalse(strip.failed)
         self.assertNotEqual(strip.proc.pid, first)
 
@@ -2726,12 +2726,12 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         d.reconcile([0x1])
         self.assertEqual(d.windows, {0x1: "left"})
         d.filled[(None, WA, "left")] = 0x1
-        self.frames[0x1] = (600, 600, 300, 300)  # пользователь вынес окно
+        self.frames[0x1] = (600, 600, 300, 300)  # the user moved the window out
         d.reconcile([0x1])
         self.assertEqual(d.windows, {})
-        self.assertEqual(d.filled, {})  # зона свободна для reflow
+        self.assertEqual(d.filled, {})  # the zone is free for reflow
         self.assertIn(0x1, d.detached)
-        self.assertEqual(len(self.applied), 1)  # заново не укладывал
+        self.assertEqual(len(self.applied), 1)  # did not place it again
         d.on_map(0x1)
         self.assertEqual(len(self.applied), 1)
 
@@ -2742,7 +2742,7 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         self.applied.clear()
         second = self.placed_daemon()
         second.reconcile([0x1])
-        self.assertEqual(self.applied, [])  # усыновил без apply
+        self.assertEqual(self.applied, [])  # adopted without apply
         self.assertEqual(second.windows, {0x1: "left"})
         self.assertEqual(second.win_monitor, {0x1: WA})
 
@@ -2762,7 +2762,7 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         self.metas[0x1] = self.meta("firefox-esr")
         self.frames[0x1] = (0, 0, 500, 1000)
         self.placed_daemon().on_map(0x1)
-        self.metas[0x1] = self.meta("chromium")  # XID переиспользован
+        self.metas[0x1] = self.meta("chromium")  # the XID was reused
         self.applied.clear()
         second = self.placed_daemon()
         second.reconcile([0x1])
@@ -2828,11 +2828,11 @@ class TestDaemonPlacedMemory(DaemonTestCase):
         self.assertEqual(d.windows, {0x1: "left"})
         self.frames[0x1] = (600, 600, 300, 300)
         d.reconcile([0x1])
-        self.assertEqual(d.windows, {0x1: "left"})  # невидимый стол не трогаем
+        self.assertEqual(d.windows, {0x1: "left"})  # we do not touch the invisible workspace
         self.current = 2
         d.on_workspace_change()
         d.reconcile([0x1])
-        self.assertEqual(d.windows, {})  # на своём столе переезд виден
+        self.assertEqual(d.windows, {})  # on its own workspace the move is visible
         self.assertIn(0x1, d.detached)
 
     def test_no_state_path_writes_nothing(self):
@@ -3063,8 +3063,8 @@ class TestPropertyEvent(unittest.TestCase):
         handled = zd.handle_property_event(
             dae, property_buffer(0xABC), 0xABC, lambda: None
         )
-        self.assertTrue(handled)  # событие про наш атом
-        self.assertEqual(dae.calls, [])  # но реконсиляции нет
+        self.assertTrue(handled)  # an event about our atom
+        self.assertEqual(dae.calls, [])  # but there is no reconciliation
 
     def test_other_atom_is_ignored(self):
         dae = self.Stub()
@@ -3082,7 +3082,7 @@ class TestPropertyEvent(unittest.TestCase):
         )
         self.assertTrue(handled)
         self.assertEqual(dae.workspace_calls, 1)
-        self.assertEqual(dae.calls, [])  # список клиентов не читали
+        self.assertEqual(dae.calls, [])  # the client list was not read
 
     def test_current_desktop_atom_ignored_without_atom_argument(self):
         # The old call with four arguments does not know about the workspace — the event is foreign.
@@ -3306,8 +3306,8 @@ class TestServeLoop(unittest.TestCase):
         zd.serve(
             dae, x11=fake, once=True, read_clients=lambda: [0x22], once_timeout=0.05
         )
-        self.assertEqual(dae.reconciled, [[0x22]])  # только стартовая
-        self.assertEqual(dae.workspace_calls, 0)  # стол тоже не трогали
+        self.assertEqual(dae.reconciled, [[0x22]])  # the initial one only
+        self.assertEqual(dae.workspace_calls, 0)  # the workspace was not touched either
 
     def test_current_desktop_property_notify_updates_workspace_only(self):
         # A workspace change is not a change of the client list: no reconciliation, no
@@ -3317,7 +3317,7 @@ class TestServeLoop(unittest.TestCase):
         zd.serve(
             dae, x11=fake, once=True, read_clients=lambda: [0x22], once_timeout=0.05
         )
-        self.assertEqual(dae.reconciled, [[0x22]])  # только стартовая
+        self.assertEqual(dae.reconciled, [[0x22]])  # the initial one only
         self.assertEqual(dae.workspace_calls, 1)
 
     def test_once_without_events_times_out(self):
