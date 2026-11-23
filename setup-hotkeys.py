@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-setup-hotkeys.py — регистрирует в Cinnamon горячие клавиши для зон из zones.conf.
+setup-hotkeys.py — registers the zone hotkeys from zones.conf in Cinnamon.
 
-Читает секцию [keys] (зона = сочетание), необязательные [move] (направление =
-сочетание), [focus] (сочетание режима «только эта зона»), [tabs] (сочетание
-«следующее окно зоны») и [action:<имя>] (действие с непустым `key`) и создаёт
-пользовательские сочетания Cinnamon вида:
+Reads the [keys] section (zone = binding), the optional [move] (direction =
+binding), [focus] (the binding of the "this zone only" mode), [tabs] (the binding
+of "the next window of the zone") and [action:<name>] (an action with a non-empty
+`key`) and creates Cinnamon custom keybindings of the form:
     zone-tiler: main          ->  python3 .../zone-tiler.py apply main --quiet
     zone-tiler: move left     ->  python3 .../zone-tiler.py move left --quiet
     zone-tiler: focus         ->  python3 .../zone-tiler.py focus main --quiet
     zone-tiler: tabs-next     ->  python3 .../zone-tiler.py tabs-next --quiet
     zone-tiler: action mirror ->  python3 .../zone-tiler.py action mirror --quiet
 
-  python3 setup-hotkeys.py            # установить/обновить
-  python3 setup-hotkeys.py --list     # показать, что будет установлено
-  python3 setup-hotkeys.py --remove   # удалить все сочетания zone-tiler
+    python3 setup-hotkeys.py            # install/update
+    python3 setup-hotkeys.py --list     # show what will be installed
+    python3 setup-hotkeys.py --remove   # remove all the zone-tiler shortcuts
 
-Сочетания перемещения по умолчанию — те же `Win`+стрелки, которые muffin
-занимает родным тайлингом (`push-tile-left/right/up/down`). Своё сочетание
-регистрируется как есть, настройки Cinnamon не меняются: если оба обработчика
-слушают одну клавишу, выигрывает тот, кто сработал последним, — поэтому для
-перемещения по зонам лучше выбрать в `[move]` свободные сочетания.
+The default move bindings are the same `Win`+arrows that muffin
+takes for its native tiling (`push-tile-left/right/up/down`). A binding of one's own
+is registered as it is, the Cinnamon settings are not changed: if both handlers
+listen to the same key, the one that fired last wins — so for
+moving between zones it is better to pick free bindings in `[move]`.
 
-Путь к zones.conf можно задать флагом ``--conf``: он передаётся и в
-``zone-tiler.py keys``, и в устанавливаемую команду сочетания — в команду
-**абсолютным** путём, потому что Cinnamon запускает её не из каталога запуска и
-относительный путь дал бы молча неработающую клавишу.
+The path to zones.conf can be given with the ``--conf`` flag: it is passed both to
+``zone-tiler.py keys`` and into the installed shortcut command — into the command
+**as an absolute** path, because Cinnamon does not launch it from the launch directory and
+a relative path would give a silently dead key.
 """
 
 import argparse
@@ -39,10 +39,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-import zone_config  # noqa: E402  (ищем рядом с собой, как устанавливается)
-from zone_i18n import _  # noqa: E402  (строки интерфейса и их перевод)
+import zone_config  # noqa: E402  (looked up next to itself, as it is installed)
+from zone_i18n import _  # noqa: E402  (interface strings and their translation)
 
-# Код возврата, когда команда не смогла сделать то, о чём её попросили.
+# The return code when the command could not do what it was asked to.
 EXIT_FAIL = 1
 
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
@@ -50,9 +50,9 @@ LIST_SCHEMA = "org.cinnamon.desktop.keybindings"
 CB_SCHEMA = "org.cinnamon.desktop.keybindings.custom-keybinding"
 BASE = "/org/cinnamon/desktop/keybindings/custom-keybindings/"
 NAME_PREFIX = "zone-tiler: "
-# Ключи одной записи сочетания: сбрасываются по одному (см. `reset_binding`).
+# The keys of one shortcut entry: reset one by one (see `reset_binding`).
 CB_KEYS = ("name", "binding", "command")
-# Родной тайлинг muffin: эти сочетания живут в Cinnamon отдельно от наших.
+# muffin's native tiling: these bindings live in Cinnamon separately from ours.
 WM_SCHEMA = "org.cinnamon.desktop.keybindings.wm"
 PUSH_TILE_PREFIX = "push-tile-"
 
@@ -66,12 +66,12 @@ def gs(*args, get=False):
 
 
 def gs_reset(path, key):
-    """Сбросить один ключ записи в значение по умолчанию.
+    """Reset one key of an entry to its default value.
 
-    Отдельная функция, а не `gsettings reset-recursively`: на живом Cinnamon
-    6.4.10 рекурсивный сброс перемещаемой схемы (`схема:/путь/`) зарегистрированную
-    запись **не** сбрасывает — замер: после него `name` остался прежним, а
-    одиночный `reset` того же ключа его убрал.
+    A separate function rather than `gsettings reset-recursively`: on a live Cinnamon
+    6.4.10 the recursive reset of a relocatable schema (`schema:/path/`) does not
+    reset a registered entry — measured: after it `name` stayed as it was, while a
+    single `reset` of the same key removed it.
     """
     r = subprocess.run(
         ["gsettings", "reset", path, key], text=True, capture_output=True
@@ -100,10 +100,10 @@ def cb_name(cid):
 
 
 def zone_pairs(conf=None, *flags):
-    """Пары `подпись<TAB>сочетание` от `zone-tiler.py keys [флаги]`.
+    """`label<TAB>binding` pairs from `zone-tiler.py keys [flags]`.
 
-    `flags` — дополнительные флаги `keys`, например `--move`: тогда подписи —
-    направления перемещения, а не имена зон.
+    `flags` — extra flags of `keys`, e.g. `--move`: then the labels are the move
+    directions rather than the zone names.
     """
     cmd = [sys.executable, ZONEBIN, "keys", *flags]
     if conf:
@@ -120,11 +120,11 @@ def zone_pairs(conf=None, *flags):
 
 
 def with_conf(command, conf=None):
-    """Команда сочетания с тем же `--conf`, что у самого скрипта.
+    """The shortcut command with the same `--conf` as the script itself.
 
-    Путь приводится к абсолютному: сочетание Cinnamon запускает не из каталога
-    запуска, и относительный `--conf zones.conf` превратился бы в «не найден
-    конфиг» (код 3) — то есть в молча неработающую клавишу (проверено живьём).
+    The path is made absolute: Cinnamon does not launch a shortcut from the
+    launch directory, and a relative `--conf zones.conf` would turn into "config
+    not found" (code 3) — that is, into a silently dead key (verified live).
     """
     if not conf:
         return command
@@ -132,25 +132,25 @@ def with_conf(command, conf=None):
 
 
 def conf_path(conf=None):
-    """Путь к конфигу для **чтения** секций: без `--conf` — как у zone-tiler.
+    """The path to the config for **reading** the sections: without `--conf` — as in zone-tiler.
 
-    В команду сочетания `--conf` без флага не попадает (`with_conf`), а читать
-    секции всё равно нужно из настоящего файла: `~/.config/gridsnap/zones.conf`,
-    а если его нет — тот, что рядом с кодом (`zone-tiler.default_conf`). Иначе
-    `setup-hotkeys.py --list` без `--conf` читал бы «ничего» и молча терял
-    сочетания `[focus]`/`[tabs]`/действий.
+    The shortcut command does not get `--conf` without the flag (`with_conf`), while reading
+    the sections still has to come from the real file: `~/.config/gridsnap/zones.conf`,
+    and if there is none — the one next to the code (`zone-tiler.default_conf`). Otherwise
+    `setup-hotkeys.py --list` without `--conf` would read "nothing" and silently lose
+    the `[focus]`/`[tabs]`/action bindings.
     """
     return conf or zone_config.zt.default_conf()
 
 
 def planned(conf=None):
-    """Что установить: `(имя, сочетание, команда)` по порядку зон, направлений, режима.
+    """What to install: `(name, binding, command)` in the order of zones, directions, mode.
 
-    Имя идёт в префикс `zone-tiler: `: по нему `drop_owned` отличает свои
-    сочетания от чужих и не трогает чужие при переустановке. `focus` —
-    имя секции `[focus]`, `tabs-next` — команда секции `[tabs]`, а ``action <имя>``
-    — действие из `[action:<имя>]` с непустым `key` (его команда —
-    `zone-tiler.py action <имя>`): без этих секций в плане ровно то же, что раньше.
+    The name goes after the `zone-tiler: ` prefix: by it `drop_owned` tells its own
+    shortcuts from foreign ones and does not touch foreign ones on reinstall. `focus` —
+    the name of the `[focus]` section, `tabs-next` — the command of the `[tabs]` section, and
+    ``action <name>`` — an action from `[action:<name>]` with a non-empty `key` (its command is
+    `zone-tiler.py action <name>`): without these sections the plan is exactly the same as before.
     """
     items = []
     for zone, binding in zone_pairs(conf):
@@ -168,9 +168,9 @@ def planned(conf=None):
         items.append(("focus", focus["key"], with_conf(command + " --quiet", conf)))
     tabs = zone_config.load_tabs_config(path)
     if tabs.get("key"):
-        # Клавиша вкладок — тот же путь, что у `[focus]`: отдельный процесс
-        # раскладчика, который только передаёт демону `tabs-next`. Сам демон
-        # переключает вкладки, поэтому команда без зоны и без аргументов.
+        # The tabs key — the same path as `[focus]`: a separate process of the
+        # tiler that only passes `tabs-next` to the daemon. The daemon itself
+        # switches tabs, so the command has no zone and no arguments.
         items.append((
             "tabs-next",
             tabs["key"],
@@ -179,8 +179,8 @@ def planned(conf=None):
     for name, record in zone_config.load_actions(path).items():
         if not record.get("key"):
             continue
-        # Действие на клавише — та же команда, что человек запустил бы руками;
-        # имя сочетания «action <имя>» снимается `--remove` вместе с прочими.
+        # An action on a key — the same command a person would run by hand;
+        # the shortcut name "action <name>" is removed by `--remove` along with the rest.
         items.append((
             f"action {name}",
             record["key"],
@@ -190,12 +190,12 @@ def planned(conf=None):
 
 
 def push_tile_bindings():
-    """`{направление: [сочетания]}` родного тайлинга muffin (`push-tile-*`).
+    """`{direction: [bindings]}` of muffin's native tiling (`push-tile-*`).
 
-    Читается только на предмет предупреждения: сочетания `move` и `push-tile`
-    по умолчанию совпадают (`Win`+стрелки), а когда на одну клавишу претендуют
-    два обработчика, срабатывает то один, то другой. Настройки Cinnamon скрипт
-    не меняет — только сообщает о совпадении.
+    It is read only for the sake of a warning: the `move` and `push-tile` bindings
+    are the same by default (`Win`+arrows), and when two handlers claim
+    one key, it fires now one, now the other. The script does not change the Cinnamon
+    settings — it only reports the collision.
     """
     out = {}
     for direction in ("left", "right", "up", "down"):
@@ -216,11 +216,11 @@ def push_tile_bindings():
 
 
 def conflicts_with_push_tile(items, native=None):
-    """`[(направление, сочетание)]` — наши `move` на клавише родного тайлинга.
+    """`[(direction, binding)]` — our `move` bindings on a native tiling key.
 
-    `items` — результат `planned`; `native` — :func:`push_tile_bindings` (можно
-    подменить в тестах). Сравнение точное, по строке сочетания: `Cinnamon`
-    понимает обе стороны одинаково.
+    `items` — the result of `planned`; `native` — :func:`push_tile_bindings` (can be
+    substituted in tests). The comparison is exact, by the binding string: `Cinnamon`
+    understands both sides the same way.
     """
     native = push_tile_bindings() if native is None else native
     out = []
@@ -234,7 +234,7 @@ def conflicts_with_push_tile(items, native=None):
 
 
 def warn_conflicts(items):
-    """Предупредить в stderr о совпадении с `push-tile-*`; ничего не меняет."""
+    """Warn on stderr about a collision with `push-tile-*`; changes nothing."""
     for direction, binding in conflicts_with_push_tile(items):
         print(
             _(
@@ -249,7 +249,7 @@ def warn_conflicts(items):
 
 
 def split_owned(ids):
-    """Разделить id сочетаний на свои и чужие: `(наши, чужие)`."""
+    """Split the ids of the shortcuts into our own and foreign ones: `(ours, foreign)`."""
     owned, kept = [], []
     for cid in ids:
         (owned if cb_name(cid).startswith(NAME_PREFIX) else kept).append(cid)
@@ -257,14 +257,14 @@ def split_owned(ids):
 
 
 def reset_binding(cid):
-    """Погасить запись сочетания: сбросить каждый её ключ по отдельности."""
+    """Extinguish a shortcut entry: reset each of its keys separately."""
     path = f"{CB_SCHEMA}:{BASE}{cid}/"
     for key in CB_KEYS:
         gs_reset(path, key)
 
 
 def drop_owned(ids):
-    """Убирает наши сочетания: сбрасывает их ключи и возвращает оставшиеся id."""
+    """Removes our shortcuts: resets their keys and returns the remaining ids."""
     owned, kept = split_owned(ids)
     for cid in owned:
         reset_binding(cid)
@@ -272,16 +272,16 @@ def drop_owned(ids):
 
 
 def remove_owned():
-    """Убрать все наши сочетания; вернуть id, которые убрать не удалось.
+    """Remove all our shortcuts; return the ids that could not be removed.
 
-    Порядок нарочный: **сначала** список без наших id, потом сброс записей,
-    потом список ещё раз. Cinnamon (`keybindings.js`) перезаписывает
-    `custom-list` из своей памяти на каждое изменение, поэтому порядок «сброс,
-    потом список» проигрывает гонку: на живом Cinnamon 6.4.10 `--remove` дважды
-    отчитался об успехе, а четыре сочетания остались и в списке, и в записях.
-    Список, написанный первым, эту память сбрасывает, и дальше ключи
-    сбрасываются без сопротивления; повторная запись списка — на случай, если
-    перезапись всё-таки случилась между шагами.
+    The order is deliberate: **first** the list without our ids, then the reset of the entries,
+    then the list once more. Cinnamon (`keybindings.js`) rewrites
+    `custom-list` from its own memory on every change, so the order "reset,
+    then list" loses the race: on a live Cinnamon 6.4.10 `--remove` twice
+    reported success, while four shortcuts remained both in the list and in the entries.
+    The list written first resets that memory, and after that the keys
+    are reset without resistance; the repeated write of the list is for the case when
+    the rewrite did happen between the steps.
     """
     owned, kept = split_owned(custom_ids())
     for _attempt in range(2):
@@ -309,7 +309,7 @@ def next_ids(kept, count):
 
 
 def set_custom_list(ids):
-    """Записать `custom-list` Cinnamon (порядок id для нас не значим)."""
+    """Write Cinnamon's `custom-list` (the order of the ids does not matter to us)."""
     gs(LIST_SCHEMA, "custom-list", "[" + ", ".join(gvariant_str(i) for i in ids) + "]")
 
 
@@ -354,13 +354,13 @@ def main():
         gs(path, "binding", "[" + gvariant_str(binding) + "]")
         gs(path, "command", gvariant_str(command))
 
-    # Список пишется в два приёма: Cinnamon (`keybindings.js`) перечитывает записи
-    # только по сигналу `changed::custom-list`. Когда id переиспользуются — а это
-    # обычный случай, — новый список совпадает со старым, сигнала нет, и Cinnamon
-    # остаётся со старыми командами: правка пути или конфига не доезжает до клавиши
-    # (проверено живьём: нажатие звало прежний путь и падало с кодом 3).
-    # Поэтому сначала список без наших id, затем с ними: второй сигнал регистрирует
-    # уже новые команды.
+    # The list is written in two steps: Cinnamon (`keybindings.js`) rereads the entries
+    # only on the `changed::custom-list` signal. When the ids are reused — and that is
+    # the usual case — the new list matches the old one, there is no signal, and Cinnamon
+    # stays with the old commands: an edit of the path or of the config does not reach the key
+    # (verified live: the press called the previous path and failed with code 3).
+    # So first the list without our ids, then with them: the second signal registers
+    # the already new commands.
     set_custom_list(kept)
     set_custom_list(kept + ids)
 
