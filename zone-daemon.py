@@ -1,65 +1,65 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-zone-daemon — долгоживущий демон GridSnap: сам вкладывает новые окна в зоны
-по правилам `[rules]` и (опционально) перестраивает раскладку при закрытии окна.
+zone-daemon — the long-lived GridSnap daemon: it places new windows into zones
+by the `[rules]` rules and (optionally) reflows the layout when a window closes.
 
-Работает в Cinnamon / Muffin (X11) через тот же ctypes/libX11 и EWMH, что и
-`zone-tiler.py`; внешние утилиты (wmctrl, xdotool) не нужны.
+Runs in Cinnamon / Muffin (X11) through the same ctypes/libX11 and EWMH as
+`zone-tiler.py`; external utilities (wmctrl, xdotool) are not needed.
 
-Источник истины о клиентах — EWMH-список `_NET_CLIENT_LIST` на root: muffin
-РЕПАРЕНТИТ клиентские окна в frame-окна, поэтому `SubstructureNotify` на root
-даёт `MapNotify` с frame-окном без `WM_CLASS`. Вместо этого демон подписан на
-`PropertyChangeMask` и на каждый `PropertyNotify` про `_NET_CLIENT_LIST` читает
-список через `xprop -root _NET_CLIENT_LIST` и реконсилирует состояние:
-появившиеся окна укладывает по правилам, исчезнувшие снимает (и делает reflow).
-Сворачивание окна из `_NET_CLIENT_LIST` не убирает — поэтому reflow не
-срабатывает, и это желаемое поведение.
+The source of truth about clients is the EWMH list `_NET_CLIENT_LIST` on root: muffin
+REPARENTS client windows into frame windows, so `SubstructureNotify` on root
+yields `MapNotify` with a frame window that has no `WM_CLASS`. Instead the daemon subscribes to
+`PropertyChangeMask` and on every `PropertyNotify` about `_NET_CLIENT_LIST` reads the
+list through `xprop -root _NET_CLIENT_LIST` and reconciles the state:
+windows that appeared are placed by the rules, vanished ones are dropped (and reflow runs).
+Iconifying a window does not remove it from `_NET_CLIENT_LIST`, so reflow does not
+fire, and that is the desired behaviour.
 
-Рабочие столы и экраны: демон помнит активный стол (`_NET_CURRENT_DESKTOP`) и
-стол каждого уложенного окна (`_NET_WM_DESKTOP`). Сетка зон окна берётся по
-его экрану: `[monitors]` важнее `[workspaces]`, `[workspaces]` — важнее общего
-`[zones]` (`zone_config.resolve_profile`); профиль стола — это
-`templates/<имя>.conf` из `[workspaces]`. «Липкое» окно (`0xFFFFFFFF`) живёт в
-общем наборе. Окна невидимых столов не двигаются никогда: reflow работает
-только на текущем столе.
+Workspaces and screens: the daemon remembers the active workspace (`_NET_CURRENT_DESKTOP`) and
+the workspace of every placed window (`_NET_WM_DESKTOP`). The zone grid of a window comes from
+its screen: `[monitors]` beats `[workspaces]`, `[workspaces]` beats the common
+`[zones]` (`zone_config.resolve_profile`); the workspace profile is
+`templates/<name>.conf` from `[workspaces]`. A "sticky" window (`0xFFFFFFFF`) lives in
+the common set. Windows of invisible workspaces never move: reflow works
+only on the current workspace.
 
-Конфиг — тот же `zones.conf` (по умолчанию путь как у раскладчика,
+The config is the same `zones.conf` (by default the tiler's path,
 `zone-tiler.default_conf()`):
 
   [rules]
-  Chrome = main                       # glob по WM_CLASS (без учёта регистра)
-  re:^(Navigator|firefox) = main      # регулярка по строке "class|title"
+  Chrome = main                       # glob over WM_CLASS (case-insensitive)
+  re:^(Navigator|firefox) = main      # regex over the "class|title" string
 
   [daemon]
-  reflow = off                        # off | neighbors (по умолчанию off)
+  reflow = off                        # off | neighbors (off by default)
 
-Запуск:
-  zone-daemon.py                 # слушать события до Ctrl-C (и поднять IPC-сокет)
-  zone-daemon.py --verbose       # писать в stdout, что делает демон
-  zone-daemon.py --once          # обработать одно изменение _NET_CLIENT_LIST и выйти
+Usage:
+  zone-daemon.py                 # listen for events until Ctrl-C (and raise the IPC socket)
+  zone-daemon.py --verbose       # print to stdout what the daemon does
+  zone-daemon.py --once          # handle one _NET_CLIENT_LIST change and exit
   zone-daemon.py --conf PATH
-  zone-daemon.py --socket PATH   # свой путь UNIX-сокета IPC
-  zone-daemon.py --no-socket     # без IPC (только автоукладка)
+  zone-daemon.py --socket PATH   # a custom path for the IPC UNIX socket
+  zone-daemon.py --no-socket     # no IPC (auto-placement only)
 
-IPC — локальный UNIX-сокет (по умолчанию `$XDG_RUNTIME_DIR/gridsnap/daemon.sock`,
-права 0600): по одной JSON-команде на соединение, ответ — тоже JSON-строка.
-Команды: `status`, `apply`, `focus`, `reload`, `quit`; говорит с сокетом клиент
-`gridsnap-ctl`. Кадрирование и диспетчер живут в чистом `zone_ipc.py`.
+IPC is a local UNIX socket (by default `$XDG_RUNTIME_DIR/gridsnap/daemon.sock`,
+mode 0600): one JSON command per connection, the answer is a JSON line too.
+Commands: `status`, `apply`, `focus`, `reload`, `quit`; the client that talks to the socket is
+`gridsnap-ctl`. Framing and the dispatcher live in the pure `zone_ipc.py`.
 
-Режим «только эта зона» (`focus`): окно-цель ложится в зону, а остальные окна
-его стола и монитора сворачиваются. Живёт режим здесь, в демоне, потому что
-только он видит `_NET_CLIENT_LIST` и потому умеет свернуть окна, появившиеся
-после входа; повторная команда — toggle, `{"off": true}` — явный выход.
+The "this zone only" mode (`focus`): the target window is placed in the zone, and the other windows
+of its workspace and monitor are iconified. The mode lives here, in the daemon, because
+only it sees `_NET_CLIENT_LIST` and therefore can iconify windows that appeared
+after entering; a repeated command is a toggle, `{"off": true}` is an explicit exit.
 
-Вкладки в зоне: несколько окон одной зоны стоят на общей рамке (зона минус
-полоса), верхнее видно целиком. Хозяин — тоже демон. Окно, попавшее в зону,
-само становится вкладкой; вторая вкладка отнимает у окон высоту полосы и
-переставляет уже стоявшее окно. Состав стопки выводится из трекера и рамок
-(файла состояния нет), а полосу рисует отдельный процесс `zone-tabstrip.py`
-(GTK в демон не добавляется): ему на каждое изменение пишется снимок
-`zone_tabs.strips_payload`. Команды `tabs-next` (клавиша) и `tabs-switch`
-(клик по полосе) приходят в тот же сокет, что и команды `gridsnap-ctl`.
+Tabs in a zone: several windows of one zone stand on the shared frame (the zone minus
+the strip), the top one is fully visible. The owner is the daemon too. A window that lands in a zone
+becomes a tab itself; the second tab takes the strip height away from the windows and
+repositions the window already standing there. The composition of the stack is derived from
+the tracker and the frames (there is no state file), and the strip is drawn by a separate
+process `zone-tabstrip.py` (GTK is not added to the daemon): on every change a snapshot
+is written to it — `zone_tabs.strips_payload`. The commands `tabs-next` (key) and `tabs-switch`
+(click on the strip) arrive at the same socket as the `gridsnap-ctl` commands.
 """
 
 import argparse
@@ -76,7 +76,7 @@ import time
 from typing import cast
 
 from zone_i18n import _
-import window_backend  # оконный слой: xprop/xwininfo/libX11 — в одном месте
+import window_backend  # the window layer: xprop/xwininfo/libX11 in one place
 
 VERSION = "0.2.0"
 
@@ -85,29 +85,29 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REFLOW_OFF = "off"
 REFLOW_NEIGHBORS = "neighbors"
 
-# Задержка перед единственным повтором чтения метаданных: `_NET_WM_NAME` иногда
-# появляется уже после того, как окно попало в `_NET_CLIENT_LIST`.
+# Delay before the single retry of reading metadata: `_NET_WM_NAME` sometimes
+# appears only after the window has landed in `_NET_CLIENT_LIST`.
 META_RETRY_DELAY = 0.2
 
-# Коды событий X11.
+# X11 event codes.
 PROPERTY_NOTIFY = 28
 
-# Активный рабочий стол (EWMH, на root). Читается тем же PropertyNotify-циклом,
-# что и список клиентов: маска PropertyChangeMask на root уже стоит.
+# The active workspace (EWMH, on root). Read by the same PropertyNotify loop
+# as the client list: the PropertyChangeMask on root is already set.
 CURRENT_DESKTOP_ATOM = "_NET_CURRENT_DESKTOP"
 
-# PropertyChangeMask: PropertyNotify о свойствах root (в т.ч. _NET_CLIENT_LIST).
+# PropertyChangeMask: PropertyNotify about root properties (including _NET_CLIENT_LIST).
 PROPERTY_CHANGE_MASK = 1 << 22
 
-# Таймаут ожидания единственного PropertyNotify в режиме `--once`.
+# Timeout for waiting for the single PropertyNotify in `--once` mode.
 ONCE_TIMEOUT = 2.0
 
-# XEvent — объединение размером 192 байта на LP64.
+# XEvent is a 192-byte union on LP64.
 EVENT_BUFFER = ctypes.c_char * 192
 
 
 def _load_sibling(name, filename):
-    """Загрузить соседний hyphen-модуль (zone-tiler.py) без зависимости от sys.path."""
+    """Load the adjacent hyphen module (zone-tiler.py) without depending on sys.path."""
     path = os.path.join(HERE, filename)
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -123,40 +123,40 @@ zone_reflow = _load_sibling("gridsnap_zone_reflow", "zone_reflow.py")
 zone_ipc = _load_sibling("gridsnap_zone_ipc", "zone_ipc.py")
 zone_tabs = _load_sibling("gridsnap_zone_tabs", "zone_tabs.py")
 
-# `zone_config` — чистое ядро профилей (`[monitors]`, `[workspaces]`,
-# `resolve_profile`). Демону оно нужно только когда привязки есть, поэтому
-# грузится лениво: старт демона не должен зависеть от лишнего модуля.
+# `zone_config` is the pure profile core (`[monitors]`, `[workspaces]`,
+# `resolve_profile`). The daemon needs it only when bindings exist, so
+# it is loaded lazily: the daemon start must not depend on an extra module.
 _zone_config = None
 
 
 def zone_config_module():
-    """Лениво загрузить `zone_config` (ядро разбора профилей) рядом с демоном."""
+    """Lazily load `zone_config` (the profile parsing core) next to the daemon."""
     global _zone_config
     if _zone_config is None:
         if HERE not in sys.path:
             sys.path.insert(0, HERE)
-        import zone_config as module  # noqa: PLC0415 — ленивый импорт, как у раскладчика
+        import zone_config as module  # noqa: PLC0415 — lazy import, like the tiler's
         _zone_config = module
     return _zone_config
 
-# Полоса вкладок — отдельный GTK-процесс рядом с демоном (как `--hud` у
-# горячих краёв): GTK в демон не добавляется, а полосе для снимка вкладок
-# довольно stdin.
+# The tabs strip is a separate GTK process next to the daemon (like `--hud` of
+# the hot edges): GTK is not added to the daemon, and for the tab snapshot the
+# strip is happy with stdin.
 TABSTRIP = os.path.join(HERE, "zone-tabstrip.py")
 
-# Сколько проверять только запущенный процесс полосы, чтобы отличить отказ
-# запуска («нет GTK»: python стартует, `zone-tabstrip.py` падает на импорте с
-# кодом 1) от работающей полосы. Проверка короткая и только на старте: демон
-# полосу не ждёт, а без неё вкладки работают.
+# How long to check only a freshly started strip process, to tell a launch
+# failure ("no GTK": python starts, `zone-tabstrip.py` dies on import with
+# code 1) from a working strip. The check is short and only at start: the daemon
+# does not wait for the strip, and tabs work without it.
 START_VERIFY_DELAY = 0.3
 START_POLL_INTERVAL = 0.02
 
 
-# ------------------------------------------------------------------ метаданные
+# ------------------------------------------------------------------ metadata
 
 
-# Общие с раскладчиком фильтры и чтение EWMH — один источник истины, чтобы
-# `arrange`/`stack` в zone-tiler.py и демон отсеивали окна одинаково.
+# Filters and EWMH reads shared with the tiler are one source of truth, so that
+# `arrange`/`stack` in zone-tiler.py and the daemon filter windows the same way.
 IGNORED_WINDOW_TYPES = tiler.IGNORED_WINDOW_TYPES
 IGNORED_TYPE_TAILS = tiler.IGNORED_TYPE_TAILS
 CLIENT_LIST_ATOM = tiler.CLIENT_LIST_ATOM
@@ -166,16 +166,16 @@ read_client_list = tiler.read_client_list
 read_window_center = tiler.read_window_center
 monitor_for_point = tiler.monitor_for_point
 
-# Метаданные окна, которые нужны демону. `window_type` — набор имён
-# `_NET_WM_WINDOW_TYPE_*` (может быть пустым). Namedtuple: и кортеж, и атрибуты.
+# The window metadata the daemon needs. `window_type` is a set of
+# `_NET_WM_WINDOW_TYPE_*` names (may be empty). Namedtuple: both a tuple and attributes.
 Meta = collections.namedtuple("Meta", "wm_class wm_title window_type")
 
 
 def read_window_meta(win):
-    """Метаданные окна по умолчанию: WM_CLASS/_NET_WM_NAME + тип окна.
+    """Default window metadata: WM_CLASS/_NET_WM_NAME + the window type.
 
-    Если класс или заголовок ещё не появились, один раз перечитывает их после
-    короткой паузы (заголовок порой приходит уже после появления окна в списке).
+    If the class or the title has not appeared yet, re-reads them once after
+    a short pause (the title sometimes arrives only after the window appears in the list).
     """
     wm_class, wm_title = tiler.window_class_title(win)
     if not wm_class or not wm_title:
@@ -187,21 +187,21 @@ def read_window_meta(win):
 
 
 class TabStripProcess:
-    """Дочерний ``zone-tabstrip.py`` — полоса вкладок поверх зон.
+    """The child ``zone-tabstrip.py`` — the tabs strip above the zones.
 
-    Снимок вкладок пишется в stdin одной строкой JSON на изменение (протокол
-    ``zone_tabs.strips_payload``); EOF в stdin завершает главный цикл полосы,
-    поэтому останов — сначала мягкий EOF, потом ``terminate``/``kill``.
+    The tab snapshot is written to stdin as one JSON line per change (the protocol
+    ``zone_tabs.strips_payload``); EOF on stdin ends the main loop of the strip,
+    so the stop is a soft EOF first, then ``terminate``/``kill``.
 
-    Сбой запуска демон не роняет: без полосы вкладки работают, просто на экране
-    нет подсказки, что окон в зоне несколько. Повторять запуск, которого быть не
-    может (нет ``zone-tabstrip.py`` или нет GTK), смысла нет — ``failed``.
+    A launch failure does not bring the daemon down: tabs work without the strip, there is just no
+    hint on screen that a zone holds several windows. Repeating a launch that cannot
+    succeed (no ``zone-tabstrip.py`` or no GTK) makes no sense: ``failed``.
 
-    «Нет GTK» выглядит не как `OSError` от `Popen`: python стартует нормально, а
-    ``zone-tabstrip.py`` падает на импорте с кодом 1 — и такой ребёнок больше не
-    перезапускается на каждом изменении картины. Отличить отказ запуска от
-    смерти уже работавшей полосы помогает короткая проверка сразу после
-    `Popen` (`_launch_failure`): умершая позже полоса остаётся перезапускаемой.
+    "No GTK" does not look like an `OSError` from `Popen`: python starts fine, but
+    ``zone-tabstrip.py`` dies on import with code 1, and such a child is no longer
+    restarted on every change of the picture. Telling a launch failure from
+    the death of a strip that had been working is helped by the short check right
+    after `Popen` (`_launch_failure`): a strip that dies later stays restartable.
     """
 
     def __init__(self, conf, script=None, python=None, verbose=False):
@@ -220,7 +220,7 @@ class TabStripProcess:
         return [self.python, self.script, "--conf", self.conf]
 
     def start(self):
-        """Запустить полосу; уже запущенную не трогаем, безнадёжную не повторяем."""
+        """Start the strip; a running one is not touched, a hopeless one is not retried."""
         if self.failed or self.running():
             return False
         if not os.path.exists(self.script):
@@ -245,7 +245,7 @@ class TabStripProcess:
         code = self._launch_failure()
         if code is not None:
             self.failed = True
-            self.stop()  # закрыть stdin мёртвого ребёнка
+            self.stop()  # close the dead child's stdin
             self.log(
                 _(
                     "the tab bar failed to start: {script} exited with code {code}"
@@ -256,13 +256,13 @@ class TabStripProcess:
         return True
 
     def _launch_failure(self):
-        """Код возврата, если ребёнок умер сразу после старта, иначе ``None``.
+        """The exit code if the child died right after the start, otherwise ``None``.
 
-        `poll()` сразу после `Popen` обычно ещё `None`: python только-только
-        запустился. Поэтому коротко ждём и опрашиваем: упавший на импорте
-        `zone-tabstrip.py` (нет GTK) выходит почти сразу, а живая полоса
-        доживает до конца проверки. Смерть уже работавшей полосы — не отказ
-        запуска: её `feed` перезапускает как раньше.
+        `poll()` right after `Popen` is usually still `None`: python has only just
+        started. So we wait briefly and poll: a `zone-tabstrip.py` that died on import
+        (no GTK) exits almost at once, while a live strip
+        survives to the end of the check. The death of a strip that had been working is not a launch
+        failure: its `feed` restarts it as before.
         """
         proc = self.proc
         if proc is None:
@@ -279,7 +279,7 @@ class TabStripProcess:
             time.sleep(START_POLL_INTERVAL)
 
     def feed(self, line):
-        """Отдать полосе снимок; ``False`` — она его не приняла (умерла/не поднялась)."""
+        """Hand the strip a snapshot; ``False`` — it did not accept it (died/did not come up)."""
         if self.failed:
             return False
         if not self.running() and not self.start():
@@ -296,7 +296,7 @@ class TabStripProcess:
         return self.proc is not None and self.proc.poll() is None
 
     def stop(self):
-        """Погасить полосу: EOF в stdin, затем terminate/kill. Идемпотентно."""
+        """Shut the strip down: EOF on stdin, then terminate/kill. Idempotent."""
         proc, self.proc = self.proc, None
         if proc is None:
             return False
@@ -321,19 +321,19 @@ class TabStripProcess:
 
 
 def window_rect(win):
-    """Рамка окна с компенсацией `_NET_FRAME_EXTENTS` (для памяти об укладке).
+    """The window frame with `_NET_FRAME_EXTENTS` compensation (for the placement memory).
 
-    Та же геометрия, что `apply_zone` читает при `--verify`, поэтому сравнение
-    «окно на месте / вышло из зоны» не зависит от рамки оконного менеджера.
+    The same geometry that `apply_zone` reads under `--verify`, so the comparison
+    "the window is in place / left the zone" does not depend on the window manager frame.
     """
     return tiler.read_frame(win, tiler.frame_extents(win))
 
 
-# ---------------------------------------------------------------------- конфиг
+# ---------------------------------------------------------------------- config
 
 
 def read_reflow(conf):
-    """Режим reflow из `[daemon]`. Нет секции/значения или мусор -> `off`."""
+    """The reflow mode from `[daemon]`. No section/value or garbage -> `off`."""
     try:
         value = (conf.get("daemon", "reflow", fallback="off") or "").strip().lower()
     except Exception:
@@ -342,11 +342,11 @@ def read_reflow(conf):
 
 
 def read_tabs_height(conf):
-    """Высота полосы вкладок из `[tabs]`; нет секции/значения или мусор -> умолчание.
+    """The tabs strip height from `[tabs]`; no section/value or garbage -> the default.
 
-    Высота — величина с умолчанием (``zone_tabs.STRIP_HEIGHT``), а не догма:
-    читается тем же конфигом, что и зоны, но разбирает её сам демон — разбор
-    секции ``[tabs]`` целиком живёт в ``zone_config`` у полосы и раскладчика.
+    The height is a value with a default (``zone_tabs.STRIP_HEIGHT``), not a dogma:
+    it is read from the same config as the zones, but the daemon parses it itself — the parsing
+    of the ``[tabs]`` section lives entirely in ``zone_config`` at the strip and the tiler.
     """
     try:
         raw = conf.get("tabs", "height", fallback=None)
@@ -358,55 +358,55 @@ def read_tabs_height(conf):
         height = int(str(raw).strip())
     except (TypeError, ValueError):
         return zone_tabs.STRIP_HEIGHT
-    # 0/отрицательная/абсурдно большая высота — не полоса, а мусор в конфиге.
+    # 0/negative/absurdly large height — not a strip but garbage in the config.
     if not 0 < height < 200:
         return zone_tabs.STRIP_HEIGHT
     return height
 
 
-# --------------------------------------------------------------- память укладок
+# --------------------------------------------------------------- placement memory
 
-# Память о том, куда демон положил окно, живёт между запусками: иначе стартовая
-# реконсиляция после перезапуска снова утащила бы в зону окно, которое
-# пользователь оттуда вынес. Это состояние, а не конфиг (его не переносят) и не
-# кэш (его вправе вычистить чистильщик) — отсюда `XDG_STATE_HOME`.
+# The memory of where the daemon put a window lives across runs: otherwise the startup
+# reconciliation after a restart would drag back into the zone a window that
+# the user moved out of it. It is state, not config (it is not migrated) and not
+# a cache (a cleaner may wipe it) — hence `XDG_STATE_HOME`.
 PLACED_STATE_VERSION = 1
 
-# Насколько рамка окна вправе разойтись с запомненной, чтобы окно всё ещё
-# считалось стоящим в своей зоне. Пара пикселей — дрожание окна/приложения после
-# укладки; настоящий переезд пользователя заметно больше.
+# How far the window frame may differ from the remembered one for the window to still
+# count as standing in its zone. A couple of pixels is window/application jitter after
+# the placement; a real move by the user is noticeably larger.
 PLACED_TOLERANCE = 8
 
-# `_NET_MOVERESIZE_WINDOW` — клиентское сообщение, WM применяет его не мгновенно.
-# Если первое чтение застало старую рамку, ждём столько и перечитываем ещё раз,
-# иначе окно тут же сочли бы «вышедшим из зоны».
+# `_NET_MOVERESIZE_WINDOW` is a client message, the WM does not apply it instantly.
+# If the first read caught the old frame, we wait this long and read once more,
+# otherwise the window would be considered "out of the zone" right away.
 PLACED_RETRY_DELAY = 0.15
 
 
 def placed_path():
-    """Путь памяти об укладках: `$XDG_STATE_HOME/gridsnap/placed.json`."""
+    """The placement memory path: `$XDG_STATE_HOME/gridsnap/placed.json`."""
     return os.path.join(tiler.state_home(), "gridsnap", "placed.json")
 
 
 def read_session_id():
-    """Идентификатор X-сессии (`_NET_SUPPORTING_WM_CHECK`) или None — см. `window_backend`.
+    """The X session id (`_NET_SUPPORTING_WM_CHECK`) or None — see `window_backend`.
 
-    Память об укладках не должна переезжать в новую X-сессию: там XID раздаются
-    заново, и старая запись может «попасть» на чужое окно того же класса.
-    Не читается — `None`, тогда проверка выключена.
+    The placement memory must not carry over into a new X session: XIDs are handed out
+    anew there, and an old record could "hit" a foreign window of the same class.
+    Not read — `None`, then the check is off.
     """
     return window_backend.read_session_id()
 
 
 def frame_matches(actual, placed, tolerance=PLACED_TOLERANCE):
-    """Совпадают ли рамки в пределах допуска. Чистая функция — под тесты."""
+    """Whether the frames match within the tolerance. A pure function — for tests."""
     if actual is None or placed is None or len(actual) != 4 or len(placed) != 4:
         return False
     return all(abs(int(a) - int(b)) <= tolerance for a, b in zip(actual, placed))
 
 
 def _state_window_id(raw):
-    """XID из ключа файла состояния; не число — `None`."""
+    """The XID from a state file key; not a number — `None`."""
     try:
         win = int(raw)
     except (TypeError, ValueError):
@@ -415,7 +415,7 @@ def _state_window_id(raw):
 
 
 def _state_frame(value):
-    """Рамка `[x, y, w, h]` из JSON; кривая — `None`."""
+    """A frame `[x, y, w, h]` from JSON; a malformed one — `None`."""
     if not isinstance(value, (list, tuple)) or len(value) != 4:
         return None
     try:
@@ -425,11 +425,11 @@ def _state_frame(value):
 
 
 def _state_record(record):
-    """Запись об укладке из JSON; кривая — `None`.
+    """A placement record from JSON; a malformed one — `None`.
 
-    Обязательны `frame` и непустая `zone`: без зоны запись бесполезна — некуда
-    возвращать окно. `monitor`/`workspace` необязательны (липкое окно,
-    неопознанный стол), `wm_class` нужен, чтобы отличить переиспользованный XID.
+    `frame` and a non-empty `zone` are mandatory: without a zone the record is useless — there is nowhere
+    to return the window. `monitor`/`workspace` are optional (a sticky window,
+    an unidentified workspace), `wm_class` is needed to tell a reused XID.
     """
     if not isinstance(record, dict):
         return None
@@ -454,12 +454,12 @@ def _state_record(record):
 
 
 def load_placed_state(path, session=None):
-    """Память об укладках из файла: `{XID: запись}`; нет файла/битый — `{}`.
+    """Placement memory from the file: `{XID: record}`; no file/broken — `{}`.
 
-    Файл состояния вспомогательный: демон обязан подняться и без него, поэтому
-    ошибки чтения не поднимаются наверх, а кривые записи отбрасываются поодиночке.
-    Записи другой X-сессии (если и файл, и аргумент знают её id) отбрасываются
-    целиком: XID в новой сессии раздаются заново.
+    The state file is auxiliary: the daemon must come up without it too, so
+    read errors are not raised upwards, and malformed records are dropped one by one.
+    Records of another X session (if both the file and the argument know its id) are dropped
+    entirely: XIDs are handed out anew in a new session.
     """
     if not path:
         return {}
@@ -486,7 +486,7 @@ def load_placed_state(path, session=None):
 
 
 def save_placed_state(path, state, session=None):
-    """Записать память об укладках атомарно (`.tmp` + `os.replace`)."""
+    """Write the placement memory atomically (`.tmp` + `os.replace`)."""
     directory = os.path.dirname(path)
     if directory:
         os.makedirs(directory, exist_ok=True)
@@ -500,14 +500,14 @@ def save_placed_state(path, state, session=None):
     os.replace(tmp, path)
 
 
-# -------------------------------------------------------------------- геометрия
+# -------------------------------------------------------------------- geometry
 
 
 def fractions_to_pixels(fx, fy, fw, fh, wa):
-    """Доли рабочей области -> пиксельная рамка (x, y, w, h).
+    """Work-area fractions -> a pixel frame (x, y, w, h).
 
-    Края считаются от одних и тех же линий (`round(ww*(fx+fw))`), как в
-    `Grid.rect`, — соседние зоны стыкуются без щели. Ширина/высота >= 1 px.
+    The edges are counted from the same lines (`round(ww*(fx+fw))`), as in
+    `Grid.rect` — neighbouring zones join without a gap. Width/height >= 1 px.
     """
     wx, wy, ww, wh = wa
     x1, x2 = wx + round(ww * fx), wx + round(ww * (fx + fw))
@@ -516,81 +516,81 @@ def fractions_to_pixels(fx, fy, fw, fh, wa):
 
 
 def workspace_label(workspace):
-    """Стол для журнала: номер EWMH (с нуля) или пометка «неизвестен»."""
+    """The workspace for the log: the EWMH number (from zero) or an "unknown" marker."""
     return _("unknown") if workspace is None else f"#{workspace}"
 
 
-# ----------------------------------------------------------------------- демон
+# ----------------------------------------------------------------------- daemon
 
 
 class Daemon:
-    """Ядро демона без X: вся реакция на события — в `on_map`/`on_destroy`/`on_unmap`.
+    """The daemon core without X: all event reaction is in `on_map`/`on_destroy`/`on_unmap`.
 
-    Зависимости инъектируются, поэтому сценарии гоняются юнит-тестами без
-    дисплея:
+    Dependencies are injected, so scenarios run under unit tests without
+    a display:
 
-      conf_path  — путь к zones.conf (по умолчанию — как у раскладчика);
-      apply      — callable(window, rect, label=..., quiet=...) (по умолчанию —
-                   `zone-tiler.apply_zone` с общим соединением `self.x11`,
-                   которое ставит `serve`; переданное чужое не закрывается);
-      read_meta  — callable(window) -> Meta (по умолчанию `read_window_meta`);
-      workarea   — принудительная одна рабочая область: callable() -> (x, y, w, h)
-                   либо сам кортеж (одноэкранный режим и тесты). При `None`
-                   монитор окна определяется по `monitors` и `window_center`;
-      monitors   — callable() -> список (x, y, w, h) рабочих областей мониторов
-                   (по умолчанию `tiler.monitors`, вызывается лениво);
-      window_center — callable(window) -> (px, py) либо None (по умолчанию
-                   `read_window_center`, вызывается лениво);
-      current_workspace — callable() -> номер активного стола (по умолчанию
-                   `tiler.current_workspace`); читается один раз в `__init__`,
-                   потом на каждый PropertyNotify о `_NET_CURRENT_DESKTOP`;
-      window_workspace — callable(window) -> номер стола окна либо None
-                   (по умолчанию `tiler.window_workspace_for_zones`; None же
-                   у «липкого» окна — оно живёт в общем наборе зон);
-      read_clients — callable() -> список id из `_NET_CLIENT_LIST` или None
-                   (`read_client_list`); вкладкам нужен порядок окон снизу вверх;
-      active_window — callable() -> id активного окна (`tiler.active_window`):
-                   `tabs-next` переключает стопку его зоны, а полоса метит
-                   активную вкладку;
-      strip      — процесс полосы вкладок (`TabStripProcess` или подмена в
-                   тестах) либо `None` — полосы нет; её сбой демон не роняет;
-      verbose    — печатать ли, что делает демон.
+      conf_path  — the zones.conf path (by default — the tiler's);
+      apply      — callable(window, rect, label=..., quiet=...) (by default —
+                   `zone-tiler.apply_zone` with the shared connection `self.x11`,
+                   which `serve` sets; a foreign one passed in is not closed);
+      read_meta  — callable(window) -> Meta (by default `read_window_meta`);
+      workarea   — a forced single work area: callable() -> (x, y, w, h)
+                   or the tuple itself (single-screen mode and tests). With `None`
+                   the window monitor is determined by `monitors` and `window_center`;
+      monitors   — callable() -> a list of (x, y, w, h) monitor work areas
+                   (by default `tiler.monitors`, called lazily);
+      window_center — callable(window) -> (px, py) or None (by default
+                   `read_window_center`, called lazily);
+      current_workspace — callable() -> the active workspace number (by default
+                   `tiler.current_workspace`); read once in `__init__`
+                   and then on every PropertyNotify about `_NET_CURRENT_DESKTOP`;
+      window_workspace — callable(window) -> the window's workspace number or None
+                   (by default `tiler.window_workspace_for_zones`; None is also
+                   what a "sticky" window gives — it lives in the common zone set);
+      read_clients — callable() -> a list of ids from `_NET_CLIENT_LIST` or None
+                   (`read_client_list`); tabs need the window order bottom to top;
+      active_window — callable() -> the active window id (`tiler.active_window`):
+                   `tabs-next` switches the stack of its zone, and the strip highlights
+                   the active tab;
+      strip      — the tabs strip process (`TabStripProcess` or a stand-in in
+                   tests) or `None` — there is no strip; its failure does not bring the daemon down;
+      verbose    — whether to print what the daemon does.
 
-    `windows` — трекер `window id -> имя зоны`: им же отсекаются повторные
-    появления окна (свернуть/развернуть не переставляют окно). `win_monitor`
-    хранит рабочую область, на которой окно уложено; `win_workspace` — стол,
-    на котором оно уложено (`None` — липкое/неизвестный стол); `filled` —
-    покрытые зоны по столу и монитору. Стол учитывается везде, где считается
-    занятость: окно стола 2 не делает зону занятой для reflow на столе 1.
+    `windows` is the tracker `window id -> zone name`: it also filters out repeated
+    appearances of a window (iconify/restore do not move a window). `win_monitor`
+    holds the work area the window was placed in; `win_workspace` — the workspace
+    it was placed on (`None` — sticky/unknown workspace); `filled` —
+    the covered zones by workspace and monitor. The workspace counts wherever
+    occupancy is computed: a window of workspace 2 does not make a zone taken for reflow on workspace 1.
 
-    Точка входа из X11-контура — `reconcile(client_ids)`: список id текущих
-    клиентов из `_NET_CLIENT_LIST`. Новые id (которых нет в `seen`) проходят
-    через `on_map`, исчезнувшие из трекера — через `on_destroy`. `seen` хранит
-    все id последнего списка, включая не подошедшие под правила, — тогда их
-    метаданные не перечитываются на каждой реконсиляции.
+    The entry point from the X11 side is `reconcile(client_ids)`: the list of ids of the current
+    clients from `_NET_CLIENT_LIST`. New ids (not in `seen`) go
+    through `on_map`, ones that vanished from the tracker — through `on_destroy`. `seen` keeps
+    all ids of the last list, including those that did not match the rules — so their
+    metadata is not re-read on every reconciliation.
 
-    Закрытие окна (`on_destroy`) снимает его с трекера и, если включён
-    `reflow=neighbors`, перестраивает раскладку — но только когда стол
-    закрытого окна виден (`self.workspace`); иначе состояние чистится, а окна
-    на других столах не двигаются. Скрытие окна (`on_unmap`: сворачивание,
-    смена воркспейса) в `_NET_CLIENT_LIST` ничего не меняет, поэтому
-    реконсиляция его не видит: окно остаётся в трекере, соседей не двигаем.
-    Смена активного стола (`on_workspace_change`) обновляет только
-    `self.workspace` — окна не переставляются.
+    Closing a window (`on_destroy`) drops it from the tracker and, if
+    `reflow=neighbors` is on, reflows the layout — but only when the workspace
+    of the closed window is visible (`self.workspace`); otherwise the state is cleaned, and windows
+    on other workspaces do not move. Hiding a window (`on_unmap`: iconifying,
+    a workspace switch) changes nothing in `_NET_CLIENT_LIST`, so
+    reconciliation does not see it: the window stays in the tracker, we do not move the neighbours.
+    A change of the active workspace (`on_workspace_change`) updates only
+    `self.workspace` — windows are not moved.
 
-    Режим «только эта зона» (`self.focus`, команда `focus`): окно-цель ложится
-    в зону, а окна того же стола и монитора сворачиваются; их id попадают в
-    `minimized`, и на выходе разворачиваются только они (свёрнутое вручную
-    остаётся свёрнутым). Режим снимается сам, когда цель исчезла, сменился
-    активный стол или демон завершается — и тогда окна возвращаются. Вкладки
-    зоны-цели режим не сворачивает: они часть той зоны, которую владелец
-    попросил оставить.
+    The "this zone only" mode (`self.focus`, the `focus` command): the target window is placed
+    in the zone, and the windows of the same workspace and monitor are iconified; their ids land in
+    `minimized`, and only they are restored on exit (a window iconified by hand
+    stays iconified). The mode drops itself when the target vanished, the
+    active workspace changed or the daemon terminates — and then the windows come back. The tabs
+    of the target zone the mode does not iconify: they are part of that zone the owner
+    asked to keep.
 
-    Вкладки в зоне (`_zone_stack`, `_settle_in_zone`, `tabs_picture`): окна
-    одной зоны на одном столе и мониторе стоят на общей рамке. Одно окно
-    занимает зону целиком, два и больше — зону минус полосу
-    (`zone_tabs.tab_rect`); вторая вкладка переставляет первую. Снимок стопок
-    уходит в `self.strip` одной строкой `zone_tabs.strips_payload`.
+    Tabs in a zone (`_zone_stack`, `_settle_in_zone`, `tabs_picture`): windows
+    of one zone on one workspace and monitor stand on the shared frame. A single window
+    occupies the whole zone, two or more — the zone minus the strip
+    (`zone_tabs.tab_rect`); the second tab moves the first. The snapshot of the stacks
+    goes to `self.strip` as one `zone_tabs.strips_payload` line.
     """
 
     def __init__(
@@ -619,120 +619,120 @@ class Daemon:
     ):
         self.conf_path = conf_path or tiler.default_conf()
         self.grid = tiler.Grid(self.conf_path)
-        self.x11 = None  # соединение кладёт serve(); чужое для apply
+        self.x11 = None  # the connection is set by serve(); apply gets a foreign one
         self.apply = apply or self._default_apply
         self.read_meta = read_meta or read_window_meta
         self.workarea = workarea
         self.monitors = monitors if monitors is not None else tiler.monitors
-        # Масштабы мониторов: по ним видно, что масштаб сменили на лету, и кэш
-        # рабочих областей устарел.
+        # Monitor scales: they show that the scale was changed on the fly and the
+        # work-area cache is stale.
         self.monitor_scales = (
             monitor_scales if monitor_scales is not None else tiler.monitor_scales
         )
-        # [(имя выхода, рабочая область)] — имя адресует профиль в `[monitors]`.
+        # [(output name, work area)] — the name addresses the profile in `[monitors]`.
         self.monitor_outputs = (
             monitor_outputs if monitor_outputs is not None else tiler.monitor_outputs
         )
         self.window_center = window_center or read_window_center
         self.read_current_workspace = current_workspace or tiler.current_workspace_or_first
         self.read_window_workspace = window_workspace or tiler.window_workspace_for_zones
-        # Рамку окна читает память об укладках (сравнение «окно на месте/ушло»).
+        # The window frame is read by the placement memory (the "in place/gone" comparison).
         self.read_rect = read_rect or window_rect
-        # Сворачивание/разворот и список клиентов — инъекция как у apply/read_meta:
-        # тесты не должны трогать X, а демон в работе зовёт общие примитивы
-        # раскладчика (`tiler.iconify`/`tiler.deiconify`).
+        # Iconify/restore and the client list are injected like apply/read_meta:
+        # tests must not touch X, while the running daemon calls the shared primitives
+        # of the tiler (`tiler.iconify`/`tiler.deiconify`).
         self.iconify = iconify or tiler.iconify
         self.deiconify = deiconify or tiler.deiconify
         self.read_clients = read_clients or read_client_list
-        # Активное окно читается вкладками: по нему выбирается стопка для
-        # `tabs-next` и метится видимая вкладка в снимке для полосы.
+        # The active window is read by tabs: it selects the stack for
+        # `tabs-next` and marks the visible tab in the snapshot for the strip.
         self.active_window = active_window or tiler.active_window
-        # Полоса вкладок — отдельный GTK-процесс (`TabStripProcess`) или None:
-        # без неё вкладки работают, просто нет подсказки на экране.
+        # The tabs strip is a separate GTK process (`TabStripProcess`) or None:
+        # tabs work without it, there is just no hint on screen.
         self.strip = strip
-        # Подписчики на события (`zone_ipc.Subscribers`): один и тот же реестр
-        # держит и слушающий сокет (`main` передаёт его в `Server`), и рассылка
-        # (`_emit`). Инъекция — для юнит-тестов без сокета.
+        # Event subscribers (`zone_ipc.Subscribers`): the same registry
+        # holds the listening socket (`main` passes it to `Server`) and the fan-out
+        # (`_emit`). The injection is for unit tests without a socket.
         self.subscribers = (
             subscribers if subscribers is not None else zone_ipc.Subscribers()
         )
-        # Высота полосы из `[tabs]`; нет секции или мусор — умолчание ядра.
+        # The strip height from `[tabs]`; no section or garbage — the core default.
         self.tabs_height = read_tabs_height(self.grid.conf)
-        # Последний отданный полосе снимок: одинаковые не пишем повторно.
+        # The last snapshot handed to the strip: identical ones are not written again.
         self._strips_last = None
-        # Путь файла состояния; `None` — только в памяти (тесты, утилитный запуск).
+        # The state file path; `None` — in memory only (tests, utility runs).
         self.state_path = state_path
-        # Путь `focus.json` — куда отдаётся неразвёрнутый остаток режима при
-        # завершении демона. `None` (тесты, утилитный запуск) — только в журнал.
+        # The `focus.json` path — where the unrestored remainder of the mode goes on
+        # daemon termination. `None` (tests, utility runs) — to the log only.
         self.focus_path = focus_path
-        # Идентификатор X-сессии: запись из другой сессии (те же XID, но чужая)
-        # не подхватывается. `None` — проверка выключена.
+        # The X session id: a record from another session (the same XIDs, but foreign)
+        # is not picked up. `None` — the check is off.
         self.session_id = session_id
         self.verbose = verbose
         self.reflow = read_reflow(self.grid.conf)
         self.windows = {}
-        # Рабочая область, на которой уложено окно: window id -> (x, y, w, h).
-        # Нужна reflow, чтобы не расширять соседа с другого монитора.
+        # The work area the window was placed in: window id -> (x, y, w, h).
+        # Reflow needs it so as not to expand a neighbour from another monitor.
         self.win_monitor = {}
-        # Стол, на котором уложено окно: window id -> номер стола или None
-        # (липкое окно). Окно другого стола не делает зону занятой на этом.
+        # The workspace the window was placed on: window id -> workspace number or None
+        # (a sticky window). A window of another workspace does not make a zone taken on this one.
         self.win_workspace = {}
-        # Рамка, которую демон применил: window id -> (x, y, w, h). По ней видно,
-        # что пользователь вынес окно из зоны (окно уже не там, где его положили).
+        # The frame the daemon applied: window id -> (x, y, w, h). It shows
+        # that the user moved the window out of the zone (it is no longer where it was put).
         self.placed = {}
-        # `WM_CLASS` уложенного окна — записи состояния нужно отличить
-        # переиспользованный XID при усыновлении после перезапуска.
+        # `WM_CLASS` of the placed window — a state record must tell apart
+        # a reused XID when adopting after a restart.
         self.win_class = {}
-        # Окна, которые пользователь вынес из своих зон: window id -> запись.
-        # Их демон больше не двигает до переоткрытия окна (новый XID).
+        # Windows the user moved out of their zones: window id -> record.
+        # The daemon no longer moves them until the window is reopened (a new XID).
         self.detached = {}
-        # Память прошлого запуска: разбирается на первой же реконсиляции.
+        # The previous run's memory: resolved on the very first reconciliation.
         self._pending = load_placed_state(state_path, session_id) if state_path else {}
-        # Зоны, покрытые расширенным соседом (reflow=neighbors): тройка
-        # (стол, рабочая область, освобождённая зона) -> окно-держатель.
-        # Покрытие ключуется столом и монитором: одна и та же зона на разных
-        # столах и экранах независима, и reflow одного стола не трогает другой.
+        # Zones covered by an expanded neighbour (reflow=neighbors): a triple
+        # (workspace, work area, freed zone) -> the holder window.
+        # Coverage is keyed by workspace and monitor: the same zone on different
+        # workspaces and screens is independent, and reflow of one workspace does not touch another.
         self.filled = {}
-        # Сетки столов, посчитанные по `[workspaces]`: стол -> Grid. Кэш
-        # сбрасывается `reload`, чтобы новый профиль подхватился без рестарта.
+        # Workspace grids computed from `[workspaces]`: workspace -> Grid. The cache
+        # is reset by `reload`, so a new profile is picked up without a restart.
         self._grids = {}
-        # Активный стол (нумерация EWMH с нуля); None — не определить.
+        # The active workspace (EWMH numbering from zero); None — cannot be determined.
         self.workspace = self._read_current_workspace()
-        # Все id из последнего `_NET_CLIENT_LIST` (и уложенные, и без правила) —
-        # чтобы не читать метаданные повторно на каждой реконсиляции.
+        # All ids from the last `_NET_CLIENT_LIST` (both placed and without a rule) —
+        # so that metadata is not re-read on every reconciliation.
         self.seen = set()
-        # Режим «только эта зона» (None — выключен): словарь с полями
-        # `zone`, `target`, `workspace`, `monitor` и множеством `minimized` —
-        # окна, которые свернул именно режим (их и только их он разворачивает).
+        # The "this zone only" mode (None — off): a dict with the fields
+        # `zone`, `target`, `workspace`, `monitor` and the set `minimized` —
+        # the windows the mode itself iconified (those and only those it restores).
         self.focus = None
         self._wa_cache = None
         self._mons_cache = None
-        # Отпечаток масштабов, с которым посчитан `_mons_cache`.
+        # The scale fingerprint `_mons_cache` was computed with.
         self._mons_scale = None
-        # [(имя выхода, рабочая область)] из `xrandr --listmonitors`: имя выхода
-        # адресует профиль экрана в `[monitors]`. Кэш на время жизни конфига.
+        # [(output name, work area)] from `xrandr --listmonitors`: the output name
+        # addresses the screen profile in `[monitors]`. Cached for the life of the config.
         self._outputs_cache = None
-        # `[monitors]`/`[workspaces]` активного конфига: разбираются один раз за
-        # reload — привязки меняются только правкой файла.
+        # `[monitors]`/`[workspaces]` of the active config: parsed once per
+        # reload — bindings change only by editing the file.
         self._monitor_map_cache = None
         self._workspace_map_cache = None
-        # Команда `quit` по сокету: цикл `serve` проверяет флаг и выходит.
+        # The `quit` command over the socket: the `serve` loop checks the flag and exits.
         self.stop_requested = False
 
-    # -- вспомогательное
+    # -- helpers
 
     def log(self, message):
         if self.verbose:
             print(message, flush=True)
 
-    # -- события наружу
+    # -- events to the outside
 
     def _emit(self, kind, build):
-        """Разослать событие подписчикам; без них строка и не строится.
+        """Emit an event to the subscribers; without them the line is not even built.
 
-        `build` — замыкание, собирающее строку протокола: события идут на каждое
-        окно, а подписчиков обычно нет, поэтому JSON собирается только тогда,
-        когда его кому-то посылать. Сбой рассылки (чужой клиент) демон не роняет.
+        `build` is a closure that assembles the protocol line: events fire for every
+        window, and there usually are no subscribers, so the JSON is assembled only
+        when there is someone to send it to. A fan-out failure (a foreign client) does not bring the daemon down.
         """
         subscribers = getattr(self, "subscribers", None)
         if subscribers is None or not subscribers.wants(kind):
@@ -748,7 +748,7 @@ class Daemon:
             return 0
 
     def _emit_appeared(self, win):
-        """Окно появилось в `_NET_CLIENT_LIST`; зона — куда его уложили (или None)."""
+        """A window appeared in `_NET_CLIENT_LIST`; `zone` is where it was placed (or None)."""
         self._emit(
             "window-appeared",
             lambda: zone_ipc.event_window_appeared(
@@ -760,19 +760,19 @@ class Daemon:
         )
 
     def _emit_closed(self, win, zone):
-        """Окно ушло из списка клиентов; `zone` — где оно стояло в последний раз."""
+        """A window left the client list; `zone` is where it stood last."""
         self._emit("window-closed", lambda: zone_ipc.event_window_closed(win, zone))
 
-    # -- рабочие столы
+    # -- workspaces
 
     def _read_current_workspace(self):
-        """Активный стол; `None` — только если X не отвечает.
+        """The active workspace; `None` only when X does not answer.
 
-        Читается `tiler.current_workspace_or_first`: в Wayland-сессии Cinnamon
-        `_NET_CURRENT_DESKTOP` не опубликован до первого переключения стола
-        (замер: ``docs/RESEARCH-wayland-recon.md``), и без запаса демон считал бы
-        стол неизвестным и не делал reflow. Подменённый читатель может и бросить:
-        стол — не повод падать, при неизвестном столе reflow просто не двигает окна.
+        Read through `tiler.current_workspace_or_first`: in a Wayland session Cinnamon
+        does not publish `_NET_CURRENT_DESKTOP` until the workspace is switched for the first time
+        (measured: ``docs/RESEARCH-wayland-recon.md``), and without that margin the daemon would treat
+        the workspace as unknown and would not reflow. A substituted reader may also raise:
+        a workspace is no reason to crash, with an unknown workspace reflow simply does not move windows.
         """
         try:
             return self.read_current_workspace()
@@ -781,7 +781,7 @@ class Daemon:
             return None
 
     def _window_workspace(self, win):
-        """Стол окна для выбора сетки; `None` — «липкое» или не опознано."""
+        """The workspace of a window for choosing the grid; `None` — "sticky" or not identified."""
         try:
             return self.read_window_workspace(win)
         except (Exception, SystemExit) as exc:
@@ -793,30 +793,30 @@ class Daemon:
             return None
 
     def _visible(self, workspace):
-        """Виден ли стол окна сейчас — то есть можно ли двигать это окно.
+        """Whether the window's workspace is visible now — that is, whether this window may be moved.
 
-        `None` (липкое окно или неопознанный стол) — видно всегда. Неизвестный
-        же активный стол (`self.workspace is None`) видимым не делает никого:
-        двигать окна вслепую хуже, чем не двигать.
+        `None` (a sticky window or an unidentified workspace) — always visible. An unknown
+        active workspace (`self.workspace is None`) makes nobody visible:
+        moving windows blindly is worse than not moving them.
         """
         if workspace is None:
             return True
         return workspace == self.workspace
 
     def _grid_for(self, workspace=None, output=None):
-        """Сетка окна: профиль экрана, стола или общий набор `zones.conf`.
+        """The grid of a window: the profile of the screen, of the workspace, or the common `zones.conf` set.
 
-        `output` — имя выхода монитора окна (`HDMI-2`), `workspace` — стол окна
-        из EWMH (с нуля). `None`/`None` (липкое или неопознанное окно) — обычный
-        `Grid(conf_path)`: общий набор зон, как зафиксировано контрактом
-        `grid_for_workspace`. Привязки разбираются в порядке `[monitors]` →
-        `[workspaces]` → активный конфиг (`zone_config.resolve_profile`), откат
-        на следующий уровень — в `_profile_grid`.
+        `output` is the output name of the window's monitor (`HDMI-2`), `workspace` is the window's
+        workspace from EWMH (zero-based). `None`/`None` (a sticky or unidentified window) — the usual
+        `Grid(conf_path)`: the common zone set, as fixed by the `grid_for_workspace`
+        contract. Bindings are resolved in the order `[monitors]` →
+        `[workspaces]` → the active config (`zone_config.resolve_profile`), the fallback
+        to the next level is in `_profile_grid`.
 
-        Сетки кэшируются по паре (стол, выход), чтобы не перечитывать конфиг и
-        профиль на каждое окно; `reload` сбрасывает кэш. Битый конфиг, профиль
-        или привязки (в т.ч. `SystemExit` из `fail()`) не роняют демон: берётся
-        общий набор.
+        Grids are cached by the pair (workspace, output), so the config and the profile are not
+        re-read for every window; `reload` resets the cache. A broken config, profile
+        or bindings (including `SystemExit` from `fail()`) do not bring the daemon down: the common
+        set is taken.
         """
         if workspace is None and output is None:
             return self.grid
@@ -841,13 +841,13 @@ class Daemon:
         return grid
 
     def _profile_grid(self, workspace, output):
-        """Сетка по привязкам: экран важнее стола, стол — важнее активного конфига.
+        """The grid by bindings: the screen beats the workspace, the workspace beats the active config.
 
-        Профиль экрана ищется в `[monitors]`, профиль стола — в `[workspaces]`;
-        порядок разбора один на всех — `zone_config.resolve_profile` (номер стола
-        EWMH он же переводит в нумерацию конфига с 1). Профиля нет на диске —
-        **откат на следующий уровень** с записью в журнал: раскладка на экране
-        без профиля всё равно нужна, отказ работы хуже общего набора зон.
+        The screen profile is looked up in `[monitors]`, the workspace profile in `[workspaces]`;
+        the resolution order is one for all — `zone_config.resolve_profile` (the EWMH workspace
+        number it also translates into the config numbering from 1). No profile on disk —
+        **fallback to the next level** with a log entry: a layout on a screen
+        without a profile is still needed, refusing to work is worse than the common zone set.
         """
         zc = zone_config_module()
         monitor_map = self._monitor_map()
@@ -886,7 +886,7 @@ class Daemon:
         return self.grid
 
     def _monitor_map(self):
-        """`[monitors]` активного конфига (выход → профиль); кэш на reload."""
+        """`[monitors]` of the active config (output → profile); cached per reload."""
         if self._monitor_map_cache is None:
             try:
                 self._monitor_map_cache = dict(
@@ -902,7 +902,7 @@ class Daemon:
         return self._monitor_map_cache
 
     def _workspace_map(self):
-        """`[workspaces]` активного конфига (стол с 1 → профиль); кэш на reload."""
+        """`[workspaces]` of the active config (workspace from 1 → profile); cached per reload."""
         if self._workspace_map_cache is None:
             try:
                 self._workspace_map_cache = dict(
@@ -918,12 +918,12 @@ class Daemon:
         return self._workspace_map_cache
 
     def _outputs(self):
-        """[(имя выхода, рабочая область)] с кэшем; отказ — пустой список.
+        """[(output name, work area)] with caching; a failure gives an empty list.
 
-        Имя выхода (`HDMI-1`) адресует профиль в `[monitors]`, а рабочая область
-        — то, что демон и так знает про монитор окна. `monitor_outputs` через
-        `fail()` бросает `SystemExit` при отказе X-сервера (не подкласс
-        `Exception`), поэтому ловятся оба; неудачу не кэсим.
+        The output name (`HDMI-1`) addresses the profile in `[monitors]`, and the work area
+        is what the daemon already knows about the window's monitor. `monitor_outputs` through
+        `fail()` raises `SystemExit` when the X server refuses (not a subclass of
+        `Exception`), so both are caught; a failure is not cached.
         """
         if self._outputs_cache is None:
             try:
@@ -941,11 +941,11 @@ class Daemon:
         return self._outputs_cache
 
     def _output_for(self, wa):
-        """Имя выхода монитора с рабочей областью `wa` (`HDMI-1`); нет — `None`.
+        """The output name of the monitor with work area `wa` (`HDMI-1`); `None` if there is none.
 
-        `None` — экран не привязан (`[monitors]` пуст) или выход не сопоставился
-        с рабочей областью. Тогда `xrandr` вовсе не зовётся, а разбор профиля
-        идёт следующим уровнем (стол/активный конфиг).
+        `None` — the screen is not bound (`[monitors]` is empty) or the output did not match
+        the work area. Then `xrandr` is not called at all, and the profile is resolved
+        by the next level (workspace/active config).
         """
         if wa is None or not self._monitor_map():
             return None
@@ -959,7 +959,7 @@ class Daemon:
         return None
 
     def _forced_workarea(self):
-        """Принудительная одна рабочая область; `None`, если её не получить."""
+        """A forced single work area; `None` if it cannot be obtained."""
         if self._wa_cache is None:
             try:
                 wa = self.workarea() if callable(self.workarea) else self.workarea
@@ -972,13 +972,13 @@ class Daemon:
         return self._wa_cache
 
     def _monitor_scale_now(self):
-        """Отпечаток масштабов мониторов; `None` — их не спросить.
+        """The fingerprint of monitor scales; `None` — they cannot be asked.
 
-        Читается дёшево (GDK, `Gdk.Monitor.get_scale_factor()`) и без
-        подпроцессов, в отличие от самих рабочих областей, и потому годится в
-        проверку на каждом обращении к кэшу: масштаб меняется в настройках
-        экрана, и ждать `reload` пользователю не за чем. Сбой чтения масштаба —
-        не ошибка: тогда отпечатка нет и кэш живёт, как жил.
+        Read cheaply (GDK, `Gdk.Monitor.get_scale_factor()`) and without
+        subprocesses, unlike the work areas themselves, and therefore good for
+        a check on every cache access: the scale changes in the screen settings,
+        and the user has no reason to wait for `reload`. A scale read failure is
+        not an error: then there is no fingerprint and the cache lives on as it did.
         """
         try:
             scales = (
@@ -996,18 +996,18 @@ class Daemon:
             return None
 
     def _drop_stale_caches(self):
-        """Забыть рабочие области, если масштаб мониторов сменился на лету.
+        """Forget the work areas if the monitor scale changed on the fly.
 
-        Рабочая область GDK меняется вместе с масштабом (`GDK_SCALE=2` — вдвое
-        меньше), а окно двигается в физических пикселях X: без сброса демон до
-        `reload` клал бы окна по старым пикселям. Резерв `workarea` тут не
-        исключение — у него тот же одиночный кэш `_wa_cache`.
+        The GDK work area changes together with the scale (`GDK_SCALE=2` — half
+        as much), while the window moves in X physical pixels: without the reset the daemon would
+        place windows by the old pixels until `reload`. The `workarea` stand-in is no
+        exception here — it has the same single cache `_wa_cache`.
         """
         scale_now = self._monitor_scale_now()
         if scale_now is None:
             return
         if self._mons_scale is None:
-            self._mons_scale = scale_now  # кэшей ещё нет — запоминаем отпечаток
+            self._mons_scale = scale_now  # no caches yet — remember the fingerprint
             return
         if scale_now == self._mons_scale:
             return
@@ -1017,14 +1017,14 @@ class Daemon:
         self._mons_scale = scale_now
 
     def _monitors(self):
-        """Список рабочих областей мониторов, закэшированный.
+        """The list of monitor work areas, cached.
 
-        `tiler.monitors()` через `fail()` бросает `SystemExit` при отказе
-        X-сервера — это не подкласс `Exception`. Ошибку демон переживает:
-        логирует и возвращает `None`, а вызывающий пропускает применение.
-        Неудачу не кэсим, успех — кэсим. `KeyboardInterrupt` не перехватывается.
+        `tiler.monitors()` through `fail()` raises `SystemExit` when the
+        X server refuses — that is not a subclass of `Exception`. The daemon survives the error:
+        it logs it and returns `None`, and the caller skips the placement.
+        A failure is not cached, a success is. `KeyboardInterrupt` is not caught.
 
-        Масштаб, сменившийся на лету, сбрасывает кэш (см. `_drop_stale_caches`).
+        A scale changed on the fly resets the cache (see `_drop_stale_caches`).
         """
         self._drop_stale_caches()
         if self._mons_cache is None:
@@ -1040,12 +1040,12 @@ class Daemon:
         return self._mons_cache
 
     def _monitor_of(self, win):
-        """Рабочая область монитора окна; `None`, если её не определить.
+        """The work area of the monitor of a window; `None` if it cannot be determined.
 
-        При заданном `workarea` всегда возвращается она (одноэкранный режим).
-        Иначе берётся область, содержащая центр окна; если центр не попал ни в
-        одну — ближайшая по центру. Неизвестное положение окна (`xwininfo`
-        не ответил) даёт `None`: лучше не трогать окно, чем угадать монитор 0.
+        With `workarea` set it is always returned (single-screen mode).
+        Otherwise the area containing the window centre is taken; if the centre fell into none
+        of them — the nearest by centre. An unknown window position (`xwininfo`
+        did not answer) gives `None`: it is better not to touch the window than to guess monitor 0.
         """
         if self.workarea is not None:
             self._drop_stale_caches()
@@ -1067,31 +1067,31 @@ class Daemon:
         return monitor_for_point(monitors, point)
 
     def _default_apply(self, win, rect, label="", quiet=False):
-        """Замыкание по умолчанию: вкладывает окно через общее X-соединение демона.
+        """The default closure: places a window through the daemon's shared X connection.
 
-        `self.x11` может быть задано позже (`serve` ставит его перед
-        реконсиляцией), поэтому берётся из атрибута в момент вызова, а не
-        запоминается. Подменённый `apply` это замыкание не задевает.
+        `self.x11` may be set later (`serve` sets it before
+        reconciliation), so it is taken from the attribute at call time rather than
+        remembered. A substituted `apply` does not touch this closure.
         """
         tiler.apply_zone(win, rect, label=label, quiet=quiet, x11=self.x11)
 
     def _apply(self, win, rect, zone):
-        """Вложить окно, не уронив долгоживущий демон из-за одной ошибки.
+        """Place a window without bringing the long-lived daemon down over one error.
 
-        Ловим и `SystemExit`: `fail()` в layout-коде бросает его при отказе
-        X-сервера (например, исчерпаны соединения), а он не подкласс
-        `Exception`. `KeyboardInterrupt` не перехватываем. Удачная укладка
-        запоминается: позже по её рамке видно, что окно вышло из зоны.
+        `SystemExit` is caught too: `fail()` in the layout code raises it when the
+        X server refuses (for example, connections are exhausted), and it is not a subclass of
+        `Exception`. `KeyboardInterrupt` is not caught. A successful placement
+        is remembered: later its frame shows that the window left the zone.
 
-        `window-moved` отсюда не шлётся: у этой воронки нет новых координат
-        окна (монитор и стол в трекер пишет вызывающий после `_apply`), а у
-        большинства вызовов зона и не меняется — выравнивание вкладок, возврат
-        reflow-держателя, возврат единственной вкладке всей зоны. Переезд
-        сообщает `_settle_in_zone`: она знает и прежнюю зону, и новую.
+        `window-moved` is not sent from here: this funnel has no new window
+        coordinates (the caller writes the monitor and the workspace to the tracker after `_apply`), and
+        for most calls the zone does not change either — aligning tabs, returning the
+        reflow holder, returning the whole zone to a single tab. A move
+        is reported by `_settle_in_zone`: it knows both the previous zone and the new one.
         """
         try:
             self.apply(win, rect, label=zone, quiet=True)
-        except (Exception, SystemExit) as exc:  # окно могло исчезнуть/отказ X
+        except (Exception, SystemExit) as exc:  # the window could have vanished / X could have refused
             self.log(
                 _("failed to place window 0x{win:x} into zone '{zone}': {exc}").format(
                     win=win, zone=zone, exc=exc
@@ -1101,10 +1101,10 @@ class Daemon:
         self._remember_placement(win, rect)
         return True
 
-    # -- память об укладках
+    # -- placement memory
 
     def _read_rect(self, win):
-        """Текущая рамка окна; `None`, если её не прочитать (нет X, окно ушло)."""
+        """The current frame of a window; `None` if it cannot be read (no X, the window is gone)."""
         try:
             rect = self.read_rect(win)
         except (Exception, SystemExit) as exc:
@@ -1122,13 +1122,13 @@ class Daemon:
             return None
 
     def _remember_placement(self, win, rect):
-        """Запомнить рамку укладки: по ней видно, что окно вышло из зоны.
+        """Remember the placement frame: it shows that the window left the zone.
 
-        Берётся фактическая рамка (рамку мог поправить WM), а если её не
-        прочитать — запрошенная. WM применяет `_NET_MOVERESIZE_WINDOW` не
-        мгновенно, поэтому несовпавшую рамку перечитываем ещё раз: иначе окно,
-        которое демон только что уложил, тут же сочли бы «вышедшим из зоны».
-        Файл состояния пишут вызывающие, когда трекер уже обновлён.
+        The actual frame is taken (the WM may have corrected the frame), and if it cannot be
+        read — the requested one. The WM applies `_NET_MOVERESIZE_WINDOW` not
+        instantly, so a frame that does not match is re-read once more: otherwise a window
+        the daemon has just placed would be considered "out of the zone" right away.
+        The state file is written by the callers, once the tracker is already updated.
         """
         frame = self._read_rect(win)
         if frame is not None and not frame_matches(frame, rect):
@@ -1140,7 +1140,7 @@ class Daemon:
         self.detached.pop(win, None)
 
     def _placement_record(self, win, frame):
-        """Запись об укладке для файла состояния."""
+        """A placement record for the state file."""
         wa = self.win_monitor.get(win)
         return {
             "frame": [int(v) for v in frame],
@@ -1151,7 +1151,7 @@ class Daemon:
         }
 
     def _save_state(self):
-        """Сохранить память об укладках (сбой записи демон не роняет)."""
+        """Save the placement memory (a write failure does not bring the daemon down)."""
         if not self.state_path:
             return
         state = {
@@ -1168,11 +1168,11 @@ class Daemon:
             )
 
     def _detach(self, win):
-        """Снять окно с трекера: оно больше не в своей зоне (пользователь вынес).
+        """Drop a window from the tracker: it is no longer in its zone (the user moved it out).
 
-        Зона освобождается (записи `filled` на окно-держателя снимаются), окно
-        уходит в `detached` — само оно уже не вернётся ни на новом появлении,
-        ни после перезапуска демона (пока XID не сменится).
+        The zone is freed (`filled` records pointing at the holder are dropped), the window
+        goes to `detached` — it will not come back by itself, neither on a new appearance
+        nor after a daemon restart (until the XID changes).
         """
         zone = self.windows.pop(win, None)
         if zone is None:
@@ -1198,13 +1198,13 @@ class Daemon:
         )
 
     def _drop_coverage(self, win):
-        """Снять покрытия, где держателем было `win`: окно сдвинули из зоны.
+        """Drop the coverages held by `win`: the window was moved out of the zone.
 
-        `filled` — книга «кто расширился на чужую зону». Держателя сдвинули
-        (стопка переставила его на общую рамку, он остался единственной
-        вкладкой, он вышел из зоны или его закрыли) — запись о покрытой зоне
-        больше не правда, и `status.filled` не должен её показывать. Геометрия
-        от этого не едет: запись снялась бы и позже, когда зону займут заново.
+        `filled` is the book of "who expanded over someone else's zone". The holder was moved
+        (the stack put it on the shared frame, it stayed the only
+        tab, it left the zone or it was closed) — the record of the covered zone
+        is no longer true, and `status.filled` must not show it. The geometry
+        does not drift because of this: the record would be dropped later anyway, when the zone is taken again.
         """
         dropped = False
         for key, holder in list(self.filled.items()):
@@ -1214,16 +1214,16 @@ class Daemon:
         return dropped
 
     def _refresh_detached(self):
-        """Заметить окна, которые пользователь вынес из своих зон.
+        """Notice the windows the user moved out of their zones.
 
-        Сравнивается текущая рамка окна с той, что демон применил: разошлась
-        больше допуска — окно ушло. Его записи снимаются, зона освобождается для
-        reflow, и заново демон его не укладывает. Рамка не читается — считаем,
-        что окно на месте (не двигать хуже, чем пропустить переезд).
+        The current frame of the window is compared with the one the daemon applied: it differs
+        by more than the tolerance — the window is gone. Its records are dropped, the zone is freed for
+        reflow, and the daemon does not place it again. The frame cannot be read — we assume
+        the window is in place (not moving is worse than missing a move).
         """
         for win in list(self.windows):
             if not self._visible(self.win_workspace.get(win)):
-                continue  # окно невидимого стола не двигаем — и ушедшим не считаем
+                continue  # we do not move a window of an invisible workspace — nor count it as gone
             placed = self.placed.get(win)
             if placed is None:
                 continue
@@ -1234,11 +1234,11 @@ class Daemon:
                 self._detach(win)
 
     def _zone_rect_for(self, win, record):
-        """Рамка зоны записи на её мониторе; `None` — не посчитать.
+        """The frame of a record's zone on its monitor; `None` — cannot be computed.
 
-        Нужна, чтобы отличить «окно стоит в своей зоне» от «окно расширено
-        reflow на соседнюю»: во втором случае записанная рамка — объединение, а
-        не зона.
+        Needed to tell "the window stands in its zone" from "the window is expanded
+        by reflow onto the neighbour": in the second case the recorded frame is a union, not
+        a zone.
         """
         wa = tuple(record["monitor"]) if record.get("monitor") else None
         if wa is None:
@@ -1257,14 +1257,14 @@ class Daemon:
             return None
 
     def _adopt_placement(self, win, record):
-        """Учесть запись прошлого запуска: усыновить окно или пометить ушедшим.
+        """Take a record of the previous run into account: adopt the window or mark it gone.
 
-        Рамка совпала с запомненной — окно всё ещё там, куда его положили: берём
-        под присмотр без `apply`. Разошлась — пользователь его вынес, и демон
-        больше окно не двигает. Если записанная рамка — не зона, а объединение с
-        соседней (расширенный reflow сосед), окно тоже возвращается в свою зону
-        через `on_map`. `False` — запись не про это окно (XID переиспользован
-        другим приложением или класс не сошёлся): окно идёт обычным путём
+        The frame matched the remembered one — the window is still where it was put: we take it
+        under watch without `apply`. It differs — the user moved it out, and the daemon
+        no longer moves the window. If the recorded frame is not a zone but a union with
+        the neighbour (a neighbour expanded by reflow), the window is returned to its zone
+        through `on_map` too. `False` — the record is not about this window (the XID was reused
+        by another application or the class did not match): the window takes the usual path
         `on_map`.
         """
         try:
@@ -1284,10 +1284,10 @@ class Daemon:
         if actual is not None and frame_matches(actual, record["frame"]):
             zone_rect = self._zone_rect_for(win, record)
             if zone_rect is not None and not self._in_zone_frame(actual, zone_rect):
-                # Рамка не своя зона: это сосед, расширенный reflow, а книга
-                # покрытий (`filled`) в файле состояния не живёт. Даём окну
-                # пройти обычный путь `on_map` — правило вернёт его в зону из
-                # конфига, и новое окно не ляжет поверх.
+                # The frame is not its own zone: this is a neighbour expanded by reflow, and the
+                # book of coverages (`filled`) does not live in the state file. We let the window
+                # take the usual path `on_map` — the rule returns it into the zone from
+                # the config, and the new window does not land on top.
                 self.log(
                     _(
                         "window 0x{win:x} is not in its zone '{zone}' - laying it out by the rule"
@@ -1315,24 +1315,24 @@ class Daemon:
         return True
 
     def _in_zone_frame(self, actual, zone_rect):
-        """Стоит ли окно в своей зоне: на рамке зоны или на общей рамке вкладок.
+        """Whether the window stands in its zone: on the zone frame or on the shared frame of tabs.
 
-        Рамка вкладки — та же зона минус полоса. Без этой проверки память
-        укладок решила бы, что окно-вкладку вынесли из зоны, и вернула его
-        обратно на рамку зоны (а с ним и всю стопку).
+        The tab frame is the same zone minus the strip. Without this check the placement
+        memory would decide that a tab window was moved out of the zone and would return it
+        back to the zone frame (and the whole stack with it).
         """
         if frame_matches(actual, zone_rect):
             return True
         return frame_matches(actual, self._tab_frame(zone_rect))
 
     def _apply_pending(self, current):
-        """Разобрать память прошлого запуска по текущему списку клиентов."""
+        """Resolve the memory of the previous run against the current list of clients."""
         pending, self._pending = self._pending, {}
         if not pending:
             return
         for win, record in pending.items():
             if win not in current:
-                continue  # окно закрылось, пока демон не работал
+                continue  # the window closed while the daemon was not running
             if not self._adopt_placement(win, record):
                 self.log(
                     _("the record of 0x{win:x} no longer fits - laying it out by the rule").format(
@@ -1341,7 +1341,7 @@ class Daemon:
                 )
 
     def _prune_state(self, current):
-        """Забыть окна, которых больше нет в `_NET_CLIENT_LIST`."""
+        """Forget the windows that are no longer in `_NET_CLIENT_LIST`."""
         dropped = False
         for win in list(self.placed):
             if win not in current:
@@ -1356,9 +1356,9 @@ class Daemon:
             self._save_state()
 
     def _window_for_zone(self, zone, wa=None):
-        """Окно в зоне `zone` на видимом столе; при `wa` — именно на этой области.
+        """A window in zone `zone` on a visible workspace; with `wa` — exactly in this area.
 
-        Окна других столов не кандидаты: reflow двигает только видимый стол.
+        Windows of other workspaces are not candidates: reflow moves only the visible workspace.
         """
         for win, occupied in self.windows.items():
             if occupied != zone:
@@ -1371,31 +1371,31 @@ class Daemon:
         return None
 
     def _restore_holder(self, workspace, wa, zone):
-        """Вернуть соседа, расширившегося на `zone`, к его рамке из конфига.
+        """Return the neighbour that expanded onto `zone` to its frame from the config.
 
-        `zone` на рабочей области `wa` занята новым окном стола `workspace`,
-        поэтому покрытие больше не нужно. Покрытие живёт на видимом столе
-        (reflow туда и только туда), поэтому окно другого стола его не трогает.
-        Если окна-держателя уже нет в трекере, запись снимается без
-        перемещений. При неудачном `apply` запись остаётся: попробуем при
-        следующем окне.
+        `zone` in work area `wa` is taken by a new window of workspace `workspace`,
+        so the coverage is no longer needed. Coverage lives on the visible workspace
+        (reflow goes there and only there), so a window of another workspace does not touch it.
+        If the holder window is no longer in the tracker, the record is dropped without
+        any moves. On a failed `apply` the record stays: we will try again on
+        the next window.
         """
         if not self._visible(workspace):
-            return  # окно невидимого стола: покрытие видимого стола не наше
+            return  # a window of an invisible workspace: the visible workspace's coverage is not ours
         key = (self.workspace, wa, zone)
         holder = self.filled.get(key)
         if holder is None:
             return
         holder_zone = self.windows.get(holder)
         holder_workspace = self.win_workspace.get(holder)
-        # Профиль — того экрана, где стоит окно-держатель (reflow живёт на `wa`).
+        # The profile is that of the screen where the holder window stands (reflow lives on `wa`).
         grid = self._grid_for(holder_workspace, self._output_for(wa))
         if holder_zone is None or holder_zone not in grid.all_zone_names():
-            # Держателя нет или его зоны больше нет в наборе — покрытие снимаем.
+            # No holder, or its zone is no longer in the set — we drop the coverage.
             del self.filled[key]
             return
-        # Рамка возврата — по числу вкладок стопки: окно-вкладка возвращается на
-        # общую рамку зоны, а не на всю её площадь.
+        # The return frame follows the tab count of the stack: a tab window returns to
+        # the shared frame of the zone, not to its whole area.
         count = len(self._zone_stack(holder_zone, wa, holder_workspace))
         rect = self._stack_rect(holder_zone, wa, holder_workspace, count, grid=grid)
         if self._apply(holder, rect, holder_zone):
@@ -1407,15 +1407,15 @@ class Daemon:
                 )
             )
 
-    # -- вкладки в зоне
+    # -- tabs in a zone
 
     def _client_order(self, client_ids=None):
-        """id клиентов в порядке `_NET_CLIENT_LIST` — снизу вверх.
+        """Client ids in `_NET_CLIENT_LIST` order — bottom to top.
 
-        Список читает демон (только он его видит); недоступен — берётся
-        порядок трекера, чтобы одна неудача xprop не рвала стопки на части.
-        `client_ids` — уже прочитанный список (его же читает `reconcile`):
-        тогда лишнего запроса к X нет.
+        The list is read by the daemon (only it sees it); if unavailable — the tracker
+        order is taken, so that one xprop failure does not tear stacks apart.
+        `client_ids` is an already read list (`reconcile` reads the same one):
+        then there is no extra request to X.
         """
         clients = []
         try:
@@ -1430,7 +1430,7 @@ class Daemon:
         return order
 
     def _tracked_order(self, client_ids=None):
-        """Уложенные окна видимого стола в порядке `_NET_CLIENT_LIST` (снизу вверх)."""
+        """Placed windows of the visible workspace in `_NET_CLIENT_LIST` order (bottom to top)."""
         return [
             win
             for win in self._client_order(client_ids)
@@ -1438,50 +1438,50 @@ class Daemon:
         ]
 
     def _frames(self, windows):
-        """`{окно: рамка}` в заданном порядке; нечитаемая рамка — `None`.
+        """`{window: frame}` in the given order; an unreadable frame is `None`.
 
-        Словарь в Python хранит порядок вставки, поэтому `zone_tabs.tabs_of_zone`
-        видит окна именно в порядке `_NET_CLIENT_LIST`.
+        A dict in Python keeps insertion order, so `zone_tabs.tabs_of_zone`
+        sees the windows exactly in `_NET_CLIENT_LIST` order.
         """
         return {win: self._read_rect(win) for win in windows}
 
     def _zone_pixel_rect(self, zone, wa, workspace=None, grid=None):
-        """Пиксельная рамка зоны на мониторе `wa` (сетка — по экрану или заданная).
+        """The pixel frame of a zone on monitor `wa` (the grid comes from the screen or is given).
 
-        Без явной сетки профиль разрешается по **этому** монитору: у экрана
-        может быть свой профиль, и чужая геометрия тут не годится.
+        Without an explicit grid the profile is resolved for **this** monitor: a screen
+        may have its own profile, and foreign geometry does not fit here.
         """
         grid = grid or self._grid_for(workspace, self._output_for(wa))
         return tuple(int(round(v)) for v in grid.rect(zone, wa))
 
     def _tab_frame(self, zone_rect):
-        """Рамка окна-вкладки: зона минус полоса (узкая зона — сама зона)."""
+        """The frame of a tab window: the zone minus the strip (a narrow zone — the zone itself)."""
         return tuple(
             int(round(v)) for v in zone_tabs.tab_rect(zone_rect, self.tabs_height)
         )
 
     def _stack_rect(self, zone, wa, workspace=None, count=1, grid=None):
-        """Рамка окна зоны: вся зона до двух вкладок, дальше — зона минус полоса.
+        """The frame of a zone window: the whole zone up to two tabs, beyond that the zone minus the strip.
 
-        Полоса отнимает высоту у окон только когда вкладок больше одной: одно
-        окно занимает зону целиком, как до вкладок.
+        The strip takes height away from the windows only when there is more than one tab: a single
+        window occupies the whole zone, as before tabs.
         """
         rect = self._zone_pixel_rect(zone, wa, workspace, grid)
-        # Правило «одна вкладка — вся зона» берётся из ядра — то же, что у
-        # раскладчика (`zone-tiler.in_zone_rect`), иначе `apply` и `arrange`
-        # разойдутся на одном и том же числе окон.
+        # The "one tab — the whole zone" rule comes from the core — the same as in
+        # the tiler (`zone-tiler.in_zone_rect`), otherwise `apply` and `arrange`
+        # would diverge on the very same number of windows.
         return tuple(
             int(round(v)) for v in zone_tabs.stack_rect(rect, count, self.tabs_height)
         )
 
     def _zone_stack(self, zone, wa, workspace=None, exclude=()):
-        """Окна стопки зоны `zone` — в порядке `_NET_CLIENT_LIST` (снизу вверх).
+        """The windows of the stack of zone `zone` — in `_NET_CLIENT_LIST` order (bottom to top).
 
-        Стопка — окна одной зоны, одного монитора и одного стола: без этого в
-        неё попало бы окно соседнего экрана или другого стола, и переключение
-        подняло бы чужое. «Липкое»/неопознанное окно (`workspace is None`) не
-        спорит с столом зоны — она живёт в наборе по умолчанию и видна везде.
-        `wa is None` — монитор не задан (тесты, окно без рабочей области).
+        A stack is windows of one zone, one monitor and one workspace: without that a
+        window of a neighbouring screen or of another workspace would get into it, and a switch
+        would raise a foreign one. A "sticky"/unidentified window (`workspace is None`) does not
+        clash with the zone workspace — it lives in the default set and is visible everywhere.
+        `wa is None` — the monitor is not given (tests, a window without a work area).
         """
         skip = set(exclude)
         out = []
@@ -1497,10 +1497,10 @@ class Daemon:
         return out
 
     def _align_stack(self, stack, rect):
-        """Переставить уже стоящие вкладки на общую рамку: полоса появилась/ушла.
+        """Move the already standing tabs onto the shared frame: the strip appeared/disappeared.
 
-        Сдвинутое окно перестаёт быть держателем покрытия: его зона-покрытие
-        больше не за ним, и запись снимается здесь же (`_drop_coverage`).
+        A moved window stops being a coverage holder: the coverage zone
+        is no longer behind it, and the record is dropped right here (`_drop_coverage`).
         """
         for win in stack:
             if self._apply(win, rect, self.windows.get(win)):
@@ -1512,16 +1512,16 @@ class Daemon:
                 )
 
     def _settle_in_zone(self, win, zone, wa, workspace, wm_class="", grid=None):
-        """Поставить окно вкладкой в зону и выровнять стопку.
+        """Place a window as a tab in a zone and align the stack.
 
-        Рамка считается по числу вкладок, которое станет после укладки: первое
-        окно — вся зона, второе — общая рамка вкладок, и тогда же переставляется
-        уже стоявшее окно (полоса появилась, окно стало ниже на её высоту).
-        Окно, переехавшее из другой зоны, оставляет за собой одну оставшуюся
-        вкладку — ей возвращается вся зона (`_collapse_stack`).
+        The frame is computed from the tab count that will be there after the placement: the first
+        window — the whole zone, the second — the shared tab frame, and right then the
+        window already standing there is moved (the strip appeared, the window got lower by its height).
+        A window that moved in from another zone leaves a single remaining
+        tab behind — it gets the whole zone back (`_collapse_stack`).
 
-        Возвращает рамку, в которую легло окно, или `None` — уложить не вышло
-        (тогда трекер не трогается: зону занятой не считаем).
+        Returns the frame the window landed in, or `None` — the placement did not work
+        (then the tracker is not touched: the zone is not considered taken).
         """
         previous = (
             self.windows.get(win),
@@ -1532,7 +1532,7 @@ class Daemon:
         rect = self._stack_rect(zone, wa, workspace, len(stack) + 1, grid=grid)
         if not self._apply(win, rect, zone):
             return None
-        # Окно переехало — покрытия, которые оно держало, больше не его.
+        # The window moved — the coverages it held are no longer its own.
         self._drop_coverage(win)
         self.windows[win] = zone
         self.win_monitor[win] = wa
@@ -1540,9 +1540,9 @@ class Daemon:
         self.win_class[win] = wm_class
         self._align_stack(stack, rect)
         if previous[0] is not None and previous[0] != zone:
-            # Окно действительно сменило зону (`apply`/`focus` командой,
-            # `arrange`) — это и есть `window-moved`. Выравнивание вкладок и
-            # расширение reflow зону не меняют, поэтому молчат.
+            # The window really changed zone (by an `apply`/`focus` command,
+            # `arrange`) — that is a `window-moved`. Aligning tabs and
+            # a reflow expansion do not change the zone, so they stay silent.
             self._emit(
                 "window-moved",
                 lambda: zone_ipc.event_window_moved(
@@ -1555,11 +1555,11 @@ class Daemon:
         return rect
 
     def _collapse_stack(self, zone, wa, workspace):
-        """Вернуть единственной оставшейся вкладке зону целиком.
+        """Give the whole zone back to the single remaining tab.
 
-        Полоса — признак стопки: ушла предпоследняя вкладка — полосы нет, и
-        окно снова занимает всю зону. `False` — в стопке не одна вкладка (или
-        двигать нельзя: невидимый стол, нет монитора).
+        The strip marks a stack: the next-to-last tab is gone — there is no strip, and
+        the window occupies the whole zone again. `False` — the stack does not hold one tab (or
+        moving is not allowed: an invisible workspace, no monitor).
         """
         if wa is None or not self._visible(workspace):
             return False
@@ -1570,8 +1570,8 @@ class Daemon:
         rect = self._zone_pixel_rect(zone, wa, workspace)
         if not self._apply(win, rect, zone):
             return False
-        # Единственная вкладка сдвинулась на всю зону — держателем покрытия она
-        # быть перестала (`_drop_coverage`), иначе `status.filled` врёт.
+        # The single tab moved onto the whole zone — it has stopped being a coverage
+        # holder (`_drop_coverage`), otherwise `status.filled` lies.
         self._drop_coverage(win)
         self._save_state()
         self.log(
@@ -1582,12 +1582,12 @@ class Daemon:
         return True
 
     def tabs_in_zone(self, zone, wa, workspace=None, frames=None, grid=None):
-        """Окна-вкладки зоны по рамкам (снизу вверх) — `zone_tabs.tabs_of_zone`.
+        """The tab windows of a zone by frames (bottom to top) — `zone_tabs.tabs_of_zone`.
 
-        `frames` — `{окно: рамка}` в порядке `_NET_CLIENT_LIST`; по умолчанию
-        читаются рамки уложенных окон видимого стола. Вкладка — окно, чья рамка
-        совпала с общей (зона минус полоса, допуск `zone_tabs.FRAME_TOLERANCE`):
-        одно окно стоит на рамке зоны целиком и стопкой не считается.
+        `frames` — `{window: frame}` in `_NET_CLIENT_LIST` order; by default
+        the frames of the placed windows of the visible workspace are read. A tab is a window whose frame
+        matched the shared one (the zone minus the strip, tolerance `zone_tabs.FRAME_TOLERANCE`):
+        a single window stands on the whole-zone frame and is not counted as a stack.
         """
         if frames is None:
             frames = self._frames(self._tracked_order())
@@ -1595,7 +1595,7 @@ class Daemon:
         return zone_tabs.tabs_of_zone(frames, tab_frame)
 
     def _window_title(self, win):
-        """Заголовок окна для полосы; не прочитан — пустая строка."""
+        """The window title for the strip; not read — an empty string."""
         try:
             return getattr(self.read_meta(win), "wm_title", "") or ""
         except (Exception, SystemExit) as exc:
@@ -1607,7 +1607,7 @@ class Daemon:
             return ""
 
     def _active_window(self):
-        """Активное окно (`_NET_ACTIVE_WINDOW`); `None` — не прочитать."""
+        """The active window (`_NET_ACTIVE_WINDOW`); `None` — cannot be read."""
         try:
             active = self.active_window()
         except (Exception, SystemExit) as exc:
@@ -1616,13 +1616,13 @@ class Daemon:
         return None if active is None else int(active)
 
     def tabs_picture(self, client_ids=None):
-        """Записи снимка для полосы — только зоны текущего рабочего стола.
+        """Snapshot records for the strip — only zones of the current workspace.
 
-        На других столах окон не видно, и подсказка «здесь стопка» там не нужна.
-        Активная вкладка — та, в которой активное окно; активное окно вне
-        стопки — верхняя (полоса всё равно должна что-то подсветить). Записи
-        строит `zone_tabs.strip_record`: одна вкладка и узкая зона дают `None`
-        (полосы нет), и такие записи в снимок не попадают.
+        On other workspaces no windows are visible, and the "a stack lives here" hint is not needed there.
+        The active tab is the one holding the active window; an active window outside
+        the stack — the top one (the strip has to highlight something anyway). The records
+        are built by `zone_tabs.strip_record`: a single tab and a narrow zone give `None`
+        (no strip), and such records do not make it into the snapshot.
         """
         workspace = self.workspace
         monitors = self._monitor_list()
@@ -1632,7 +1632,7 @@ class Daemon:
         active = self._active_window()
         records = []
         for wa in monitors:
-            # У каждого экрана свой профиль, поэтому и зоны — свой набор.
+            # Every screen has its own profile, hence its own set of zones.
             grid = self._grid_for(workspace, self._output_for(wa))
             for zone in sorted(grid.zones):
                 zone_rect = self._zone_pixel_rect(zone, wa, workspace, grid)
@@ -1653,20 +1653,20 @@ class Daemon:
         return records
 
     def _normalize_stacks(self, client_ids=None):
-        """Привести рамки стопок к числу вкладок — по зонам видимого стола.
+        """Bring stack frames in line with the tab count — over the zones of the visible workspace.
 
-        Правило «осталась одна вкладка — ей вся зона» живёт в ядре
-        (`zone_tabs.stack_rect`), но применяется не только при укладке и
-        закрытии: окно уходит из стопки руками (`_refresh_detached`) или вторая
-        вкладка не возвращается после перезапуска демона (`_adopt_placement` и
-        `_in_zone_frame`, который считает рамку вкладки «окно в зоне»). Тогда
-        оставшееся окно стоит на рамке вкладки — на высоту полосы ниже, с пустой
-        полосой сверху. Один проход по зонам вместо россыпи вызовов
-        `_collapse_stack` возвращает таким окнам рамку по числу вкладок.
+        The "one tab left — it gets the whole zone" rule lives in the core
+        (`zone_tabs.stack_rect`), but it applies not only on placement and
+        closing: a window leaves the stack by hand (`_refresh_detached`) or the second
+        tab does not come back after a daemon restart (`_adopt_placement` and
+        `_in_zone_frame`, which counts the tab frame as "the window is in the zone"). Then
+        the remaining window stands on the tab frame — a strip height lower, with an empty
+        strip above. One pass over the zones instead of a scatter of
+        `_collapse_stack` calls gives such windows their frame by the tab count.
 
-        Двигаются только окна, стоящие на рамке вкладки при единственной
-        вкладке в зоне: окно на своей зоне и расширенный reflow-держатель (его
-        рамка — объединение зон) не трогаются. `True` — что-то переставили.
+        Only windows standing on the tab frame with a single
+        tab in the zone are moved: a window on its own zone and an expanded reflow holder (its
+        frame is a union of zones) are not touched. `True` — something was moved.
         """
         if self.workspace is None:
             return False
@@ -1678,7 +1678,7 @@ class Daemon:
                 continue
             if not self._visible(self.win_workspace.get(win)):
                 continue
-            # Зона ищется в профиле того экрана, где стоит окно.
+            # The zone is looked up in the profile of the screen where the window stands.
             grid = self._grid_for(self.workspace, self._output_for(wa))
             if zone not in grid.all_zone_names():
                 continue
@@ -1692,15 +1692,15 @@ class Daemon:
             zone_rect = self._zone_pixel_rect(zone, wa, self.workspace, grid)
             tab_frame = self._tab_frame(zone_rect)
             if tab_frame == zone_rect:
-                continue  # узкая зона: полосы нет, рамки вкладки и зоны совпали
-            # Сравниваем с памятью укладок, а не с чтением X: до этого прохода
-            # `_refresh_detached` уже сравнил факт с памятью, и раз окно в
-            # трекере — оно там, куда демон его положил (или его не прочитать).
+                continue  # a narrow zone: no strip, the tab frame and the zone frame matched
+            # We compare with the placement memory, not with an X read: before this pass
+            # `_refresh_detached` has already compared the fact with the memory, and since the window is in
+            # the tracker — it is where the daemon put it (or it cannot be read).
             actual = self.placed.get(win)
             if actual is None:
                 actual = self._read_rect(win)
             if actual is None or not frame_matches(actual, tab_frame):
-                continue  # окно не на рамке вкладки — не наше дело
+                continue  # the window is not on the tab frame — not our business
             if not self._apply(win, zone_rect, zone):
                 continue
             self._drop_coverage(win)
@@ -1715,12 +1715,12 @@ class Daemon:
         return moved
 
     def sync_strips(self, client_ids=None):
-        """Отдать полосе полный снимок вкладок; сбой полосы демон не роняет.
+        """Hand the strip a full tab snapshot; a strip failure does not bring the daemon down.
 
-        Снимок — одна строка `zone_tabs.strips_payload` на каждое изменение
-        (не дельта): полосе не надо помнить прошлое. Одинаковые снимки не
-        пишутся дважды — событий много, а меняется картина реже. Без полосы
-        (`strip is None`) метод ничего не стоит и не читает ни X, ни конфиг.
+        The snapshot is one `zone_tabs.strips_payload` line per change
+        (not a delta): the strip does not need to remember the past. Identical snapshots are not
+        written twice — events are many, and the picture changes less often. Without a strip
+        (`strip is None`) the method costs nothing and reads neither X nor the config.
         """
         if self.strip is None:
             return False
@@ -1734,21 +1734,21 @@ class Daemon:
             return False
         self._strips_last = payload
         if not records and not self.strip.running():
-            return False  # рисовать нечего и рисовать некому
+            return False  # there is nothing to draw and nobody to draw for
         try:
             accepted = self.strip.feed(payload)
         except (Exception, SystemExit) as exc:
             self.log(_("tab bar: {exc}").format(exc=exc))
             accepted = False
         if not accepted:
-            # Полоса не приняла снимок (упала/не запустилась): в следующий раз
-            # отдадим тот же снимок заново — уже новому процессу.
+            # The strip did not accept the snapshot (died/did not start): next time
+            # we will hand the same snapshot again — to a new process already.
             self._strips_last = None
             self.log(_("the tab bar did not accept the snapshot"))
         return accepted
 
     def _raise_window(self, win):
-        """Показать окно: `_NET_ACTIVE_WINDOW` через общее соединение демона."""
+        """Show a window: `_NET_ACTIVE_WINDOW` through the daemon's shared connection."""
         try:
             self.deiconify(win, x11=self.x11)
         except (Exception, SystemExit) as exc:
@@ -1759,35 +1759,35 @@ class Daemon:
         self.log(_("window 0x{win:x} raised").format(win=win))
         return True
 
-    # -- IPC: обработчики команд сокета
+    # -- IPC: socket command handlers
 
     def ipc_subscribe(self, request=None):
-        """Подписка на события: после неё соединение только на чтение.
+        """An event subscription: after it the connection is read-only.
 
-        Группы разбирает чистый `zone_ipc.parse_subscription`: без поля `events`
-        подписываемся на всё (`window` + `focus`), пустой список — отказ (иначе
-        опечатка молча дала бы поток, которого клиент не ждал). Возвращается
-        `zone_ipc.Subscription`: транспорт по нему оставляет соединение открытым
-        и кладёт его в `self.subscribers`, а демон туда только пишет. Отписка —
-        закрыть соединение.
+        The groups are parsed by the pure `zone_ipc.parse_subscription`: without the `events`
+        field we subscribe to everything (`window` + `focus`), an empty list is a refusal (otherwise
+        a typo would silently give a stream the client did not expect). Returned is
+        `zone_ipc.Subscription`: the transport keeps the connection open by it
+        and puts it into `self.subscribers`, and the daemon only writes there. Unsubscribing is
+        closing the connection.
         """
         groups = zone_ipc.parse_subscription(request or {})
         self.log(_("event subscription: {groups}").format(groups=", ".join(groups)))
         return zone_ipc.Subscription(groups)
 
     def ipc_arrange(self, request):
-        """Разложить окна по зонам, которые назвал клиент (команда `arrange`).
+        """Lay the windows out into the zones the client named (the `arrange` command).
 
-        Какие окна куда встают, решает раскладчик (`zone-tiler.py arrange` — там
-        же выбор `--by` и история `undo`), а **применяет их демон**: иначе его
-        трекер разошёлся бы с раскладкой (закрытие окна запускало бы reflow не
-        туда), а подписчики не увидели бы `window-moved`. Геометрию считает
-        `_settle_in_zone` — ровно как при появлении окна по правилу, поэтому
-        вкладки и полоса считаются по тому же трекеру.
+        Which windows go where is decided by the tiler (`zone-tiler.py arrange` — the `--by`
+        choice and the `undo` history live there too), and the daemon **applies them**: otherwise its
+        tracker would drift from the layout (closing a window would launch reflow to
+        the wrong place), and the subscribers would not see `window-moved`. The geometry is computed by
+        `_settle_in_zone` — exactly as on a window appearing by a rule, so
+        tabs and the strip are counted against the same tracker.
 
-        Запрос: `{"cmd": "arrange", "workspace": N, "placements": [{"window":
-        "0x…", "zone": …, "monitor": [x, y, w, h]}, …]}` (`monitor` и
-        `workspace` необязательны — берутся у окна и текущий). Ответ:
+        Request: `{"cmd": "arrange", "workspace": N, "placements": [{"window":
+        "0x…", "zone": …, "monitor": [x, y, w, h]}, …]}` (`monitor` and
+        `workspace` are optional — they come from the window and the current one). Answer:
         `{"arranged": [hex…], "skipped": [{"window": …, "error": …}]}`.
         """
         placements = request.get("placements")
@@ -1817,11 +1817,11 @@ class Daemon:
         return {"arranged": arranged, "skipped": skipped}
 
     def _arrange_one(self, item, workspace):
-        """Поставить одно окно из `arrange`: `(окно, None)` или `(окно, отказ)`.
+        """Place one window from `arrange`: `(window, None)` or `(window, refusal)`.
 
-        Отказ одного окна не отменяет остальные: у раскладчика окна могли
-        исчезнуть между чтением списка и командой. Второй элемент — текст отказа
-        (или `None`, если окно легло в зону).
+        A refusal of one window does not cancel the others: at the tiler windows could
+        vanish between reading the list and the command. The second element is the refusal text
+        (or `None` if the window landed in the zone).
         """
         if not isinstance(item, dict):
             return None, _("a placement entry must be an object")
@@ -1868,10 +1868,10 @@ class Daemon:
         return window, None
 
     def build_dispatcher(self):
-        """Диспетчер команд сокета с инъекцией обработчиков демона.
+        """The socket command dispatcher with the daemon handlers injected.
 
-        Конкретные обработчики можно подменить в тестах; сам диспетчер
-        (`zone_ipc.Dispatcher`) не знает ни о X, ни о конфиге.
+        The specific handlers can be substituted in tests; the dispatcher itself
+        (`zone_ipc.Dispatcher`) knows neither about X nor about the config.
         """
         return zone_ipc.Dispatcher(
             {
@@ -1888,31 +1888,31 @@ class Daemon:
         )
 
     def _monitor_list(self):
-        """Рабочие области для команд IPC: принудительная или все мониторы."""
+        """Work areas for IPC commands: the forced one or all monitors."""
         if self.workarea is not None:
             wa = self._forced_workarea()
             return [wa] if wa else []
         return self._monitors() or []
 
     def ipc_status(self, request=None):
-        """Состояние демона: зоны, окно→зона, стол, монитор, профиль, reflow.
+        """The daemon state: zones, window→zone, workspace, monitor, profile, reflow.
 
-        Пиксельные рамки зон даются на каждый монитор (`zones_px`), потому что
-        зона — доля рабочей области, а у монитора своя область.
-        **Наполнение считается по разрешённым профилям**, а не по активному
-        `zones.conf`: у каждого экрана свой профиль (см. `_grid_for`), поэтому
-        `zones` — объединение наборов по экранам (в их порядке), а
-        `zones_px[name][i]` — рамка зоны в профиле монитора `i` (или `None`,
-        если в том профиле такой зоны нет: рисовать её там нечего). Форма
-        ответа при этом прежняя.
+        Pixel zone frames are given per monitor (`zones_px`), because
+        a zone is a share of the work area, and a monitor has its own area.
+        **Fill is computed over the resolved profiles**, not over the active
+        `zones.conf`: every screen has its own profile (see `_grid_for`), so
+        `zones` is the union of the sets of the screens (in their order), and
+        `zones_px[name][i]` is the zone frame in the profile of monitor `i` (or `None`
+        if that profile has no such zone: there is nothing to draw there). The shape
+        of the answer stays the same.
 
-        Поля `windows[].zone/window/monitor` — прежние: апплет и тесты читают
-        их как раньше; `workspace` (номер активного стола и стол каждого окна и
-        покрытия) добавлен рядом, а не вместо. `focus` — режим «только эта
-        зона»: `None` или `{zone, window, minimized (число)}`.
+        The `windows[].zone/window/monitor` fields are unchanged: the applet and the tests read
+        them as before; `workspace` (the active workspace number and the workspace of every window and
+        coverage) is added next to them, not instead. `focus` is the "this
+        zone only" mode: `None` or `{zone, window, minimized (count)}`.
         """
         monitors = self._monitor_list()
-        # Сетка на каждый монитор — ровно та, по которой демон кладёт окна.
+        # The grid per monitor — exactly the one the daemon places windows by.
         grids = [
             self._grid_for(self.workspace, self._output_for(wa)) for wa in monitors
         ]
@@ -1957,16 +1957,16 @@ class Daemon:
             "version": VERSION,
             "conf": self.conf_path,
             "reflow": self.reflow,
-            # Активный рабочий стол (нумерация EWMH с нуля); None — неизвестен.
+            # The active workspace (EWMH numbering from zero); None — unknown.
             "workspace": self.workspace,
-            # Профили раскладок — волна 3; поле есть заранее для совместимости.
+            # Layout profiles — wave 3; the field is there in advance for compatibility.
             "profile": None,
             "monitors": [list(wa) for wa in monitors],
             "zones": zones,
             "zones_px": zones_px,
             "windows": windows,
             "filled": filled,
-            # Режим «только эта зона»: None или зона, цель и число свёрнутых.
+            # The "this zone only" mode: None or the zone, the target and the iconified count.
             "focus": None
             if self.focus is None
             else {
@@ -1977,11 +1977,11 @@ class Daemon:
         }
 
     def _monitor_for_command(self, request, window):
-        """Рабочая область для `apply`: явный номер монитора или монитор окна.
+        """The work area for `apply`: an explicit monitor number or the monitor of the window.
 
-        Без явного `monitor` (и без читаемого положения окна) берётся первый
-        монитор — команду дал пользователь, и отказ хуже приблизительного
-        выбора.
+        Without an explicit `monitor` (and without a readable window position) the first
+        monitor is taken — the user gave the command, and a refusal is worse than an approximate
+        choice.
         """
         monitors = self._monitor_list()
         index = request.get("monitor")
@@ -2000,12 +2000,12 @@ class Daemon:
         return monitors[0] if monitors else None
 
     def _known_zone_names(self):
-        """Имена зон, доступные явным командам: активный конфиг и профили экранов.
+        """Zone names available to explicit commands: the active config and the screen profiles.
 
-        Команда приходит с именем зоны от апплета или раскладчика, а те
-        показывают зоны **разрешённого** профиля — у экрана он может быть свой.
-        Поэтому проверять имя только по активному `zones.conf` нельзя: зона
-        профиля второго экрана была бы отвергнута как несуществующая.
+        A command arrives with a zone name from the applet or the tiler, and they
+        show zones of the **resolved** profile — a screen may have its own.
+        So a name cannot be checked against the active `zones.conf` alone: a zone
+        of the second screen's profile would be rejected as nonexistent.
         """
         names = set(self.grid.all_zone_names())
         for wa in self._monitor_list():
@@ -2014,11 +2014,11 @@ class Daemon:
         return names
 
     def ipc_apply(self, request):
-        """Вложить окно в зону по команде сокета (по умолчанию — активное).
+        """Place a window in a zone by a socket command (by default — the active one).
 
-        Успешная укладка запоминается в трекере демона: закрытие окна затем
-        штатно запускает reflow, а не оставляет призрак. Сетка зоны — профиля
-        того экрана, где стоит окно (см. `_grid_for`).
+        A successful placement is remembered in the daemon tracker: closing the window then
+        triggers reflow as usual instead of leaving a ghost. The zone grid comes from the profile
+        of the screen where the window stands (see `_grid_for`).
         """
         zone = request.get("zone")
         known = self._known_zone_names()
@@ -2030,7 +2030,7 @@ class Daemon:
             )
         window = request.get("window")
         if window is None:
-            window = tiler.active_window()  # нет активного окна -> SystemExit
+            window = tiler.active_window()  # no active window -> SystemExit
         elif isinstance(window, str):
             window = int(window, 0)
         else:
@@ -2056,8 +2056,8 @@ class Daemon:
                     "window 0x{window:x} is excluded ([ignore]/utility window type) - not moving it"
                 ).format(window=window)
             )
-        # Окно вкладывается там, где сейчас пользователь: занятость считаем по
-        # активному столу, а геометрию зоны — по профилю экрана окна.
+        # A window is placed where the user is now: occupancy is counted over the
+        # active workspace, and the zone geometry comes from the profile of the window's screen.
         rect = self._settle_in_zone(
             window, zone, wa, self.workspace, wm_class, grid=grid
         )
@@ -2076,15 +2076,15 @@ class Daemon:
         }
 
     def ipc_tabs_next(self, request=None):
-        """Поднять следующую вкладку стопки зоны активного окна (`tabs-next`).
+        """Raise the next tab of the stack of the active window's zone (`tabs-next`).
 
-        Зону демон выбирает сам — по активному окну. Окно вне зон, стопка из
-        одной вкладки и нечитаемое активное окно — не ошибка, а честный ответ
-        `{"switched": false, ...}`: клавиша не должна ругаться на то, что
-        переключать нечего.
+        The daemon chooses the zone itself — by the active window. A window outside the zones, a stack of
+        one tab and an unreadable active window are not an error but an honest answer
+        `{"switched": false, ...}`: a key must not complain that there is
+        nothing to switch.
 
-        Возврат: `{"switched": true, "zone", "window" (hex), "previous" (hex)}`
-        или `{"switched": false, "zone", "window": None, "reason"}`.
+        Return: `{"switched": true, "zone", "window" (hex), "previous" (hex)}`
+        or `{"switched": false, "zone", "window": None, "reason"}`.
         """
         active = self._active_window()
         if active is None:
@@ -2134,12 +2134,12 @@ class Daemon:
         }
 
     def ipc_tabs_switch(self, request):
-        """Показать окно зоны по клику в полосе (`tabs-switch`).
+        """Show a zone window on a click in the strip (`tabs-switch`).
 
-        Клик приходит из полосы в тот же сокет, что и команды `gridsnap-ctl`.
-        Окно, которого в вкладках этой зоны нет (уже закрылось, ушло в другую
-        зону или его вынесли), не поднимаем: `ValueError` вместо чужого окна
-        поверх зоны.
+        The click comes from the strip to the same socket as the `gridsnap-ctl` commands.
+        A window that is not among the tabs of this zone (already closed, moved to another
+        zone or moved out) is not raised: a `ValueError` instead of a foreign window
+        on top of the zone.
         """
         request = request or {}
         zone = request.get("zone")
@@ -2168,18 +2168,18 @@ class Daemon:
         return {"zone": zone, "window": hex(window)}
 
     def _focus_covers(self, win, workspace, wa=None):
-        """Сворачивает ли активный режим это окно: тот же стол и монитор режима.
+        """Whether the active mode iconifies this window: the workspace and monitor of the mode.
 
-        Правило отбора — то же, что у `tiler.focus_candidates` (чистая функция —
-        один источник истины), одна запись: само окно, его стол и его рабочая
-        область. `wa` передаётся, если монитор уже прочитан. Монитор окна не
-        прочитать — не сворачиваем: хуже угадать и спрятать чужое.
+        The selection rule is the same as in `tiler.focus_candidates` (a pure function —
+        one source of truth), a single record: the window itself, its workspace and its work
+        area. `wa` is passed when the monitor has already been read. If the window's monitor cannot
+        be read — we do not iconify: guessing and hiding a foreign window is worse.
 
-        Вкладки зоны-цели не сворачиваются — ни те, что были в стопке на входе
-        в режим (`_focus_candidates`), ни те, что правило положило туда уже во
-        время режима: режим называется «только эта зона», и прятать окно самой
-        зоны значит противоречить его смыслу (плюс полоса показывала бы
-        свёрнутую вкладку, а `ipc_apply` в ту же зону окно не сворачивает).
+        The tabs of the target zone are not iconified — neither those that were in the stack on entering
+        the mode (`_focus_candidates`), nor those the rule put there already during
+        the mode: the mode is called "this zone only", and hiding a window of that very
+        zone would contradict its meaning (besides, the strip would show
+        an iconified tab, while `ipc_apply` does not iconify a window into the same zone).
         """
         state = self.focus
         if state is None:
@@ -2203,11 +2203,11 @@ class Daemon:
         return True
 
     def _focus_zone_tabs(self, target):
-        """Вкладки зоны цели — их режим не сворачивает: они часть зоны.
+        """The tabs of the target zone — the mode does not iconify them: they are part of the zone.
 
-        Стопка ищется в трекере (цель уже уложена в зону до отбора, или была
-        уложена раньше). Цель в множестве всегда: сворачивать её самой себе
-        нечего.
+        The stack is looked up in the tracker (the target is already placed in the zone before the selection, or was
+        placed earlier). The target is always in the set: it has nothing to iconify
+        for itself.
         """
         keep = {target}
         zone = self.windows.get(target)
@@ -2221,16 +2221,16 @@ class Daemon:
         return keep
 
     def _focus_candidates(self, target, wa):
-        """Окна, которые режим сворачивает сейчас, в порядке `_NET_CLIENT_LIST`.
+        """The windows the mode iconifies right now, in `_NET_CLIENT_LIST` order.
 
-        Список клиентов читает демон (`read_clients`): только он видит окна,
-        появившиеся после входа в режим. Отбор окон того же стола и монитора —
-        `tiler.focus_candidates`; здесь же отсеиваются исключения
-        (`window_excluded`: диалоги, `[ignore]`, служебные типы остаются
-        видимыми — это требование продукта) и свёрнутое вручную: такое окно
-        режим не сворачивал и на выходе не развернёт. Вкладки зоны-цели из
-        отбора исключаются (`_focus_zone_tabs`): они часть той самой зоны,
-        которую владелец попросил оставить.
+        The client list is read by the daemon (`read_clients`): only it sees windows
+        that appeared after entering the mode. The selection of windows of the same workspace and monitor is
+        `tiler.focus_candidates`; exceptions are filtered out here as well
+        (`window_excluded`: dialogs, `[ignore]`, utility types stay
+        visible — that is a product requirement) and windows iconified by hand: such a window
+        was not iconified by the mode and will not be restored on exit. The tabs of the target zone are
+        excluded from the selection (`_focus_zone_tabs`): they are part of that very zone
+        the owner asked to keep.
         """
         try:
             client_ids = self.read_clients() or []
@@ -2247,7 +2247,7 @@ class Daemon:
         out = []
         for win in tiler.focus_candidates(entries, target, self.workspace, wa):
             if win in out:
-                continue  # дубль в списке клиентов
+                continue  # a duplicate in the client list
             if win in keep:
                 self.log(
                     _("window 0x{win:x} is a tab of the mode's zone - stays visible").format(
@@ -2296,7 +2296,7 @@ class Daemon:
         return out
 
     def _focus_minimize(self, win):
-        """Свернуть окно и запомнить, что свернул именно режим; `False` — не вышло."""
+        """Iconify a window and remember that the mode did it; `False` — it did not work."""
         try:
             self.iconify(win, x11=self.x11, quiet=True)
         except (Exception, SystemExit) as exc:
@@ -2314,22 +2314,22 @@ class Daemon:
         return True
 
     def leave_focus(self, switch=False):
-        """Выйти из режима: развернуть то, что свернул он сам.
+        """Leave the mode: restore what it iconified itself.
 
-        Возвращает `(развёрнутые, остаток, состояние режима)`: состояние — уже
-        снятое с `self.focus`, оно нужно вызывающему, чтобы отдать остаток в
+        Returns `(restored, remainder, mode state)`: the state is already
+        taken from `self.focus`, the caller needs it to hand the remainder to
         `focus.json` (`_focus_handoff`).
 
-        `tiler.deiconify_all` перечитывает состояние, поэтому в остатке — окна,
-        которые так и остались свёрнутыми. Чаще всего это окна не на активном
-        столе: muffin игнорирует активацию таких окон (проверено дымом). Что
-        делать с остатком, решает вызывающий — `_focus_handoff` отдаёт его в
-        `focus.json`, а не теряет.
+        `tiler.deiconify_all` re-reads the state, so the remainder holds the windows
+        that stayed iconified. Most often these are windows not on the active
+        workspace: muffin ignores activation of such windows (verified by smoke). What
+        to do with the remainder is decided by the caller — `_focus_handoff` hands it to
+        `focus.json` rather than losing it.
 
-        `switch=True` — сначала перейти на стол режима: так делает **явный** выход
-        (toggle/`off`), ведь пользователь попросил вернуть окна. Неявные (цель
-        исчезла, демон завершается) рабочий стол не трогают: дёргать пользователя
-        из-за чужого окна хуже, чем оставить список CLI.
+        `switch=True` — switch to the mode's workspace first: that is what an **explicit** exit does
+        (toggle/`off`), since the user asked to bring the windows back. Implicit ones (the target
+        vanished, the daemon is terminating) do not touch the workspace: pulling the user
+        around because of a foreign window is worse than leaving a CLI list.
         """
         state, self.focus = self.focus, None
         if state is None:
@@ -2337,7 +2337,7 @@ class Daemon:
         if switch and self.x11 is not None and isinstance(state.get("workspace"), int):
             try:
                 tiler.switch_workspace(state["workspace"], x11=self.x11)
-            except (Exception, SystemExit) as exc:  # стол нужен, но не обязателен
+            except (Exception, SystemExit) as exc:  # the workspace is wanted but not required
                 self.log(
                     _("failed to switch the workspace: {exc}").format(exc=exc)
                 )
@@ -2363,8 +2363,8 @@ class Daemon:
                 total=len(state["minimized"]),
             )
         )
-        # `focus-off` шлётся из единственной воронки выхода: сюда приходят и
-        # toggle/`off`, и исчезновение цели, и завершение демона.
+        # `focus-off` is sent from the single exit funnel: toggle/`off`,
+        # the loss of the target and the daemon shutdown all arrive here.
         self._emit(
             "focus-off",
             lambda: zone_ipc.event_focus_off(
@@ -2376,11 +2376,11 @@ class Daemon:
         return restored, remaining, state
 
     def _focus_records(self, windows):
-        """Записи окон для `focus.json` — через инъекции демона, а не через X напрямую.
+        """Window records for `focus.json` — through the daemon's injections, not through X directly.
 
-        Стол и `WM_CLASS` читаются **сейчас**: стол у каждого окна свой (в файле
-        могут сойтись окна разных столов), а без класса запись уклонялась бы от
-        защиты от переиспользованного XID.
+        The workspace and `WM_CLASS` are read **now**: every window has its own workspace (in the file
+        windows of different workspaces could meet), and without the class a record would dodge
+        the protection against a reused XID.
         """
         records = []
         for win in dict.fromkeys(windows):
@@ -2403,19 +2403,19 @@ class Daemon:
         return records
 
     def _focus_handoff(self, remaining, state):
-        """Отдать неразвёрнутый остаток в `focus.json` — его доведёт `focus --off`.
+        """Hand the unrestored remainder to `focus.json` — `focus --off` will finish it.
 
-        Окно на неактивном столе развернуть нельзя (`_NET_ACTIVE_WINDOW` muffin
-        игнорирует для таких окон), а терять его нельзя тем более: демон режим
-        больше не держит, и без записи оно осталось бы свёрнутым навсегда. Файл
-        читает CLI, а `focus --off` сам переходит на стол записи.
+        A window on an inactive workspace cannot be restored (`_NET_ACTIVE_WINDOW` muffin
+        ignores it for such windows), and losing it is even worse: the daemon no longer
+        holds the mode, and without the record it would stay iconified forever. The file
+        is read by the CLI, and `focus --off` switches to the recorded workspace itself.
 
-        Записи строит `tiler.focus_records`: она читает `WM_CLASS` и **стол
-        каждого окна** прямо сейчас. Иначе окно из остатка унаследовало бы чужой
-        `workspace` старой записи (в ней могли остаться окна другого стола) — и
-        разворот переходил бы не на тот стол, а окно так и осталось бы свёрнутым.
-        Из старой записи остаются только те окна, которые ещё свёрнуты: уже
-        развёрнутые разворачивать больше не нужно.
+        The records are built by `tiler.focus_records`: it reads `WM_CLASS` and the **workspace
+        of every window** right now. Otherwise a window from the remainder would inherit a foreign
+        `workspace` from the old record (windows of another workspace could have stayed in it) — and
+        the restore would switch to the wrong workspace, and the window would stay iconified.
+        Only windows that are still iconified are kept from the old record: already
+        restored ones no longer need restoring.
         """
         if not remaining:
             return
@@ -2466,46 +2466,46 @@ class Daemon:
         )
 
     def ipc_focus(self, request):
-        """Режим «только эта зона»: вход/toggle/выход.
+        """The "this zone only" mode: enter/toggle/exit.
 
-        `focus <зона>` кладёт активное окно (или `window` из запроса) в зону и
-        сворачивает остальные окна **того же стола и того же монитора**; команда
-        при уже активном режиме — **toggle**: сворачивает режим и разворачивает
-        окна, которые свернул он сам. `{"off": true}` — явный выход без входа.
+        `focus <zone>` places the active window (or the `window` from the request) in the zone and
+        iconifies the other windows **of the same workspace and the same monitor**; the command
+        with the mode already active is a **toggle**: it turns the mode off and restores
+        the windows it iconified itself. `{"off": true}` — an explicit exit without entering.
 
-        Разворачиваются только окна из `self.focus["minimized"]` (свёрнутое
-        вручную остаётся свёрнутым), последней — цель: `deiconify` поднимает и
-        фокусирует окно. Исключения (`window_excluded`: `[ignore]`, служебные
-        типы, диалоги) и уже свёрнутые окна не трогаются и в `minimized` не
-        попадают.
+        Only the windows from `self.focus["minimized"]` are restored (a window iconified
+        by hand stays iconified), the target last: `deiconify` raises and
+        focuses the window. Exceptions (`window_excluded`: `[ignore]`, utility
+        types, dialogs) and already iconified windows are not touched and do not
+        get into `minimized`.
 
-        Активный стол не прочитан — отказ: сворачивать окна чужих столов
-        вслепую хуже, чем не включать режим.
+        The active workspace is not read — a refusal: iconifying windows of foreign workspaces
+        blindly is worse than not enabling the mode.
 
-        Возврат:
+        Return:
 
-        - вход — `{"zone", "window" (hex), "monitor" ([x,y,w,h]), "minimized"
-          ([hex] — что свернули)}`;
-        - выход — `{"off": True, "restored": [hex]}`.
+        - enter — `{"zone", "window" (hex), "monitor" ([x,y,w,h]), "minimized"
+          ([hex] — what was iconified)}`;
+        - exit — `{"off": True, "restored": [hex]}`.
 
-        Режим входит в `status` полем `focus`: `null` или
-        `{"zone", "window", "minimized" (число)}`.
+        The mode appears in `status` as the `focus` field: `null` or
+        `{"zone", "window", "minimized" (count)}`.
 
-        `zone` необязательна: без неё (форма `[focus]` в `zones.conf` без зоны)
-        цель остаётся где стоит, и сворачивается только окружение — укладки и
-        записи в трекеры тогда нет, а в `self.focus["zone"]` лежит `None`.
-        Монитор нужен и в этом случае: он задаёт область сворачивания.
+        `zone` is optional: without it (a `[focus]` section in `zones.conf` with no zone)
+        the target stays where it stands, and only the surroundings are iconified — there is no
+        placement and no tracker record then, and `self.focus["zone"]` holds `None`.
+        The monitor is needed in this case too: it defines the iconification area.
         """
         request = request or {}
         if request.get("off") or self.focus is not None:
-            # Явный выход и повторная команда (toggle) — одно и то же: снять режим
-            # и развернуть только то, что свернул он сам. Стол переключаем (если
-            # режим не на активном): так окна на другом столе тоже вернутся.
+            # An explicit exit and a repeated command (toggle) are the same: drop the mode
+            # and restore only what it iconified itself. We switch the workspace (if
+            # the mode is not on the active one): that way windows on another workspace come back too.
             restored, remaining, state = self.leave_focus(switch=True)
             self._focus_handoff(remaining, state)
-            # `leave_focus` разворачивает окна и активирует цель последней:
-            # активное окно (а с ним подсвеченная вкладка) могло смениться,
-            # поэтому снимок полосы пересобирается и здесь, а не только на входе.
+            # `leave_focus` restores the windows and activates the target last:
+            # the active window (and the highlighted tab with it) could have changed,
+            # so the strip snapshot is rebuilt here too, not only on entry.
             self.sync_strips()
             return {"off": True, "restored": [hex(w) for w in restored]}
         zone = request.get("zone")
@@ -2518,7 +2518,7 @@ class Daemon:
             )
         window = request.get("window")
         if window is None:
-            window = tiler.active_window()  # нет активного окна -> SystemExit
+            window = tiler.active_window()  # no active window -> SystemExit
         elif isinstance(window, str):
             window = int(window, 0)
         else:
@@ -2542,10 +2542,10 @@ class Daemon:
                     "the active workspace is not read - not enabling focus mode: minimizing windows of other workspaces blindly is worse than not enabling it"
                 )
             )
-        # Монитор берётся только у цели и не угадывается: режим сворачивает окна
-        # той же рабочей области, а `_monitor_for_command` при непрочитанном
-        # положении падает на первый монитор — и режим прятал бы окна соседнего
-        # экрана. У CLI в том же случае отказ.
+        # The monitor is taken from the target only and is not guessed: the mode iconifies windows
+        # of the same work area, and `_monitor_for_command` with an unreadable
+        # position falls back to the first monitor — and the mode would hide windows of the neighbouring
+        # screen. The CLI refuses in the same case.
         wa = self._monitor_of(window)
         if wa is None:
             raise ValueError(
@@ -2553,11 +2553,11 @@ class Daemon:
                     "failed to determine the monitor of window 0x{window:x} - not enabling focus mode: its area depends on the target's monitor"
                 ).format(window=window)
             )
-        # Геометрия зоны — профиля того экрана, где стоит цель.
+        # The zone geometry comes from the profile of the screen where the target stands.
         grid = self._grid_for(self.workspace, self._output_for(wa))
         if zone is not None:
-            # Цель сама становится вкладкой зоны: если там уже было окно, оба
-            # встают на общую рамку, а полоса получает новый снимок.
+            # The target becomes a tab of the zone itself: if a window was already there, both
+            # stand on the shared frame, and the strip gets a new snapshot.
             rect = self._settle_in_zone(
                 window, zone, wa, self.workspace, wm_class, grid=grid
             )
@@ -2578,7 +2578,7 @@ class Daemon:
             self._focus_minimize(win)
         self.sync_strips()
         minimized = len(self.focus["minimized"])
-        # `focus-on` шлётся после сворачивания: счётчик — уже итоговый.
+        # `focus-on` is sent after the iconification: the counter is already final.
         self._emit(
             "focus-on",
             lambda: zone_ipc.event_focus_on(zone, window, minimized=minimized),
@@ -2591,11 +2591,11 @@ class Daemon:
         }
 
     def ipc_reload(self, request=None):
-        """Перечитать zones.conf: сетку, правила, привязки экранов/столов и reflow.
+        """Re-read zones.conf: the grid, the rules, the screen/workspace bindings and reflow.
 
-        Кэши сбрасываются все, включая пары (стол, выход) и разобранные
-        `[monitors]`/`[workspaces]`: новый профиль экрана подхватывается без
-        рестарта демона.
+        All caches are reset, including the (workspace, output) pairs and the parsed
+        `[monitors]`/`[workspaces]`: a new screen profile is picked up without
+        a daemon restart.
         """
         self.grid = tiler.Grid(self.conf_path)
         self.reflow = read_reflow(self.grid.conf)
@@ -2616,28 +2616,28 @@ class Daemon:
         }
 
     def ipc_quit(self, request=None):
-        """Попросить цикл демона завершиться после текущего события."""
+        """Ask the daemon loop to finish after the current event."""
         self.stop_requested = True
         self.log(_("got the quit command - exiting"))
         return {"bye": True}
 
-    # -- события
+    # -- events
 
     def reconcile(self, client_ids):
-        """Свести состояние к списку клиентов `_NET_CLIENT_LIST`.
+        """Reconcile the state with the client list `_NET_CLIENT_LIST`.
 
-        Новые окна укладываются по правилам (`on_map`), исчезнувшие снимаются
-        с трекера (`on_destroy`, с reflow). Новые обрабатываются раньше
-        исчезнувших: если новое окно заняло освободившуюся зону, reflow уже
-        увидит её занятой и соседей не сдвинет.
+        New windows are placed by the rules (`on_map`), vanished ones are dropped
+        from the tracker (`on_destroy`, with reflow). New ones are handled before
+        vanished ones: if a new window took the freed zone, reflow already
+        sees it as taken and will not move the neighbours.
         """
         current = set(client_ids)
-        # Зоны на начало прохода: `on_destroy` и `_detach` чистят трекер, а
-        # `window-closed` нужна последняя известная зона окна (у вынесенного
-        # руками окна она в трекере уже другая — потому снимок до всего).
+        # Zones at the start of the pass: `on_destroy` and `_detach` clean the tracker, but
+        # `window-closed` needs the last known zone of the window (for a window moved out
+        # by hand it is already different in the tracker — hence the snapshot before everything).
         zones_before = dict(self.windows)
-        # Память прошлого запуска и переезды пользователя — до укладки: окно,
-        # которое вынесли из зоны, не должно быть уложено снова.
+        # The previous run's memory and the user's moves — before the placement: a window
+        # that was moved out of its zone must not be placed again.
         self._apply_pending(current)
         self._refresh_detached()
         previous_seen = set(self.seen)
@@ -2645,41 +2645,41 @@ class Daemon:
         for win in new:
             self.log(_("new window 0x{win:x} in _NET_CLIENT_LIST").format(win=win))
             self.on_map(win)
-            # Событие — после укладки: в нём уже есть зона, стол и монитор окна.
-            # Шлётся и на окно без зоны (под `[ignore]`, без правила).
+            # The event — after the placement: it already carries the zone, workspace and monitor of the window.
+            # It is sent for a window without a zone too (under `[ignore]`, with no rule).
             self._emit_appeared(win)
         for win in list(self.windows):
             if win not in current:
                 self.on_destroy(win)
-        # Свёрнутые режимом окна могут быть без зоны (правила не было) — их в
-        # `windows` нет, но забыть их надо: разворачивать исчезнувшее нечем.
+        # Windows iconified by the mode may have no zone (there was no rule) — they are not in
+        # `windows`, but they must be forgotten: there is nothing to restore a vanished one with.
         for win in list(self.focus["minimized"]) if self.focus is not None else []:
             if win not in current and win not in self.windows:
                 self.on_destroy(win)
-        # Цель могла быть и не уложена в зону (форма `focus` без зоны): тогда
-        # первый проход её не увидит, а режим без цели держать незачем.
+        # The target may not have been placed in a zone either (a `focus` section with no zone): then
+        # the first pass will not see it, and there is no point in holding a mode without a target.
         if self.focus is not None and self.focus["target"] not in current:
             self.on_destroy(self.focus["target"])
-        # `window-closed` — на каждое исчезнувшее окно списка, включая те, что в
-        # трекере не были (без правила): подписчику важно, что окно ушло.
+        # `window-closed` — for every window that vanished from the list, including those that were not
+        # in the tracker (no rule): what matters to a subscriber is that the window is gone.
         for win in sorted(previous_seen):
             if win not in current:
                 self._emit_closed(win, zones_before.get(win))
         self._prune_state(current)
         self.seen = current
-        # Состав стопок мог измениться без укладки (окно вынесли руками, вторая
-        # вкладка не вернулась после перезапуска): рамки приводим одним проходом.
+        # The composition of stacks could change without a placement (a window was moved out by hand, the second
+        # tab did not come back after a restart): we bring the frames in line in one pass.
         self._normalize_stacks(client_ids)
-        # Картина вкладок поменялась (окна пришли/ушли): полосе — новый снимок.
-        # Список клиентов уже прочитан — передаём его, чтобы не спрашивать X дважды.
+        # The tab picture changed (windows came/went): the strip gets a new snapshot.
+        # The client list has already been read — we pass it so as not to ask X twice.
         self.sync_strips(client_ids)
 
     def on_workspace_change(self):
-        """Активный стол сменился (`_NET_CURRENT_DESKTOP`): запомнить новый.
+        """The active workspace changed (`_NET_CURRENT_DESKTOP`): remember the new one.
 
-        Окна не двигаем: укладка и reflow идут только по событиям окон, а
-        невидимые столы остаются как есть. Возвращает новый стол (прежний,
-        если прочитать не удалось).
+        We do not move windows: placement and reflow run only on window events, and
+        invisible workspaces stay as they are. Returns the new workspace (the previous
+        one if it could not be read).
         """
         previous = self.workspace
         workspace = self._read_current_workspace()
@@ -2707,49 +2707,49 @@ class Daemon:
                 )
             )
         if self.focus is not None and workspace != self.focus["workspace"]:
-            # Режим живёт на своём столе и уход его НЕ снимает: окна того стола и
-            # так не видны, вернувшись — увидишь режим как был. Снять его при
-            # уходе нельзя: `_NET_ACTIVE_WINDOW` muffin игнорирует для окна не на
-            # активном столе (проверено дымом), и окна остались бы свёрнутыми без
-            # хозяина. Выход работает на своём столе или сам переводит на него.
+            # The mode lives on its workspace and leaving does NOT drop it: the windows of that workspace
+            # are invisible anyway, and on return you will see the mode as it was. It cannot be dropped on
+            # leaving: muffin ignores `_NET_ACTIVE_WINDOW` for a window that is not on the
+            # active workspace (verified by smoke), and the windows would stay iconified without
+            # an owner. The exit works on its own workspace or switches to it itself.
             self.log(
                 _(
                     "focus mode lives on workspace {desk} - leaving it in place"
                 ).format(desk=workspace_label(self.focus["workspace"]))
             )
-        # Полосы — только у зон текущего стола: снимок пересобирается на смену.
+        # Strips — only for the zones of the current workspace: the snapshot is rebuilt on a change.
         self.sync_strips()
         return workspace
 
     def on_map(self, win, override_redirect=False):
-        """Новое клиентское окно: вложить в зону по правилу, если оно подходит.
+        """A new client window: place it in a zone by the rule if it fits.
 
-        Сетка берётся по экрану окна: `[monitors]` важнее `[workspaces]`,
-        `[workspaces]` — важнее активного `zones.conf` (см. `_grid_for`). Правила
-        и `[ignore]` читаются из **того же** профиля — они приходят внутри
-        `Grid`, а профиль без своих правил (снимок одних зон) откатывается на
-        правила активного конфига. «Липкое» окно и окно с неопознанным экраном
-        живут в наборе следующего уровня. Имя зоны глобально: если в наборе
-        экрана такой зоны нет, окно не укладывается (лучше никак, чем в чужую
-        геометрию). Окно, попавшее в область активного режима «только эта зона»
-        (тот же стол и монитор, что у цели), укладывается по правилу и сверх
-        того сворачивается: так после выхода из режима оно окажется уже в
-        своей зоне.
+        The grid comes from the window's screen: `[monitors]` beats `[workspaces]`,
+        `[workspaces]` beats the active `zones.conf` (see `_grid_for`). The rules
+        and `[ignore]` are read from the **same** profile — they arrive inside
+        `Grid`, and a profile without its own rules (a snapshot of zones alone) falls back to
+        the rules of the active config. A "sticky" window and a window with an unidentified screen
+        live in the set of the next level. A zone name is global: if the screen's
+        set has no such zone, the window is not placed (better not at all than into a foreign
+        geometry). A window that lands in the area of the active "this zone only" mode
+        (the same workspace and monitor as the target) is placed by the rule and is iconified
+        on top of that: that way, after leaving the mode, it turns out to be already in
+        its own zone.
         """
         if win in self.windows:
-            return  # окно уже уложено (повторное появление в списке)
+            return  # the window is already placed (a repeated appearance in the list)
         if win in self.detached:
-            return  # пользователь вынес окно из зоны — само оно не вернётся
+            return  # the user moved the window out of the zone — it will not come back by itself
         if override_redirect:
-            return  # меню/подсказки WM — не самостоятельные окна
+            return  # a WM menu/tooltip — not a window of its own
         meta = self.read_meta(win)
         wm_class = getattr(meta, "wm_class", "") or ""
         wm_title = getattr(meta, "wm_title", "") or ""
         if not wm_class:
-            return  # без WM_CLASS правило не проверить
-        # Стол и экран нужны до правил: у профиля экрана свои правила и свои
-        # исключения, и активный `zones.conf` тут не указ. Без `[monitors]`
-        # `_output_for` молчит и за `xrandr` не идёт — разбор идёт по столу.
+            return  # without WM_CLASS the rule cannot be checked
+        # The workspace and the screen are needed before the rules: a screen profile has its own rules and its own
+        # exceptions, and the active `zones.conf` has no say here. Without `[monitors]`
+        # `_output_for` stays silent and does not go for `xrandr` — the resolution goes by workspace.
         workspace = self._window_workspace(win)
         wa = self._monitor_of(win)
         grid = self._grid_for(workspace, self._output_for(wa))
@@ -2769,8 +2769,8 @@ class Daemon:
             grid.rules or self.grid.rules, wm_class, wm_title
         )
         if zone is None:
-            # Правила нет — в режиме окно всё равно прячется (иначе оно окажется
-            # поверх цели), но укладывать его некуда: просто сворачиваем.
+            # No rule — in the mode the window is hidden anyway (otherwise it would land
+            # on top of the target), but there is nowhere to place it: we simply iconify it.
             if self._focus_covers(win, workspace):
                 self._focus_minimize(win)
             return
@@ -2789,32 +2789,32 @@ class Daemon:
                 self._focus_minimize(win)
             return
         if wa is None:
-            return  # монитор окна недоступен: не падаем и окно не трогаем
-        # Правило дизайна волны: одно окно занимает зону целиком, два и больше
-        # встают на общую рамку вкладок — и тогда переставляется и уже стоявшее.
+            return  # the window monitor is unavailable: we do not crash and do not touch the window
+        # The wave's design rule: one window occupies the whole zone, two or more
+        # stand on the shared tab frame — and then the one already standing is moved as well.
         if self._settle_in_zone(win, zone, wa, workspace, wm_class, grid=grid) is None:
-            return  # не запоминаем: окно не уложено, зону занятой не считаем
+            return  # not remembered: the window is not placed, the zone is not counted as taken
         self.log(
             _("window 0x{win:x} -> zone '{zone}' (workspace {desk})").format(
                 win=win, zone=zone, desk=workspace_label(workspace)
             )
         )
-        # Режим «только эта зона»: окно уже в своей зоне — теперь прячем его,
-        # чтобы после выхода оно оказалось именно там, а не где пришлось.
+        # The "this zone only" mode: the window is already in its zone — now we hide it,
+        # so that after the exit it ends up exactly there and not wherever it happens to be.
         if self._focus_covers(win, workspace, wa):
             self._focus_minimize(win)
 
     def on_destroy(self, win):
-        """Окно исчезло из `_NET_CLIENT_LIST` — снять с трекера и, если нужно, reflow.
+        """A window vanished from `_NET_CLIENT_LIST` — drop it from the tracker and, if needed, reflow.
 
-        Перестройка — только когда стол закрытого окна виден (`self.workspace`):
-        окна невидимых столов не двигаются никогда, состояние такого стола
-        просто чистится.
+        A rebuild happens only when the workspace of the closed window is visible (`self.workspace`):
+        windows of invisible workspaces never move, the state of such a workspace
+        is simply cleaned.
 
-        Режим «только эта зона» снимается здесь же: его цель исчезла — значит,
-        держать остальные окна свёрнутыми незачем. Ушедшее свёрнутое окно
-        убирается из `minimized` (разворачивать нечего), но при живой цели
-        режим остаётся.
+        The "this zone only" mode is dropped right here: its target vanished — so there is
+        no point in keeping the other windows iconified. A vanished iconified window
+        is removed from `minimized` (there is nothing to restore), but with a live target
+        the mode stays.
         """
         state = self.focus
         if state is not None:
@@ -2835,11 +2835,11 @@ class Daemon:
         self.log(
             _("window 0x{win:x} left zone '{zone}'").format(win=win, zone=zone)
         )
-        # Зона занята, пока в ней есть хоть одна вкладка: ушла последняя — ниже
-        # reflow увидит зону свободной, а пока в стопке осталась одна — ей
-        # возвращается вся зона (полосы у одиночного окна нет).
+        # A zone is taken while it holds at least one tab: the last one is gone — below
+        # reflow sees the zone as free, and while the stack holds one — it gets
+        # the whole zone back (a single window has no strip).
         self._collapse_stack(zone, wa, workspace)
-        # Держатель исчез: снять записи о зонах, которые он покрывал.
+        # The holder is gone: drop the records of the zones it was covering.
         self._drop_coverage(win)
         if self.reflow != REFLOW_NEIGHBORS or wa is None:
             return
@@ -2851,8 +2851,8 @@ class Daemon:
                 )
             )
             return
-        # reflow — в пределах монитора ушедшего окна и видимого стола: окна на
-        # других экранах и столах в занятых зонах не учитываются и не двигаются.
+        # reflow — within the monitor of the vanished window and the visible workspace: windows on
+        # other screens and workspaces are not counted in taken zones and are not moved.
         occupied = {
             other_zone
             for other, other_zone in self.windows.items()
@@ -2866,9 +2866,9 @@ class Daemon:
             return
         for name, frac in changes.items():
             if len(self._zone_stack(name, wa, self.workspace)) > 1:
-                # В зоне стопка вкладок: они живут на общей рамке, и вынуть из
-                # неё одно окно — значит разложить стопку. Такую зону не
-                # расширяем, а зону не считаем покрытой.
+                # The zone holds a stack of tabs: they live on the shared frame, and taking
+                # one window out of it means breaking up the stack. We do not
+                # expand such a zone, and we do not count the zone as covered.
                 self.log(
                     _("reflow: zone '{zone}' has tabs - not expanding").format(
                         zone=name
@@ -2880,7 +2880,7 @@ class Daemon:
                 continue
             fx, fy, fw, fh = frac
             if not self._apply(target, fractions_to_pixels(fx, fy, fw, fh, wa), name):
-                continue  # окно не переехало: зону покрытой не считаем
+                continue  # the window did not move: the zone is not counted as covered
             self.filled[(self.workspace, wa, zone)] = target
             self.log(
                 _("reflow: window 0x{win:x} -> zone '{zone}'").format(
@@ -2890,22 +2890,22 @@ class Daemon:
         self._save_state()
 
     def on_unmap(self, win):
-        """Окно скрыто (свёрнуто/сменился воркспейс) — no-op.
+        """A window is hidden (iconified/the workspace changed) — no-op.
 
-        В `_NET_CLIENT_LIST` такое окно остаётся, поэтому реконсиляция его не
-        снимает с трекера: при разворачивании окно не переставляется заново, а
-        соседи не расширяются на занятую зону. Снятие с трекера и reflow —
-        только когда окно исчезает из `_NET_CLIENT_LIST` (`on_destroy`), и там
-        же стоит проверка «стол окна виден»: перестраивать здесь нечего.
+        Such a window stays in `_NET_CLIENT_LIST`, so reconciliation does not
+        drop it from the tracker: on restore the window is not placed again, and
+        the neighbours do not expand onto a taken zone. Dropping from the tracker and reflow happen
+        only when the window disappears from `_NET_CLIENT_LIST` (`on_destroy`), and the
+        "the window's workspace is visible" check sits there too: there is nothing to rebuild here.
         """
         self.log(_("window 0x{win:x} is hidden - keeping it in the tracker").format(win=win))
 
 
-# ------------------------------------------------------------------ X11-контур
+# ------------------------------------------------------------------ X11 side
 
 
 class XPropertyEvent(ctypes.Structure):
-    # Порядок и типы полей — как в Xlib.h (XPropertyEvent).
+    # Field order and types follow Xlib.h (XPropertyEvent).
     _fields_ = [
         ("type", ctypes.c_int),
         ("serial", ctypes.c_ulong),
@@ -2919,16 +2919,16 @@ class XPropertyEvent(ctypes.Structure):
 
 
 def handle_property_event(dae, buf, client_list_atom, read_clients, desktop_atom=None):
-    """PropertyNotify: `_NET_CLIENT_LIST` — реконсиляция, `_NET_CURRENT_DESKTOP` — стол.
+    """PropertyNotify: `_NET_CLIENT_LIST` — reconcile, `_NET_CURRENT_DESKTOP` — the workspace.
 
-    Возвращает True, если событие относилось к одному из этих свойств. Если
-    список прочитать не удалось (`read_clients()` дал `None`), реконсиляция
-    пропускается: трекер и `seen` не трогаем.
+    Returns True if the event was about one of these properties. If the
+    list could not be read (`read_clients()` returned `None`), reconciliation is
+    skipped: the tracker and `seen` are not touched.
 
-    `desktop_atom` — атом `_NET_CURRENT_DESKTOP`: на него демон обновляет
-    активный стол (`dae.on_workspace_change()`), но окна не двигает: укладка и
-    reflow — только по событиям окон. `None` — атом не передан, событие о столе
-    пропускается (старый вызов из четырёх аргументов).
+    `desktop_atom` is the `_NET_CURRENT_DESKTOP` atom: the daemon updates the
+    active workspace on it (`dae.on_workspace_change()`), but does not move windows: placement and
+    reflow go only by window events. `None` — the atom was not passed, the workspace event is
+    skipped (the old four-argument call).
     """
     ev = ctypes.cast(buf, ctypes.POINTER(XPropertyEvent)).contents
     if desktop_atom is not None and ev.atom == desktop_atom:
@@ -2947,7 +2947,7 @@ def handle_property_event(dae, buf, client_list_atom, read_clients, desktop_atom
 
 
 def _reconcile_if_known(dae, read_clients):
-    """Прочитать список клиентов и свести состояние; `None` — пропустить."""
+    """Read the client list and reconcile the state; `None` — skip."""
     client_ids = read_clients()
     if client_ids is None:
         dae.log(_("_NET_CLIENT_LIST is unavailable - skipping reconciliation"))
@@ -2956,7 +2956,7 @@ def _reconcile_if_known(dae, read_clients):
 
 
 def _bind_event_functions(x):
-    """Проставить сигнатуры libX11-функциям, которых нет в `zone-tiler.X11`."""
+    """Declare signatures for the libX11 functions missing from `zone-tiler.X11`."""
     x.XSelectInput.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_long]
     x.XSelectInput.restype = ctypes.c_int
     x.XConnectionNumber.argtypes = [ctypes.c_void_p]
@@ -2970,10 +2970,10 @@ def _bind_event_functions(x):
 
 
 def _serve_ipc(dae, ipc):
-    """Принять и обслужить команды сокета; ошибки не роняют демон.
+    """Accept and serve socket commands; errors do not bring the daemon down.
 
-    Ответы и ошибки пишутся в журнал (`--verbose`). Исключение приёма/разбора
-    логируется и глушится: сокет — вспомогательный канал, X-цикл дороже.
+    Answers and errors go to the log (`--verbose`). An exception of accepting/parsing
+    is logged and swallowed: the socket is an auxiliary channel, the X loop matters more.
     """
     try:
         responses = ipc.accept_all()
@@ -2990,12 +2990,12 @@ def _serve_ipc(dae, ipc):
 
 
 def _restore_focus_on_exit(dae):
-    """Развернуть окна режима «только эта зона» при выходе демона (best-effort).
+    """Restore the windows of the "this zone only" mode on daemon exit (best-effort).
 
-    Зовётся из `finally` у `serve` — до `XCloseDisplay`, иначе посылать будет
-    уже некуда. Если X-соединения нет (ранний выход, отказ X-сервера), просто
-    снимаем состояние: так после выхода демона никто не останется со свёрнутыми
-    окнами без хозяина.
+    Called from the `finally` of `serve` — before `XCloseDisplay`, otherwise there will be
+    nowhere left to send. If there is no X connection (early exit, X server refusal), we simply
+    drop the state: that way nobody is left with iconified windows
+    without an owner after the daemon exits.
     """
     if getattr(dae, "focus", None) is None:
         return
@@ -3018,38 +3018,38 @@ def _restore_focus_on_exit(dae):
 
 
 def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOUT, ipc=None):
-    """Цикл событий X11: PropertyNotify о `_NET_CLIENT_LIST` -> реконсиляция.
+    """The X11 event loop: PropertyNotify about `_NET_CLIENT_LIST` -> reconciliation.
 
-    Подписка — `PropertyChangeMask` на root. На старте один раз читается текущий
-    список клиентов и укладываются уже открытые окна; дальше то же происходит на
-    каждый PropertyNotify про `_NET_CLIENT_LIST`. PropertyNotify про
-    `_NET_CURRENT_DESKTOP` обновляет только активный стол демона.
+    The subscription is `PropertyChangeMask` on root. At start the current client list
+    is read once and the already open windows are placed; then the same happens on
+    every PropertyNotify about `_NET_CLIENT_LIST`. A PropertyNotify about
+    `_NET_CURRENT_DESKTOP` updates only the daemon's active workspace.
 
-    `x11` и `read_clients` можно подменить (тогда реальный дисплей не нужен).
-    Своё соединение `serve` кладёт в `dae.x11`, чтобы `apply_zone` переиспользовал
-    его на все окна и не открывал новое на каждый `apply` (утечка соединений).
-    `None`, возвращённое `read_clients` (список недоступен), — сигнал пропустить
-    реконсиляцию, не трогая трекер.
-    `once=True` — обработать один PropertyNotify и выйти; если событий нет —
-    подождать `once_timeout` секунд и выйти (для smoke-проверок).
-    `ipc` — слушающий сокет `zone_ipc.Server`: его дескриптор добавляется в тот же
-    `select`, а команды обслуживаются между X-событиями; команда `quit` ставит
-    `dae.stop_requested`, и цикл завершается.
+    `x11` and `read_clients` can be substituted (then no real display is needed).
+    `serve` puts its own connection into `dae.x11`, so that `apply_zone` reuses
+    it for all windows and does not open a new one per `apply` (a connection leak).
+    `None` returned by `read_clients` (the list is unavailable) is a signal to skip
+    reconciliation without touching the tracker.
+    `once=True` — handle one PropertyNotify and exit; if there are no events —
+    wait `once_timeout` seconds and exit (for smoke checks).
+    `ipc` is the listening socket `zone_ipc.Server`: its descriptor joins the same
+    `select`, and commands are served between X events; the `quit` command sets
+    `dae.stop_requested`, and the loop ends.
 
-    Дескрипторы подписчиков (`dae.subscribers`) добавляются в тот же `select`, а
-    то, что они присылают, разбирает `Subscribers.poll`: так обрыв подписчика
-    замечается между X-событиями и демон его забывает, а не пишет в пустоту.
+    Subscriber descriptors (`dae.subscribers`) join the same `select`, and
+    what they send is parsed by `Subscribers.poll`: that way a dropped subscriber
+    is noticed between X events and the daemon forgets it instead of writing into the void.
     """
     if x11 is None:
         x11 = tiler.X11()
     if read_clients is None:
         read_clients = read_client_list
-    dae.x11 = x11  # общее соединение: apply_zone не должен его закрывать
+    dae.x11 = x11  # the shared connection: apply_zone must not close it
     _bind_event_functions(x11.x)
     x11.x.XSelectInput(x11.dpy, x11.root, PROPERTY_CHANGE_MASK)
     x11.x.XSync(x11.dpy, 0)
     client_list_atom = x11.atom(CLIENT_LIST_ATOM)
-    # Тот же PropertyChangeMask на root даёт и смену активного стола.
+    # The same PropertyChangeMask on root also delivers the active workspace change.
     desktop_atom = x11.atom(CURRENT_DESKTOP_ATOM)
     fd = x11.x.XConnectionNumber(x11.dpy)
     watch = [fd]
@@ -3063,7 +3063,7 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     if ipc is not None:
         dae.log(_("IPC socket: {path}").format(path=getattr(ipc, "path", "?")))
     try:
-        # Раскладываем окна, уже открытые к запуску (вход в готовую сессию).
+        # We place the windows already open at start (entering a ready session).
         _reconcile_if_known(dae, read_clients)
         while True:
             subscribers = getattr(dae, "subscribers", None)
@@ -3075,7 +3075,7 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
                     watch_now, [], [], once_timeout if once else None
                 )
                 if not ready:
-                    break  # once: событий так и не пришло
+                    break  # once: no event ever arrived
             handled = False
             while x11.x.XPending(x11.dpy):
                 buf = EVENT_BUFFER()
@@ -3091,7 +3091,7 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
             if ipc is not None:
                 _serve_ipc(dae, ipc)
             if subscribers is not None:
-                # Обрыв подписчика — не событие X: замечаем его здесь.
+                # A dropped subscriber is not an X event: we notice it here.
                 subscribers.poll()
             if getattr(dae, "stop_requested", False):
                 break
@@ -3100,9 +3100,9 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     except KeyboardInterrupt:
         pass
     finally:
-        # Режим «только эта зона» не должен пережить демон: иначе свёрнутые окна
-        # останутся свёрнутыми без хозяина. Полоса вкладок тоже живёт ровно
-        # столько, сколько демон: EOF в stdin завершает её главный цикл.
+        # The "this zone only" mode must not outlive the daemon: otherwise iconified windows
+        # would stay iconified without an owner. The tabs strip also lives exactly
+        # as long as the daemon: EOF on stdin ends its main loop.
         _restore_focus_on_exit(dae)
         strip = getattr(dae, "strip", None)
         if strip is not None:
