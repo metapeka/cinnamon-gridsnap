@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Тесты чистого ядра действий (`zone_actions`) — без X и GTK.
+"""Tests of the pure core of the actions (`zone_actions`) — no X and no GTK.
 
-Здесь проверяется только то, что ядро обещает снаружи: контекст окна и зоны в
-двух каналах (`values`/`env`), разбор команды с подстановками, распознавание
-встроенных действий, зеркальная рамка и поиск зеркальной зоны по геометрии, а
-также «окно в зоне» и «зона окна». Всё это — арифметика рамок и разбор строк,
-поэтому X-сервер и GTK не нужны: раскладчик (`zone-tiler.py`) сюда не входит.
+Only what the core promises from the outside is checked here: the window and zone context in
+two channels (`values`/`env`), parsing a command with substitutions, recognising
+the built-in actions, the mirror frame and finding the mirror zone by geometry, and
+also "window in the zone" and "the zone of a window". All of it is frame arithmetic and line
+parsing, so neither an X server nor GTK is needed: the tiler (`zone-tiler.py`) is out of scope here.
 
-Запуск:
+Usage:
     python3 tests/test_zone_actions.py
     python3 -m unittest discover -s tests -v
 """
@@ -31,7 +31,7 @@ import zone_actions as za  # noqa: E402
 import zone_tabs  # noqa: E402
 
 
-# Полный контекст: окно 0x1a00007, зона main, её пиксельная рамка, монитор, стол.
+# The full context: window 0x1a00007, zone main, its pixel frame, the monitor, the desk.
 FULL = za.ActionContext(
     window=0x1A00007,
     zone="main",
@@ -43,9 +43,9 @@ FULL = za.ActionContext(
     conf="/home/user/.config/gridsnap/zones.conf",
 )
 
-# Имена переменных окружения — из докстринга `ActionContext.env`. Список
-# выписан руками, а не собран из `PLACEHOLDERS`: тест должен падать, если имя
-# переменной поменяют, а не подтверждать любое содержимое константы.
+# The environment variable names come from the `ActionContext.env` docstring. The list
+# is written out by hand rather than assembled from `PLACEHOLDERS`: the test must fail if a name
+# changes, rather than confirm whatever the constant contains.
 ENV_NAMES = (
     "GRIDSNAP_WINDOW",
     "GRIDSNAP_ZONE",
@@ -62,7 +62,7 @@ ENV_NAMES = (
 
 
 class ActionContextTest(unittest.TestCase):
-    """Оба канала контекста: подстановки и окружение."""
+    """Both channels of the context: substitutions and the environment."""
 
     def test_full_context_values(self):
         self.assertEqual(
@@ -83,8 +83,8 @@ class ActionContextTest(unittest.TestCase):
         )
 
     def test_empty_context_gives_empty_strings(self):
-        # Пустой контекст — не «None» в чужой команде, а «ничего»: подстановка
-        # попадает в argv, и выдуманное слово там выглядело бы как значение.
+        # An empty context is not "None" in someone's command but "nothing": a substitution
+        # lands in argv, and an invented word there would look like a value.
         self.assertEqual(
             za.ActionContext().values(),
             {name: "" for name in za.PLACEHOLDERS},
@@ -115,7 +115,7 @@ class ActionContextTest(unittest.TestCase):
 
 
 class ExpandCommandTest(unittest.TestCase):
-    """Команда из конфига: `shlex` и подстановки `{имя}`."""
+    """A command from the config: `shlex` and `{name}` substitutions."""
 
     def context(self, **kwargs):
         defaults = {"zone": "main", "rect": (10, 20, 300, 400)}
@@ -154,15 +154,15 @@ class ExpandCommandTest(unittest.TestCase):
         )
 
     def test_title_with_spaces_and_quote_stays_one_argument(self):
-        # Заголовок приходит из X и может содержать что угодно; в кавычках
-        # конфига он должен остаться одним аргументом, а не рассыпаться.
+        # The title comes from X and may contain anything; inside the config's quotes
+        # it must stay a single argument instead of falling apart.
         title = 'Заметки "на день" — файл'
         argv = za.expand_command('notify-send "{title}"', self.context(wm_title=title))
         self.assertEqual(argv, ["notify-send", title])
 
     def test_whole_argument_placeholder_is_an_empty_argument(self):
-        # Подстановка без значения — пустая строка, а не выброшенный аргумент:
-        # иначе чужая команда получила бы сдвинутые позиционные параметры.
+        # A substitution without a value is an empty string, not a dropped argument:
+        # otherwise someone's command would get shifted positional parameters.
         argv = za.expand_command("my-cmd {zone} {window}", za.ActionContext())
         self.assertEqual(argv, ["my-cmd", "", ""])
 
@@ -173,17 +173,17 @@ class ExpandCommandTest(unittest.TestCase):
         self.assertIn("{window}", str(caught.exception))
 
     def test_cyrillic_placeholder_is_action_error(self):
-        # Имя подстановки — слово из букв (кириллица тоже): `{зона}` и
-        # `{что-то}` — такие же опечатки, как `{zon}`, и дают ActionError со
-        # списком известных имён, а не уходят в команду дословно.
+        # A substitution name is a word of letters (Cyrillic too): `{зона}` and
+        # `{что-то}` are the same typos as `{zon}`, and give an ActionError with
+        # the list of known names instead of going to the command verbatim.
         for text in ("echo {зона}", "notify-send {что-то}"):
             with self.assertRaises(za.ActionError) as caught:
                 za.expand_command(text, self.context())
             self.assertIn("unknown substitution", str(caught.exception))
 
     def test_shell_and_awk_braces_stay_literal(self):
-        # Не подстановки: `${HOME}` — переменная оболочки, `{}` из find,
-        # `{print $1}` у awk. Расширенный шаблон их не задевает.
+        # Not substitutions: `${HOME}` is a shell variable, `{}` from find,
+        # `{print $1}` from awk. The extended pattern does not touch them.
         for text, expected in (
             ("sh -c 'echo ${HOME}'", ["sh", "-c", "echo ${HOME}"]),
             ("find . -exec ls {} +", ["find", ".", "-exec", "ls", "{}", "+"]),
@@ -206,7 +206,7 @@ class ExpandCommandTest(unittest.TestCase):
 
 
 class BuiltinNameTest(unittest.TestCase):
-    """`builtin:<имя>` против внешней команды."""
+    """`builtin:<name>` versus an external command."""
 
     def test_external_command_is_not_builtin(self):
         for run in ("notify-send привет", "x-terminal-emulator", "", None, "my-builtin:x"):
@@ -231,14 +231,14 @@ class BuiltinNameTest(unittest.TestCase):
             self.assertIn("builtin:" + name, message)
 
     def test_empty_builtin_name_is_action_error(self):
-        # `builtin:` — та же опечатка, что `builtin:нетакого`: имени нет.
+        # `builtin:` is the same typo as `builtin:nosuchname`: there is no such name.
         with self.assertRaises(za.ActionError):
             za.builtin_name("builtin:")
         self.assertTrue(za.is_builtin("builtin:"))
 
 
 class MirrorFractionsTest(unittest.TestCase):
-    """Зеркальная рамка в долях: горизонталь, вертикаль, ось по умолчанию."""
+    """The mirror frame in fractions: horizontal, vertical, the default axis."""
 
     def test_horizontal_is_left_right(self):
         self.assertEqual(
@@ -290,12 +290,12 @@ class MirrorFractionsTest(unittest.TestCase):
 
 
 class FindMirrorTest(unittest.TestCase):
-    """Зеркало по геометрии: площадь пересечения, близость центров, порядок зон."""
+    """The mirror by geometry: intersection area, centre proximity, zone order."""
 
-    # Реальная несимметричная сетка: главная зона слева, две мелкие справа.
-    # Зеркало `main` — (0.1642, 0, 0.8358, 1): с `top-right` пересечение
-    # 0.1642*0.5, с `bottom` — 0.2871*0.1932, то есть `top-right` выигрывает
-    # по площади, хотя обе зоны попадают в зеркальную рамку.
+    # A real asymmetric grid: the main zone on the left, two small ones on the right.
+    # The mirror of `main` is (0.1642, 0, 0.8358, 1): with `top-right` the intersection is
+    # 0.1642*0.5, with `bottom` 0.2871*0.1932, so `top-right` wins
+    # on area, although both zones fall into the mirror frame.
     REAL = {
         "main": (0.0, 0.0, 0.8358, 1.0),
         "top-right": (0.8358, 0.0, 0.1642, 0.5),
@@ -312,10 +312,10 @@ class FindMirrorTest(unittest.TestCase):
         self.assertEqual(za.find_mirror(self.REAL, "top-right"), "main")
 
     def test_equal_area_tie_is_broken_by_center_distance(self):
-        # `s` совпадает со своей зеркальной рамкой (0.4, 0, 0.2, 1). Оба
-        # кандидата перекрывают её на 0.1, но центр `near` ближе к центру
-        # зеркала (0.15 против 0.25), и `far` записан первым: близость важнее
-        # порядка словаря.
+        # `s` coincides with its own mirror frame (0.4, 0, 0.2, 1). Both
+        # candidates overlap it by 0.1, but the centre of `near` is closer to the centre
+        # of the mirror (0.15 against 0.25), and `far` is written first: proximity beats
+        # dictionary order.
         zones = {
             "s": (0.4, 0.0, 0.2, 1.0),
             "far": (0.4, 0.0, 0.2, 0.5),
@@ -330,8 +330,8 @@ class FindMirrorTest(unittest.TestCase):
             "second": (0.4, 0.0, 0.2, 0.5),
         }
         self.assertEqual(za.find_mirror(zones, "s"), "first")
-        # Тот же словарь, собранный в другом порядке, даёт другой ответ —
-        # и это единственное, что решает: площадь и центры равны.
+        # The same dictionary built in another order gives another answer —
+        # and that is the only thing that decides it: the areas and centres are equal.
         reversed_zones = {"s": zones["s"], "second": zones["second"], "first": zones["first"]}
         self.assertEqual(za.find_mirror(reversed_zones, "s"), "second")
 
@@ -354,9 +354,9 @@ class FindMirrorTest(unittest.TestCase):
             za.find_mirror({"a": (0.0, 0.0, 1.0, 1.0)}, "a", "diagonal")
 
     def test_vertical_axis_is_honoured(self):
-        # По горизонтали у `a` зеркала нет (полоса во всю ширину и две зоны
-        # снизу), по вертикали зеркало — полоса снизу; равные площади двух
-        # нижних зон разрешает порядок словаря.
+        # Horizontally `a` has no mirror (a full-width strip and two zones
+        # below), vertically the mirror is the strip below; equal areas of the two
+        # bottom zones are resolved by dictionary order.
         zones = {
             "a": (0.0, 0.0, 1.0, 0.4),
             "b": (0.0, 0.6, 0.5, 0.4),
@@ -367,7 +367,7 @@ class FindMirrorTest(unittest.TestCase):
 
 
 class ZoneWindowsTest(unittest.TestCase):
-    """Окна, стоящие в зоне: рамка зоны, рамка вкладки, допуск, порядок."""
+    """Windows standing in a zone: the zone frame, the tab frame, tolerance, order."""
 
     ZONE = (100.0, 50.0, 800.0, 600.0)
 
@@ -392,7 +392,7 @@ class ZoneWindowsTest(unittest.TestCase):
         self.assertEqual(self.windows({11: None}), [])
 
     def test_tolerance_accepts_a_small_shift(self):
-        # Рамку ставит оконный менеджер: точного равенства float недостаточно.
+        # The window manager sets the frame: exact float equality is not enough.
         shift = float(zone_tabs.FRAME_TOLERANCE)
         shifted = tuple(v + shift for v in self.ZONE)
         self.assertEqual(self.windows({11: shifted}), [11])
@@ -412,7 +412,7 @@ class ZoneWindowsTest(unittest.TestCase):
 
 
 class ZoneOfFrameTest(unittest.TestCase):
-    """Зона окна по его рамке: зона, вкладка, узкая зона без полосы."""
+    """The zone of a window by its frame: zone, tab, a narrow zone without a strip."""
 
     ZONES = {
         "main": (0.0, 0.0, 800.0, 600.0),
@@ -431,7 +431,7 @@ class ZoneOfFrameTest(unittest.TestCase):
         zone = self.ZONES["main"]
         tab = zone_tabs.stack_rect(zone, 2, 40)
         self.assertEqual(za.zone_of_frame(tab, {"main": zone}, height=40), "main")
-        # С умолчанием полосы та же рамка уже не совпадает.
+        # With the default strip the same frame no longer matches.
         self.assertIsNone(za.zone_of_frame(tab, {"main": zone}))
 
     def test_window_outside_zones_is_none(self):
@@ -441,16 +441,16 @@ class ZoneOfFrameTest(unittest.TestCase):
         self.assertIsNone(za.zone_of_frame(None, self.ZONES))
 
     def test_narrow_zone_without_strip_still_owns_its_window(self):
-        # Полоса не влезает в узкую зону (`MIN_WINDOW_H` + высота полосы), и
-        # окна стоят на рамке самой зоны. Это всё ещё окна этой зоны.
+        # The strip does not fit into the narrow zone (`MIN_WINDOW_H` + the strip height), and
+        # the windows stand on the frame of the zone itself. These are still windows of this zone.
         zone = (0.0, 0.0, 400.0, 50.0)
         self.assertIsNone(zone_tabs.strip_rect(zone), "полоса не должна влезать")
         self.assertEqual(zone_tabs.stack_rect(zone, 2), zone)
         self.assertEqual(za.zone_of_frame(zone, {"narrow": zone}), "narrow")
 
     def test_first_zone_in_grid_order_wins(self):
-        # Зоны не перекрываются, но если рамка подходит двум (одинаковые зоны
-        # в словаре), ответ должен быть один и тот же — первая по порядку.
+        # The zones do not overlap, but if a frame fits two of them (identical zones
+        # in the dictionary), the answer must be the same one — the first in order.
         zones = {"first": (0.0, 0.0, 800.0, 600.0), "second": (0.0, 0.0, 800.0, 600.0)}
         self.assertEqual(za.zone_of_frame((0.0, 0.0, 800.0, 600.0), zones), "first")
 

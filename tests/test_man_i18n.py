@@ -1,38 +1,38 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""man-страницы: полнота каталогов po4a, сверка с CLI и то, что видит пользователь.
+"""Man pages: po4a catalog completeness, the cross-check against the CLI, and what the user sees.
 
-Man-страницы — не gettext-домен, а локализованные страницы: po4a делает `.po` из
-roff, собранные страницы ставятся в `/usr/share/man/<язык>/man1/`. Этот тест
-держит то, что иначе тихо гниёт:
+Man pages are not a gettext domain but localized pages: po4a makes a `.po` out of
+roff, and the built pages are installed into `/usr/share/man/<language>/man1/`. This test
+holds what would otherwise rot quietly:
 
-* каждый `msgid` шаблона `po/man/gridsnap.1.pot` переведён в `en.po` и
-  `zh_CN.po`, лишних записей нет и `fuzzy` нет — читается своим
-  `zone_i18n.parse_po`, поэтому ни `gettext`, ни `po4a` тесту не нужны;
-* **страница не отстала от кода**: множества длинных ключей `--…` в
-  `man/gridsnap.1` и в `--help` семи команд совпадают; все секции `zones.conf`,
-  которые знает `zone_config`, имеют свой `.SS`; команды и подкоманды из раздела
-  ПРИМЕРЫ настоящие; действия `profile` в странице — ровно `PROFILE_ACTIONS` из
-  `zone-tiler.py` (галерея так и выпадала из страницы незаметно);
-* **собранные страницы** (если `make man` уже прогнан) ведут себя как у
-  пользователя: кладутся во временный `MANPATH`, и `man gridsnap` под нужной
-  локалью показывает нужный язык, укладывается в колонку и не оставляет строк,
-  которые troff не смог разорвать.
+* every `msgid` of the `po/man/gridsnap.1.pot` template is translated in `en.po` and
+  `zh_CN.po`, there are no extra entries and no `fuzzy` ones — it is read through our own
+  `zone_i18n.parse_po`, so the test needs neither `gettext` nor `po4a`;
+* **the page has not fallen behind the code**: the sets of long `--…` keys in
+  `man/gridsnap.1` and in the `--help` of the seven commands are the same; every `zones.conf` section
+  that `zone_config` knows has its own `.SS`; the commands and subcommands of the
+  EXAMPLES section are real; the `profile` actions in the page are exactly `PROFILE_ACTIONS` from
+  `zone-tiler.py` (that is how the gallery used to drop out of the page unnoticed);
+* **the built pages** (if `make man` has already run) behave as they do for
+  the user: they are put into a temporary `MANPATH`, and `man gridsnap` under the right
+  locale shows the right language, fits into the column and leaves no lines
+  that troff could not break.
 
-Про `man путь/zh_CN/man1/gridsnap.1`: так проверять нельзя — man-db ведёт себя
-иначе, когда ему дают файл из каталога локали, и замер врёт (на этом уже ловили
-ложную тревогу). Поэтому временный `MANPATH` и локаль, как в жизни, причём путь
-берётся вида `<tmp>/usr/share/man`, а не короткий `<tmp>`: man-db включает
-языковые макросы groff только для такой раскладки. Разница измеримая и решает
-всё: без точек переноса страница даёт 254 колонки под коротким путём и 193 под
-настоящим, а с точками — 79 в обоих.
+About `man path/zh_CN/man1/gridsnap.1`: that is not a valid way to check — man-db behaves
+differently when it is given a file from a locale directory, and the measurement lies (we have already
+caught a false alarm that way). So a temporary `MANPATH` and a locale, as in real life, and the path
+is taken as `<tmp>/usr/share/man` rather than a short `<tmp>`: man-db enables
+the groff language macros only for such a layout. The difference is measurable and decides
+everything: without hyphenation points the page gives 254 columns under the short path and 193 under
+the real one, while with points it is 79 in both.
 
-Локаль `zh_CN.UTF-8` нужна, чтобы страница легла в колонку: без неё groff
-считает иероглиф одной колонкой вместо двух. Если локали в системе нет, языковые
-проверки пропускаются (`make check-man-i18n` в CI ставит их заранее);
-ширина и «cannot break line» проверяются всё равно.
+The `zh_CN.UTF-8` locale is needed for the page to fit the column: without it groff
+counts a CJK character as one column instead of two. If the locale is absent from the system, the language
+checks are skipped (`make check-man-i18n` in CI installs them beforehand);
+the width and the "cannot break line" checks run all the same.
 
-Запуск:
+Usage:
     python3 tests/test_man_i18n.py
     python3 -m unittest discover -s tests
 """
@@ -64,10 +64,10 @@ SOURCE = os.path.join(MAN, "gridsnap.1")
 BUILD = os.path.join(MAN, "build")
 POT = os.path.join(ROOT, "po", "man", "gridsnap.1.pot")
 LANGUAGES = ("ru", "zh_CN")
-# Язык страницы в man1/ — английский (`MAN_DEFAULT` в Makefile); он же язык
-# исходника, поэтому каталога `en` нет, а английская страница — копия источника.
+# The page language in man1/ is English (`MAN_DEFAULT` in the Makefile); it is also the
+# source language, so there is no `en` catalog and the English page is a copy of the source.
 BUILT_LANGS = ("en", "ru", "zh_CN")
-# Язык → локаль, под которой man-db обязан выбрать именно его страницу.
+# Language -> locale under which man-db must pick that very page.
 LOCALES = {"en": "C", "ru": "ru_RU.UTF-8", "zh_CN": "zh_CN.UTF-8"}
 ALIASES = (
     "gridsnap-tiler.1",
@@ -79,8 +79,8 @@ ALIASES = (
     "setup-hotkeys.1",
 )
 
-# Команда-запускалка → файл в репозитории. `--help` у всех работает без дисплея,
-# но троим для импорта нужен `python3-gi`.
+# Launcher command -> file in the repository. `--help` works for all of them without a display,
+# but three of them need `python3-gi` to import.
 COMMANDS = (
     ("gridsnap-tiler", "zone-tiler.py"),
     ("gridsnap-daemon", "zone-daemon.py"),
@@ -93,19 +93,19 @@ COMMANDS = (
 FILE_OF = dict(COMMANDS)
 
 OPTION_RE = re.compile(r"--([a-z][a-z-]*)")
-# Действие `profile` в странице: `.B list`, `.B from\-gallery \fIID\fP` и т. п.
+# A `profile` action in the page: `.B list`, `.B from\-gallery \fIID\fP` and the like.
 PROFILE_ACTION_RE = re.compile(r"^\.B ([a-z][a-z0-9\\-]*)")
 SECTION_RE = re.compile(r'^\.SS "?\[([^\]]+)\]"?', re.M)
-# Скелет страницы: макросы структуры, а не шрифта. `.B x` po4a превращает в
-# `\fBx\fP`, поэтому шрифтовые макросы в сверке не участвуют.
+# The page skeleton: structural macros, not font macros. po4a turns `.B x` into
+# `\fBx\fP`, so font macros take no part in the comparison.
 STRUCT_RE = re.compile(r"^\.(SH|SS|TP|PP|IP|RS|RE|nf|fi|TH|EX|EE)\b")
 BUILD_NOTICE_RE = re.compile(r'^\.\\"')
-# Ширина страницы: man-db верстает в 80 колонок, текст — 78 минус отступ.
+# Page width: man-db typesets in 80 columns, the text is 78 minus the indent.
 MAX_WIDTH = 90
-# Единственное предупреждение, которое может остаться у CJK-страницы: troff не
-# может растянуть строку без пробелов, поэтому она остаётся неполной. Пользователь
-# этого не видит (обычный `man` предупреждений не печатает), а вот неразрывная
-# строка — видит: она уезжает за ширину терминала.
+# The only warning a CJK page may leave: troff cannot
+# stretch a line without spaces, so it stays short. The user
+# does not see it (a plain `man` prints no warnings), but an unbreakable
+# line is a thing they do see: it runs past the terminal width.
 TOLERATED_WARNING = "cannot adjust line"
 CYRILLIC_RE = re.compile(r"[\u0400-\u04ff]")
 CJK_RE = re.compile(r"[\u2e80-\u9fff\u3040-\u30ff\uff00-\uffef]")
@@ -117,12 +117,12 @@ def read(path):
 
 
 def po_entries(path):
-    """Записи каталога без шапки; `fuzzy`, `msgctxt` и `msgid_plural` пропускает."""
+    """Catalog entries without the header; skips `fuzzy`, `msgctxt` and `msgid_plural`."""
     return {key: value for key, value in i18n.parse_po(read(path)).items() if key}
 
 
 def source_body():
-    """Исходная страница без комментариев `.\\"` (в них есть `--warnings`)."""
+    """The source page without the `.\\"` comments (they carry `--warnings`)."""
     return "\n".join(
         line for line in read(SOURCE).splitlines()
         if not line.startswith('.\\"')
@@ -130,12 +130,12 @@ def source_body():
 
 
 def option_names(text):
-    """Длинные ключи `--…`; `\\-` в roff — экранированный дефис."""
+    """Long `--…` keys; `\\-` in roff is an escaped hyphen."""
     return set(OPTION_RE.findall(text.replace("\\-", "-")))
 
 
 def help_text(binary):
-    """Вывод `--help` команды или `None`, если она не запускается без GTK."""
+    """The `--help` output of a command, or `None` if it does not start without GTK."""
     env = dict(os.environ)
     env.pop("DISPLAY", None)
     env["GRIDSNAP_LANG"] = "en"
@@ -154,7 +154,7 @@ def help_text(binary):
 
 
 def built_help():
-    """`--help` всех запустившихся команд; пропущенные — отдельным списком."""
+    """The `--help` of every command that started; the skipped ones — as a separate list."""
     texts, skipped = {}, []
     for name, binary in COMMANDS:
         text = help_text(binary)
@@ -166,7 +166,7 @@ def built_help():
 
 
 def skeleton(text):
-    """Последовательность структурных макросов страницы (без аргументов)."""
+    """The sequence of structural macros of the page (without arguments)."""
     found = []
     for line in text.splitlines():
         if BUILD_NOTICE_RE.match(line):
@@ -178,7 +178,7 @@ def skeleton(text):
 
 
 def example_lines():
-    """Строки блока `.nf` … `.fi` из раздела ПРИМЕРЫ."""
+    """The lines of the `.nf` … `.fi` block from the EXAMPLES section."""
     lines = read(SOURCE).splitlines()
     try:
         start = lines.index(".nf")
@@ -193,14 +193,14 @@ def example_lines():
 
 
 def display_width(line):
-    """Ширина строки в колонках: иероглиф занимает две."""
+    """The line width in columns: a CJK character takes two."""
     return sum(
         2 if unicodedata.east_asian_width(char) in "WF" else 1 for char in line
     )
 
 
 def locale_available(name):
-    """Есть ли локаль в системе (`locale -a` знает её под своим написанием)."""
+    """Whether the locale is present in the system (`locale -a` knows it under its own spelling)."""
     proc = subprocess.run(["locale", "-a"], stdout=subprocess.PIPE, text=True)
     normalize = lambda text: text.lower().replace("-", "").replace("_", "").replace(".", "")
     wanted = normalize(name)
@@ -208,7 +208,7 @@ def locale_available(name):
 
 
 class ManCatalogsTest(unittest.TestCase):
-    """Каталоги po4a полны и не содержат мусора."""
+    """The po4a catalogs are complete and contain no garbage."""
 
     def test_pot_matches_source(self):
         self.assertTrue(os.path.exists(POT), "нет po/man/gridsnap.1.pot: make man-pot")
@@ -239,18 +239,18 @@ class ManCatalogsTest(unittest.TestCase):
 
 
 class ManMatchesCliTest(unittest.TestCase):
-    """Страница не отстала от кода — ни в ключах, ни в секциях, ни в примерах."""
+    """The page has not fallen behind the code — neither in keys, nor in sections, nor in examples."""
 
     @classmethod
     def setUpClass(cls):
         cls.help_texts, cls.skipped = built_help()
 
     def test_options_match_cli_both_ways(self):
-        """Ключи страницы и ключи `--help` — одно и то же множество.
+        """The keys of the page and the keys of `--help` are one and the same set.
 
-        Сверка двусторонняя, поэтому командам с GTK нужен `python3-gi`: без
-        него (юнит-job CI) обе стороны множества неполны и тест пропускается,
-        а полный прогон делает `make check-man-i18n`.
+        The comparison is two-way, so the GTK commands need `python3-gi`: without
+        it (the unit CI job) both sides of the set are incomplete and the test is skipped,
+        while a full run is done by `make check-man-i18n`.
         """
         if self.skipped:
             self.skipTest(f"без GTK не запускаются: {', '.join(self.skipped)}")
@@ -285,8 +285,8 @@ class ManMatchesCliTest(unittest.TestCase):
             text = self.help_texts.get(tokens[0])
             if text is None:
                 continue  # команда без GTK не запускается — пропускаем
-            # Подкоманда — второе слово; у `profile` она третья, и её набор
-            # задаёт не argparse, а PROFILE_ACTIONS в zone-tiler.py.
+            # The subcommand is the second word; for `profile` it is the third, and its set
+            # is defined not by argparse but by PROFILE_ACTIONS in zone-tiler.py.
             if len(tokens) > 1 and tokens[1] == "profile":
                 if len(tokens) <= 2:
                     continue
@@ -300,12 +300,12 @@ class ManMatchesCliTest(unittest.TestCase):
                           f"(пример {line!r})")
 
     def test_profile_actions_match_cli(self):
-        """Действия `profile` в man-странице и в коде — одно и то же множество.
+        """The `profile` actions in the man page and in the code are one and the same set.
 
-        Список действий `profile` задаёт не argparse, а `PROFILE_ACTIONS` в
-        `zone-tiler.py`; без этой сверки новая подкоманда тихо не попадает
-        в страницу (так выпала галерея). Записи страницы — блоки `.TP` со
-        шрифтовыми макросами (`\fBlist\fP`), поэтому имя берётся до первого `\fP`.
+        The list of `profile` actions is defined not by argparse but by `PROFILE_ACTIONS` in
+        `zone-tiler.py`; without this cross-check a new subcommand quietly fails to get
+        into the page (that is how the gallery dropped out). The page entries are `.TP` blocks with
+        font macros (`\fBlist\fP`), so the name is taken up to the first `\fP`.
         """
         lines = source_body().splitlines()
         try:
@@ -340,10 +340,10 @@ class ManMatchesCliTest(unittest.TestCase):
 
 
 class BuiltPagesTest(unittest.TestCase):
-    """Собранные `make man` страницы так, как их видит пользователь.
+    """The pages built by `make man`, as the user sees them.
 
-    Без `make man` (юнит-job CI, где нет po4a) тесты пропускаются: полноту
-    каталогов они всё равно проверяют выше, а сборку гоняет `make check-man-i18n`.
+    Without `make man` (the unit CI job, which has no po4a) the tests are skipped: the completeness
+    of the catalogs they still check above, and the build is run by `make check-man-i18n`.
     """
 
     manpath = None
@@ -353,10 +353,10 @@ class BuiltPagesTest(unittest.TestCase):
     def setUpClass(cls):
         cls.built = os.path.isdir(BUILD)
         if cls.built:
-            # Путь именно `<tmp>/usr/share/man`: под коротким `<tmp>` man-db не
-            # включает языковые макросы groff и страница форматируется иначе,
-            # чем у пользователя (проверено: без точек переноса 254 колонки
-            # против 193 под настоящим путём).
+            # The path is exactly `<tmp>/usr/share/man`: under a short `<tmp>` man-db does not
+            # enable the groff language macros and the page is formatted differently
+            # than for the user (verified: without hyphenation points 254 columns
+            # against 193 under the real path).
             cls.root = tempfile.mkdtemp(prefix="gridsnap-man-")
             cls.manpath = os.path.join(cls.root, "usr", "share", "man")
             for lang in BUILT_LANGS:
@@ -408,9 +408,9 @@ class BuiltPagesTest(unittest.TestCase):
                              f"скелет {lang} разошёлся с источником")
 
     def test_english_page_is_the_source(self):
-        """Английская страница — копия `man/gridsnap.1`, а не сборка po4a.
+        """The English page is a copy of `man/gridsnap.1`, not a po4a build.
 
-        До инверсии языка копией источника была русская страница.
+        Before the language inversion the copy of the source was the Russian page.
         """
         if not self.built:
             self.skipTest("нет man/build: сначала make man")

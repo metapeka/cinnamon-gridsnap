@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Тесты выбора языка и каталогов (`zone_i18n`) — без X, без GTK, без сборки.
+"""Tests of language selection and catalogs (`zone_i18n`) — no X, no GTK, no build.
 
-Покрыто: разбор значения локали, порядок выбора языка (`GRIDSNAP_LANG` важнее
-локали, локаль `ru*` — русский каталог, `zh*` — китайский, всё прочее — английский,
-он же язык исходника), переопределение `set_language`, поиск каталога (`.mo` важнее
-`.po`, нет каталога — не ошибка), разбор `.po` (многострочные строки, эскейпы,
-`#, fuzzy`, заголовок) и сам перевод. Ни `msgfmt`, ни `xgettext` тестам не нужны:
-`.mo` собирается тут же вручную — формат у него простой, а проверить приоритет
-`.mo` над `.po` нужно.
+Covered: parsing the locale value, the language selection order (`GRIDSNAP_LANG` beats
+the locale, a `ru*` locale means the Russian catalog, `zh*` the Chinese one, everything else English,
+which is also the source language), the `set_language` override, catalog lookup (`.mo` beats
+`.po`, no catalog is not an error), `.po` parsing (multi-line strings, escapes,
+`#, fuzzy`, the header) and the translation itself. The tests need neither `msgfmt` nor `xgettext`:
+the `.mo` is built right here by hand — its format is simple, and the priority of
+`.mo` over `.po` has to be checked.
 
-Запуск:
+Usage:
     python3 tests/test_zone_i18n.py
     python3 -m unittest discover -s tests -v
 """
@@ -29,16 +29,16 @@ if ROOT not in sys.path:
 
 import zone_i18n as i18n  # noqa: E402
 
-# Переменные, из которых выбирается язык. Каждый тест начинается с чистого
-# окружения: иначе результат зависел бы от локали машины и от порядка тестов.
+# The variables the language is chosen from. Every test starts from a clean
+# environment: otherwise the result would depend on the machine locale and on the test order.
 LANG_VARS = ("GRIDSNAP_LANG", "LC_ALL", "LC_MESSAGES", "LANG")
 
 
 def build_mo(entries):
-    """Собрать `.mo` (формат GNU gettext) из `{msgid: msgstr}` — для теста.
+    """Build a `.mo` (GNU gettext format) from `{msgid: msgstr}` — for the test.
 
-    Формат: заголовок из 7 слов, две таблицы `(длина, смещение)` и склеенные
-    строки с нулевым байтом в конце. Этого достаточно `GNUTranslations`.
+    The format: a header of 7 words, two `(length, offset)` tables and the concatenated
+    strings with a zero byte at the end. That is enough for `GNUTranslations`.
     """
     header = {
         "": "Content-Type: text/plain; charset=UTF-8\nLanguage: en\n",
@@ -54,9 +54,9 @@ def build_mo(entries):
     str_table = []
     base = 28 + 16 * len(ordered)
     for key, _value in ordered:
-        # Длина в таблице — без завершающего нуля (так пишет GNU msgfmt); сам
-        # нуль занимает место в потоке строк. Нулевая длина у пустого msgid —
-        # это заголовок каталога, `GNUTranslations` опознаёт его именно так.
+        # The length in the table is without the terminating zero (that is how GNU msgfmt writes it); the
+        # zero itself takes a place in the string stream. A zero length for an empty msgid is
+        # the catalog header, which is exactly how `GNUTranslations` recognises it.
         raw = key.encode("utf-8")
         id_table.append((len(raw), base + len(ids)))
         ids += raw + b"\0"
@@ -71,13 +71,13 @@ def build_mo(entries):
         out += struct.pack("<2I", length, offset)
     for length, offset in str_table:
         out += struct.pack("<2I", length, offset)
-    # GNU msgfmt оставляет в конце лишний нулевой байт; `GNUTranslations`
-    # требует, чтобы строка кончалась *до* конца файла, поэтому повторяем.
+    # GNU msgfmt leaves an extra zero byte at the end; `GNUTranslations`
+    # requires the string to end *before* the end of the file, so we repeat it.
     return out + ids + strs + b"\0"
 
 
 class LanguageCase(unittest.TestCase):
-    """Общая обвязка: чистое окружение и сброшенные кэши/переопределение."""
+    """Shared harness: a clean environment and reset caches/override."""
 
     def setUp(self):
         patcher = mock.patch.dict(os.environ, {}, clear=False)
@@ -89,7 +89,7 @@ class LanguageCase(unittest.TestCase):
         i18n.reset_cache()
 
     def env(self, **values):
-        """Задать переменные языка (`None` — убрать переменную)."""
+        """Set the language variables (`None` removes the variable)."""
         for name, value in values.items():
             if value is None:
                 os.environ.pop(name, None)
@@ -216,7 +216,7 @@ class TestParsePo(LanguageCase):
 
 
 class CatalogCase(LanguageCase):
-    """Временный каталог вместо настоящих `po/` и `locale/`."""
+    """A temporary directory instead of the real `po/` and `locale/`."""
 
     def setUp(self):
         super().setUp()
@@ -226,8 +226,8 @@ class CatalogCase(LanguageCase):
         env = mock.patch.dict(os.environ, {"GRIDSNAP_LOCALEDIR": self.root})
         env.start()
         self.addCleanup(env.stop)
-        # Своя сборка `locale/` в чекауте нашлась бы раньше временного каталога:
-        # здесь ищем каталоги только там, где их положил тест.
+        # A local `locale/` build in the checkout would be found before the temporary directory:
+        # here the directories are looked for only where the test put them.
         dirs = mock.patch.object(i18n, "localedirs", return_value=[self.root])
         dirs.start()
         self.addCleanup(dirs.stop)
@@ -306,7 +306,7 @@ class TestPaths(LanguageCase):
         self.assertEqual(i18n.localedirs()[0], os.path.join(ROOT, "locale"))
 
     def test_install_prefix_localedir(self):
-        # <префикс>/lib/gridsnap -> <префикс>/share/locale
+        # <prefix>/lib/gridsnap -> <prefix>/share/locale
         expected = os.path.normpath(os.path.join(ROOT, "..", "..", "share", "locale"))
         self.assertIn(expected, i18n.localedirs())
 
