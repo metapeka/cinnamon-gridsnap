@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты HUD-режима пикера (`zone-picker.py --hud`).
+"""Unit tests for the HUD mode of the picker (`zone-picker.py --hud`).
 
-Проверяют три вещи:
+Three things are checked:
 
-* чистый выбор зоны под экранной точкой — `zone_picker_nav.zone_at_point`
-  (та же `zone_at`, только экранные пиксели переводятся в доли рабочей области);
-  этот класс тестов идёт без GTK и без X;
-* разбор аргументов `--hud`/`--at`/`--follow`: без источника точки — код 2,
-  с интерактивными флагами — код 2, `--at` и `--follow` mutually exclusive,
-  `--at` понимает и «X,Y», и «X Y»;
-* снимок `--hud --at X,Y --shot FILE.png` — файл непустой, а разные точки
-  (разные зоны) дают разные файлы, то есть подсветка действительно рисуется.
+* the pure choice of a zone under a screen point — `zone_picker_nav.zone_at_point`
+    (the same `zone_at`, only the screen pixels are translated into fractions of the work area);
+    this class of tests runs without GTK and without X;
+* parsing the arguments `--hud`/`--at`/`--follow`: without a point source — exit code 2,
+    with the interactive flags — exit code 2, `--at` and `--follow` are mutually exclusive,
+    `--at` understands both "X,Y" and "X Y";
+* a shot `--hud --at X,Y --shot FILE.png` — the file is not empty, and different points
+    (different zones) give different files, that is the highlight really is drawn.
 
-Модулю нужны `gi`/GTK и cairo (он импортирует их на уровне файла), а снимку —
-ещё и дисплей (`Gdk.Display`), поэтому в CI без GTK или без X эти тесты
-пропускаются. Чистая часть (точка → зона) работает всегда.
+The module needs `gi`/GTK and cairo (it imports them at file level), and the shot needs
+a display as well (`Gdk.Display`), so in CI without GTK or without X these tests are
+skipped. The pure part (point → zone) always works.
 
-Запуск:
+Running:
     python3 tests/test_picker_hud.py
     python3 -m unittest discover -s tests -v
-    xvfb-run -a python3 tests/test_picker_hud.py   # вместе со снимком
+    xvfb-run -a python3 tests/test_picker_hud.py   # together with the shot
 """
 
 import collections
@@ -34,8 +34,8 @@ import tempfile
 import unittest
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -50,17 +50,17 @@ PICKER = os.path.join(ROOT, "zone-picker.py")
 
 Rect = collections.namedtuple("Rect", "x y w h")
 
-# Две зоны во всю высоту: граница ровно посередине рабочей области.
+# Two zones over the full height: the border right in the middle of the work area.
 LEFT, RIGHT = Rect(0, 0, 0.5, 1.0), Rect(0.5, 0, 0.5, 1.0)
 TWO = [LEFT, RIGHT]
-# Щель между зонами: 0.4..0.6 не занято ни одной.
+# The gap between the zones: 0.4..0.6 is covered by neither.
 GAP = [Rect(0, 0, 0.4, 1.0), Rect(0.6, 0, 0.4, 1.0)]
 
-AREA = (0, 0, 1000, 500)  # рабочая область монитора: экранные пиксели
+AREA = (0, 0, 1000, 500)  # the work area of the monitor: screen pixels
 
 
 def gui_available():
-    """Есть ли GTK и cairo: без них `zone-picker.py` не импортируется."""
+    """Are GTK and cairo available: without them `zone-picker.py` does not import."""
     try:
         import cairo  # noqa: F401
         import gi
@@ -73,7 +73,7 @@ def gui_available():
 
 
 def display_available():
-    """Есть ли X-дисплей: без него не посчитать мониторы и не записать снимок."""
+    """Is there an X display: without it the monitors cannot be counted and the shot cannot be written."""
     if not HAS_GUI:
         return False
     try:
@@ -87,7 +87,7 @@ def display_available():
 HAS_GUI = gui_available()
 HAS_DISPLAY = display_available()
 
-# Конфиг для снимка: две зоны, чтобы точка слева и точка справа попадали в разные.
+# The config for the shot: two zones, so that a point on the left and a point on the right land in different ones.
 CONF2 = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\nleft = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\n"
@@ -96,7 +96,7 @@ CONF2 = (
 
 
 class TestZoneAtPoint(unittest.TestCase):
-    """Точка в экранных пикселях -> индекс зоны; без GTK и без X."""
+    """A point in screen pixels -> the zone index; without GTK and without X."""
 
     def test_point_inside_left_zone(self):
         self.assertEqual(nav.zone_at_point(TWO, AREA, (100, 100)), 0)
@@ -108,7 +108,7 @@ class TestZoneAtPoint(unittest.TestCase):
         self.assertEqual(nav.zone_at_point(TWO, AREA, (999, 499)), 1)
 
     def test_boundary_goes_to_later_zone(self):
-        # Ровно на стыке побеждает та зона, что нарисована позже, — как zone_at.
+        # Right on the seam the zone drawn later wins — as in zone_at.
         self.assertEqual(nav.zone_at_point(TWO, AREA, (500, 250)), 1)
 
     def test_gap_between_zones_has_no_zone(self):
@@ -119,11 +119,11 @@ class TestZoneAtPoint(unittest.TestCase):
         self.assertIsNone(nav.zone_at_point(TWO, AREA, (-10, 250)))
 
     def test_work_area_offset_is_subtracted(self):
-        # Монитор справа: его рабочая область начинается с x=100, y=50.
+        # The monitor on the right: its work area starts at x=100, y=50.
         shifted = (100, 50, 1000, 500)
         self.assertEqual(nav.zone_at_point(TWO, shifted, (150, 60)), 0)
         self.assertEqual(nav.zone_at_point(TWO, shifted, (1050, 60)), 1)
-        # та же точка, но без поправки на смещение, попала бы в левую зону
+        # the same point, but without the offset correction, would land in the left zone
         self.assertEqual(nav.zone_at_point(TWO, AREA, (150, 60)), 0)
 
     def test_empty_zones(self):
@@ -140,7 +140,7 @@ class TestZoneAtPoint(unittest.TestCase):
 
 @unittest.skipUnless(HAS_GUI, "нет python3-gi/gir1.2-gtk-3.0/python3-cairo: zone-picker.py не загрузить")
 class PickerHudArgsCase(unittest.TestCase):
-    """Разбор аргументов и мелкие помощники HUD; окно и X не нужны."""
+    """Parsing the arguments and the small HUD helpers; no window and no X needed."""
 
     @classmethod
     def setUpClass(cls):
@@ -150,18 +150,18 @@ class PickerHudArgsCase(unittest.TestCase):
         cls.picker = module
 
     def parse(self, argv):
-        """Разобрать аргументы; SystemExit и stderr — наружу, тесту."""
+        """Parse the arguments; SystemExit and stderr go outside, to the test."""
         return self.picker.parse_args(argv)
 
     def parse_error(self, argv):
-        """Код возврата и текст ошибки разбора для заведомо негодных аргументов."""
+        """The return code and the parse error text for deliberately invalid arguments."""
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
             with self.assertRaises(SystemExit) as ctx:
                 self.picker.parse_args(argv)
         return ctx.exception.code, err.getvalue()
 
-    # ---- --hud требует источник точки
+    # ---- --hud needs a point source
 
     def test_hud_without_point_source_exits_2(self):
         code, err = self.parse_error(["--hud"])
@@ -195,7 +195,7 @@ class PickerHudArgsCase(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("only work together with --hud", err)
 
-    # ---- --hud is incompatible с интерактивным режимом
+    # ---- --hud is incompatible with the interactive mode
 
     def test_hud_with_interactive_flags_exits_2(self):
         for extra in (["--select", "left"], ["--window", "0x1"], ["--dry-run"], ["--verify"]):
@@ -212,7 +212,7 @@ class PickerHudArgsCase(unittest.TestCase):
         self.assertIn("--shot does not work with --follow", err)
 
     def test_hud_keeps_common_flags(self):
-        # --conf/--monitor/--workspace/--shot общие: HUD их принимает.
+        # --conf/--monitor/--workspace/--shot are common: the HUD accepts them.
         args = self.parse(
             ["--hud", "--at", "5,6", "--shot", "/tmp/x.png", "--conf", "/tmp/z.conf",
              "--monitor", "1", "--workspace", "conf"]
@@ -222,7 +222,7 @@ class PickerHudArgsCase(unittest.TestCase):
         self.assertEqual(args.monitor, 1)
         self.assertEqual(args.workspace, self.picker.zt.WORKSPACE_CONF)
 
-    # ---- точка: один разбор на --at и на строки stdin
+    # ---- the point: one parser for --at and for the stdin lines
 
     def test_parse_point_formats(self):
         parse = self.picker.parse_point
@@ -243,7 +243,7 @@ class PickerHudArgsCase(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("screen coordinates", err)
 
-    # ---- подпись профиля
+    # ---- the profile caption
 
     def test_hud_caption(self):
         caption = self.picker.hud_caption
@@ -252,17 +252,17 @@ class PickerHudArgsCase(unittest.TestCase):
         self.assertEqual(caption(""), "")
 
     def test_hud_caption_names_screen_when_its_profile_gave_grid(self):
-        """Профиль экрана важнее стола и в подписи HUD, а не только в оверлее."""
+        """The screen profile takes precedence over the workspace in the HUD caption too, not only in the overlay."""
         caption = self.picker.hud_caption
         self.assertEqual(caption("cinema", "HDMI-1", "studio"),
                          'monitor HDMI-1 · profile "studio"')
         self.assertEqual(caption("cinema", "HDMI-1", None), 'profile "cinema"')
         self.assertEqual(caption(None, "HDMI-1", None), "")
 
-    # ---- HUD рисуется без подсказки про клавиши
+    # ---- the HUD is drawn without the key hint
 
     def test_draw_zones_without_hint_differs_from_hint(self):
-        """Пустой hint убирает подсказку «стрелки/Enter»: HUD их не слушает."""
+        """An empty hint removes the "arrows/Enter" hint: the HUD does not listen to them."""
         import cairo
 
         zone = self.picker.zc.Zone("left", 0.0, 0.0, 0.5, 1.0, "")
@@ -283,7 +283,7 @@ class PickerHudArgsCase(unittest.TestCase):
     HAS_GUI and HAS_DISPLAY, "нужны GTK, cairo и X-дисплей: снимок HUD считается по мониторам"
 )
 class PickerHudShotCase(unittest.TestCase):
-    """`--hud --at X,Y --shot`: PNG непустой, разные точки — разные файлы."""
+    """`--hud --at X,Y --shot`: the PNG is not empty, different points — different files."""
 
     @classmethod
     def setUpClass(cls):
@@ -300,7 +300,7 @@ class PickerHudShotCase(unittest.TestCase):
             handle.write(CONF2)
 
     def shot(self, name, point):
-        """Запустить `main` в режиме снимка HUD и вернуть путь, размер и вывод."""
+        """Run `main` in the HUD shot mode and return the path, the size and the output."""
         path = os.path.join(self.dir, name)
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
@@ -325,12 +325,12 @@ class PickerHudShotCase(unittest.TestCase):
         _p2, right_png, out_right = self.shot("right.png", (700, 100))
         self.assertIn("-> left", out_left)
         self.assertIn("-> right", out_right)
-        # разные зоны подсвечены — значит, различаются и картинки
+        # different zones are highlighted — so the pictures differ too
         self.assertNotEqual(left_png, right_png, "подсветка не попала в снимок")
 
     def test_point_in_gap_highlights_nothing(self):
-        # Щели в CONF2 нет, поэтому берём точку за правым краем рабочей области:
-        # подсветки нет, но сетка всё равно рисуется.
+        # CONF2 has no gap, so we take a point beyond the right edge of the work area:
+        # there is no highlight, but the grid is drawn anyway.
         _path, data, out = self.shot("gap.png", (10_000, 10_000))
         self.assertIn("мимо зон", out)
         self.assertGreater(len(data), 1000)

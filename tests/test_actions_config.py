@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Тесты конфига действий: секции `[action:<имя>]` в `zone_config`.
+"""Tests for the action config: the `[action:<name>]` sections in `zone_config`.
 
-Действие — секция `[action:<имя>]` (одна секция — один экземпляр, как
-`[zones:<выход>]` — один набор на экран). Здесь проверяется разбор этой секции
-(`zone_config.load_actions`: поля, `builtin:`, обязательные значения, опечатки —
-код 3) и то, что секции действий переживают запись конфига: редактор их не
-правит, а переносит дословно, как `[focus]`/`[tabs]`/`[move]`.
+An action is a section `[action:<name>]` (one section — one instance, just as
+`[zones:<output>]` is one set per screen). What is checked here is the parsing of that section
+(`zone_config.load_actions`: the fields, `builtin:`, the required values, typos —
+exit code 3) and that the action sections survive saving the config: the editor does not
+edit them, it carries them over verbatim, like `[focus]`/`[tabs]`/`[move]`.
 
-Без X-сервера и GTK: разбор конфига и запись раскладки — чистые функции, а
-`profile use` вызывается через `main` раскладчика с `--no-hotkeys`, чтобы не
-трогать gsettings и сочетания клавиш.
+Without an X server and GTK: parsing the config and saving the layout are pure functions, and
+`profile use` is called through the tiler's `main` with `--no-hotkeys` so as not to
+touch gsettings and the key bindings.
 
-Запуск:
+Running:
     python3 tests/test_actions_config.py
     python3 -m unittest discover -s tests -v
 """
@@ -27,8 +27,8 @@ import tempfile
 import unittest
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -46,8 +46,8 @@ BASE = (
     "[zones]\nmain = 0, 0, 0.5, 1\nside = 0.5, 0, 0.5, 1\n"
 )
 
-# Полная запись: все пять полей. Инлайн-комментарий после `run` — как в README,
-# он не должен попасть в значение.
+# A full record: all five fields. The inline comment after `run` is as in the README,
+# it must not get into the value.
 FULL = """[action:term-main]
 run = builtin:terminal        ; обязательное поле
 zone = main
@@ -78,7 +78,7 @@ FULL_EXPECTED = {
 
 
 def load_tiler():
-    """`zone-tiler.py` как модуль: `profile use` живёт там."""
+    """`zone-tiler.py` as a module: `profile use` lives there."""
     spec = importlib.util.spec_from_file_location("zone_tiler_actions_conf", TILER)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -86,7 +86,7 @@ def load_tiler():
 
 
 class ActionsSectionTest(unittest.TestCase):
-    """Разбор `[action:<имя>]` в `zone_config` — без X и GTK."""
+    """Parsing `[action:<name>]` in `zone_config` — without X and GTK."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-actions-conf-")
@@ -102,7 +102,7 @@ class ActionsSectionTest(unittest.TestCase):
             return fh.read()
 
     def config_error(self, text, *needles):
-        """Записать конфиг и ждать код 3 с подстроками в сообщении."""
+        """Write the config and expect exit code 3 with the substrings in the message."""
         self.write(text)
         err = io.StringIO()
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
@@ -114,7 +114,7 @@ class ActionsSectionTest(unittest.TestCase):
             self.assertIn(needle, message)
         return message
 
-    # ---------------------------------------------------------- пусто и минимум
+    # ---------------------------------------------------------- empty and minimum
 
     def test_missing_file_means_no_actions(self):
         self.assertEqual(zc.load_actions(os.path.join(self.dir, "нет.conf")), {})
@@ -142,7 +142,7 @@ class ActionsSectionTest(unittest.TestCase):
             },
         )
 
-    # --------------------------------------------------------------- поля целиком
+    # --------------------------------------------------------------- all the fields
 
     def test_full_record(self):
         self.write(BASE + FULL)
@@ -185,14 +185,14 @@ class ActionsSectionTest(unittest.TestCase):
         self.assertEqual(actions["own"]["key"], "<Super><Alt>m")
 
     def test_action_name_is_lowercased_and_prefix_is_case_insensitive(self):
-        # Имя попадает в командную строку клавиши, поэтому оно всегда строчное;
-        # префикс секции — такое же имя, регистр в нём не значим.
+        # The name goes into the command line of the key binding, so it is always lowercase;
+        # the prefix of the section is the same name, case does not matter in it.
         self.write(BASE + "[Action:Term-Main]\nrun = builtin:terminal\n")
         self.assertEqual(list(zc.load_actions(self.path)), ["term-main"])
 
     def test_axis_is_normalized_to_lowercase(self):
-        # `zone_actions.mirror_fractions` сравнивает ось без учёта регистра,
-        # поэтому в записи она тоже приводится к нижнему регистру.
+        # `zone_actions.mirror_fractions` compares the axis case-insensitively,
+        # so the record normalizes it to lowercase too.
         self.write(BASE + "[action:mirror]\nrun = builtin:mirror\naxis = Vertical\n")
         self.assertEqual(zc.load_actions(self.path)["mirror"]["axis"], "vertical")
 
@@ -215,7 +215,7 @@ class ActionsSectionTest(unittest.TestCase):
         )
 
     def test_empty_builtin_name_is_config_error(self):
-        # `builtin:` без имени — опечатка: известно ли имя, решает ядро действий.
+        # `builtin:` without a name is a typo: the action core decides whether the name is known.
         message = self.config_error(BASE + "[action:own]\nrun = builtin:\n", "builtin:")
         self.assertIn("built-in action", message)
 
@@ -225,7 +225,7 @@ class ActionsSectionTest(unittest.TestCase):
     def test_missing_run_is_config_error(self):
         self.config_error(BASE + "[action:own]\nzone = main\n", "run")
 
-    # -------------------------------------------------------------- имена секций
+    # -------------------------------------------------------------- section names
 
     def test_case_differing_names_are_config_error(self):
         self.config_error(
@@ -245,7 +245,7 @@ class ActionsSectionTest(unittest.TestCase):
     def test_empty_action_name_is_config_error(self):
         self.config_error(BASE + "[action:]\nrun = builtin:mirror\n", "empty action name")
 
-    # ------------------------------------------------------------------ поля
+    # ------------------------------------------------------------------ fields
 
     def test_unknown_field_is_config_error(self):
         self.config_error(
@@ -273,7 +273,7 @@ class ActionsSectionTest(unittest.TestCase):
         )
 
     def test_command_at_external_command_is_config_error(self):
-        # Молча съеденная опечатка выглядела бы как «моя команда не работает».
+        # A silently swallowed typo would look like "my command does not work".
         self.config_error(
             BASE + "[action:own]\nrun = notify-send привет\ncommand = xterm\n",
             "command",
@@ -302,12 +302,12 @@ class ActionsSectionTest(unittest.TestCase):
         )
 
     def test_empty_axis_is_config_error(self):
-        # Пустая ось — не «умолчание», а опечатка: умолчание — отсутствие поля.
+        # An empty axis is not "the default" but a typo: the default is the field being absent.
         self.config_error(BASE + "[action:own]\nrun = builtin:mirror\naxis =\n", "axis")
 
 
 class ActionsSurviveSavingTest(unittest.TestCase):
-    """Секции `[action:*]` — чужие для редактора: запись конфига их не теряет."""
+    """The `[action:*]` sections are foreign to the editor: saving the config does not lose them."""
 
     BODY = (
         "[action:term-main]\n"
@@ -349,7 +349,7 @@ class ActionsSurviveSavingTest(unittest.TestCase):
         )
         self.assertEqual(zc.load_actions(self.path), self.actions)
         text = self.read()
-        # Тело секции переносится дословно — с комментарием и порядком строк.
+        # The body of the section is carried over verbatim — with the comment and the line order.
         self.assertIn(
             "[action:term-main]\n"
             "# редактор зон этих строк не правит — переносит как есть\n"
@@ -376,10 +376,10 @@ class ActionsSurviveSavingTest(unittest.TestCase):
         self.assertEqual(zc.load_actions(self.path), self.actions)
 
     def test_case_differing_sections_refuse_to_save(self):
-        # `[action:Main]` и `[action:main]` ConfigParser считает разными
-        # секциями. Склеить их в один блок нельзя: записанная склейка не
-        # читается (`DuplicateOptionError`). Редактор отказывает кодом 3,
-        # файл остаётся дословно тем же.
+        # `[action:Main]` and `[action:main]` ConfigParser considers different
+        # sections. They cannot be merged into one block: the written merge does not
+        # read back (`DuplicateOptionError`). The editor refuses with exit code 3,
+        # the file stays verbatim the same.
         original = (
             BASE
             + "[action:Main]\nrun = builtin:mirror\n\n"
@@ -398,9 +398,9 @@ class ActionsSurviveSavingTest(unittest.TestCase):
         self.assertEqual(self.read(), original)
 
     def test_duplicate_section_is_config_error(self):
-        # Дословный повтор `[action:x]`: ConfigParser падает
-        # `DuplicateSectionError`. Загрузчик превращает его в код 3 с именем
-        # файла, а не в трассировку.
+        # A verbatim repeat of `[action:x]`: ConfigParser raises
+        # `DuplicateSectionError`. The loader turns it into exit code 3 with the file
+        # name, not into a traceback.
         self.write(BASE + "[action:x]\nrun = builtin:mirror\n\n[action:x]\nrun = builtin:terminal\n")
         err = io.StringIO()
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
@@ -410,8 +410,8 @@ class ActionsSurviveSavingTest(unittest.TestCase):
         self.assertIn("action:x", err.getvalue())
 
     def test_duplicate_section_in_extra_sections_is_config_error(self):
-        # Тот же повтор, но через чтение чужих секций (путь сохранения):
-        # сообщение называет секцию, а не молча склеивает тела.
+        # The same repeat, but through reading the foreign sections (the saving path):
+        # the message names the section instead of silently merging the bodies.
         self.write(BASE + "[action:x]\nrun = builtin:mirror\n\n[action:x]\nrun = builtin:terminal\n")
         err = io.StringIO()
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
@@ -420,9 +420,9 @@ class ActionsSurviveSavingTest(unittest.TestCase):
         self.assertIn("defined twice", err.getvalue())
 
     def test_profile_use_keeps_actions(self):
-        # `profile use` — та же запись конфига: профиль меняет зоны и правила, а
-        # чужие секции активного конфига остаются. Клавиши не трогаем
-        # (`--no-hotkeys`), иначе тест полез бы в gsettings.
+        # `profile use` is the same config writing: the profile changes zones and rules, while
+        # the foreign sections of the active config stay. We do not touch the keys
+        # (`--no-hotkeys`), otherwise the test would reach into gsettings.
         zc.save_profile(
             "work", [zc.Zone("wide", 0.0, 0.0, 1.0, 1.0)], None, self.path
         )
