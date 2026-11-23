@@ -63,9 +63,9 @@ MAN = os.path.join(ROOT, "man")
 SOURCE = os.path.join(MAN, "gridsnap.1")
 BUILD = os.path.join(MAN, "build")
 POT = os.path.join(ROOT, "po", "man", "gridsnap.1.pot")
-LANGUAGES = ("en", "zh_CN")
-# Язык страницы в man1/ — английский (`MAN_DEFAULT` в Makefile); `ru` собирается
-# копией источника, поэтому в каталогах po4a его нет.
+LANGUAGES = ("ru", "zh_CN")
+# Язык страницы в man1/ — английский (`MAN_DEFAULT` в Makefile); он же язык
+# исходника, поэтому каталога `en` нет, а английская страница — копия источника.
 BUILT_LANGS = ("en", "ru", "zh_CN")
 # Язык → локаль, под которой man-db обязан выбрать именно его страницу.
 LOCALES = {"en": "C", "ru": "ru_RU.UTF-8", "zh_CN": "zh_CN.UTF-8"}
@@ -138,7 +138,7 @@ def help_text(binary):
     """Вывод `--help` команды или `None`, если она не запускается без GTK."""
     env = dict(os.environ)
     env.pop("DISPLAY", None)
-    env["GRIDSNAP_LANG"] = "ru"
+    env["GRIDSNAP_LANG"] = "en"
     env["PYTHONPATH"] = ROOT + os.pathsep + env.get("PYTHONPATH", "")
     try:
         proc = subprocess.run(
@@ -269,7 +269,7 @@ class ManMatchesCliTest(unittest.TestCase):
         known |= {
             zc.MOVE_SECTION, zc.FOCUS_SECTION, zc.TABS_SECTION,
             zc.WORKSPACES_SECTION, zc.MONITORS_SECTION,
-            zc.ACTION_SECTION_PREFIX + "<имя>",
+            zc.ACTION_SECTION_PREFIX + "<name>",
         }
         known |= set(zc.BEFORE_KEYS) | set(zc.AFTER_KEYS)
         documented = set(SECTION_RE.findall(read(SOURCE)))
@@ -304,24 +304,26 @@ class ManMatchesCliTest(unittest.TestCase):
 
         Список действий `profile` задаёт не argparse, а `PROFILE_ACTIONS` в
         `zone-tiler.py`; без этой сверки новая подкоманда тихо не попадает
-        в страницу (так выпала галерея).
+        в страницу (так выпала галерея). Записи страницы — блоки `.TP` со
+        шрифтовыми макросами (`\fBlist\fP`), поэтому имя берётся до первого `\fP`.
         """
         lines = source_body().splitlines()
         try:
             start = next(
-                n for n, line in enumerate(lines) if line.startswith(".B profile ")
+                n for n, line in enumerate(lines) if line.startswith("\\fBprofile ")
             )
         except StopIteration:
-            self.fail("в man-странице нет блока .B profile")
+            self.fail("в man-странице нет записи про profile")
         end = next(
             (n for n in range(start + 1, len(lines)) if lines[n].startswith(".SS ")),
             len(lines),
         )
-        documented = {
-            match.group(1).replace("\\-", "-")
-            for match in (PROFILE_ACTION_RE.match(line) for line in lines[start + 1:end])
-            if match
-        }
+        documented = set()
+        for n in range(start + 1, end - 1):
+            if lines[n].strip() != ".TP" or not lines[n + 1].strip().startswith("\\fB"):
+                continue
+            name = lines[n + 1].strip()[len("\\fB"):].split("\\fP", 1)[0]
+            documented.add(name.replace("\\-", "-").strip())
         real = set(zc.load_zonetiler().PROFILE_ACTIONS)
         self.assertEqual(sorted(documented), sorted(real),
                          "действия profile в man-странице разошлись с PROFILE_ACTIONS")
@@ -405,12 +407,16 @@ class BuiltPagesTest(unittest.TestCase):
             self.assertEqual(skeleton(read(self.page(lang))), expected,
                              f"скелет {lang} разошёлся с источником")
 
-    def test_russian_page_is_the_source(self):
+    def test_english_page_is_the_source(self):
+        """Английская страница — копия `man/gridsnap.1`, а не сборка po4a.
+
+        До инверсии языка копией источника была русская страница.
+        """
         if not self.built:
             self.skipTest("нет man/build: сначала make man")
-        with open(SOURCE, "rb") as src, open(self.page("ru"), "rb") as ru:
-            self.assertEqual(ru.read(), src.read(),
-                             "русская страница должна быть копией man/gridsnap.1")
+        with open(SOURCE, "rb") as src, open(self.page("en"), "rb") as en:
+            self.assertEqual(en.read(), src.read(),
+                             "английская страница должна быть копией man/gridsnap.1")
 
     def test_locale_chooses_the_page(self):
         if not self.built or shutil.which("man") is None:
