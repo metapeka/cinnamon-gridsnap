@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""zone_config.py — чистая работа с zones.conf без GTK.
+"""zone_config.py — pure work with zones.conf, without GTK.
 
-Здесь живёт всё, что редактор зон (``zone-editor.py``) делает с конфигом:
-модель зоны, загрузка раскладки через ``zone-tiler.py``, сохранение в
-каноническом виде и перенос «чужих» секций (``[rules]``, ``[daemon]``, …)
-дословно. Наборы зон на монитор живут в секциях ``[zones]`` (по умолчанию) и
-``[zones:<имя выхода>]`` (например ``[zones:HDMI-1]``); модуль знает оба вида
-и не теряет соседние наборы при сохранении одного.
+Everything the zone editor (``zone-editor.py``) does with the config lives here:
+the zone model, loading the layout through ``zone-tiler.py``, saving in
+canonical form and carrying "foreign" sections (``[rules]``, ``[daemon]``, …)
+verbatim. Per-monitor zone sets live in the ``[zones]`` (default) and
+``[zones:<output name>]`` sections (for example ``[zones:HDMI-1]``); the module
+knows both kinds and does not lose the neighbouring sets when one is saved.
 
-Модуль намеренно не импортирует gi/GTK: его можно и нужно тестировать
-обычными юнит-тестами в CI, где ``python3-gi`` не установлен.
+The module deliberately does not import gi/GTK: it can and should be tested
+by ordinary unit tests in CI, where ``python3-gi`` is not installed.
 """
 
 import configparser
@@ -22,26 +22,26 @@ import re
 import zone_actions
 import zone_tabs
 
-from zone_i18n import _  # строки интерфейса; без каталога — исходный текст
+from zone_i18n import _  # UI strings; without a catalog — the source text
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 
-# Секции, которыми управляет сам редактор: их нельзя переносить как «чужие».
+# Sections the editor manages itself: they must not be carried as “foreign”.
 RESERVED_SECTIONS = frozenset({"grid", "zones", "keys", "move"})
 
-# Набор зон монитора: ``[zones:<имя выхода>]``. Имя выхода (eDP-1, HDMI-1) —
-# не имя зоны, поэтому в кавычки/дефисы оно не приводится.
+# A monitor zone set: ``[zones:<output name>]``. The output name (eDP-1, HDMI-1)
+# is not a zone name, so it is not mangled into quotes/dashes.
 MONITOR_SECTION_PREFIX = "zones:"
 
-# Перемещение окна в соседнюю зону: ``[move]``, ключ — направление, значение —
-# сочетание Cinnamon. Секция необязательная: нет её — действуют значения по
-# умолчанию. Ключи не из направлений — ошибка конфига: молча проигнорированная
-# опечатка оставила бы человека без клавиши, а он бы этого не заметил.
+# Moving a window into the neighbouring zone: ``[move]``, the key is a direction,
+# the value a Cinnamon binding. The section is optional: without it the
+# defaults apply. Keys that are not directions are a config error: a silently
+# ignored typo would leave a person without a key, and they would not notice.
 MOVE_SECTION = "move"
 MOVE_DIRECTIONS = ("left", "right", "up", "down")
-# ``Win``+стрелки — сочетания, которые Cinnamon (muffin) занимает своим
-# ``push-tile-*``; поэтому их и берём по умолчанию, но человек может поменять.
+# ``Win``+arrows are the bindings Cinnamon (muffin) takes for its own
+# ``push-tile-*``; that is why we take them as the default, but a person may change them.
 DEFAULT_MOVE_KEYS = {
     "left": "<Super>Left",
     "right": "<Super>Right",
@@ -49,69 +49,69 @@ DEFAULT_MOVE_KEYS = {
     "down": "<Super>Down",
 }
 
-# Режим «только эта зона»: ``[focus]``, ``key`` — сочетание, ``zone`` — зона, куда
-# кладётся окно (необязательна). Секция необязательная: нет её — режим не
-# настроен. Ключи не из ``key``/``zone`` — ошибка конфига, как и пустая ``zone``:
-# молча проигнорированная опечатка оставила бы человека без клавиши.
+# The “this zone only” mode: ``[focus]``, ``key`` is the binding, ``zone`` the zone the
+# window is dropped into (optional). The section is optional: without it the
+# mode is not configured. Keys other than ``key``/``zone`` are a config error,
+# as is an empty ``zone``: a silently ignored typo would leave a person without a key.
 #
-# В :data:`RESERVED_SECTIONS` секция не входит намеренно: редактор её не правит,
-# а переносит дословно как чужую — так она и переживает сохранение раскладки.
+# The section is deliberately absent from :data:`RESERVED_SECTIONS`: the editor
+# does not edit it but carries it verbatim as foreign — that is how it survives a save.
 FOCUS_SECTION = "focus"
 
-# Вкладки в зоне: ``[tabs]``, ``key`` — сочетание «следующее окно зоны», ``height``
-# — высота полосы вкладок в пикселях (необязательна, умолчание —
-# :data:`zone_tabs.STRIP_HEIGHT`). Секция необязательная. Как и ``[focus]``, в
-# :data:`RESERVED_SECTIONS` она не входит: редактор её не правит, а переносит
-# дословно как чужую. Неизвестный ключ — ошибка конфига (опечатка оставила бы
-# человека без клавиши), мусор в ``height`` — тоже: полоса нулевой или
-# отрицательной высоты не рисуется, и вкладки молча стали бы невидимыми.
+# Tabs in a zone: ``[tabs]``, ``key`` is the “next window of the zone” binding,
+# ``height`` is the height of the tabs strip in pixels (optional, the default is
+# :data:`zone_tabs.STRIP_HEIGHT`). The section is optional. Like ``[focus]``, it
+# is not in :data:`RESERVED_SECTIONS`: the editor does not edit it but carries it
+# verbatim as foreign. An unknown key is a config error (a typo would leave a
+# person without a key), and so is garbage in ``height``: a strip of zero or
+# negative height is not drawn, and the tabs would silently become invisible.
 TABS_SECTION = "tabs"
 TABS_FIELDS = ("key", "height")
 
-# Действия: одна секция — один экземпляр действия, ``[action:<имя>]`` (как
-# ``[zones:<выход>]`` — один набор на экран). В :data:`RESERVED_SECTIONS` секция
-# не входит: редактор её не правит, а переносит дословно, как
-# ``[focus]``/``[tabs]``. Имя действия — из ``[a-z0-9_-]``: оно уже приведено
-# ``ConfigParser`` к нижнему регистру и попадает в командную строку клавиши
-# (``zone-tiler.py action <имя>``), поэтому пробелы и кавычки в нём недопустимы.
+# Actions: one section is one action instance, ``[action:<name>]`` (like
+# ``[zones:<output>]`` is one set per screen). The section is not in
+# :data:`RESERVED_SECTIONS`: the editor does not edit it but carries it verbatim,
+# like ``[focus]``/``[tabs]``. The action name comes from ``[a-z0-9_-]``: it has
+# already been lowercased by ``ConfigParser`` and ends up in the command line of
+# a key (``zone-tiler.py action <name>``), so spaces and quotes are not allowed in it.
 ACTION_SECTION_PREFIX = "action:"
 ACTION_FIELDS = ("run", "zone", "key", "command", "axis")
 ACTION_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
-# Рабочие столы: ``[workspaces]``, ключ — номер стола как в интерфейсе Cinnamon
-# (с 1), значение — имя профиля из ``templates/<имя>.conf``.
+# Workspaces: ``[workspaces]``, the key is the workspace number as in the Cinnamon
+# UI (starting at 1), the value is a profile name from ``templates/<name>.conf``.
 WORKSPACES_SECTION = "workspaces"
 
-# Экраны: ``[monitors]``, ключ — имя выхода (``HDMI-1``, ``eDP-1``), значение — имя
-# профиля. Секция машинная: в профиль не входит, ``profile use`` её не трогает
-# (переносится дословно, как ``[grid]``). Порядок строк значим: профиль первого
-# экрана решает спор при слиянии (``profile use-monitors``).
+# Screens: ``[monitors]``, the key is an output name (``HDMI-1``, ``eDP-1``), the
+# value a profile name. The section is machine-owned: it is not part of a profile
+# and ``profile use`` leaves it alone (carried verbatim, like ``[grid]``). Line
+# order matters: the first screen's profile breaks the tie (``profile use-monitors``).
 MONITORS_SECTION = "monitors"
 
-# Подпись «стол без профиля» в диалоге «Профили столов». С настоящим именем
-# профиля не совпадёт: имена санируются, пробел в них превращается в дефис.
+# The “workspace without a profile” label in the “Workspace profiles” dialog. It
+# cannot match a real profile name: names are sanitized, a space becomes a dash.
 WORKSPACE_SHARED = _("default set")
 
-# Подпись «экран без привязки» в диалоге «Профили экранов» — та же строка, что
-# у столов: пустое значение убирает привязку.
+# The “screen without a binding” label in the “Screen profiles” dialog — the same
+# string as for workspaces: an empty value removes the binding.
 MONITOR_SHARED = WORKSPACE_SHARED
 
-# Как в диалоге помечен выход из `[monitors]`, которого сейчас нет на машине.
+# How the dialog marks an output from `[monitors]` that is not on the machine now.
 MONITOR_OFFLINE_NOTE = _("not on screen")
 
-# Сколько столов показать в диалоге, если ``_NET_NUMBER_OF_DESKTOPS`` не прочитать.
+# How many workspaces to show in the dialog if ``_NET_NUMBER_OF_DESKTOPS`` is unreadable.
 WORKSPACE_DESKTOPS_DEFAULT = 4
 
-# Порядок «чужих» секций при сохранении: [rules] и [ignore] до [keys], [daemon] после.
-# ``[move]`` пишется сама: она «своя» (см. :data:`RESERVED_SECTIONS`), но
-# редактор её не правит и обязан сохранить — тело берётся из прежнего файла
-# (или из ``extra``, если его передали явно).
+# Order of the "foreign" sections when saving: [rules] and [ignore] before [keys],
+# [daemon] after. ``[move]`` writes itself: it is ours (see
+# :data:`RESERVED_SECTIONS`), but the editor does not edit it and has to preserve
+# it — the body comes from the previous file (or from ``extra``, if passed explicitly).
 BEFORE_KEYS = ("rules", "ignore")
 AFTER_KEYS = ("daemon",)
 
 
 def load_zonetiler(path=ZONEBIN):
-    """Загрузить ``zone-tiler.py`` как модуль (в нём парсер конфига)."""
+    """Load ``zone-tiler.py`` as a module (it holds the config parser)."""
     spec = importlib.util.spec_from_file_location("zone_tiler", path)
     if spec is None or spec.loader is None:
         raise ImportError(_("zone_config: failed to load {path}").format(path=path))
@@ -123,7 +123,7 @@ def load_zonetiler(path=ZONEBIN):
 zt = load_zonetiler()
 
 
-# ------------------------------------------------------------------ данные
+# -------------------------------------------------------------------------- data
 
 
 class Zone:
@@ -143,13 +143,13 @@ class Zone:
 
 
 class _SpecParser:
-    """Разбор спецификаций зон правилами ``zone-tiler.Grid`` без X и GTK.
+    """Parsing zone specs with the rules of ``zone-tiler.Grid``, without X and GTK.
 
-    У ``Grid`` берутся только чистые методы: ``_parse_zone`` (формы ``x,y,w,h``
-    и ``c0:c1, r0:r1`` с проверками), ``zone_spec`` и ``fractions``, — поэтому
-    правила разбора и сообщения об ошибках не расходятся с раскладчиком. Своё
-    состояние (``cols``/``rows`` и разобранные ``zones``) держит сам, конфига не
-    читает.
+    Only the pure methods are taken from ``Grid``: ``_parse_zone`` (the ``x,y,w,h``
+    and ``c0:c1, r0:r1`` forms with their checks), ``zone_spec`` and ``fractions`` —
+    so the parsing rules and the error messages do not drift away from the tiler.
+    It keeps its own state (``cols``/``rows`` and the parsed ``zones``) and does not
+    read the config.
     """
 
     _parse_zone = zt.Grid._parse_zone
@@ -161,22 +161,22 @@ class _SpecParser:
         self.zones = {}
 
     def add(self, name, spec):
-        """Разобрать зону пары ``имя = спецификация``; возвращает имя как в файле."""
+        """Parse the zone of a ``name = spec`` pair; returns the name as spelled in the file."""
         key = name.strip()
         self.zones[key] = self._parse_zone(key, spec)
         return key
 
     def fractions_of(self, name):
-        """``(x, y, w, h)`` в долях рабочей области для разобранной зоны."""
+        """``(x, y, w, h)`` in work-area fractions for a parsed zone."""
         return self.fractions(name)
 
     def zone_spec(self, zone, monitor_name=None):
-        """Описание зоны из уже собранного набора.
+        """The description of a zone from an already collected set.
 
-        У ``Grid`` этот метод ищет сначала в наборе монитора, потом в общем
-        ``[zones]``. Здесь набор собран из нужной секции заранее, так что
-        искать больше негде; ``monitor_name`` принимается ради совместимости
-        сигнатуры (``Grid.fractions`` вызывает ``self.zone_spec``).
+        In ``Grid`` this method looks first in the monitor set, then in the common
+        ``[zones]``. Here the set is already collected from the right section, so there
+        is nowhere left to look; ``monitor_name`` is accepted for signature
+        compatibility (``Grid.fractions`` calls ``self.zone_spec``).
         """
         spec = self.zones.get(zone)
         if spec is None:
@@ -188,14 +188,14 @@ class _SpecParser:
 
 
 def load_workspace_map(path):
-    """``{номер_стола: имя_профиля}`` из секции ``[workspaces]``; нет секции — ``{}``.
+    """``{workspace_number: profile_name}`` from the ``[workspaces]`` section; no section — ``{}``.
 
-    Ключи — **с 1**, как номера столов в интерфейсе Cinnamon («Рабочий стол 1»),
-    а в EWMH ``_NET_CURRENT_DESKTOP`` они с нуля; переводит коды в имена
-    ``zone-tiler.grid_for_workspace()``. Значение — имя профиля
-    (``templates/<имя>.conf``), существование файла проверяется в момент
-    использования: профиль может появиться позже, и это не повод ломать чтение
-    всего конфига.
+    Keys are **1-based**, like the workspace numbers in the Cinnamon UI ("Workspace 1"),
+    while in EWMH ``_NET_CURRENT_DESKTOP`` they are zero-based; the codes are translated
+    into names by ``zone-tiler.grid_for_workspace()``. The value is a profile name
+    (``templates/<name>.conf``); the existence of the file is checked at the moment
+    of use: a profile may appear later, and that is no reason to break reading
+    the whole config.
     """
     cp = _read_conf(path, missing_ok=True)
     if cp is None or not cp.has_section(WORKSPACES_SECTION):
@@ -223,25 +223,25 @@ def load_workspace_map(path):
 
 
 def load_move_keys(path):
-    """``{направление: сочетание}`` из секции ``[move]``; секции нет — умолчания.
+    """``{direction: shortcut}`` from the ``[move]`` section; no section — the defaults.
 
-    Ключи — только направления :data:`MOVE_DIRECTIONS` (``left``/``right``/
-    ``up``/``down``), значения — сочетания в синтаксисе Cinnamon
-    (``<Super>Left``). Нет файла или секции — :data:`DEFAULT_MOVE_KEYS`
-    целиком, так что файл без ``[move]`` работает как раньше.
+    The keys are only the directions :data:`MOVE_DIRECTIONS` (``left``/``right``/
+    ``up``/``down``), the values are shortcuts in Cinnamon syntax
+    (``<Super>Left``). No file or no section — :data:`DEFAULT_MOVE_KEYS`
+    as a whole, so a file without ``[move]`` works as before.
 
-    Неизвестный ключ или пустое сочетание — ошибка конфига (код 3): это
-    опечатка, из-за которой человек остался бы без клавиши и не понял почему.
-    Недостающие в секции направления добираются умолчаниями — писать все
-    четыре ради одной замены не нужно.
+    An unknown key or an empty shortcut is a config error (code 3): it is a
+    typo that would have left a person without a key and with no idea why.
+    Directions missing from the section are filled in from the defaults — there is
+    no need to write all four to replace one.
     """
     keys = dict(DEFAULT_MOVE_KEYS)
     cp = _read_conf(path, missing_ok=True)
     if cp is None or not cp.has_section(MOVE_SECTION):
         return keys
     for name, value in cp.items(MOVE_SECTION):
-        # ConfigParser приводит ключи к нижнему регистру, так что ``Left`` в
-        # файле тоже сойдёт за направление.
+        # ConfigParser lowercases the keys, so ``Left`` in the
+        # file counts as a direction too.
         direction = str(name).strip().lower()
         if direction not in MOVE_DIRECTIONS:
             zt.fail(
@@ -267,21 +267,21 @@ def load_move_keys(path):
 
 
 def load_focus_keys(path):
-    """Секция ``[focus]``: ``{"key": сочетание, "zone": имя зоны | None}``.
+    """The ``[focus]`` section: ``{"key": shortcut, "zone": zone name | None}``.
 
-    ``None`` — режим не настроен: нет файла, нет секции или пустое ``key``.
-    ``zone`` необязательна: без неё сочетание только сворачивает остальные окна
-    («только это окно»), с ней — ещё и кладёт окно в зону. Неизвестный ключ в
-    секции и пустое значение ``zone`` — ошибка конфига (код 3): это опечатка, из-за
-    которой человек остался бы без клавиши и не понял почему.
+    ``None`` — the mode is not configured: no file, no section or an empty ``key``.
+    ``zone`` is optional: without it the shortcut only minimises the other windows
+    ("this window only"), with it the window is also dropped into the zone. An unknown
+    key in the section and an empty ``zone`` value are a config error (code 3): a typo
+    that would have left a person without a key and with no idea why.
     """
     cp = _read_conf(path, missing_ok=True)
     if cp is None or not cp.has_section(FOCUS_SECTION):
         return None
     key, zone = None, None
     for name, value in cp.items(FOCUS_SECTION):
-        # ConfigParser приводит ключи к нижнему регистру, так что ``Key`` в
-        # файле тоже сойдёт.
+        # ConfigParser lowercases the keys, so ``Key`` in the
+        # file counts too.
         field = str(name).strip().lower()
         if field not in ("key", "zone"):
             zt.fail(
@@ -303,30 +303,30 @@ def load_focus_keys(path):
             )
         zone = text
     if not key:
-        # Секция без сочетания — это не режим: без клавиши он недоступен.
+        # A section without a shortcut is not a mode: without a key it is unreachable.
         return None
     return {"key": key, "zone": zone}
 
 
 def load_tabs_config(path):
-    """Секция ``[tabs]``: ``{"key": сочетание | None, "height": высота полосы}``.
+    """The ``[tabs]`` section: ``{"key": shortcut | None, "height": strip height}``.
 
-    ``height`` — высота полосы вкладок в пикселях, целое больше нуля; нет
-    секции или нет ключа — :data:`zone_tabs.STRIP_HEIGHT` (умолчание полосы, а
-    не второе число в конфиге). ``key`` — сочетание Cinnamon для «следующего
-    окна зоны»:
-    ``None`` — клавиши нет, остальные поля при этом читаются. Мусор в
-    ``height`` (не число, ноль, отрицательное) и неизвестный ключ в секции —
-    ошибка конфига (код 3): полосы нулевой высоты не видно, и человек не понял
-    бы, почему вкладки перестали показываться.
+    ``height`` is the height of the tabs strip in pixels, an integer greater than zero;
+    no section or no key — :data:`zone_tabs.STRIP_HEIGHT` (the strip default, and not
+    a second number in the config). ``key`` is the Cinnamon shortcut for "the next window
+    of the zone":
+    ``None`` — no key, while the other fields are still read. Garbage in
+    ``height`` (not a number, zero, negative) and an unknown key in the section are
+    a config error (code 3): a strip of zero height is not visible, and a person would
+    not have understood why the tabs stopped showing.
     """
     config = {"key": None, "height": int(zone_tabs.STRIP_HEIGHT)}
     cp = _read_conf(path, missing_ok=True)
     if cp is None or not cp.has_section(TABS_SECTION):
         return config
     for name, value in cp.items(TABS_SECTION):
-        # ConfigParser приводит ключи к нижнему регистру, так что ``Key`` в
-        # файле тоже сойдёт.
+        # ConfigParser lowercases the keys, so ``Key`` in the
+        # file counts too.
         field = str(name).strip().lower()
         if field not in TABS_FIELDS:
             zt.fail(
@@ -348,7 +348,7 @@ def load_tabs_config(path):
 
 
 def _tabs_height(text):
-    """Высота полосы вкладок из ``[tabs] height``: целое больше нуля, иначе код 3."""
+    """The tabs strip height from ``[tabs] height``: an integer above zero, else code 3."""
     try:
         height = int(str(text).strip(), 10)
     except (TypeError, ValueError):
@@ -364,33 +364,33 @@ def _tabs_height(text):
 
 
 def load_actions(path):
-    """Действия из секций ``[action:<имя>]``: ``{имя: запись}``.
+    """The actions from the ``[action:<name>]`` sections: ``{name: record}``.
 
-    Запись — словарь с полями :data:`ACTION_FIELDS`:
+    A record is a dictionary with the fields of :data:`ACTION_FIELDS`:
 
-    * ``run`` — обязательный: ``builtin:<имя>`` из ``zone_actions.BUILTINS`` либо
-      внешняя команда (её разбирает ``zone_actions.expand_command``);
-    * ``zone`` — необязательное имя зоны-предмета; без неё предметом становится
-      активное окно и зона, где оно стоит;
-    * ``key`` — необязательное сочетание Cinnamon для ``setup-hotkeys.py``;
-    * ``command`` — только у ``builtin:terminal``: чем запускать терминал
-      (умолчание — ``zone_actions.DEFAULT_TERMINAL``);
-    * ``axis`` — только у ``builtin:mirror``: ось из ``zone_actions.MIRROR_AXES``
-      (умолчание — ``zone_actions.DEFAULT_MIRROR_AXIS``).
+    * ``run`` — mandatory: ``builtin:<name>`` from ``zone_actions.BUILTINS`` or an
+      external command (parsed by ``zone_actions.expand_command``);
+    * ``zone`` — an optional name of the subject zone; without it the subject is
+      the active window and the zone it sits in;
+    * ``key`` — an optional Cinnamon shortcut for ``setup-hotkeys.py``;
+    * ``command`` — only for ``builtin:terminal``: what to launch the terminal with
+      (the default is ``zone_actions.DEFAULT_TERMINAL``);
+    * ``axis`` — only for ``builtin:mirror``: an axis from ``zone_actions.MIRROR_AXES``
+      (the default is ``zone_actions.DEFAULT_MIRROR_AXIS``).
 
-    Отсутствующие необязательные поля — ``None``; нет файла или нет ни одной
-    секции — пустой словарь (действий нет, и это не ошибка).
+    Missing optional fields are ``None``; no file or not a single section — an
+    empty dictionary (there are no actions, and that is not an error).
 
-    Ошибка конфига (код 3): пустой ``run``/``zone``/``key``/``command``,
-    неизвестное имя встроенного действия, неизвестное поле секции, ``command``
-    или ``axis`` не у своего действия, ось не из :data:`zone_actions.MIRROR_AXES`,
-    имя секции не из ``[a-z0-9_-]``. Всё это — опечатки, из-за которых человек
-    остался бы без действия или без клавиши и не понял почему.
+    Config error (code 3): an empty ``run``/``zone``/``key``/``command``, an unknown
+    builtin action name, an unknown section field, ``command`` or ``axis`` on an
+    action that does not take it, an axis not from :data:`zone_actions.MIRROR_AXES`,
+    a section name not from ``[a-z0-9_-]``. All of these are typos that would have
+    left a person without an action or without a key and with no idea why.
 
-    Имя секции и имя действия сравниваются без учёта регистра (как ключи
-    ``ConfigParser``): ``[action:Main]`` и ``[action:main]`` — не два действия с
-    одним именем, а опечатка, поэтому это тоже код 3. Порядок результата — как
-    секции в файле.
+    The section name and the action name are compared case-insensitively (like
+    ``ConfigParser`` keys): ``[action:Main]`` and ``[action:main]`` are not two actions
+    with one name but a typo, so that is code 3 as well. The order of the result is
+    the order of the sections in the file.
     """
     cp = _read_conf(path, missing_ok=True)
     if cp is None:
@@ -413,12 +413,12 @@ def load_actions(path):
 
 
 def _action_section_name(section):
-    """Имя действия из имени секции ``[action:<имя>]``; не наша секция — ``None``.
+    """The action name from a ``[action:<name>]`` section name; not our section — ``None``.
 
-    Имя приводится к нижнему регистру: оно попадает в командную строку клавиши
-    (``zone-tiler.py action <имя>``), поэтому пробелы, точки и кавычки в нём
-    недопустимы (:data:`ACTION_NAME_RE`), а пустое ``[action:]`` — опечатка, а
-    не действие без имени.
+    The name is lowercased: it ends up in the command line of a key
+    (``zone-tiler.py action <name>``), so spaces, dots and quotes in it are
+    not allowed (:data:`ACTION_NAME_RE`), and an empty ``[action:]`` is a typo,
+    not an action without a name.
     """
     name = str(section)
     if name[: len(ACTION_SECTION_PREFIX)].lower() != ACTION_SECTION_PREFIX:
@@ -442,18 +442,18 @@ def _action_section_name(section):
 
 
 def _action_entry(section, items):
-    """Запись действия из пар секции; всё не по контракту — код 3.
+    """The action record from the pairs of a section; anything off contract is code 3.
 
-    Поля читаются все сразу, а проверяются после: ``command``/``axis`` зависят от
-    того, какое встроенное действие стоит в ``run``, а порядок строк в секции
-    произвольный. ``run`` хранится как в файле (внешняя команда
-    регистрозависима), ``axis`` — приведённой к нижнему регистру, как её
-    разбирает ``zone_actions.mirror_fractions``.
+    All the fields are read at once and checked afterwards: ``command``/``axis`` depend
+    on which builtin action stands in ``run``, while the line order in the section is
+    arbitrary. ``run`` is stored as in the file (an external command is
+    case-sensitive), ``axis`` lowercased, the way
+    ``zone_actions.mirror_fractions`` parses it.
     """
     raw = {}
     for field, value in items:
-        # ConfigParser приводит ключи к нижнему регистру, так что ``Run`` в файле
-        # тоже сойдёт за поле.
+        # ConfigParser lowercases the keys, so ``Run`` in the file
+        # counts as a field too.
         field = str(field).strip().lower()
         if field not in ACTION_FIELDS:
             zt.fail(
@@ -479,8 +479,8 @@ def _action_entry(section, items):
     try:
         builtin = zone_actions.builtin_name(run)
     except zone_actions.ActionError as exc:
-        # Имя встроенного действия проверяет ядро: список известных и сообщение
-        # об опечатке должны быть одни и те же в конфиге и в раскладчике.
+        # The core checks the builtin action name: the list of known ones and the message
+        # about a typo must be the same in the config and in the tiler.
         zt.fail(
             _("zone_config: in [{section}] {error}").format(section=section, error=exc),
             zt.EXIT_CONFIG,
@@ -545,7 +545,7 @@ def _action_entry(section, items):
 
 
 def _workspace_number(value):
-    """Номер стола из ключа карты: целое с 1, иначе ``ValueError``."""
+    """The workspace number from a map key: an integer from 1, else ``ValueError``."""
     try:
         number = int(value)
     except (TypeError, ValueError):
@@ -560,12 +560,12 @@ def _workspace_number(value):
 
 
 def _workspace_body(mapping):
-    """Тело секции ``[workspaces]``: ``номер = имя`` по возрастанию номера.
+    """The body of the ``[workspaces]`` section: ``number = name``, ascending by number.
 
-    Имя профиля санируется тем же правилом, что при чтении
-    (:func:`sanitize_profile_name`), поэтому запись и чтение понимают друг
-    друга. Номер не целый или меньше 1, а пустое после санирования имя —
-    ``ValueError``: писать заведомо нечитаемый конфиг незачем.
+    The profile name is sanitized by the same rule as when reading
+    (:func:`sanitize_profile_name`), so writing and reading understand each
+    other. A number that is not an integer or is below 1, and a name that is empty
+    after sanitizing — ``ValueError``: there is no point in writing a knowingly unreadable one.
     """
     items = {}
     for number, name in (mapping or {}).items():
@@ -584,7 +584,7 @@ def _workspace_body(mapping):
 
 
 def _section_line_spans(lines, section):
-    """``(начало, конец)`` всех секций ``[section]``: заголовок и тело."""
+    """``(start, end)`` of every ``[section]`` section: the header and the body."""
     spans, start = [], None
     for index, line in enumerate(lines):
         match = _SECTION_RE.match(line)
@@ -601,16 +601,16 @@ def _section_line_spans(lines, section):
 
 
 def _workspace_spans(lines):
-    """``(начало, конец)`` всех секций ``[workspaces]``."""
+    """``(start, end)`` of every ``[workspaces]`` section."""
     return _section_line_spans(lines, WORKSPACES_SECTION)
 
 
 def _replace_section(lines, section, block):
-    """Заменить все секции ``[section]`` одним блоком ``block`` (заголовок + тело).
+    """Replace all ``[section]`` sections with one ``block`` (header + body).
 
-    Блок встаёт на место первой секции, дубли (если их наплодили руками) уходят:
-    ``ConfigParser`` на повторе секции падает. Пустой ``block`` убирает секцию
-    совсем; нет её вообще — блок дописывается в конец. Пустые строки подчищаются.
+    The block takes the place of the first section, and duplicates (if they were
+    bred by hand) go away: ``ConfigParser`` fails on a repeated section. An empty
+    ``block`` removes the section; no section at all — appended at the end. Blank lines are tidied up.
     """
     spans = _section_line_spans(lines, section)
     if spans:
@@ -636,7 +636,7 @@ def _replace_section(lines, section, block):
 
 
 def _tidy_blank(lines):
-    """Пустые строки: без ведущих, без хвостовых и без пар подряд."""
+    """Blank lines: no leading, no trailing, and no pairs in a row."""
     out = []
     for line in lines:
         if not line.strip() and (not out or not out[-1].strip()):
@@ -648,15 +648,15 @@ def _tidy_blank(lines):
 
 
 def save_workspace_map(path, mapping):
-    """Записать секцию ``[workspaces]``: номер стола (с 1) → имя профиля.
+    """Write the ``[workspaces]`` section: workspace number (from 1) → profile name.
 
-    Правится только эта секция, и текстом: ``[grid]``, наборы зон ``[zones]``/
-    ``[zones:<выход>]``, ``[keys]``, ``[rules]``, ``[daemon]`` и прочие строки
-    файла остаются дословно, как после ручной правки. Пустой ``mapping``
-    убирает секцию совсем, номера пишутся по возрастанию. Имена профилей
-    санируются, поэтому ``{"2": "my cinema"}`` станет ``2 = my-cinema``.
-    Файла нет — он будет создан с одной этой секцией. Кривой номер (не целый
-    или меньше 1) и пустое имя профиля — ``ValueError``. Возвращает путь.
+    Only this section is edited, and as text: ``[grid]``, the zone sets ``[zones]``/
+    ``[zones:<output>]``, ``[keys]``, ``[rules]``, ``[daemon]`` and the other lines
+    of the file stay verbatim, as after a manual edit. An empty ``mapping`` removes
+    the section altogether, the numbers are written ascending. Profile names are
+    sanitized, so ``{"2": "my cinema"}`` becomes ``2 = my-cinema``.
+    No file — it will be created with this one section. A bad number (not an integer
+    or below 1) and an empty profile name are ``ValueError``. Returns the path.
     """
     body = _workspace_body(mapping)
     block = [f"[{WORKSPACES_SECTION}]"] + body if body else []
@@ -674,15 +674,15 @@ def save_workspace_map(path, mapping):
 
 
 def _monitor_body(mapping):
-    """Тело секции ``[monitors]``: ``выход = имя профиля`` в заданном порядке.
+    """The body of the ``[monitors]`` section: ``output = profile name`` in the order given.
 
-    Порядок строк значим: профиль **первого** экрана решает спор при слиянии
-    (``profile use-monitors``), поэтому сортировки нет — как передали, так и
-    запишем. Имя выхода пишется как есть (обычно так его печатает
-    ``xrandr --listmonitors``), но сравнивать его надо без учёта регистра: в файле
-    может оказаться ``hdmi-1``, а ``ConfigParser`` вообще опускает регистр ключей.
-    Пустое имя выхода или пустое (после санирования) имя профиля — ``ValueError``:
-    писать заведомо нечитаемый конфиг незачем.
+    Line order matters: the profile of the **first** screen breaks the tie when merging
+    (``profile use-monitors``), so there is no sorting — we write it the way it was
+    passed. The output name is written as is (usually that is how
+    ``xrandr --listmonitors`` prints it), but it must be compared case-insensitively:
+    the file may hold ``hdmi-1``, and ``ConfigParser`` lowercases keys anyway.
+    An empty output name or an empty (after sanitizing) profile name is ``ValueError``:
+    there is no point in writing a knowingly unreadable config.
     """
     lines = []
     for output, name in (mapping or {}).items():
@@ -701,19 +701,19 @@ def _monitor_body(mapping):
 
 
 def load_monitor_map(path):
-    """``{имя выхода: имя профиля}`` из секции ``[monitors]``; нет секции — ``{}``.
+    """``{output name: profile name}`` from the ``[monitors]`` section; no section — ``{}``.
 
-    Ключ — имя выхода как его печатает ``xrandr --listmonitors`` (``HDMI-1``,
-    ``eDP-1``), значение — имя профиля (``templates/<имя>.conf``). Сравнивать имена
-    выходов надо **без учёта регистра**: ``ConfigParser`` опускает регистр ключей,
-    поэтому ``HDMI-1`` вернётся как ``hdmi-1`` — ровно так же терпимо сравнивает
-    наборы зон ``Grid.zones_for`` (см. :func:`resolve_profile`).
+    The key is the output name as ``xrandr --listmonitors`` prints it (``HDMI-1``,
+    ``eDP-1``), the value is a profile name (``templates/<name>.conf``). Output names
+    must be compared **case-insensitively**: ``ConfigParser`` lowercases keys, so
+    ``HDMI-1`` comes back as ``hdmi-1`` — exactly the way the zone sets of
+    ``Grid.zones_for`` are compared tolerantly (see :func:`resolve_profile`).
 
-    Порядок строк значим (профиль первого экрана решает спор при слиянии), поэтому
-    словарь в порядке файла, а не отсортированный. Существование файла профиля здесь
-    не проверяется: профиль могли переименовать, и это повод откатиться на следующий
-    уровень с предупреждением, а не ломать чтение конфига (как у ``[workspaces]``).
-    Пустое имя профиля — ошибка конфига (код 3): строка, которая ничего не значит.
+    Line order matters (the profile of the first screen breaks the tie when merging),
+    so the dictionary is in file order, not sorted. The existence of the profile file
+    is not checked here: a profile could have been renamed, and that is a reason to
+    fall back to the next level with a warning, not to break reading the config (as
+    with ``[workspaces]``). An empty profile name is a config error (code 3): a line that means nothing.
     """
     cp = _read_conf(path, missing_ok=True)
     if cp is None or not cp.has_section(MONITORS_SECTION):
@@ -741,16 +741,16 @@ def load_monitor_map(path):
 
 
 def save_monitor_map(path, mapping):
-    """Записать секцию ``[monitors]``: имя выхода → имя профиля.
+    """Write the ``[monitors]`` section: output name → profile name.
 
-    Правится только эта секция и текстом: ``[grid]``, наборы зон ``[zones]``/
-    ``[zones:<выход>]``, ``[workspaces]``, ``[keys]``, ``[rules]``, ``[daemon]`` и
-    прочие строки файла остаются дословно, как после ручной правки. Пустой
-    ``mapping`` убирает секцию совсем; порядок строк сохраняется как передали —
-    профиль первого экрана решает спор при слиянии. Имена профилей санируются,
-    поэтому ``{"HDMI-2": "my cinema"}`` станет ``HDMI-2 = my-cinema``.
-    Файла нет — он будет создан с одной этой секцией. Пустое имя выхода и пустое
-    имя профиля — ``ValueError``. Возвращает путь.
+    Only this section is edited, and as text: ``[grid]``, the zone sets ``[zones]``/
+    ``[zones:<output>]``, ``[workspaces]``, ``[keys]``, ``[rules]``, ``[daemon]`` and
+    the other lines of the file stay verbatim, as after a manual edit. An empty
+    ``mapping`` removes the section altogether; the line order is kept as passed —
+    the profile of the first screen breaks the tie when merging. Profile names are
+    sanitized, so ``{"HDMI-2": "my cinema"}`` becomes ``HDMI-2 = my-cinema``.
+    No file — it will be created with this one section. An empty output name and an
+    empty profile name are ``ValueError``. Returns the path.
     """
     body = _monitor_body(mapping)
     block = [f"[{MONITORS_SECTION}]"] + body if body else []
@@ -768,24 +768,24 @@ def save_monitor_map(path, mapping):
 
 
 def resolve_profile(monitor_map, workspace_map=None, output=None, workspace_code=None):
-    """Имя профиля для окна: привязка экрана важнее привязки стола.
+    """The profile name for a window: a screen binding beats a workspace binding.
 
-    Порядок разбора (решение владельца, 22.11.2026):
+    Resolution order (the owner's decision, 22.11.2026):
 
-    1. выход окна есть в ``[monitors]`` — профиль экрана;
-    2. иначе номер стола окна есть в ``[workspaces]`` — профиль стола;
-    3. иначе ``None`` — значит активный ``zones.conf``.
+    1. the output of the window is in ``[monitors]`` — the screen profile;
+    2. otherwise the workspace number of the window is in ``[workspaces]`` — its profile;
+    3. otherwise ``None`` — which means the active ``zones.conf``.
 
-    ``workspace_code`` — номер стола из EWMH (``_NET_CURRENT_DESKTOP``, с нуля), а
-    в ``[workspaces]`` номера записаны с 1, как в интерфейсе Cinnamon: перевод
-    делает эта функция, чтобы его не повторял каждый вызывающий.
+    ``workspace_code`` is the workspace number from EWMH (``_NET_CURRENT_DESKTOP``,
+    zero-based), while in ``[workspaces]`` the numbers are written from 1, as in the
+    Cinnamon UI: this function does the translation, so that no caller has to repeat it.
 
-    Имя выхода сравнивается без учёта регистра — как наборы ``[zones:<выход>]``; в
-    словаре из :func:`load_monitor_map` регистр вообще опущен парсером.
+    The output name is compared case-insensitively — like the ``[zones:<output>]``
+    sets; in the dictionary from :func:`load_monitor_map` the parser lowercases it anyway.
 
-    Существование файла профиля не проверяется: профиль могли переименовать, и
-    тогда нужен откат на следующий уровень с предупреждением (это делает
-    вызывающий — :func:`read_profile_sets` бросит ``FileNotFoundError``).
+    The existence of the profile file is not checked: a profile could have been
+    renamed, and then a fallback to the next level with a warning is needed (the
+    caller does that — :func:`read_profile_sets` will raise ``FileNotFoundError``).
     """
     if output:
         name = str(output).strip()
@@ -798,8 +798,8 @@ def resolve_profile(monitor_map, workspace_map=None, output=None, workspace_code
         except (TypeError, ValueError):
             desk = None
         if desk is not None:
-            # `load_workspace_map` отдаёт ключи-числа, но словарь могли собрать и
-            # руками (диалог редактора, тесты) — смотрим оба вида.
+            # `load_workspace_map` returns numbers as keys, but the dictionary may have been
+            # assembled by hand (the editor dialog, tests) — we look at both kinds.
             for key in (desk, str(desk)):
                 profile = (workspace_map or {}).get(key)
                 if profile:
@@ -807,10 +807,10 @@ def resolve_profile(monitor_map, workspace_map=None, output=None, workspace_code
     return None
 
 
-# Строки диалога «Профили экранов» (редактор) — рядом с профилями столов:
-# чистая функция без GTK и X, поэтому её проверяют обычные тесты.
+# The rows of the "Screen profiles" dialog (the editor) — next to the workspace
+# profiles: a pure function without GTK and X, so ordinary tests check it.
 def _monitor_row(output, profile, names, on_screen=True):
-    """Одна строка диалога «Профили экранов»: варианты, предупреждение и признак."""
+    """One row of the "Screen profiles" dialog: the options, the warning and the flag."""
     options = [MONITOR_SHARED] + names
     notes = []
     if profile is not None and profile not in names:
@@ -830,31 +830,31 @@ def _monitor_row(output, profile, names, on_screen=True):
 
 
 def monitor_dialog_rows(mapping, profiles=None, outputs=None):
-    """Строки диалога «Профили экранов» — чистая функция без GTK и без X.
+    """The rows of the "Screen profiles" dialog — a pure function without GTK and X.
 
-    ``mapping`` — карта из :func:`zone_config.load_monitor_map`, ``profiles`` —
-    имена профилей на диске (:func:`zone_config.list_profiles`), ``outputs`` — имена
-    выходов в порядке ``xrandr --listmonitors``. Порядок значим: профиль первого
-    экрана решает спор при слиянии (``profile use-monitors``), и сохранение пишет
-    секцию ровно в порядке строк этого списка.
+    ``mapping`` is the map from :func:`zone_config.load_monitor_map`, ``profiles`` the
+    profile names on disk (:func:`zone_config.list_profiles`), ``outputs`` the output
+    names in ``xrandr --listmonitors`` order. Order matters: the profile of the first
+    screen breaks the tie when merging (``profile use-monitors``), and saving writes
+    the section exactly in the line order of this list.
 
-    Строка — ``(выход, профиль, варианты, предупреждение, на_экране)``:
+    A row is ``(output, profile, options, warning, on_screen)``:
 
-    * ``выход`` — имя как его печатает xrandr; для выхода из ``[monitors]``, которого
-      сейчас нет на машине (отключён, переименован), — как записано в файле: строку
-      всё равно показываем, иначе её нельзя ни поправить, ни убрать;
-    * ``профиль`` — имя профиля экрана, ``None`` — общий набор (привязки нет);
-    * ``варианты`` — выпадающий список: :data:`MONITOR_SHARED`, затем имена профилей
-      с диска, и обязательно имя из сопоставления — профиль мог исчезнуть, но запись
-      показываем и не выбрасываем;
-    * ``предупреждение`` — пусто или текст про профиль, которого нет на диске, и про
-      выход, которого сейчас нет на экране;
-    * ``на_экране`` — ``False`` у строки выхода, которого сейчас нет.
+    * ``output`` — the name as xrandr prints it; for an output from ``[monitors]`` that
+        is not on the machine right now (disconnected, renamed) — as recorded in the file:
+        we show the row anyway, otherwise it can be neither fixed nor removed;
+    * ``profile`` — the screen profile name, ``None`` — the common set (no binding);
+    * ``options`` — the drop-down list: :data:`MONITOR_SHARED`, then the profile names
+        from disk, and always the name from the mapping — a profile may have vanished, but
+        we show the record and do not throw it away;
+    * ``warning`` — empty, or text about a profile that is not on disk and about an
+        output that is not on screen right now;
+    * ``on_screen`` — ``False`` for a row of an output that is not there right now.
 
-    Имена выходов сравниваются **без учёта регистра**: ``ConfigParser`` опускает
-    регистр ключей, поэтому из файла приходит ``hdmi-1``, а xrandr говорит
-    ``HDMI-1``. Строки идут в порядке xrandr, а записи про отсутствующие выходы —
-    следом, в порядке файла.
+    Output names are compared **case-insensitively**: ``ConfigParser`` lowercases
+    the keys, so the file gives ``hdmi-1`` while xrandr says ``HDMI-1``. The rows go
+    in xrandr order, and the records about outputs that are not on the screen now
+    follow them, in file order.
     """
     names = sorted({sanitize_profile_name(n) for n in (profiles or [])} - {""})
     file_order = []
@@ -866,7 +866,7 @@ def monitor_dialog_rows(mapping, profiles=None, outputs=None):
         key = output.casefold()
         if key in by_key:
             continue
-        # Имя профиля из файла уже санировано, но словарь могли собрать и руками.
+        # The profile name from the file is already sanitized, but the dictionary could have been built by hand.
         file_order.append(output)
         by_key[key] = (output, sanitize_profile_name(name) or None)
     rows = []
@@ -888,25 +888,25 @@ def monitor_dialog_rows(mapping, profiles=None, outputs=None):
 
 
 def workspace_dialog_rows(mapping, profiles=None, desktops=None):
-    """Строки диалога «Профили столов»: по одной на стол.
+    """The rows of the "Workspace profiles" dialog: one per workspace.
 
-    ``mapping`` — карта из :func:`load_workspace_map`, ``profiles`` — имена
-    профилей на диске (:func:`list_profiles`), ``desktops`` — число столов из
-    ``_NET_NUMBER_OF_DESKTOPS`` (``None``/0 — не прочитали, берём
+    ``mapping`` is the map from :func:`load_workspace_map`, ``profiles`` the profile
+    names on disk (:func:`list_profiles`), ``desktops`` the number of workspaces from
+    ``_NET_NUMBER_OF_DESKTOPS`` (``None``/0 — could not be read, take
     :data:`WORKSPACE_DESKTOPS_DEFAULT`).
 
-    Строка — ``(номер, профиль, варианты, предупреждение)``:
+    A row is ``(number, profile, options, warning)``:
 
-    * ``номер`` — стол с 1, как в интерфейсе Cinnamon;
-    * ``профиль`` — имя профиля стола, ``None`` — общий набор зон;
-    * ``варианты`` — выпадающий список: :data:`WORKSPACE_SHARED`, затем имена
-      профилей с диска, и обязательно имя из сопоставления — профиль мог
-      исчезнуть, но запись показываем и не выбрасываем;
-    * ``предупреждение`` — пусто или текст про профиль, которого нет на диске:
-      до появления файла такой стол раскладывается общим набором.
+    * ``number`` — the workspace from 1, as in the Cinnamon UI;
+    * ``profile`` — the workspace profile name, ``None`` — the common zone set;
+    * ``options`` — the drop-down list: :data:`WORKSPACE_SHARED`, then the profile
+        names from disk, and always the name from the mapping — a profile may have
+        vanished, but we show the record and do not throw it away;
+    * ``warning`` — empty, or text about a profile that is not on disk: until the
+        file appears, such a workspace is laid out with the common set.
 
-    Столы идут по порядку; сопоставления за пределами ``desktops`` тоже
-    попадают в список — иначе сохранение потеряло бы их.
+    The workspaces go in order; mappings beyond ``desktops`` end up in the list too —
+    otherwise saving would lose them.
     """
     try:
         total = int(desktops)
@@ -940,22 +940,22 @@ def workspace_dialog_rows(mapping, profiles=None, desktops=None):
 
 
 def _clean_monitor(monitor):
-    """Имя выхода из аргумента; ``None``/пусто — набор по умолчанию."""
+    """The output name from an argument; ``None``/empty — the default set."""
     name = str(monitor or "").strip()
     return name or None
 
 
 def _zone_section_name(monitor):
-    """Имя секции набора: ``zones`` или ``zones:<монитор>``."""
+    """The name of a set section: ``zones`` or ``zones:<monitor>``."""
     name = _clean_monitor(monitor)
     return "zones" if name is None else MONITOR_SECTION_PREFIX + name
 
 
 def _monitor_of(section):
-    """Монитор из имени секции ``zones:<выход>``; ``None`` — секция не набор монитора.
+    """The monitor from a ``zones:<output>`` section name; ``None`` — not a monitor set.
 
-    Пустое имя (``[zones:]``) — ошибка конфига: сообщение подсказывает форму
-    записи. Регистр имени выхода сохраняется: это имя выхода X11, а не зоны.
+    An empty name (``[zones:]``) is a config error: the message hints at the way it
+    should be written. The case of the output name is kept: it is an X11 output name, not a zone.
     """
     name = str(section)
     if name[: len(MONITOR_SECTION_PREFIX)].lower() != MONITOR_SECTION_PREFIX:
@@ -972,7 +972,7 @@ def _monitor_of(section):
 
 
 def _read_conf(path, missing_ok=False):
-    """``ConfigParser`` того же вида, что у ``Grid``; нет файла — ``None`` или SystemExit."""
+    """A ``ConfigParser`` of the same kind as ``Grid`` has; no file — ``None`` or SystemExit."""
     cp = configparser.ConfigParser(
         interpolation=None,
         inline_comment_prefixes=("#", ";"),
@@ -981,8 +981,8 @@ def _read_conf(path, missing_ok=False):
     try:
         read = cp.read(path, encoding="utf-8")
     except configparser.Error as exc:
-        # Повтор секции или ключа в ней: `ConfigParser` падает трассировкой, а
-        # человеку нужен код 3 и имя файла — как у любой другой опечатки.
+        # A repeated section or key in it: `ConfigParser` dies with a traceback, while a
+        # person needs code 3 and the file name — as with any other typo.
         zt.fail(
             _("zone_config: cannot parse config {path}: {error}").format(
                 path=path, error=exc),
@@ -999,21 +999,21 @@ def _read_conf(path, missing_ok=False):
 
 
 def _zone_bindings(cp):
-    """Привязки зон из ``[keys]`` (пустой словарь, если секции нет)."""
+    """Zone bindings from ``[keys]`` (an empty dictionary if there is no section)."""
     if not cp.has_section("keys"):
         return {}
     return {k.strip(): v.strip() for k, v in cp.items("keys")}
 
 
 def _with_bindings(zones, keys):
-    """Проставить зонам привязки из ``[keys]`` по имени зоны."""
+    """Give the zones the bindings from ``[keys]`` by zone name."""
     for zone in zones:
         zone.binding = keys.get(zone.name, "")
     return zones
 
 
 def _zone_set(cp, section):
-    """Зоны секции ``section`` в порядке файла; ``None`` — секции нет."""
+    """The zones of the ``section`` section in file order; ``None`` — no section."""
     if not cp.has_section(section):
         return None
     parser = _SpecParser(
@@ -1033,10 +1033,10 @@ def _zone_set(cp, section):
 
 
 def _zone_sets(path):
-    """Все наборы файла: ``(набор по умолчанию или None, {монитор: [Zone]})``.
+    """All the sets of the file: ``(default set or None, {monitor: [Zone]})``.
 
-    Порядок мониторов — как секции в файле; привязки ``[keys]`` проставлены
-    всем наборам. Нет файла — ``(None, {})``.
+    The monitor order is the order of the sections in the file; the ``[keys]``
+    bindings are set on every set. No file — ``(None, {})``.
     """
     cp = _read_conf(path, missing_ok=True)
     if cp is None:
@@ -1054,10 +1054,10 @@ def _zone_sets(path):
 
 
 def load_zone_sets(path):
-    """Все наборы зон файла: ``{монитор: [Zone]}``, ключ ``None`` — по умолчанию.
+    """All the zone sets of the file: ``{monitor: [Zone]}``, the key ``None`` — default.
 
-    Ключ ``None`` есть только если в файле есть секция ``[zones]``; порядок —
-    ``[zones]``, затем секции мониторов в порядке файла. Нет файла — ``{}``.
+    The key ``None`` is there only if the file has a ``[zones]`` section; the order is
+    ``[zones]``, then the monitor sections in file order. No file — ``{}``.
     """
     default, monitors = _zone_sets(path)
     sets = {}
@@ -1068,17 +1068,17 @@ def load_zone_sets(path):
 
 
 def list_zone_sets(path):
-    """Какие наборы зон есть в файле: ``{монитор: [имена зон]}``.
+    """Which zone sets the file has: ``{monitor: [zone names]}``.
 
-    Ключ ``None`` — набор по умолчанию из ``[zones]`` (есть только если секция
-    в файле есть), остальные ключи — имена выходов из ``[zones:<выход>]``
-    в порядке файла. Нет файла — ``{}``.
+    The key ``None`` is the default set from ``[zones]`` (present only if the section
+    is in the file), the other keys are output names from ``[zones:<output>]`` in file
+    order. No file — ``{}``.
     """
     return {monitor: [z.name for z in zones] for monitor, zones in load_zone_sets(path).items()}
 
 
 def _default_zones(path):
-    """Зоны ``[zones]`` с привязками ``[keys]`` — прежний путь через ``Grid``."""
+    """The ``[zones]`` zones with the ``[keys]`` bindings — the old path through ``Grid``."""
     grid = zt.Grid(path)
     keys = _zone_bindings(grid.conf)
     zones = []
@@ -1089,11 +1089,11 @@ def _default_zones(path):
 
 
 def load_zones(path, monitor=None):
-    """Зоны набора с привязками из ``[keys]``. Райзит SystemExit на битом конфиге.
+    """The zones of a set with the ``[keys]`` bindings. Raises SystemExit on a broken config.
 
-    Без ``monitor`` (или с пустым) — набор по умолчанию из ``[zones]``, как
-    раньше. С ``monitor="HDMI-1"`` — набор из ``[zones:HDMI-1]``; если такой
-    секции нет, откат на набор по умолчанию (неизвестный монитор не ошибка).
+    Without ``monitor`` (or with an empty one) — the default set from ``[zones]``, as
+    before. With ``monitor="HDMI-1"`` — the set from ``[zones:HDMI-1]``; if there is no
+    such section, a fallback to the default set (an unknown monitor is not an error).
     """
     name = _clean_monitor(monitor)
     if name is not None:
@@ -1104,7 +1104,7 @@ def load_zones(path, monitor=None):
     return _default_zones(path)
 
 
-# ------------------------------------------------- перенос «чужих» секций
+# ---------------------------------------------------------------- carrying "foreign" sections
 
 
 _SECTION_RE = re.compile(r"^\s*\[([^\[\]]+)\]\s*(?:[#;].*)?$")
@@ -1119,16 +1119,16 @@ def _trim_blank(lines):
 
 
 def load_extra_sections(path, sections=None):
-    """Секции конфига, которые редактор не редактирует, но обязан сохранить.
+    """Config sections the editor does not edit but has to preserve.
 
-    Возвращает ``{имя_секции: [строки_тела, ...]}`` только для секций, реально
-    присутствующих в файле, — порядок и содержимое строк сохраняются дословно
-    (включая регистр ключей и комментарии). ``sections`` ограничивает набор
-    имён (в нижнем регистре); по умолчанию берутся все, кроме
-    :data:`RESERVED_SECTIONS`. Две секции, чьи имена совпадают без учёта
-    регистра (``[action:Main]`` и ``[action:main]``) или повторяют друг друга,
-    — код 3: склеить их в один блок значит записать нечитаемый файл.
-    Несуществующий файл даёт пустой словарь.
+    Returns ``{section_name: [body lines, ...]}`` only for the sections really
+    present in the file — the order and the content of the lines are kept verbatim
+    (including the case of the keys and the comments). ``sections`` limits the set
+    of names (lowercase); by default all of them are taken, except
+    :data:`RESERVED_SECTIONS`. Two sections whose names match case-insensitively
+    (``[action:Main]`` and ``[action:main]``) or repeat each other are code 3:
+    gluing them into one block means writing an unreadable file. A nonexistent
+    file gives an empty dictionary.
     """
     wanted = None if sections is None else {s.lower() for s in sections}
     result = {}
@@ -1143,19 +1143,19 @@ def load_extra_sections(path, sections=None):
             if match:
                 raw_name = match.group(1).strip()
                 current = raw_name.lower()
-                # Наборы мониторов (`[zones:*]`) ведёт сам редактор: как «чужие»
-                # их не переносим, иначе имя выхода потеряет регистр и задвоится.
+                # The editor manages the monitor sets (`[zones:*]`) itself: we do not carry
+                # them as "foreign", otherwise the output name would lose its case and be doubled.
                 is_zone_set = _monitor_of(current) is not None
                 if (
                     not is_zone_set
                     and current not in RESERVED_SECTIONS
                     and (wanted is None or current in wanted)
                 ):
-                    # Две секции с одним именем в нижнем регистре — это либо
-                    # повтор дословно, либо `[action:Main]` и `[action:main]`.
-                    # Склеить их в один блок нельзя: ConfigParser считает их
-                    # разными, и записанная склейка (`DuplicateOptionError`)
-                    # перестаёт читаться. Поэтому — код 3, а не порча файла.
+                    # Two sections with one name in lowercase are either a verbatim repeat or
+                    # `[action:Main]` and `[action:main]`. Gluing them into one block is impossible:
+                    # ConfigParser considers them different, and the glue that was written down
+                    # (`DuplicateOptionError`) stops being readable. Hence code 3, not a
+                    # mangled file.
                     if current in headers:
                         first = headers[current]
                         if first == raw_name:
@@ -1184,18 +1184,18 @@ def load_extra_sections(path, sections=None):
 
 
 def load_config(path):
-    """``(зоны, чужие секции)`` одним чтением — то, что нужно редактору."""
+    """``(zones, foreign sections)`` in one read — exactly what the editor needs."""
     return load_zones(path), load_extra_sections(path)
 
 
 def _raw_section(path, name):
-    """Тело секции ``name`` из файла дословно; ``None`` — секции нет.
+    """The body of the ``name`` section from the file, verbatim; ``None`` — no section.
 
-    Нужно для секций, которых нет в ``extra``, но которые обязаны пережить
-    сохранение зон. ``[move]`` — как раз такая: она «своя»
-    (:data:`RESERVED_SECTIONS`), поэтому :func:`load_extra_sections` её не
-    отдаёт, а терять чужие сочетания при сохранении раскладки нельзя.
-    Пустая секция — ``[]`` (заголовок будет записан, тело — нет).
+    Needed for sections that are not in ``extra`` but must survive saving the zones.
+    ``[move]`` is exactly such a section: it is ours
+    (:data:`RESERVED_SECTIONS`), so :func:`load_extra_sections` does not return it,
+    while losing someone else's bindings when saving the layout is not allowed.
+    An empty section is ``[]`` (the header will be written, the body will not).
     """
     if not path or not os.path.exists(path):
         return None
@@ -1219,7 +1219,7 @@ def _raw_section(path, name):
 
 
 def _section_lines(body):
-    """Тело секции как строки: готовые строки пишутся как есть, пары ``(k, v)`` — как ``k = v``."""
+    """The section body as lines: ready lines are written as is, ``(k, v)`` pairs as ``k = v``."""
     out = []
     for item in body:
         if isinstance(item, (tuple, list)) and len(item) == 2:
@@ -1230,19 +1230,19 @@ def _section_lines(body):
 
 
 def _zone_lines(zones):
-    """Строки тела секции набора зон: ``имя = x, y, w, h``."""
+    """The body lines of a zone set section: ``name = x, y, w, h``."""
     return [f"{z.name} = {z.fmt()}" for z in zones]
 
 
 def _key_lines(zones):
-    """Строки ``[keys]`` без повторов: одна клавиша на имя зоны.
+    """The ``[keys]`` lines without repeats: one key per zone name.
 
-    ``[keys]`` одна на файл, а зона одного имени может стоять и в общем наборе,
-    и в наборах мониторов. Повтор имени в секции — это не только лишняя строка:
-    ``ConfigParser`` падает на повторной опции, и файл перестаёт читаться.
-    Поэтому привязка пишется только при первом появлении имени: наборы идут в
-    порядке записи (общий первым), и его клавиша главная. Пустые привязки не
-    пишутся вовсе.
+    ``[keys]`` is one per file, while a zone of the same name may stand both in the
+    common set and in the monitor sets. A repeated name in the section is not only a
+    redundant line: ``ConfigParser`` fails on a repeated option, and the file stops
+    being readable. That is why a binding is written only at the first appearance of
+    the name: the sets go in write order (the common one first), and its key wins.
+    Empty bindings are not written at all.
     """
     out, seen = [], set()
     for zone in zones:
@@ -1255,23 +1255,23 @@ def _key_lines(zones):
 
 
 def _write_config(path, default_zones, monitor_sets=None, extra=None):
-    """Записать ``zones.conf``: ``[grid]``, наборы зон, ``[keys]`` и чужие секции.
+    """Write ``zones.conf``: ``[grid]``, the zone sets, ``[keys]`` and foreign sections.
 
-    ``default_zones=None`` — секции ``[zones]`` в файле не будет (набор по
-    умолчанию не задан). Привязки ``[keys]`` собираются со всех записанных
-    наборов, поэтому горячие клавиши соседних мониторов не теряются.
+    ``default_zones=None`` — there will be no ``[zones]`` section in the file (the
+    default set is not given). The ``[keys]`` bindings are collected from all the
+    written sets, so the hotkeys of the neighbouring monitors are not lost.
 
-    ``[move]`` пишется перед ``[daemon]``: тело берётся из ``extra``, а если
-    его там нет — дословно из прежнего файла (:func:`_raw_section`). Так
-    сохранение зон не сбрасывает переопределённые человеком сочетания.
+    ``[move]`` is written before ``[daemon]``: the body comes from ``extra``, and if
+    it is not there — verbatim from the previous file (:func:`_raw_section`). That way
+    saving the zones does not reset the bindings a person has overridden.
     """
     extra = {str(k).strip().lower(): list(v) for k, v in (extra or {}).items()}
     lines = [
-        # Заголовок файла — не текст интерфейса, а содержимое zones.conf.
-        "# Сетка окон для zone-tiler. Файл создан визуальным редактором zone-editor.py.",  # i18n: не переводится
-        "# Зона = x,y,w,h в долях рабочей области (0..1), без панели задач.",  # i18n: не переводится
-        "# Горячие клавиши — в секции [keys].",  # i18n: не переводится
-        "# Набор монитора — секция вида zones:<имя выхода>, например zones:HDMI-1.",  # i18n: не переводится
+        # The file header is not UI text but the content of zones.conf.
+        "# Сетка окон для zone-tiler. Файл создан визуальным редактором zone-editor.py.",  # i18n: do not translate
+        "# Зона = x,y,w,h в долях рабочей области (0..1), без панели задач.",  # i18n: do not translate
+        "# Горячие клавиши — в секции [keys].",  # i18n: do not translate
+        "# Набор монитора — секция вида zones:<имя выхода>, например zones:HDMI-1.",  # i18n: do not translate
         "",
         "[grid]",
         "cols = 1.0",
@@ -1305,8 +1305,8 @@ def _write_config(path, default_zones, monitor_sets=None, extra=None):
         lines += ["", "[keys]"]
         lines.extend(key_lines)
 
-    # ``[move]`` — своя секция (её читает zone_config), но редактор её не правит:
-    # сохраняем как было, чтобы переопределённые сочетания не терялись.
+    # ``[move]`` is our section (zone_config reads it), but the editor does not edit it:
+    # we save it as it was, so that overridden bindings are not lost.
     move_body = extra.pop(MOVE_SECTION, None)
     if move_body is None:
         move_body = _raw_section(path, MOVE_SECTION)
@@ -1331,23 +1331,23 @@ def _write_config(path, default_zones, monitor_sets=None, extra=None):
 
 
 def save_zone_sets(path, default_zones, monitor_sets=None, extra=None):
-    """Записать все наборы зон за один проход файла.
+    """Write all the zone sets in one pass over the file.
 
-    ``default_zones`` — набор по умолчанию: список зон, ``None`` — секции
-    ``[zones]`` в файле не будет. ``monitor_sets`` — ``{имя выхода: [Zone]}``;
-    пустые наборы и пустые имена выходов отбрасываются, имя выхода берётся как
-    есть (регистр значим). ``extra`` — словарь вида
-    :func:`load_extra_sections` (``{секция: [строки]}``): секции, которых в нём
-    нет, в файл не попадают.
+    ``default_zones`` is the default set: a list of zones, ``None`` — there will be
+    no ``[zones]`` section in the file. ``monitor_sets`` is ``{output name: [Zone]}``;
+    empty sets and empty output names are dropped, the output name is taken as is
+    (the case matters). ``extra`` is a dictionary of the
+    :func:`load_extra_sections` kind (``{section: [lines]}``): sections that are not
+    in it do not make it into the file.
 
-    Файл переписывается целиком, поэтому читать его не нужно: битый ``[keys]``
-    с повтором имени не мешает записи (он и появлялся от таких повторов).
-    Исключение — ``[move]``: её тело читается из прежнего файла (или берётся
-    из ``extra``), чтобы сохранение зон не сбросило настройку клавиш.
-    ``[keys]`` собирается со всех записанных наборов без повторов — по клавише
-    на имя зоны, главная из набора по умолчанию (он пишется первым). Порядок:
+    The file is rewritten as a whole, so there is no need to read it: a broken ``[keys]``
+    with a repeated name does not get in the way of writing (it appeared from such repeats).
+    The exception is ``[move]``: its body is read from the previous file (or taken from
+    ``extra``), so that saving the zones does not reset the key settings. ``[keys]`` is
+    collected from all the written sets without repeats — one key per zone name, the one
+    from the default set winning (it is written first). The order is:
     ``[grid]``, ``[zones]``, ``[zones:*]``, ``[rules]``, ``[ignore]``, ``[keys]``, ``[move]``,
-    ``[daemon]``, остальные — после. Возвращает путь.
+    ``[daemon]``, the rest after it. Returns the path.
     """
     sets = {}
     for monitor, zones in (monitor_sets or {}).items():
@@ -1359,15 +1359,15 @@ def save_zone_sets(path, default_zones, monitor_sets=None, extra=None):
 
 
 def save_zones(path, zones, extra=None, monitor=None):
-    """Записать набор зон: ``[zones]`` без ``monitor``, ``[zones:<монитор>]`` с ним.
+    """Write a zone set: ``[zones]`` without ``monitor``, ``[zones:<monitor>]`` with it.
 
-    ``extra`` — словарь вида :func:`load_extra_sections` (``{секция: [строки]}``);
-    секции, которых в нём нет, в файл не попадают. Остальные наборы мониторов
-    берутся из текущего файла, поэтому сохранение одного набора не теряет
-    соседние (и их привязки в ``[keys]``). Пустой набор монитора удаляет его
-    секцию: набор без зон — невалидный конфиг. Это удобная обёртка над
-    :func:`save_zone_sets` для одного набора; когда записываются все наборы
-    сразу (редактор), дешевле позвать её.
+    ``extra`` is a dictionary of the :func:`load_extra_sections` kind
+    (``{section: [lines]}``); sections that are not in it do not make it into the
+    file. The other monitor sets are taken from the current file, so saving one set
+    does not lose the neighbouring ones (and their bindings in ``[keys]``). An empty
+    monitor set removes its section: a set without zones is an invalid config. This is
+    a convenient wrapper over :func:`save_zone_sets` for a single set; when all the
+    sets are written at once (the editor), calling that one is cheaper.
     """
     target = _clean_monitor(monitor)
     default, monitors = _zone_sets(path)
@@ -1380,14 +1380,14 @@ def save_zones(path, zones, extra=None, monitor=None):
     return save_zone_sets(path, default, monitors, extra)
 
 
-# ------------------------------------------------- проверка правил [rules]
+# ------------------------------------------------------------ checking the [rules] rules
 
-# Инлайн-комментарий: ` # ...` или ` ; ...`, как у ConfigParser (нужен пробел перед знаком).
+# An inline comment: ` # ...` or ` ; ...`, as in ConfigParser (a space before the sign is required).
 _INLINE_COMMENT_RE = re.compile(r"\s[#;].*$")
 
 
 def _rule_pairs(body):
-    """Пары ``(selector, zone)`` из тела секции ``[rules]`` в порядке появления."""
+    """The ``(selector, zone)`` pairs from the ``[rules]`` section body, in order of appearance."""
     pairs = []
     for item in body or []:
         if isinstance(item, (tuple, list)) and len(item) == 2:
@@ -1406,14 +1406,14 @@ def _rule_pairs(body):
 
 
 def missing_rule_targets(extra_sections, zone_names):
-    """Правила ``[rules]``, ссылающиеся на отсутствующие зоны.
+    """The ``[rules]`` rules that point at missing zones.
 
-    Возвращает список пар ``(selector, отсутствующая_зона)`` в порядке, в
-    котором правила записаны (первое совпадение важнее в ``match_rules``).
-    Пустой список, если секции ``[rules]`` нет или все её цели на месте.
-    Повторяет семантику ``zone-tiler.Grid``: тело секции — строки вида
-    ``selector = zone``, инлайн-комментарии после пробела отбрасываются,
-    имя зоны сверяется точно. Модуль остаётся чистым — без GTK.
+    Returns a list of ``(selector, missing_zone)`` pairs in the order the rules are
+    written in (the first match matters more to ``match_rules``). An empty list if
+    there is no ``[rules]`` section or all of its targets are in place. It repeats the
+    semantics of ``zone-tiler.Grid``: the section body is lines of the form
+    ``selector = zone``, inline comments after a space are dropped, the zone name is
+    matched exactly. The module stays pure — without GTK.
     """
     body = None
     for key, value in (extra_sections or {}).items():
@@ -1426,21 +1426,21 @@ def missing_rule_targets(extra_sections, zone_names):
     return [(sel, zone) for sel, zone in _rule_pairs(body) if zone not in names]
 
 
-# ------------------------------------------------------- имена зон (чистые)
+# ---------------------------------------------------------------------- zone names (pure)
 
 
 def sanitize_name(text):
-    """Имя зоны из поля ввода: пробелы и посторонние символы — в дефисы.
+    """A zone name from an input field: spaces and stray characters become dashes.
 
-    Свои символы — латиница, вся кириллица (диапазон U+0400–U+04FF, поэтому в нём
-    и «ё», и украинские буквы), цифры, «_», «.» и «-»; всё прочее вместе с
-    пробелами сжимается в один дефис.
+    The allowed characters are Latin letters, all of Cyrillic (the range
+    U+0400–U+04FF, which covers the letter “yo” (U+0451) and the Ukrainian ones),
+    digits, “_”, “.” and “-”; everything else, spaces included, is squeezed into a dash.
     """
-    return re.sub(r"[^0-9A-Za-z\u0400-\u04FF_.-]+", "-", (text or "").strip())  # i18n: не переводится
+    return re.sub(r"[^0-9A-Za-z\u0400-\u04FF_.-]+", "-", (text or "").strip())  # i18n: do not translate
 
 
 def unique_name(zones, base="zone"):
-    """Свободное имя вида ``zone1``, ``zone2``, … среди уже занятых."""
+    """A free name of the ``zone1``, ``zone2``, … kind among the ones already taken."""
     names = {z.name for z in zones}
     i = 1
     while f"{base}{i}" in names:
@@ -1448,26 +1448,26 @@ def unique_name(zones, base="zone"):
     return f"{base}{i}"
 
 
-# --------------------------------------------------------------- профили
+# --------------------------------------------------------------------- profiles
 
 PROFILE_EXT = ".conf"
 
-# Переносимый формат профиля (JSON). Ключ версии обязателен: чужая версия —
-# не повод угадывать, что имел в виду автор файла.
+# The portable profile format (JSON). The version key is mandatory: a foreign
+# version is no reason to guess what the author of the file meant.
 PROFILE_JSON_KEY = "gridsnap_profile"
 PROFILE_JSON_VERSION = 1
 
-# Доли в JSON округляются до 4 знаков — столько же, сколько пишет ``Zone.fmt``
-# в ``.conf``; больше знаков файл профиля всё равно не сохранит.
+# Fractions in JSON are rounded to 4 digits — as many as ``Zone.fmt`` writes
+# to ``.conf``; the profile file will not keep more digits anyway.
 PROFILE_JSON_DIGITS = 4
 
 
 def profiles_dir(conf_path=None):
-    """Каталог профилей.
+    """The profile directory.
 
-    Рядом с активным ``zones.conf`` (``<каталог>/templates``) — тогда ``--conf``
-    уводит профили за собой; без аргумента — XDG-каталог
-    ``$XDG_CONFIG_HOME/gridsnap/templates`` (по умолчанию
+    Next to the active ``zones.conf`` (``<directory>/templates``) — then ``--conf``
+    takes the profiles along; without an argument — the XDG directory
+    ``$XDG_CONFIG_HOME/gridsnap/templates`` (by default
     ``~/.config/gridsnap/templates``).
     """
     if conf_path:
@@ -1476,7 +1476,7 @@ def profiles_dir(conf_path=None):
 
 
 def sanitize_profile_name(text):
-    """Имя профиля тем же правилом, что имя зоны; пустое и «.», «..» отбрасываются."""
+    """A profile name by the same rule as a zone name; empty, “.” and “..” are dropped."""
     name = sanitize_name(text)
     if not name or name in (".", ".."):
         return ""
@@ -1484,10 +1484,10 @@ def sanitize_profile_name(text):
 
 
 def profile_path(name, conf_path=None):
-    """Путь к ``<имя>.conf`` в каталоге профилей; плохое имя — ``ValueError``.
+    """The path to ``<name>.conf`` in the profile directory; a bad name — ``ValueError``.
 
-    Имя санируется, поэтому ``.conf`` не может выйти за каталог шаблонов: у
-    результата тот же каталог, что у самого каталога профилей.
+    The name is sanitized, so ``.conf`` cannot escape the templates directory: the
+    result has the same directory as the profile directory itself.
     """
     safe = sanitize_profile_name(name)
     if not safe:
@@ -1504,7 +1504,7 @@ def profile_path(name, conf_path=None):
 
 
 def list_profiles(conf_path=None):
-    """Имена сохранённых профилей (без ``.conf``) по алфавиту; нет каталога — пусто."""
+    """The names of the saved profiles (without ``.conf``) alphabetically; no directory — empty."""
     directory = profiles_dir(conf_path)
     try:
         entries = os.listdir(directory)
@@ -1522,7 +1522,7 @@ def _profile_missing(name):
 
 
 def profile_text(name, conf_path=None):
-    """Содержимое файла профиля дословно (для ``profile show``)."""
+    """The content of a profile file verbatim (for ``profile show``)."""
     path = profile_path(name, conf_path)
     if not os.path.exists(path):
         raise _profile_missing(sanitize_profile_name(name))
@@ -1534,13 +1534,13 @@ def profile_text(name, conf_path=None):
 
 
 def read_profile_sets(name, conf_path=None):
-    """``(зоны [zones], строки [rules], {монитор: [Zone]}, строки [ignore])``.
+    """``(zones [zones], lines [rules], {monitor: [Zone]}, lines [ignore])``.
 
-    Зоны несут привязки из ``[keys]``; набор по умолчанию — всегда список
-    (пустой, если секции ``[zones]`` в профиле нет), наборы мониторов — в
-    порядке секций файла. ``[ignore]`` идёт вместе с ``[rules]``: это одно
-    семейство правил окон, и расхождение «правило уехало, а исключение осталось»
-    удивляло бы.
+    The zones carry the ``[keys]`` bindings; the default set is always a list (empty
+    if the profile has no ``[zones]`` section), the monitor sets are in the order of
+    the sections in the file. ``[ignore]`` goes together with ``[rules]``: it is one
+    family of window rules, and a mismatch like “the rule went away but the exclusion
+    stayed” would be surprising.
     """
     path = profile_path(name, conf_path)
     if not os.path.exists(path):
@@ -1551,23 +1551,23 @@ def read_profile_sets(name, conf_path=None):
 
 
 def read_profile(name, conf_path=None):
-    """``(зоны, строки [rules], строки [ignore])`` профиля; зоны с привязками.
+    """``(zones, lines [rules], lines [ignore])`` of a profile; zones with bindings.
 
-    Это только набор по умолчанию (``[zones]``) — ради совместимости с
-    редактором; все наборы отдаёт :func:`read_profile_sets`.
+    This is only the default set (``[zones]``) — for compatibility with the editor;
+    all the sets are given by :func:`read_profile_sets`.
     """
     zones, rules, _monitors, ignore = read_profile_sets(name, conf_path)
     return zones, rules, ignore
 
 
 def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None, ignore=None):
-    """Записать профиль: ``[zones]``, ``[zones:*]``, ``[rules]``, ``[ignore]``, ``[keys]``.
+    """Write a profile: ``[zones]``, ``[zones:*]``, ``[rules]``, ``[ignore]``, ``[keys]``.
 
-    ``[grid]``/``[daemon]`` и прочие чужие секции в профиль не тащим — он и
-    есть только раскладка. ``monitor_sets`` — ``{имя выхода: [Zone]}``;
-    ключи ``None``/пустые игнорируются (набор по умолчанию — ``zones``).
-    ``ignore`` — строки секции ``[ignore]`` (селекторы исключённых окон).
-    Возвращает путь.
+    ``[grid]``/``[daemon]`` and other foreign sections are not dragged into a profile
+    — it is only a layout. ``monitor_sets`` is ``{output name: [Zone]}``; ``None``/
+    empty keys are ignored (the default set is ``zones``). ``ignore`` holds the lines
+    of the ``[ignore]`` section (selectors of the excluded windows).
+    Returns the path.
     """
     sets = {}
     for monitor, monitor_zones in (monitor_sets or {}).items():
@@ -1579,8 +1579,8 @@ def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None, ign
     path = profile_path(name, conf_path)
     safe = sanitize_profile_name(name)
     lines = [
-        f"# Профиль раскладки GridSnap: {safe}.",  # i18n: не переводится
-        "# Секции [zones], [zones:<монитор>], [rules], [ignore], [keys]; "  # i18n: не переводится
+        f"# Профиль раскладки GridSnap: {safe}.",  # i18n: do not translate
+        "# Секции [zones], [zones:<монитор>], [rules], [ignore], [keys]; "  # i18n: do not translate
         "активация — zone-tiler.py profile use <имя>.",
     ]
     written = []
@@ -1618,7 +1618,7 @@ def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None, ign
 
 
 def remove_profile(name, conf_path=None):
-    """Удалить файл профиля; нет файла — ``FileNotFoundError``. Возвращает путь."""
+    """Delete a profile file; no file — ``FileNotFoundError``. Returns the path."""
     path = profile_path(name, conf_path)
     if not os.path.exists(path):
         raise _profile_missing(sanitize_profile_name(name))
@@ -1629,52 +1629,52 @@ def remove_profile(name, conf_path=None):
     return path
 
 
-# ------------------------------------------------------------- галерея
+# -------------------------------------------------------------------- gallery
 
-# Секция с человеческим названием и описанием раскладки. Есть только в файлах
-# галереи: в профиль пользователя она не переносится — профиль это раскладка,
-# а `[gallery]` это карточка каталога. Имя то же, что у каталога в поставке
-# (`gallery/`): одно слово для «где лежит» и для «что написано в файле».
+# The section with a human-readable title and a description of the layout. It exists
+# only in gallery files: it is not carried into a user profile — a profile is a
+# layout, while `[gallery]` is a catalog card. The name is the same as the catalog
+# in the distribution (`gallery/`): one word for “where it lives” and “what is written in it”.
 GALLERY_SECTION = "gallery"
 
-# Явное перекрытие каталога галереи (свои раскладки, тесты): как
-# `GRIDSNAP_LANG` у строк интерфейса — один способ сказать «возьми отсюда».
+# An explicit override of the gallery directory (own layouts, tests): like
+# `GRIDSNAP_LANG` for the UI strings — one way to say “take it from here”.
 GALLERY_ENV = "GRIDSNAP_GALLERY"
 
-# Порядок в меню у раскладки без `order` в `[gallery]`: такие идут после
-# раскладок с номерами и разбираются по названию.
+# The menu order of a layout without `order` in `[gallery]`: such layouts come after
+# the numbered ones and are sorted by title.
 GALLERY_ORDER_DEFAULT = 100
 
 
 class GalleryError(ValueError):
-    """Ошибка галереи: нет раскладки, битая `[gallery]`, профиль уже есть.
+    """A gallery error: no layout, a broken `[gallery]`, the profile is already there.
 
-    Наследуется от ``ValueError``, как :class:`ProfileJsonError`: и редактор, и
-    CLI ловят ошибки ввода одним типом, а не знают про галерею особое слово.
+    It inherits from ``ValueError``, like :class:`ProfileJsonError`: both the editor
+    and the CLI catch input errors with one type and do not know a special word for the gallery.
     """
 
 
 def _gallery_candidates():
-    """Где искать каталог галереи, в порядке приоритета."""
+    """Where to look for the gallery directory, in order of priority."""
     env = (os.environ.get(GALLERY_ENV) or "").strip()
     if env:
         yield env
-    # Чекаут: gallery/ рядом с кодом.
+    # A checkout: gallery/ next to the code.
     yield os.path.join(HERE, GALLERY_SECTION)
-    # Установка: код в <префикс>/lib/gridsnap, данные в <префикс>/share/gridsnap.
+    # An installation: the code in <prefix>/lib/gridsnap, the data in <prefix>/share/gridsnap.
     yield os.path.join(
         os.path.dirname(os.path.dirname(HERE)), "share", "gridsnap", GALLERY_SECTION
     )
 
 
 def gallery_dir():
-    """Каталог готовых раскладок — первый существующий из кандидатов.
+    """The directory of ready-made layouts — the first candidate that exists.
 
-    Порядок: ``$GRIDSNAP_GALLERY``, затем ``gallery/`` рядом с кодом (чекаут),
-    затем ``<префикс>/share/gridsnap/gallery`` (установка: ``install.sh`` кладёт
-    данные туда, `.deb`/AUR — в ``/usr/share/gridsnap/gallery``). Если не нашлось
-    ничего, возвращается путь рядом с кодом: по нему в сообщении об ошибке видно,
-    чего не хватает.
+    The order: ``$GRIDSNAP_GALLERY``, then ``gallery/`` next to the code (a checkout),
+    then ``<prefix>/share/gridsnap/gallery`` (an installation: ``install.sh`` puts the
+    data there, `.deb`/AUR — into ``/usr/share/gridsnap/gallery``). If nothing is
+    found, the path next to the code is returned: it shows in the error message what
+    is missing.
     """
     for path in _gallery_candidates():
         if os.path.isdir(path):
@@ -1683,7 +1683,7 @@ def gallery_dir():
 
 
 def gallery_ids():
-    """id раскладок галереи (имена файлов без ``.conf``) по алфавиту."""
+    """The ids of the gallery layouts (file names without ``.conf``) alphabetically."""
     directory = gallery_dir()
     try:
         entries = os.listdir(directory)
@@ -1698,10 +1698,10 @@ def gallery_ids():
 
 
 def gallery_layout_path(gid):
-    """Путь к файлу раскладки; неизвестное или неаккуратное id — ``GalleryError``.
+    """The path to a layout file; an unknown or sloppy id — ``GalleryError``.
 
-    id — имя файла без расширения, а не путь: оно проверяется тем же правилом,
-    что имя профиля, поэтому выйти из каталога галереи им нельзя.
+    The id is a file name without the extension, not a path: it is checked by the same
+    rule as a profile name, so it cannot walk out of the gallery directory.
     """
     name = str(gid or "").strip()
     safe = sanitize_profile_name(name)
@@ -1714,7 +1714,7 @@ def gallery_layout_path(gid):
 
 
 def _gallery_conf(path):
-    """``ConfigParser`` файла галереи; битый или нечитаемый — ``GalleryError``."""
+    """The ``ConfigParser`` of a gallery file; broken or unreadable — ``GalleryError``."""
     cp = configparser.ConfigParser(
         interpolation=None,
         inline_comment_prefixes=("#", ";"),
@@ -1742,10 +1742,10 @@ def _gallery_conf(path):
 
 
 def _gallery_meta(cp, layout_id):
-    """``(название, описание, порядок)`` из секции ``[gallery]``.
+    """``(title, description, order)`` from the ``[gallery]`` section.
 
-    Названия нет — берётся id: раскладка без карточки всё равно должна быть
-    видна в меню, иначе файл, положенный руками, молча пропадёт.
+    No title — the id is taken: a layout without a card still has to be visible in
+    the menu, otherwise a file put there by hand would silently disappear.
     """
     title = ""
     description = ""
@@ -1767,19 +1767,19 @@ def _gallery_meta(cp, layout_id):
 
 
 def _gallery_zone_names(cp):
-    """Имена зон ``[zones]`` без разбора геометрии — для списка в меню."""
+    """The zone names of ``[zones]`` without parsing the geometry — for the menu list."""
     if not cp.has_section("zones"):
         return []
     return [str(name).strip() for name in cp.options("zones")]
 
 
 def gallery_layouts():
-    """Готовые раскладки для меню: ``[{"id", "title", "description", "zones", "order"}]``.
+    """The ready-made layouts for the menu: ``[{"id", "title", "description", "zones", "order"}]``.
 
-    ``zones`` — имена зон в порядке файла: этого хватает и меню, и CLI, чтобы
-    показать «зон: N»; геометрию отдаёт :func:`load_gallery_layout`. Порядок —
-    по ``order`` из ``[gallery]``, затем по названию: классика выше сценариев,
-    а одинаковый ``order`` не зависит от порядка каталога в файловой системе.
+    ``zones`` are the zone names in file order: that is enough both for the menu and
+    for the CLI to show “zones: N”; the geometry is given by
+    :func:`load_gallery_layout`. The order is by ``order`` from ``[gallery]``, then by
+    title: the classics above the scenarios, and an equal ``order`` ignores the directory order.
     """
     directory = gallery_dir()
     items = []
@@ -1800,17 +1800,17 @@ def gallery_layouts():
 
 
 def load_gallery_layout(gid):
-    """Раскладка галереи целиком — готовый «сценарий», а не только геометрия.
+    """A gallery layout as a whole — a ready-made “scenario”, not just the geometry.
 
-    Ключи словаря: ``id``, ``title``, ``description``, ``order``, ``zones``
-    (список :class:`Zone` с привязками из ``[keys]``; пустой, если раскладка
-    задана только наборами мониторов), ``monitors`` (``{выход: [Zone]}``),
-    ``keys`` (``{зона: сочетание}``), ``rules`` и ``ignore`` (строки секций
-    дословно, в порядке файла).
+    The keys of the dictionary: ``id``, ``title``, ``description``, ``order``, ``zones``
+    (a list of :class:`Zone` with the ``[keys]`` bindings; empty if the layout is
+    given only by monitor sets), ``monitors`` (``{output: [Zone]}``), ``keys``
+    (``{zone: shortcut}``), ``rules`` and ``ignore`` (section lines verbatim, in file
+    order).
 
-    Ошибки самой раскладки — :class:`GalleryError` (нет файла, битый
-    ``[gallery]``, нет зон), а кривая зона — ``SystemExit``, как у профиля:
-    сообщение с именем зоны печатает парсер раскладчика.
+    The errors of the layout itself are :class:`GalleryError` (no file, a broken
+    ``[gallery]``, no zones), while a bad zone is ``SystemExit``, as with a profile:
+    the message with the zone name is printed by the tiler's parser.
     """
     path = gallery_layout_path(gid)
     layout_id = os.path.basename(path)[: -len(PROFILE_EXT)]
@@ -1842,17 +1842,17 @@ def load_gallery_layout(gid):
 
 
 def install_gallery_layout(gid, name=None, force=False, conf_path=None):
-    """Скопировать раскладку галереи в профиль пользователя; вернуть путь.
+    """Copy a gallery layout into the user profile; return the path.
 
-    Профиль — тот же, что создаёт редактор и читает ``profile use``:
-    ``templates/<имя>.conf`` рядом с ``zones.conf``. Переносится всё, что несёт
-    раскладка: зоны, наборы ``[zones:<выход>]``, ``[rules]``, ``[ignore]`` и
-    ``[keys]``. Секция ``[gallery]`` остаётся в каталоге: в профиле ей нечего
-    делать, иначе скопированная раскладка продолжала бы числиться в галерее.
+    The profile is the same one the editor creates and ``profile use`` reads:
+    ``templates/<name>.conf`` next to ``zones.conf``. Everything the layout carries is
+    transferred: the zones, the ``[zones:<output>]`` sets, ``[rules]``, ``[ignore]`` and
+    ``[keys]``. The ``[gallery]`` section stays in the catalog: it has nothing to do in
+    a profile, otherwise the copied layout would keep counting as part of the gallery.
 
-    Имя по умолчанию — id раскладки. Профиль с таким именем —
-    :class:`GalleryError`, пока не передан ``force``: тихая перезапись чужой
-    раскладки была бы потерей, а не «выбором из галереи».
+    The name by default is the layout id. A profile with such a name is
+    :class:`GalleryError` until ``force`` is passed: silently overwriting someone
+    else's layout would be a loss, not a “choice from the gallery”.
     """
     layout = load_gallery_layout(gid)
     safe = sanitize_profile_name(name if name is not None else layout["id"])
@@ -1880,27 +1880,27 @@ def install_gallery_layout(gid, name=None, force=False, conf_path=None):
 
 
 class ProfileJsonError(ValueError):
-    """Ошибка JSON-профиля: формат, версия или значения (в CLI — код 3)."""
+    """A JSON profile error: format, version or values (in the CLI — code 3)."""
 
 
-# --------------------------------------------- перенос профиля в JSON
+# ------------------------------------------------------ carrying a profile into JSON
 def _json_number(value):
-    """Доля в JSON: целое остаётся целым (0, 1), остальное — float."""
+    """A fraction in JSON: an integer stays an integer (0, 1), the rest is a float."""
     number = round(float(value), PROFILE_JSON_DIGITS)
     return int(number) if number == int(number) else number
 
 
 def _json_zone(zones):
-    """Набор зон как ``{имя: [x, y, w, h]}`` в порядке зон набора."""
+    """A zone set as ``{name: [x, y, w, h]}`` in the order of the zones of the set."""
     return {z.name: [_json_number(v) for v in z.as_tuple()] for z in zones or []}
 
 
 def _zone_keys(zones, monitor_sets=None):
-    """``{зона: сочетание}`` из привязок наборов.
+    """``{zone: shortcut}`` from the bindings of the sets.
 
-    Привязки лежат в ``[keys]`` и проставляются зонам при чтении. Одна зона
-    может стоять в нескольких наборах, а ``[keys]`` пишется по первому
-    появлению имени (:func:`_key_lines`), поэтому и здесь главное — первое.
+    The bindings live in ``[keys]`` and are set on the zones when reading. One zone may
+    stand in several sets, while ``[keys]`` is written at the first appearance of the
+    name (:func:`_key_lines`), so here too the first one is what matters.
     """
     keys = {}
     chunks = [zones or []] + list((monitor_sets or {}).values())
@@ -1913,14 +1913,14 @@ def _zone_keys(zones, monitor_sets=None):
 
 
 def profile_to_dict(name, conf_path=None):
-    """Профиль → dict переносимого формата (``gridsnap_profile`` версии 1).
+    """A profile → dict of the portable format (``gridsnap_profile`` version 1).
 
-    ``zones`` — набор по умолчанию (пустой словарь, если секции ``[zones]``
-    нет), ``monitors`` — наборы ``[zones:<выход>]`` (ключа нет, если их нет),
-    ``rules`` — строки ``[rules]`` как в файле, ``ignore`` — строки ``[ignore]``,
-    ``keys`` — ``{зона: сочетание}`` из ``[keys]``. Доли округлены до
+    ``zones`` is the default set (an empty dictionary if there is no ``[zones]``
+    section), ``monitors`` the ``[zones:<output>]`` sets (no key if there are none),
+    ``rules`` the ``[rules]`` lines as in the file, ``ignore`` the ``[ignore]`` lines,
+    ``keys`` — ``{zone: shortcut}`` from ``[keys]``. The fractions are rounded to
     :data:`PROFILE_JSON_DIGITS`.
-    Профиля нет — ``FileNotFoundError``; битый ``.conf`` — ``SystemExit``.
+    No profile — ``FileNotFoundError``; a broken ``.conf`` — ``SystemExit``.
     """
     zones, rules, monitor_sets, ignore = read_profile_sets(name, conf_path)
     data = {
@@ -1937,18 +1937,18 @@ def profile_to_dict(name, conf_path=None):
 
 
 def dumps_profile(data):
-    """Стабильный текст JSON-профиля: ключи по алфавиту, отступ 2, UTF-8 как есть.
+    """Stable text of a JSON profile: keys alphabetically, indent 2, UTF-8 as is.
 
-    Стабильность нужна для git: один и тот же профиль должен давать один и тот
-    же файл, иначе диффы гуляют от порядка обхода словаря.
+    The stability is needed for git: one and the same profile must give one and the
+    same file, otherwise the diffs wander with the dictionary traversal order.
     """
     return json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
 
 
 def write_profile_json(data, path):
-    """Записать JSON-профиль в файл (каталог создаётся); возвращает путь.
+    """Write a JSON profile to a file (the directory is created); returns the path.
 
-    Кривой путь или отказ файловой системы — ``ProfileJsonError`` с подсказкой.
+    A bad path or a file system refusal — ``ProfileJsonError`` with a hint.
     """
     directory = os.path.dirname(path)
     try:
@@ -1966,7 +1966,7 @@ def write_profile_json(data, path):
 
 
 def read_profile_json(path):
-    """Прочитать dict из файла JSON-профиля; кривой JSON — ``ProfileJsonError``."""
+    """Read a dict from a JSON profile file; bad JSON — ``ProfileJsonError``."""
     try:
         with open(path, encoding="utf-8") as fh:
             return json.load(fh)
@@ -1983,7 +1983,7 @@ def read_profile_json(path):
 
 
 def profile_zone_total(data):
-    """Сколько зон в dict профиля: набор по умолчанию плюс наборы мониторов."""
+    """How many zones a profile dict holds: the default set plus the monitor sets."""
     total = len(data.get("zones") or {})
     for body in (data.get("monitors") or {}).values():
         total += len(body or {})
@@ -1991,7 +1991,7 @@ def profile_zone_total(data):
 
 
 def _dict_zone_rect(name, spec):
-    """``[x, y, w, h]`` из JSON с проверками; ошибка — ``ProfileJsonError``."""
+    """``[x, y, w, h]`` from JSON with checks; an error — ``ProfileJsonError``."""
     if isinstance(spec, (str, bytes, dict)):
         raise ProfileJsonError(
             _("zone '{zone}': expected a list [x, y, w, h], not {spec!r}").format(
@@ -2039,7 +2039,7 @@ def _dict_zone_rect(name, spec):
 
 
 def _dict_zones(body, where):
-    """``{имя: [x, y, w, h]}`` из JSON → ``[Zone]`` с проверками."""
+    """``{name: [x, y, w, h]}`` from JSON → ``[Zone]`` with checks."""
     if body is None:
         return []
     if not isinstance(body, dict):
@@ -2060,18 +2060,18 @@ def _dict_zones(body, where):
 
 
 def profile_from_dict(data, name=None, conf_path=None):
-    """dict ``gridsnap_profile`` → файл профиля ``templates/<имя>.conf``.
+    """A ``gridsnap_profile`` dict → a profile file ``templates/<name>.conf``.
 
-    Имя берётся из аргумента ``name``, иначе из ``data["name"]``, и санируется
-    (:func:`sanitize_profile_name`); пустое — ``ValueError``. Ошибки формата —
-    :class:`ProfileJsonError` (в CLI это код 3): не та или отсутствующая
-    версия, нет ни одной зоны, зона вне 0..1 или с неположительными ``w``/``h``,
-    правило на несуществующую зону, кривые типы. Клавиши к зонам, которых в
-    профиле нет, отбрасываются молча — ``[keys]`` пишется по зонам набора.
-    Порядок зон внутри набора — как в JSON-объекте (после файла на диске — по
-    алфавиту, так работает ``sort_keys``): имена, доли и привязки значат, а
-    порядок в ``.conf`` — только вид.
-    Возвращает путь записанного профиля.
+    The name comes from the ``name`` argument, otherwise from ``data["name"]``, and is
+    sanitized (:func:`sanitize_profile_name`); empty — ``ValueError``. Format errors
+    are :class:`ProfileJsonError` (code 3 in the CLI): the wrong or a missing version,
+    not a single zone, a zone outside 0..1 or with non-positive ``w``/``h``, a rule
+    pointing at a nonexistent zone, wrong types. Keys for zones the profile does not
+    have are dropped silently — ``[keys]`` is written from the zones of the set. The
+    order of the zones inside a set is the one of the JSON object (after a file on
+    disk — alphabetical, that is how ``sort_keys`` works): the names, the fractions
+    and the bindings matter, while the order in ``.conf`` is only looks.
+    Returns the path of the written profile.
     """
     if not isinstance(data, dict):
         raise ProfileJsonError(_("JSON profile expected an object {...}"))
@@ -2179,14 +2179,14 @@ def profile_from_dict(data, name=None, conf_path=None):
 
 
 def apply_profile(name, conf_path=None):
-    """Активировать профиль в ``zones.conf``.
+    """Activate a profile in ``zones.conf``.
 
-    Наборы зон ``[zones]``/``[zones:*]``, ``[rules]``, ``[ignore]`` и ``[keys]``
-    берутся из профиля (``[keys]`` — из привязок зон) и заменяют наборы активного
-    конфига целиком: наборов мониторов, которых в профиле нет, в конфиге не
-    останется. ``[grid]``, ``[daemon]`` и прочие секции активного конфига
-    сохраняются. Возвращает зоны набора по умолчанию (пустой список, если его в
-    профиле нет).
+    The zone sets ``[zones]``/``[zones:*]``, ``[rules]``, ``[ignore]`` and ``[keys]``
+    are taken from the profile (``[keys]`` — from the zone bindings) and replace the
+    sets of the active config as a whole: monitor sets that the profile does not have
+    will not remain in the config. ``[grid]``, ``[daemon]`` and the other sections of
+    the active config are preserved. Returns the zones of the default set (an empty
+    list if the profile has none).
     """
     zones, rules, monitor_sets, ignore = read_profile_sets(name, conf_path)
     extra = load_extra_sections(conf_path)
