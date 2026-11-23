@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Юнит-тесты раскладки одной командой и истории undo — без X и GTK.
+"""Unit tests for arranging in one command and for the undo history — without X and GTK.
 
-Покрыто: выбор подвижных окон (те же фильтры, что у демона), режимы `arrange`
-(`auto`/`rules`/`order`), общая рамка вкладки для окон одной зоны, персистентная история в XDG-состоянии
-(предел, битый файл), план `undo` (последняя операция и вся история), разбор
-воркспейса и CLI-ошибки новых команд.
+Covered: the choice of movable windows (the same filters as the daemon's), the `arrange` modes
+(`auto`/`rules`/`order`), the common tab frame for the windows of one zone, the persistent history in the XDG state
+(the limit, a broken file), the `undo` plan (the last operation and the whole history), the parsing of a
+workspace, and the CLI errors of the new commands.
 
-Запуск:
+Running:
     python3 -m unittest discover -s tests -v
     python3 tests/test_arrange_undo.py
 """
@@ -21,14 +21,14 @@ from unittest import mock
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)  # zone-tiler и его модули
+    sys.path.insert(0, ROOT)  # zone-tiler and its modules
 TILER = os.path.join(ROOT, "zone-tiler.py")
 
 
@@ -63,7 +63,7 @@ class TestMovableWindows(unittest.TestCase):
         metas = {
             0x1: meta("Firefox", window_type={"_NET_WM_WINDOW_TYPE_DIALOG"}),
             0x2: meta("Firefox", window_type={"_NET_WM_WINDOW_TYPE_SPLASH"}),
-            0x3: meta("Firefox", window_type={"TOOLTIP"}),  # короткое имя
+            0x3: meta("Firefox", window_type={"TOOLTIP"}),  # a short name
             0x4: meta("Firefox", window_type={"_NET_WM_WINDOW_TYPE_NORMAL"}),
         }
         self.assertEqual(zt.movable_windows(ids, metas), [0x4])
@@ -98,10 +98,10 @@ class TestChooseAssignments(unittest.TestCase):
     def test_auto_mode_rules_first_then_free_zones(self):
         ids = [0x1, 0x2, 0x3, 0x4]
         metas = {
-            0x1: meta("firefox-esr"),  # правило -> left
-            0x2: meta("xterm"),        # свободная зона -> first free
-            0x3: meta("another"),      # следующая свободная
-            0x4: meta("extra"),        # свободных зон больше нет -> не трогаем
+            0x1: meta("firefox-esr"),  # rule -> left
+            0x2: meta("xterm"),        # a free zone -> first free
+            0x3: meta("another"),      # the next free one
+            0x4: meta("extra"),        # no free zones left -> leave it alone
         }
         self.assertEqual(
             zt.choose_assignments(ids, metas, ["left", "right", "bottom"], self.RULES, "auto"),
@@ -132,7 +132,7 @@ class TestInZoneRect(unittest.TestCase):
         self.assertEqual(zt.in_zone_rect(self.BASE, 1), self.BASE)
 
     def test_two_windows_share_frame_below_strip(self):
-        # Полоса по умолчанию — 22 px: окно сдвинуто вниз на её высоту.
+        # The default strip is 22 px: the window is moved down by its height.
         self.assertEqual(zt.in_zone_rect(self.BASE, 2), (100, 122, 400, 278))
 
     def test_all_windows_of_zone_get_the_same_frame(self):
@@ -144,7 +144,7 @@ class TestInZoneRect(unittest.TestCase):
         self.assertEqual(zt.in_zone_rect(self.BASE, 2, 30), (100, 130, 400, 270))
 
     def test_narrow_zone_has_no_strip_and_keeps_zone(self):
-        # Окну не остаётся 44 px под полосой — полосы нет, рамка — сама зона.
+        # Not 44 px are left to the window under the strip — there is no strip, the frame is the zone itself.
         base = (100, 100, 400, 50)
         self.assertEqual(zt.in_zone_rect(base, 3), base)
 
@@ -239,7 +239,7 @@ class TestUndoTargets(unittest.TestCase):
             {
                 "windows": [
                     {"id": None, "frame": [0, 0, 1, 1]},
-                    {"id": 5, "frame": [0, 0, 1]},          # не 4 числа
+                    {"id": 5, "frame": [0, 0, 1]},          # not 4 numbers
                     {"id": 6, "frame": [0, 0, 1, 1]},
                     "мусор",
                 ]
@@ -277,12 +277,12 @@ class TestCli(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         for word in ("arrange", "stack", "tabs-next", "undo", "--by", "--all", "[tabs]"):
             self.assertIn(word, r.stdout)
-        # Каскада больше нет: ни флага, ни упоминания в справке.
+        # There is no cascade any more: neither a flag nor a mention in the help.
         self.assertNotIn("--offset", r.stdout)
 
     def test_stack_unknown_zone_is_config_error(self):
-        # Нет зоны ни в сетке стола, ни в общем [zones] — ошибка конфига (код 3),
-        # см. `require_zone` в zone-tiler.py.
+        # There is no zone either in the desktop grid or in the common [zones] — a config error (code 3),
+        # see `require_zone` in zone-tiler.py.
         r = self.run_cli("stack", "no-such-zone")
         self.assertEqual(r.returncode, 3)
         self.assertIn("no zone", r.stderr)

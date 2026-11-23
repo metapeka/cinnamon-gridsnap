@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Тесты Wayland-совместимости оконного слоя.
+"""Tests for the Wayland compatibility of the window layer.
 
-Проверяется то, что замерено в ``docs/RESEARCH-wayland-recon.md``: в Wayland-сессии
-Cinnamon `_NET_CURRENT_DESKTOP` не опубликован до первого переключения стола, а окно
-на другом столе неотличимо от свёрнутого. X-сервер не нужен: `xprop` подменяется.
+They check what was measured in ``docs/RESEARCH-wayland-recon.md``: in a Wayland session
+Cinnamon does not publish `_NET_CURRENT_DESKTOP` before the first desktop switch, and a window
+on another desktop is indistinguishable from a minimized one. No X server is needed: `xprop` is replaced.
 """
 
 import os
@@ -22,11 +22,11 @@ DESKTOP = "_NET_WM_DESKTOP"
 
 
 def xprop(answers=None, unavailable=False):
-    """Подмена `subprocess.check_output`: отвечает по имени свойства.
+    """A replacement for `subprocess.check_output`: it answers by property name.
 
-    `answers` — {свойство: строка ответа | Exception}; свойства нет в словаре —
-    отвечаем как `xprop` на отсутствующее («not found»). `unavailable` — нет самой
-    утилиты (так ведёт себя машина без X).
+    `answers` — {property: answer line | Exception}; the property is not in the dictionary —
+    we answer as `xprop` does for a missing one ("not found"). `unavailable` — the utility itself
+    is absent (this is how a machine without X behaves).
     """
 
     def fake(argv, **_kwargs):
@@ -51,9 +51,9 @@ class TestCurrentWorkspaceOrFirst(unittest.TestCase):
             self.assertEqual(wb.current_workspace_or_first(), 2)
 
     def test_missing_property_while_x_answers_gives_first_desktop(self):
-        # Ровно случай Wayland-сессии Cinnamon: `xprop` отвечает «no such atom» и
-        # выходит с нулём, то есть X жив, а свойства нет. Без этого `focus` и
-        # `wmctrl -d` мертвы до первого переключения стола.
+        # Exactly the case of a Cinnamon Wayland session: `xprop` answers "no such atom" and
+        # exits with zero, that is X is alive but the property is not there. Without this `focus` and
+        # `wmctrl -d` are dead until the first desktop switch.
         def answers(argv, **kwargs):
             if "_NET_SUPPORTED" in argv:
                 return f"{'_NET_SUPPORTED'}(ATOM) = _NET_WM_NAME\n"
@@ -64,14 +64,14 @@ class TestCurrentWorkspaceOrFirst(unittest.TestCase):
             self.assertEqual(wb.current_workspace_or_first(), 0)
 
     def test_x_unavailable_still_means_unknown(self):
-        # X не отвечает (нет xprop или нет дисплея) — стол по-прежнему неизвестен,
-        # и подменять его нулём нельзя: на X11 свойство не пропадает.
+        # X does not answer (no xprop or no display) — the desktop is still unknown,
+        # and it must not be replaced with zero: on X11 the property does not disappear.
         with mock.patch.object(wb.subprocess, "check_output", xprop(unavailable=True)):
             self.assertIsNone(wb.current_workspace_or_first())
 
     def test_live_session_costs_one_call(self):
-        # Когда всё в порядке (свойство есть) — ни одной лишней пробы: этим путём
-        # идёт каждая команда.
+        # When everything is fine (the property is there) — not a single extra probe: every
+        # command takes this path.
         calls = []
 
         def counting(argv, **kwargs):
@@ -83,8 +83,8 @@ class TestCurrentWorkspaceOrFirst(unittest.TestCase):
         self.assertEqual(len(calls), 1, calls)
 
     def test_wayland_start_costs_one_liveness_probe(self):
-        # Свойства нет — надо отличить «нет X» от «X жив, свойства нет»: одна
-        # дополнительная проба, и только на этом пути.
+        # The property is missing — "no X" must be told apart from "X is alive, the property is missing": one
+        # extra probe, and only on this path.
         calls = []
 
         def answers(argv, **kwargs):
@@ -131,7 +131,7 @@ class TestWindowOnOtherDesktop(unittest.TestCase):
 
 
 class TestPreferX11Gdk(unittest.TestCase):
-    """GDK обязан идти через X11: в Wayland-сессии иначе `move()` не работает."""
+    """GDK must go through X11: in a Wayland session `move()` does not work otherwise."""
 
     def setUp(self):
         self.addCleanup(lambda: os.environ.pop("GDK_BACKEND", None))
@@ -147,8 +147,8 @@ class TestPreferX11Gdk(unittest.TestCase):
         self.assertEqual(os.environ.get("GDK_BACKEND"), "wayland")
 
     def test_gdk_readers_ask_for_x11_themselves(self):
-        # `monitors()`/`monitor_scales()` ходят через `gdk_monitors()`, и он обязан
-        # включить X11-бэкенд до обращения к GDK — иначе область придёт из другого мира.
+        # `monitors()`/`monitor_scales()` go through `gdk_monitors()`, and it must
+        # enable the X11 backend before touching GDK — otherwise the area comes from another world.
         calls = []
         real = wb.prefer_x11_gdk
 

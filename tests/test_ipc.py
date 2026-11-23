@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Юнит-тесты IPC GridSnap — без X-сервера, GTK и дисплея.
+"""Unit tests for GridSnap IPC — without an X server, GTK or a display.
 
-Проверяют чистый `zone_ipc.py`: кадрирование (`LineReader`), разбор строк
-(`parse_command`), диспетчер с заглушками-обработчиками (`Dispatcher`),
-обслуживание соединения и слушающий UNIX-сокет (`Server`). Отдельно —
-диспетчер демона: `Daemon.build_dispatcher()` отвечает на `status`/`quit`
-с подставленной рабочей областью, без реального X.
+They check the pure `zone_ipc.py`: framing (`LineReader`), line parsing
+(`parse_command`), the dispatcher with stub handlers (`Dispatcher`),
+serving a connection and the listening UNIX socket (`Server`). Separately —
+the daemon dispatcher: `Daemon.build_dispatcher()` answers `status`/`quit`
+with a substituted work area, without a real X.
 
-Запуск:
+Running:
     python3 tests/test_ipc.py
 """
 
@@ -20,8 +20,8 @@ import tempfile
 import unittest
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -45,7 +45,7 @@ CONF = (
 
 
 def load_daemon():
-    """Загрузить `zone-daemon.py` (имя с дефисом) без обращения к X."""
+    """Load `zone-daemon.py` (a name with a dash) without touching X."""
     path = os.path.join(ROOT, "zone-daemon.py")
     spec = importlib.util.spec_from_file_location("zone_daemon_ipc_test", path)
     assert spec is not None and spec.loader is not None
@@ -54,7 +54,7 @@ def load_daemon():
     return mod
 
 
-# --------------------------------------------------------------- кадрирование
+# -------------------------------------------------------------------- framing
 
 
 class TestFraming(unittest.TestCase):
@@ -80,7 +80,7 @@ class TestFraming(unittest.TestCase):
             reader.feed(b"12345")
 
 
-# ------------------------------------------------------------------- разбор
+# ------------------------------------------------------------------ parsing
 
 
 class TestParseCommand(unittest.TestCase):
@@ -120,7 +120,7 @@ class TestParseCommand(unittest.TestCase):
             zone_ipc.parse_command(b"\xff\xfe")
 
 
-# --------------------------------------------------------------- диспетчер
+# -------------------------------------------------------------- dispatcher
 
 
 class TestDispatcher(unittest.TestCase):
@@ -158,7 +158,7 @@ class TestDispatcher(unittest.TestCase):
         self.assertIn("упало", str(response["error"]))
 
     def test_handler_system_exit_is_caught(self):
-        # `fail()` в layout-коде бросает SystemExit — он не подкласс Exception.
+        # `fail()` in the layout code raises SystemExit — it is not a subclass of Exception.
         def bail(request):
             raise SystemExit("нет активного окна")
 
@@ -179,7 +179,7 @@ class TestDispatcher(unittest.TestCase):
         self.assertTrue(disp.dispatch('{"cmd":"ping"}')["ok"])
 
 
-# --------------------------------------------------------- соединение и сокет
+# ------------------------------------------------------ connection and socket
 
 
 class TestConnection(unittest.TestCase):
@@ -192,7 +192,7 @@ class TestConnection(unittest.TestCase):
             client.sendall(b'{"cmd":"ping","n":1}\n{"cmd":"ping","n":2}\n')
             client.shutdown(socket.SHUT_WR)
             responses = zone_ipc.serve_connection(server, disp)
-            server.close()  # иначе клиент ждёт EOF бесконечно
+            server.close()  # otherwise the client waits for EOF forever
             self.assertEqual([r["n"] for r in responses], [1, 2])
             data = b""
             while True:
@@ -211,7 +211,7 @@ class TestConnection(unittest.TestCase):
         client, server = socket.socketpair()
         try:
             disp = zone_ipc.Dispatcher({"ping": lambda req: {"pong": True}})
-            client.sendall(b'{"cmd":"ping"}')  # без перевода строки
+            client.sendall(b'{"cmd":"ping"}')  # without a trailing newline
             client.shutdown(socket.SHUT_WR)
             responses = zone_ipc.serve_connection(server, disp)
             self.assertEqual(responses, [{"ok": True, "pong": True}])
@@ -305,11 +305,11 @@ class TestConnection(unittest.TestCase):
             server.close()
 
 
-# ------------------------------------------------------- диспетчер демона
+# ------------------------------------------------- the daemon's dispatcher
 
 
 class TestDaemonDispatcher(unittest.TestCase):
-    """Проверка, что демон отдаёт наружу настоящие обработчики (без X)."""
+    """A check that the daemon exposes the real handlers (without X)."""
 
     @classmethod
     def setUpClass(cls):
@@ -319,7 +319,7 @@ class TestDaemonDispatcher(unittest.TestCase):
         conf = os.path.join(tmp, "zones.conf")
         with open(conf, "w", encoding="utf-8") as fh:
             fh.write(CONF)
-        # Принудительная рабочая область: реальные мониторы (X) не нужны.
+        # A forced work area: real monitors (X) are not needed.
         return self.daemon.Daemon(conf, workarea=(0, 0, 1000, 800))
 
     def test_status_reports_zones_and_reflow(self):

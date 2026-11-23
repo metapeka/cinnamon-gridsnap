@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Юнит-тесты чистой навигации выбора зоны — без X-сервера и без GTK.
+"""Unit tests for the pure zone picker navigation — without an X server and without GTK.
 
-Проверяют `zone_picker_nav`: начальное выделение, перемещение стрелками
-(все четыре направления из центра, границы списка, зоны разной геометрии),
-зону под курсором (в т.ч. перекрытие и «щель»), пустой список и нормализацию
-индекса. Модуль не тянет за собой GTK, поэтому тесты идут в обычном CI.
+They check `zone_picker_nav`: the initial selection, moving with the arrows
+(all four directions from the centre, the edges of the list, zones of different geometry),
+the zone under the cursor (including overlap and a "slit"), an empty list, and the normalisation
+of the index. The module does not drag GTK in, so the tests run in ordinary CI.
 
-Запуск:
+Running:
     python3 tests/test_picker_nav.py
     python3 -m unittest discover -s tests -v
 """
@@ -17,8 +17,8 @@ import sys
 import unittest
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -31,12 +31,12 @@ import zone_picker_nav as nav  # noqa: E402
 
 Rect = collections.namedtuple("Rect", "x y w h")
 
-# Сетка 2×2 в порядке [A, B, C, D]; A — левый верх, D — правый низ.
+# A 2×2 grid in the order [A, B, C, D]; A is the top left, D is the bottom right.
 A, B = Rect(0, 0, 0.5, 0.5), Rect(0.5, 0, 0.5, 0.5)
 C, D = Rect(0, 0.5, 0.5, 0.5), Rect(0.5, 0.5, 0.5, 0.5)
 GRID2 = [A, B, C, D]
 
-# Сетка 3×3; индекс = row * 3 + col, центр — индекс 4.
+# A 3×3 grid; index = row * 3 + col, the centre is index 4.
 GRID3 = [Rect(c / 3.0, r / 3.0, 1 / 3.0, 1 / 3.0) for r in range(3) for c in range(3)]
 
 
@@ -126,7 +126,7 @@ class TestMoveBoundaries(unittest.TestCase):
 
 class TestMoveDifferentGeometry(unittest.TestCase):
     def test_prefers_same_row_neighbour(self):
-        # Слева — низкая зона; справа по той же строке сосед и дальше внизу ещё одна.
+        # On the left a low zone; on the right, along the same row, a neighbour, and lower down one more.
         left = Rect(0, 0, 0.3, 0.4)
         same_row = Rect(0.3, 0, 0.3, 0.4)
         lower = Rect(0.5, 0.6, 0.3, 0.4)
@@ -134,7 +134,7 @@ class TestMoveDifferentGeometry(unittest.TestCase):
         self.assertEqual(nav.move_selection(zones, 0, "right"), 1)
 
     def test_wide_zone_reaches_thin_strip(self):
-        # Из широкой зоны «вправо» — тонкая полоса справа, а не широкая слева.
+        # From a wide zone "to the right" — the thin strip on the right, not the wide one on the left.
         wide = Rect(0, 0, 0.9, 1.0)
         strip = Rect(0.9, 0, 0.1, 1.0)
         zones = [wide, strip]
@@ -149,14 +149,14 @@ class TestMoveDifferentGeometry(unittest.TestCase):
         self.assertEqual(nav.move_selection(zones, 1, "left"), 0)
 
     def test_large_zone_center_right_of_small_left_zone(self):
-        # Сосед крупнее и его центр правее — движение вправо работает.
+        # The neighbour is bigger and its centre is further right — moving right works.
         small = Rect(0, 0, 0.2, 1.0)
         big = Rect(0.2, 0, 0.7, 1.0)
         self.assertEqual(nav.move_selection([small, big], 0, "right"), 1)
 
 
 class TestMoveRealLayout(unittest.TestCase):
-    """Раскладка из zones.conf: широкая main, полоса справа и зона bottom."""
+    """The layout from zones.conf: a wide main, a strip on the right and the bottom zone."""
 
     def setUp(self):
         self.main = Rect(0, 0, 0.8358, 1.0)
@@ -166,7 +166,7 @@ class TestMoveRealLayout(unittest.TestCase):
         self.zones = [self.main, self.top_right, self.top_far, self.bottom]
 
     def test_right_from_main_is_the_right_strip_not_the_bottom(self):
-        # Центр bottom ближе по X, но он снизу — «вправо» должно вести в полосу.
+        # The centre of bottom is closer along X, but it is below — "to the right" must go to the strip.
         self.assertEqual(nav.move_selection(self.zones, 0, "right"), 1)
 
     def test_down_from_main_is_bottom(self):

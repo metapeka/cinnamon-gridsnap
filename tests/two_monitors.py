@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Два виртуальных монитора для дымовых сценариев — общий helper.
+"""Two virtual monitors for the smoke scenarios — a shared helper.
 
-Xvfb на один экран даёт ровно один выход (`screen`), сколько бы `-screen` ни
-передать: каждый `-screen` — это отдельный X-экран, а не второй выход. Отдельный
-процесс с `XRRSetMonitor` мониторы создаёт и держит соединение живым — пока он
-работает, у X-сервера два монитора, и muffin (Mutter) видит оба.
+Xvfb on one screen gives exactly one output (`screen`), no matter how many `-screen` are
+passed: each `-screen` is a separate X screen, not a second output. A separate
+process with `XRRSetMonitor` creates the monitors and keeps the connection alive — while it
+runs, the X server has two monitors, and muffin (Mutter) sees both.
 
-Аргументы: ``<файл-список> <ширина> <высота> ИМЯ:X [ИМЯ:X ...]``. Последнему
-монитору достаётся настоящий выход Xvfb: если отдать его первому, GDK покажет
-один монитор. В файл пишутся строки ``ИМЯ X 0 ШИРИНА ВЫСОТА``, чтобы сценарий не
-разбирал вывод xrandr регулярками.
+Arguments: ``<list-file> <width> <height> NAME:X [NAME:X ...]``. The last
+monitor gets the real Xvfb output: if it went to the first one, GDK would show
+one monitor. The file gets lines ``NAME X 0 WIDTH HEIGHT``, so that the scenario does not
+parse the xrandr output with regexes.
 
-Сценарии, которым он нужен: ``tests/smoke-monitors.sh`` (зоны на монитор) и
-``tests/smoke-monitor-profiles.sh`` (профиль на экран).
+The scenarios that need it: ``tests/smoke-monitors.sh`` (zones per monitor) and
+``tests/smoke-monitor-profiles.sh`` (a profile per screen).
 """
 
 import ctypes, ctypes.util, os, sys, time
 
 
 class XRRMonitorInfo(ctypes.Structure):
-    """struct _XRRMonitorInfo из <X11/extensions/Xrandr.h>."""
+    """struct _XRRMonitorInfo from <X11/extensions/Xrandr.h>."""
 
     _fields_ = [
         ("name", ctypes.c_ulong),
@@ -38,7 +38,7 @@ class XRRMonitorInfo(ctypes.Structure):
 
 
 class XRRScreenResources(ctypes.Structure):
-    """struct _XRRScreenResources (нужен только список выходов)."""
+    """struct _XRRScreenResources (only the list of outputs is needed)."""
 
     _fields_ = [
         ("timestamp", ctypes.c_ulong),
@@ -76,9 +76,9 @@ xrr.XRRSetMonitor.argtypes = [
     ctypes.POINTER(XRRMonitorInfo),
 ]
 
-# Аргументы: <файл-список> <ширина> <высота> ИМЯ:X [ИМЯ:X ...]
-# Последнему монитору достаётся настоящий выход Xvfb (первому нельзя: тогда
-# GDK показывает один монитор).
+# Arguments: <list-file> <width> <height> NAME:X [NAME:X ...]
+# The last monitor gets the real Xvfb output (not the first: then
+# GDK shows one monitor).
 if len(sys.argv) < 5:
     fail("helper: нужны <файл> <ширина> <высота> ИМЯ:X ...")
 out_path, width, height = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
@@ -93,7 +93,7 @@ outputs = [res.contents.outputs[i] for i in range(res.contents.noutput)]
 if not outputs:
     fail("helper: у X-сервера нет ни одного выхода")
 
-keep = []  # массивы выходов должны жить до конца работы
+keep = []  # the output arrays must live until the end of the run
 lines = []
 for index, spec in enumerate(all_specs):
     name, _, xpos = spec.partition(":")
@@ -126,6 +126,6 @@ with open(out_path + ".tmp", "w", encoding="utf-8") as fh:
 os.replace(out_path + ".tmp", out_path)
 print("helper: готово, держу соединение")
 sys.stdout.flush()
-# Соединение живёт до конца теста: с ним живут и мониторы.
+# The connection lives until the end of the test: the monitors live with it.
 while True:
     time.sleep(3600)

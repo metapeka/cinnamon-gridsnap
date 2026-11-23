@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Галерея готовых раскладок: контракт (падающий тест до реализации).
+"""A gallery of ready-made layouts: the contract (a failing test before the implementation).
 
-Волна «галерея раскладок» отдана воркеру, а этот файл — зафиксированный заранее
-интерфейс: чистые функции живут в `zone_config.py`, данные — в каталоге `gallery/`
-рядом с кодом (и ставятся пакетом). Тест намеренно **падает** до реализации и
-проверяет ровно то, о чём договорились с владельцем:
+The "layout gallery" wave went to a worker, and this file is the interface fixed in
+advance: the pure functions live in `zone_config.py`, the data lives in the `gallery/`
+directory next to the code (and is installed by the package). The test deliberately
+**fails** before the implementation and checks exactly what was agreed with the owner:
 
-* раскладка из галереи — это набор зон **плюс** клавиши **плюс** правила для
-  приложений (готовый «сценарий», а не только геометрия);
-* выбор копирует раскладку в **профиль пользователя** — дальше её правят как свою;
-* галерея видна и в редакторе, и в CLI (CLI-часть проверяется как функции
-  `zone_config`, потому что редактор и командная строка зовут их же);
-* файлы галереи — обычные `.conf` в формате профиля, с секцией `[gallery]`
-  (человеческое название и описание — их показывают и меню, и `profile gallery`).
+* a layout from the gallery is a set of zones **plus** keys **plus** rules for
+  applications (a ready-made "scenario", not just geometry);
+* picking one copies the layout into the **user profile** — from then on it is edited as one's own;
+* the gallery is visible both in the editor and in the CLI (the CLI part is checked as the functions of
+  `zone_config`, because the editor and the command line call the same ones);
+* the gallery files are ordinary `.conf` in the profile format, with a `[gallery]` section
+  (a human title and a description — both the menu and `profile gallery` show them).
 
-Тела не подсказываются: важно, чтобы воркер сам выбрал разумную реализацию,
-а тест держал обещания интерфейса.
+The bodies are not hinted at: what matters is that the worker picks a reasonable
+implementation itself, while the test keeps the promises of the interface.
 """
 
 import io
@@ -32,8 +32,8 @@ import zone_config as zc  # noqa: E402
 
 GALLERY = os.path.join(ROOT, "gallery")
 
-# Сколько раскладок должно быть в первой поставке: меньше — «галерея» из одного
-# пункта, больше — каша в меню. Владелец просил готовые сценарии, а не каталог.
+# How many layouts the first release must have: fewer — a "gallery" of one
+# entry, more — a mess in the menu. The owner asked for ready-made scenarios, not a catalogue.
 MIN_LAYOUTS = 6
 
 
@@ -58,8 +58,8 @@ class TestGalleryData(unittest.TestCase):
             self.assertIn("description", text, f"{name}: нет описания")
 
     def test_layouts_bring_keys_and_rules_not_only_geometry(self):
-        # Владелец выбрал вариант «наборы + клавиши + правила»: хотя бы одна
-        # раскладка обязана приносить правила для приложений.
+        # The owner chose the "sets + keys + rules" option: at least one
+        # layout must bring rules for applications.
         texts = []
         for name in sorted(os.listdir(GALLERY)):
             if name.endswith(".conf"):
@@ -70,7 +70,7 @@ class TestGalleryData(unittest.TestCase):
 
 
 class TestGalleryApi(unittest.TestCase):
-    """Интерфейс галереи в `zone_config` — им пользуются и CLI, и редактор."""
+    """The gallery interface in `zone_config` — used by both the CLI and the editor."""
 
     def test_gallery_layouts_lists_all_with_titles(self):
         layouts = zc.gallery_layouts()
@@ -87,8 +87,8 @@ class TestGalleryApi(unittest.TestCase):
         gid = zc.gallery_layouts()[0]["id"]
         layout = zc.load_gallery_layout(gid)
         self.assertTrue(layout.get("zones"), f"{gid}: нечего раскладывать")
-        # keys и rules могут быть пустыми у конкретной раскладки, но ключи в
-        # словаре обязаны быть — по ним редактор и CLI решают, что переносить.
+        # keys and rules may be empty for a particular layout, but the keys in the
+        # dictionary must be there — the editor and the CLI use them to decide what to carry over.
         self.assertIn("keys", layout)
         self.assertIn("rules", layout)
 
@@ -109,8 +109,8 @@ class TestGalleryApi(unittest.TestCase):
             with open(path, encoding="utf-8") as fh:
                 text = fh.read()
             self.assertIn("[zones]", text, "в профиль не перенеслись зоны")
-            # Повторный выбор того же имени без force — ошибка, а не тихая
-            # перезапись чужого профиля.
+            # Picking the same name again without force is an error, not a silent
+            # overwrite of somebody else's profile.
             with self.assertRaises(zc.GalleryError):
                 zc.install_gallery_layout(gid, conf_path=conf)
 

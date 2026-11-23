@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты чистого ядра вкладок в зоне — без X-сервера и без GTK.
+"""Unit tests for the pure tab core inside a zone — without an X server and without GTK.
 
-Проверяют `zone_tabs`: геометрию полосы и окна-вкладки (в т.ч. узкую зону, где
-полосы нет), выбор окон зоны с допуском рамок, кольцо переключения и оба
-протокола — строку снимка для полосы и запросы сокета демона. Модуль не тянет за
-собой ни GTK, ни X, поэтому тесты идут в обычном CI.
+They check `zone_tabs`: the geometry of the strip and of the tab window (including a narrow zone
+where there is no strip), the choice of the zone's windows with a frame tolerance, the switch ring, and both
+protocols — the snapshot line for the strip and the requests of the daemon socket. The module drags in
+neither GTK nor X, so the tests run in ordinary CI.
 
-Запуск:
+Running:
     python3 tests/test_tabs.py
     python3 -m unittest discover -s tests -v
 """
@@ -18,8 +18,8 @@ import sys
 import unittest
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -30,7 +30,7 @@ if ROOT not in sys.path:
 import zone_tabs as tabs  # noqa: E402
 
 
-# Зона на весь левый монитор и та же зона, которой полосы уже не хватает.
+# A zone over the whole left monitor, and the same zone that no longer has room for the strip.
 ZONE = (0, 0, 960, 1080)
 NARROW = (0, 0, 960, tabs.STRIP_HEIGHT + tabs.MIN_WINDOW_H - 1)
 FITS = (0, 0, 960, tabs.STRIP_HEIGHT + tabs.MIN_WINDOW_H)
@@ -50,7 +50,7 @@ class TestStripRect(unittest.TestCase):
         self.assertIsNone(tabs.strip_rect((0, 0, 200, 30)))
 
     def test_custom_height_and_minimum(self):
-        # 30 - 10 = 20 — ровно минимум, полоса влезает.
+        # 30 - 10 = 20 — exactly the minimum, the strip fits.
         self.assertEqual(tabs.strip_rect((5, 7, 100, 30), height=10, min_window_h=20),
                          (5.0, 7.0, 100.0, 10.0))
         self.assertIsNone(tabs.strip_rect((5, 7, 100, 29), height=10, min_window_h=20))
@@ -113,9 +113,9 @@ class TestTabsOfZone(unittest.TestCase):
         self.assertEqual(tabs.tabs_of_zone({}, tabs.tab_rect(ZONE)), [])
 
     def test_single_window_on_the_whole_zone_is_not_a_stack(self):
-        # Правило дизайна: одно окно занимает зону целиком (рамка — сама зона),
-        # поэтому стопкой оно не считается — полоса появляется со второго окна.
-        # Демон держит одиночное окно именно на `zone_rect`, а не на `tab_rect`.
+        # Design rule: a single window takes the whole zone (the frame is the zone itself),
+        # so it does not count as a stack — the strip appears with the second window.
+        # The daemon keeps a single window exactly on `zone_rect`, not on `tab_rect`.
         self.assertEqual(tabs.tabs_of_zone({11: ZONE}, tabs.tab_rect(ZONE)), [])
         self.assertEqual(tabs.tabs_of_zone({11: ZONE, 22: tabs.tab_rect(ZONE)}, tabs.tab_rect(ZONE)), [22])
 
@@ -133,7 +133,7 @@ class TestNextTab(unittest.TestCase):
         self.assertIsNone(tabs.next_tab([1], 1))
 
     def test_two_tab_ring_goes_both_ways(self):
-        # В стопке из двух окон «следующее» — это единственное другое.
+        # In a stack of two windows "the next one" is the only other one.
         self.assertEqual(tabs.next_tab([1, 2], 1), 2)
         self.assertEqual(tabs.next_tab([1, 2], 2), 1)
 
@@ -210,12 +210,12 @@ class TestStackRect(unittest.TestCase):
         self.assertEqual(tabs.stack_rect(ZONE, 7), tabs.tab_rect(ZONE))
 
     def test_narrow_zone_is_the_same_rect_for_any_count(self):
-        # Полоса не влезает — рамка вкладки совпадает с зоной, и «сжатия» не происходит.
+        # The strip does not fit — the tab frame coincides with the zone, and no "shrinkage" happens.
         self.assertEqual(tabs.stack_rect(NARROW, 1), tabs.stack_rect(NARROW, 3))
 
 
 class TestDefaults(unittest.TestCase):
-    """Умолчания полосы: их читает и человек, и ``[tabs] height`` из конфига."""
+    """The strip defaults: both a human and ``[tabs] height`` from the config read them."""
 
     def test_defaults_are_the_documented_values(self):
         self.assertEqual(tabs.STRIP_HEIGHT, 22)

@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Метаданные пакетов: одно описание на всех путях сборки и на английском.
+"""Package metadata: one description on every build path, and in English.
 
-Описание пакета — это то, что пользователь видит в `apt show gridsnap` и
-`pacman -Si gridsnap`, а не служебный комментарий. Поэтому:
+The package description is what the user sees in `apt show gridsnap` and
+`pacman -Si gridsnap`, not a service comment. Therefore:
 
-* `debian/control` и цель `make deb` (она пишет своё `DEBIAN/control`) обязаны
-  говорить **одно и то же** — раньше текст был продублирован, и после перевода
-  `debian/control` на английский русская копия в `Makefile` осталась (нашлось
-  проверкой при сборке `.deb`, а не глазами);
-* `pkgdesc` в `PKGBUILD` обязан совпадать с коротким описанием Debian: это одна
-  и та же строка про продукт;
-* в описаниях не должно быть кириллицы: Debian Policy §3.4 требует английского,
-  а ради архива Debian эта волна и делалась;
-* короткое описание — строчными и без точки на конце, как принято в Debian.
+* `debian/control` and the `make deb` target (it writes its own `DEBIAN/control`) must
+  say **the same thing** — the text used to be duplicated, and after translating
+  `debian/control` to English the Russian copy in the `Makefile` stayed behind (it was found
+  by a check while building the `.deb`, not by eye);
+* `pkgdesc` in `PKGBUILD` must match the short Debian description: it is one
+  and the same line about the product;
+* the descriptions must not contain Cyrillic: Debian Policy §3.4 requires English,
+  and that wave was done for the sake of the Debian archive;
+* the short description is lowercase and without a full stop at the end, as is usual in Debian.
 
-Запуск:
+Running:
     python3 tests/test_packaging_metadata.py
     python3 -m unittest discover -s tests
 """
@@ -42,7 +42,7 @@ def read(path):
 
 
 def debian_description():
-    """Короткое и длинное описание из бинарной секции ``debian/control``."""
+    """The short and long description from the binary section of ``debian/control``."""
     lines = read(CONTROL).splitlines()
     start = next(i for i, line in enumerate(lines)
                  if line.startswith("Description:"))
@@ -56,7 +56,7 @@ def debian_description():
 
 
 def makefile_description():
-    """Описание, которое цель `make deb` пишет в DEBIAN/control."""
+    """The description that the `make deb` target writes into DEBIAN/control."""
     synopsis = None
     body = []
     for line in read(MAKEFILE).splitlines():
@@ -91,7 +91,7 @@ class PackageDescriptionTest(unittest.TestCase):
         self.assertGreaterEqual(len(self.body), 3, "длинное описание слишком короткое")
 
     def test_make_deb_writes_the_same_description(self):
-        """Текст в Makefile — дословно тот же (иначе одно из двух устаревает)."""
+        """The text in the Makefile — literally the same (otherwise one of the two goes stale)."""
         synopsis, body = makefile_description()
         self.assertIsNotNone(synopsis, "в Makefile нет строки Description для DEBIAN/control")
         self.assertEqual(synopsis, self.synopsis)

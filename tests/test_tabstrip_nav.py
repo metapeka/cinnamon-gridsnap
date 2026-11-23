@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты чистой полосы вкладок — без X-сервера и без GTK.
+"""Unit tests for the pure tab strip — without an X server and without GTK.
 
-Проверяют `zone_tabstrip_nav`: разбор построчного снимка от демона (снимок,
-пустой снимок и мусор — три разных ответа), рамки вкладок по ширине полосы
-(поровну, последняя забирает остаток, ничего не вылезает за зону), подпись под
-ширину вкладки и вкладку под точкой клика. Модуль не тянет GTK, поэтому тесты
-идут в обычном CI, где `python3-gi` не установлен.
+They check `zone_tabstrip_nav`: the parsing of a line snapshot from the daemon (a snapshot,
+an empty snapshot and garbage — three different answers), the tab frames by strip width
+(equally, the last one takes the remainder, nothing sticks out of the zone), the label under
+the width of a tab, and the tab under the click point. The module does not pull GTK in, so the tests
+run in ordinary CI, where `python3-gi` is not installed.
 
-Запуск:
+Running:
     python3 tests/test_tabstrip_nav.py
     python3 -m unittest discover -s tests -v
 """
@@ -23,8 +23,8 @@ import unittest
 from unittest import mock
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +35,7 @@ if ROOT not in sys.path:
 import zone_tabstrip_nav as nav  # noqa: E402
 
 
-# Полоса одной зоны: две вкладки, нижняя неактивна.
+# The strip of one zone: two tabs, the lower one inactive.
 RECORD = {
     "zone": "main",
     "rect": [0, 0, 200, 22],
@@ -82,11 +82,11 @@ class TestParseSnapshot(unittest.TestCase):
         self.assertEqual(len(parsed), 1)
 
     def test_empty_snapshot_is_a_list(self):
-        # Пустой снимок — законная команда «убрать все полосы», а не мусор.
+        # An empty snapshot is a legitimate "remove all strips" command, not garbage.
         self.assertEqual(nav.parse_snapshot('{"strips": []}'), [])
 
     def test_garbage_is_none(self):
-        # Не разобрали строку — состояние не меняем (полоса не исчезает).
+        # The line did not parse — we do not change the state (the strip does not disappear).
         for value in ("", "   ", "{", "[]", "null", '{"strips": 1}', b"\xff\xfe"):
             with self.subTest(value=value):
                 self.assertIsNone(nav.parse_snapshot(value))
@@ -199,7 +199,7 @@ class TestTabAt(unittest.TestCase):
 
     def test_left_edge_belongs_to_tab_right_edge_does_not(self):
         self.assertEqual(nav.tab_at(self.FRAMES, (0, 0)), 0)
-        # Правый край первой вкладки — уже зазор, а is not a tab.
+        # The right edge of the first tab is already the gap, and it is not a tab.
         self.assertIsNone(nav.tab_at(self.FRAMES, (50, 10)))
 
     def test_outside_and_bad_point(self):
@@ -218,7 +218,7 @@ class TestTabAt(unittest.TestCase):
 
 
 def load_tabstrip():
-    """`zone-tabstrip.py` — файл без `.py`-модуля: `SourceFileLoader` кажет его без запуска GTK."""
+    """`zone-tabstrip.py` — a file without a `.py` module: `SourceFileLoader` loads it without starting GTK."""
     loader = importlib.machinery.SourceFileLoader(
         "zone_tabstrip_feed_test", os.path.join(ROOT, "zone-tabstrip.py")
     )
@@ -229,7 +229,7 @@ def load_tabstrip():
 
 
 class FakeStrip:
-    """Подменяет GTK-окно полосы: запоминает снимки, факт удаления и забывает себя."""
+    """Replaces the GTK window of the strip: it remembers snapshots, the fact of removal, and forgets itself."""
 
     def __init__(self, zone, owner):
         self.zone = zone
@@ -251,10 +251,10 @@ class FakeStrip:
 
 
 class TestTabstripFeed(unittest.TestCase):
-    """Разбор stdin процесса `zone-tabstrip.py`: строки, мусор, снимок и EOF.
+    """Parsing the stdin of the `zone-tabstrip.py` process: lines, garbage, a snapshot and EOF.
 
-    GTK не нужен: окно полосы подменено `FakeStrip`, проверяется только
-    буферизация строк и применение полного снимка.
+    GTK is not needed: the strip window is replaced by `FakeStrip`, only the
+    buffering of lines and the application of a full snapshot are checked.
     """
 
     def setUp(self):

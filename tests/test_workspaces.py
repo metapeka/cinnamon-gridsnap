@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты сопоставления «рабочий стол → профиль».
+"""Unit tests for the "desktop → profile" mapping.
 
-Без X и GTK: `load_workspace_map` живёт в чистом конфиг-слое, а
-`grid_for_workspace`/`current_workspace` проверяются с подменой `xprop`.
-Проверяется главное: столе без профиля получает общий `[zones]`, отсутствующий
-или битый профиль не ломает раскладку, а «липкое» окно (`_NET_WM_DESKTOP =
-0xFFFFFFFF`) живёт в наборе по умолчанию.
+Without X and GTK: `load_workspace_map` lives in the pure config layer, while
+`grid_for_workspace`/`current_workspace` are checked with `xprop` replaced.
+The main thing is checked: a desktop without a profile gets the common `[zones]`, a missing
+or broken profile does not break the layout, and a "sticky" window (`_NET_WM_DESKTOP =
+0xFFFFFFFF`) lives in the default set.
 
-Запуск:
+Running:
     python3 tests/test_workspaces.py
 """
 
@@ -19,8 +19,8 @@ import tempfile
 import unittest
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +35,7 @@ import zone_config as zc  # noqa: E402
 
 
 def load_tiler():
-    """Загрузить `zone-tiler.py` как модуль: он не пакет, а скрипт."""
+    """Load `zone-tiler.py` as a module: it is not a package but a script."""
     path = os.path.join(ROOT, "zone-tiler.py")
     spec = importlib.util.spec_from_file_location("zone_tiler_under_test", path)
     module = importlib.util.module_from_spec(spec)
@@ -52,7 +52,7 @@ PROFILE = "[grid]\ncols = 1.0\nrows = 1.0\n[zones]\nvideo = 0, 0, 1, 0.75\n"
 
 
 class WorkspaceMapTest(unittest.TestCase):
-    """Секция `[workspaces]`: ключи с 1, значения — имена профилей."""
+    """The `[workspaces]` section: keys start at 1, the values are profile names."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-ws-")
@@ -85,7 +85,7 @@ class WorkspaceMapTest(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 3)
 
     def test_zero_key_is_config_error(self):
-        # Ключи с 1: ноль сбивал бы перевод в нумерацию EWMH.
+        # Keys start at 1: zero would throw off the translation to EWMH numbering.
         self.write(BASE + "[workspaces]\n0 = work\n")
         with self.assertRaises(SystemExit):
             zc.load_workspace_map(self.conf)
@@ -97,7 +97,7 @@ class WorkspaceMapTest(unittest.TestCase):
 
 
 class GridForWorkspaceTest(unittest.TestCase):
-    """Какой набор зон получает стол."""
+    """Which zone set a desktop gets."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-gw-")
@@ -116,7 +116,7 @@ class GridForWorkspaceTest(unittest.TestCase):
         shutil.rmtree(self.dir, ignore_errors=True)
 
     def test_mapped_workspace_uses_profile_zones(self):
-        # Конфиг: стол «2» (ключ 2) → профиль cinema; в EWMH это индекс 1.
+        # Config: desktop "2" (key 2) → the cinema profile; in EWMH this is index 1.
         grid = self.zt.grid_for_workspace(self.conf, 1)
         self.assertEqual(sorted(grid.zones), ["video"])
 
@@ -142,7 +142,7 @@ class GridForWorkspaceTest(unittest.TestCase):
 
 
 class StickyWindowTest(unittest.TestCase):
-    """«Липкое» окно живёт в наборе по умолчанию, а не в профиле стола."""
+    """A "sticky" window lives in the default set, not in the desktop's profile."""
 
     def setUp(self):
         self.zt = load_tiler()
@@ -165,7 +165,7 @@ class StickyWindowTest(unittest.TestCase):
 
 
 class CurrentWorkspaceTest(unittest.TestCase):
-    """`_NET_CURRENT_DESKTOP` читается числом, мусор и сбой дают None."""
+    """`_NET_CURRENT_DESKTOP` is read as a number; garbage and failure give None."""
 
     def setUp(self):
         self.zt = load_tiler()
