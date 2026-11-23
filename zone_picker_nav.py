@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""zone_picker_nav — чистая навигация выбора зоны для оверлея ``zone-picker.py``.
+"""zone_picker_nav — pure zone-selection navigation for the ``zone-picker.py`` overlay.
 
-Здесь живёт вся арифметика визуального выбора зоны: начальное выделение,
-перемещение выделения стрелками по геометрии зон, зона под курсором и границы
-списка. Модуль намеренно не импортирует ни GTK, ни cairo, ни X: его можно и
-нужно проверять обычными юнит-тестами без X-сервера (инвариант проекта).
+All the arithmetic of visual zone selection lives here: the initial selection,
+moving the selection with the arrow keys over the zone geometry, the zone under
+the cursor and the bounds of the list. The module deliberately imports neither GTK
+nor cairo nor X: it can and should be checked with ordinary unit tests without an
+X server (a project invariant).
 
-Зона — что угодно с атрибутами ``x, y, w, h`` (как ``zone_config.Zone``) или
-кортеж ``(x, y, w, h)``. Координаты — доли рабочей области (0..1), как в
-``zones.conf``. Выделение — индекс в списке зон; ``None`` — пустой список.
+A zone is anything with ``x, y, w, h`` attributes (like ``zone_config.Zone``) or a
+``(x, y, w, h)`` tuple. Coordinates are work-area fractions (0..1), as in
+``zones.conf``. The selection is an index into the list of zones; ``None`` is an
+empty list.
 
-Точка — тоже либо доли (``zone_at``), либо экранные пиксели вместе с рабочей
-областью монитора (``zone_at_point``): HUD получает позицию курсора снаружи
-именно в экранных координатах.
+A point is also either fractions (``zone_at``) or screen pixels together with the
+monitor work area (``zone_at_point``): the HUD receives the cursor position from
+outside in screen coordinates precisely.
 """
 
 DIRECTIONS = ("left", "right", "up", "down")
@@ -20,7 +22,7 @@ EPS = 1e-9
 
 
 def rect(zone):
-    """Рамка зоны как ``(x, y, w, h)``: и из объекта с атрибутами, и из кортежа."""
+    """Zone frame as ``(x, y, w, h)``: from an object with attributes and from a tuple alike."""
     if hasattr(zone, "x"):
         return float(zone.x), float(zone.y), float(zone.w), float(zone.h)
     x, y, w, h = zone
@@ -28,20 +30,20 @@ def rect(zone):
 
 
 def center(zone):
-    """Центр зоны в долях рабочей области — по нему сравниваются направления."""
+    """Zone centre in work-area fractions — directions are compared by it."""
     x, y, w, h = rect(zone)
     return (x + w / 2.0, y + h / 2.0)
 
 
 def first_index(zones):
-    """Начальное выделение: ``0`` для непустого списка, иначе ``None``."""
+    """Initial selection: ``0`` for a non-empty list, otherwise ``None``."""
     return 0 if zones else None
 
 
 def clamp_index(zones, index):
-    """Индекс внутри ``[0, len)``; ``None``/мусор/выход за край — к ближайшему.
+    """Index within ``[0, len)``; ``None``/garbage/out of range go to the nearest.
 
-    Для пустого списка всегда ``None``: тогда выделять нечего.
+    For an empty list always ``None``: there is nothing to select then.
     """
     if not zones:
         return None
@@ -55,29 +57,31 @@ def clamp_index(zones, index):
 
 
 def _overlap(a, b, axis):
-    """Длина перекрытия двух прямоугольников по оси, перпендикулярной движению.
+    """Overlap length of two rectangles along the axis perpendicular to the move.
 
-    Нужна, чтобы «вправо» из зоны с полосой справа выбирало соседа в той же
-    строке, а не случайную зону в другой строке с близким центром.
+    It is needed so that "right" from a zone with a strip to its right picks the
+    neighbour in the same row, not a random zone in another row with a nearby
+    centre.
     """
     ax, ay, aw, ah = rect(a)
     bx, by, bw, bh = rect(b)
-    if axis == 0:  # движение по X — считаем перекрытие по Y
+    if axis == 0:  # movement along X — count the overlap along Y
         lo, hi = max(ay, by), min(ay + ah, by + bh)
-    else:  # движение по Y — перекрытие по X
+    else:  # movement along Y — the overlap along X
         lo, hi = max(ax, bx), min(ax + aw, bx + bw)
     return max(0.0, hi - lo)
 
 
 def move_selection(zones, index, direction):
-    """Индекс соседней зоны в направлении; если соседа нет — тот же индекс.
+    """Index of the neighbouring zone in the direction; the same index if there is none.
 
-    Кандидатом считается только зона, центр которой лежит в нужную сторону от
-    центра текущей. Среди кандидатов побеждает сперва тот, что перекрывается с
-    текущей по перпендикулярной оси, затем ближайший по перпендикуляру, затем
-    ближайший по оси движения. Так «вправо» из широкой зоны ведёт в полосу
-    справа (а не в зону снизу-справа), а из центра сетки — в соседнюю клетку.
-    Неизвестное направление ничего не меняет.
+    Only a zone whose centre lies in the wanted direction from the centre of the
+    current one counts as a candidate. Among the candidates the winner is first the
+    one that overlaps the current zone along the perpendicular axis, then the
+    nearest perpendicular, then the nearest along the direction of movement. That
+    way "right" from a wide zone leads into the strip on the right (not into the
+    zone below-right), and from the middle of the grid — into the neighbouring
+    cell. An unknown direction changes nothing.
     """
     if not zones:
         return None
@@ -94,7 +98,7 @@ def move_selection(zones, index, direction):
             continue
         c = center(z)
         along = sign * (c[axis] - cur[axis])
-        if along <= EPS:  # центр не в ту сторону — не сосед
+        if along <= EPS:  # the centre is not in that direction — not a neighbour
             continue
         perp = abs(c[1 - axis] - cur[1 - axis])
         has_overlap = _overlap(z, zones[index], axis) > EPS
@@ -106,11 +110,11 @@ def move_selection(zones, index, direction):
 
 
 def zone_at(zones, fx, fy):
-    """Индекс зоны под точкой ``(fx, fy)`` в долях рабочей области.
+    """Index of the zone under the point ``(fx, fy)`` in work-area fractions.
 
-    ``None`` — если точка не попала ни в одну зону (например, в «щель» между
-    свободными прямоугольниками). Зоны могут перекрываться: под курсором
-    считается та, что нарисована позже (последняя в списке) — как в редакторе.
+    ``None`` if the point fell into no zone (into a "gap" between free rectangles,
+    for example). Zones may overlap: the one under the cursor is the one drawn
+    later (last in the list) — as in the editor.
     """
     for i in range(len(zones) - 1, -1, -1):
         x, y, w, h = rect(zones[i])
@@ -120,16 +124,16 @@ def zone_at(zones, fx, fy):
 
 
 def zone_at_point(zones, area, point):
-    """Индекс зоны под экранной точкой ``point = (x, y)`` в пикселях.
+    """Index of the zone under the screen point ``point = (x, y)`` in pixels.
 
-    ``area`` — рабочая область монитора ``(x, y, w, h)`` в тех же экранных
-    координатах, что и точка: оверлей (и `--hud`) живёт ровно в ней. Перевод
-    «экранные пиксели → доли рабочей области» — единственное, что здесь есть
-    сверх :func:`zone_at`, поэтому зону под курсором и зону под присланной
-    watcher'ом точкой выбирает один и тот же код
-    (``zone-picker.Picker._initial_selection`` и HUD).
+    ``area`` is the monitor work area ``(x, y, w, h)`` in the same screen
+    coordinates as the point: the overlay (and `--hud`) lives exactly in it. The
+    conversion "screen pixels → work-area fractions" is the only thing here beyond
+    :func:`zone_at`, so the zone under the cursor and the zone under the point sent
+    by the watcher are picked by the same code
+    (``zone-picker.Picker._initial_selection`` and the HUD).
 
-    ``None`` — точка вне рабочей области или в щели между зонами.
+    ``None`` means the point is outside the work area or in a gap between zones.
     """
     ax, ay, aw, ah = (float(v) for v in area)
     px, py = (float(v) for v in point)
