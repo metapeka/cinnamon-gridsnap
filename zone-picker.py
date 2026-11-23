@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
-"""zone-picker.py — визуальный выбор зоны для GridSnap (как gTile).
+"""zone-picker.py — a visual zone picker for GridSnap (like gTile).
 
-По горячей клавише (в Cinnamon заводится на ``Super+Z``, см. README) поверх
-рабочего стола показывается оверлей с зонами из ``zones.conf``. Зона под
-курсором и выделение подсвечиваются; стрелки двигают выделение, ``Enter``
-вкладывает активное окно в выбранную зону, ``Esc`` отменяет.
+On a hotkey (in Cinnamon it is bound to ``Super+Z``, see README) an overlay
+with the zones from ``zones.conf`` appears over the desktop. The zone under
+the cursor and the selection are highlighted; the arrows move the selection, ``Enter``
+places the active window into the chosen zone, ``Esc`` cancels.
 
-    python3 zone-picker.py                 # интерактивный оверлей
-    python3 zone-picker.py --shot out.png  # отрисовать оверлей в PNG и выйти
-    python3 zone-picker.py --dry-run       # выбрать зону, но окно не двигать
-    python3 zone-picker.py --workspace 2   # сетка рабочего стола 2 (профиль из [workspaces])
-    python3 zone-picker.py --hud --at 100,100        # HUD-сетка: зона под точкой, и выход
-    python3 zone-picker.py --hud --follow            # HUD-сетка: точки «X Y» из stdin
+    python3 zone-picker.py                 # the interactive overlay
+    python3 zone-picker.py --shot out.png  # render the overlay into a PNG and exit
+    python3 zone-picker.py --dry-run       # pick a zone but do not move the window
+    python3 zone-picker.py --workspace 2   # the grid of desktop 2 (the profile from [workspaces])
+    python3 zone-picker.py --hud --at 100,100        # HUD grid: the zone under the point, then exit
+    python3 zone-picker.py --hud --follow            # HUD grid: "X Y" points from stdin
 
-Режим ``--hud`` — пассивная сетка для перетаскивания окна: подсвечены контуры
-всех зон и зона под точкой, которую присылает клиент (watcher перетаскивания).
-HUD не берёт фокус, не захватывает клавиатуру и прозрачен для ввода: во время
-перетаскивания ввод держит muffin, а мы только рисуем.
+The ``--hud`` mode is a passive grid for dragging a window: the outlines of
+all zones are highlighted, and so is the zone under the point the client (the drag
+watcher) sends. The HUD takes no focus, does not grab the keyboard and is transparent
+for input: during a drag muffin keeps the input and we only draw.
 
-Сетка берётся для экрана окна/курсора тем же резолвером, что у раскладчика
-(``zone-tiler.grid_for_output``): профиль из ``[monitors]`` → профиль
-``[workspaces]`` → активный ``zones.conf``. Так оверлей показывает ровно те зоны,
-которые положит демон/``apply``, а не набор активного конфига; внутри сетки
-монитор может сузить набор своим ``[zones:<выход>]``. Экран без привязки живёт
-сеткой своего стола, как раньше.
+The grid is taken for the screen of the window/cursor by the same resolver as in the tiler
+(``zone-tiler.grid_for_output``): the ``[monitors]`` profile → the ``[workspaces]`` profile
+→ the active ``zones.conf``. Thus the overlay shows exactly the zones the daemon/``apply`` will
+place, not the set of the active config; inside a grid the monitor can narrow the set with
+its own ``[zones:<output>]``. A screen without a binding lives by the grid of its own
+workspace, as before.
 
-Чистая логика навигации — в ``zone_picker_nav`` (без GTK и X), применение окна —
-через ``zone-tiler.apply_zone``/``Grid.rect``. GTK и cairo живут только здесь.
+The pure navigation logic lives in ``zone_picker_nav`` (no GTK and no X), window
+placement goes through ``zone-tiler.apply_zone``/``Grid.rect``. GTK and cairo live only here.
 
-Два пространства пикселей (см. ``zone_units``): арифметика зон, ``monitors()``,
-точка ``--at`` и строки stdin у ``--follow`` — **физические** пиксели X, а всё,
-что задаёт GTK-окно (``move``/``set_default_size``) и отдаёт указатель GDK, —
-**логические**. Перевод в одну сторону делает только ``zone_units``; здесь он
-вызывается в трёх местах: рамка окна оверлея/HUD, первое выделение под курсором
-и монитор под курсором.
+Two pixel spaces (see ``zone_units``): zone arithmetic, ``monitors()``,
+the ``--at`` point and the stdin lines of ``--follow`` are **physical** X pixels, while
+everything the GTK window sets (``move``/``set_default_size``) and the GDK pointer
+reports is **logical**. Only ``zone_units`` converts one way into the other; here it is
+called in three places: the frame of the overlay/HUD window, the first selection under
+the cursor and the monitor under the cursor.
 """
 
 import argparse
@@ -44,9 +44,9 @@ import sys
 
 import cairo
 
-# X11-бэкенд GDK включается до первого обращения к GDK (см. `window_backend`):
-# в Wayland-сессии оверлей и HUD обязаны жить в координатах Xwayland, иначе
-# `move()` превращается в ничто, а размер окна считает другая линейка.
+# The X11 GDK backend is enabled before the first call into GDK (see `window_backend`):
+# in a Wayland session the overlay and the HUD must live in Xwayland coordinates, otherwise
+# `move()` becomes a no-op and another ruler counts the window size.
 import window_backend
 
 window_backend.prefer_x11_gdk()
@@ -62,10 +62,10 @@ from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402  # typ
 
 import zone_config as zc  # noqa: E402
 import zone_picker_nav as nav  # noqa: E402
-import zone_units as zu  # noqa: E402  (перевод логических пикселей GTK в физические X)
-from zone_i18n import _  # noqa: E402  (там же: строки интерфейса и их перевод)
+import zone_units as zu  # noqa: E402  (converts GTK logical pixels to physical X ones)
+from zone_i18n import _  # noqa: E402  (the same place: interface strings and their translation)
 
-zt = zc.zt  # zone-tiler.py, загруженный zone_config (парсер конфига и раскладка)
+zt = zc.zt  # zone-tiler.py loaded by zone_config (the config parser and the layout)
 
 PALETTE = [
     (0.36, 0.62, 0.92), (0.42, 0.78, 0.58), (0.92, 0.66, 0.36),
@@ -75,8 +75,8 @@ PALETTE = [
 ACCENT = (1.0, 0.71, 0.33)
 BACKDROP = (0.07, 0.08, 0.10)
 HINT = _("arrows - select · Enter - place · Esc - cancel")
-# Подложка HUD и пауза однократной отрисовки: сетку видно, рабочий стол — тоже,
-# а сам процесс после кадра не висит.
+# The HUD backdrop and the pause of the one-shot draw: the grid is visible and so is
+# the desktop, while the process itself does not hang after the frame.
 HUD_ALPHA = 0.25
 HUD_HOLD_MS = 500
 
@@ -89,15 +89,15 @@ def fail(message, code=EXIT_FAIL):
     sys.exit(code)
 
 
-# -------------------------------------------------------- сетка рабочего стола
+# ----------------------------------------------------------- workspace grid
 
 
 def zone_bindings(grid):
-    """Привязки зон из ``[keys]`` сетки: имя зоны -> сочетание клавиш.
+    """Zone bindings from the ``[keys]`` of the grid: zone name -> key combination.
 
-    ``[keys]`` лежит в том же файле, что и набор зон, поэтому профиль стола
-    приносит и свои сочетания. Секции нет — привязок нет: подпись зоны просто
-    не покажет клавишу.
+    ``[keys]`` lives in the same file as the zone set, so a workspace profile
+    brings its own combinations too. No section — no bindings: the zone label simply
+    shows no key.
     """
     if not grid.conf.has_section("keys"):
         return {}
@@ -105,12 +105,12 @@ def zone_bindings(grid):
 
 
 def zones_from_grid(grid, output=None):
-    """Зоны набора монитора из уже выбранной сетки (с привязками ``[keys]``).
+    """The zones of a monitor's set from an already chosen grid (with the ``[keys]`` bindings).
 
-    Имена и доли берутся у одного и того же ``Grid``: у монитора может быть свой
-    набор ``[zones:<выход>]``, а у стола — свой профиль, и оверлей обязан рисовать
-    ровно то, что печатает ``list``. Отдельное чтение файла тут не годится: имена
-    зон разошлись бы с геометрией, которой пикер двигает окно.
+    Names and fractions come from one and the same ``Grid``: a monitor may have its own
+    ``[zones:<output>]`` set, a workspace has its own profile, and the overlay must
+    draw exactly what ``list`` prints. Reading the file separately will not do here:
+    the zone names would diverge from the geometry the picker moves the window by.
     """
     keys = zone_bindings(grid)
     zones = []
@@ -121,18 +121,18 @@ def zones_from_grid(grid, output=None):
 
 
 def screen_grid(conf, output, workspace):
-    """Сетка экрана и профили, которые её дали: ``(Grid, экран, стол)``.
+    """The grid of a screen and the profiles that gave it: ``(Grid, screen, workspace)``.
 
-    Порядок разбора не дублируется, а берётся у раскладчика
+    The resolution order is not duplicated but taken from the tiler
     (:func:`zone-tiler.grid_for_output`): ``[monitors]`` → ``[workspaces]`` →
-    активный ``zones.conf``. Сетка стола (``grid_for_workspace``) идёт готовым
-    ``fallback``: экран без привязки живёт ею, как жил до привязки профилей к
-    экранам. Профиля экрана нет на диске — ``grid_for_output`` сам печатает
-    предупреждение в stderr и отдаёт сетку стола, то есть оверлей не отказывает.
+    the active ``zones.conf``. The workspace grid (``grid_for_workspace``) comes as a
+    ready-made ``fallback``: a screen without a binding lives by it, as it lived before
+    profiles were bound to screens. With no screen profile on disk, ``grid_for_output``
+    prints a warning to stderr by itself and returns the workspace grid — the overlay does not refuse.
 
-    ``screen`` — имя профиля экрана, если он реально дал сетку, иначе ``None``;
-    ``desk`` — профиль стола из ``[workspaces]``. По ним строятся подписи: без
-    разделения «экран …» и «стол …» подпись врала бы о происхождении сетки.
+    ``screen`` is the name of the screen profile if it really gave the grid, otherwise
+    ``None``; ``desk`` is the workspace profile from ``[workspaces]``. The captions are built
+    from them: without the "screen …" and "workspace …" split a caption would lie about the origin.
     """
     desk = zt.workspace_profile(conf, workspace)
     grid, screen = zt.grid_for_output(
@@ -145,10 +145,10 @@ def screen_grid(conf, output, workspace):
 
 
 def workspace_caption(workspace, profile):
-    """Подпись к сетке: какой стол её дал и почему набор зон такой.
+    """The caption of a grid: which workspace gave it and why the zone set is such.
 
-    Пусто, если стол неизвестен (нет ``_NET_CURRENT_DESKTOP``): тогда работает
-    общий ``[zones]``, и подписывать нечего.
+    Empty if the workspace is unknown (no ``_NET_CURRENT_DESKTOP``): then the common
+    ``[zones]`` works and there is nothing to caption.
     """
     if workspace == zt.WORKSPACE_CONF:
         return _("zones.conf, without workspace profiles")
@@ -160,11 +160,11 @@ def workspace_caption(workspace, profile):
 
 
 def screen_caption(workspace, profile, output, screen_profile):
-    """Подпись к сетке: профиль экрана, если он дал сетку, иначе подпись стола.
+    """The caption of a grid: the screen profile if it gave the grid, else the workspace caption.
 
-    Экран важнее стола (:func:`zone_config.resolve_profile`), поэтому и подпись
-    называет экран первым: по ней в ``--shot``/``--dry-run`` видно, что оверлей
-    нарисовал зоны того же профиля, что положит раскладчик на этом экране.
+    A screen beats a workspace (:func:`zone_config.resolve_profile`), so the caption
+    names the screen first: by it ``--shot``/``--dry-run`` show that the overlay drew
+    the zones of the same profile the tiler will place on this screen.
     """
     if screen_profile:
         return _("monitor {} · profile \"{}\"").format(output, screen_profile)
@@ -172,11 +172,11 @@ def screen_caption(workspace, profile, output, screen_profile):
 
 
 def hud_caption(profile, output=None, screen_profile=None):
-    """Подпись HUD: чей профиль дал сетку — экрана или стола.
+    """The HUD caption: whose profile gave the grid — a screen's or a workspace's.
 
-    В HUD нет подсказки про клавиши (их он не слушает), поэтому в углу остаётся
-    только ответ на вопрос «какая это сетка» — та же строка профиля, что и в
-    интерактивном оверлее, но без номера стола: рисовать больше нечего.
+    The HUD has no key hint (it does not listen to keys), so the corner keeps
+    only the answer to "which grid is this" — the same profile line as in the
+    interactive overlay, but without the workspace number: there is nothing more to draw.
     """
     if screen_profile:
         return _("monitor {} · profile \"{}\"").format(output, screen_profile)
@@ -184,10 +184,10 @@ def hud_caption(profile, output=None, screen_profile=None):
 
 
 def describe_grid(zones, caption):
-    """Строка про показанную сетку: подпись стола и перечень зон.
+    """A line about the grid shown: the workspace caption and the list of zones.
 
-    Нужна ``--dry-run`` и ``--shot``: по ней видно, какая сетка нарисована, не
-    разглядывая оверлей (это и проверяет ``tests/smoke-picker-workspace.sh``).
+    Needed by ``--dry-run`` and ``--shot``: by it one sees which grid is drawn without
+    looking at the overlay (that is what ``tests/smoke-picker-workspace.sh`` checks).
     """
     if caption:
         return _("{caption} · zones {count}: {names}").format(
@@ -198,7 +198,7 @@ def describe_grid(zones, caption):
     )
 
 
-# ------------------------------------------------------------------- рисование
+# ---------------------------------------------------------------------- drawing
 
 
 def _rounded(cr, x, y, w, h, r):
@@ -224,14 +224,14 @@ def _label(cr, x, y, text, size, bold, rgba, width=None):
 
 
 def draw_zones(cr, width, height, zones, selected, caption="", hint=HINT):
-    """Нарисовать сетку без фона: зоны, подписи, подсветка, стол и подсказка.
+    """Draw a grid without a backdrop: zones, labels, highlight, caption and hint.
 
-    Координаты — в пикселях локального оверлея (он же — рабочая область монитора),
-    зоны заданы долями, поэтому ``zone_px`` просто умножает их на размеры. Фон
-    рисует вызывающий: интерактивному оверлею нужна непрозрачная подложка, а HUD —
-    полупрозрачная. Пустой ``hint`` — подсказки про клавиши нет (HUD их не слушает).
+    Coordinates are in pixels of the local overlay (which is also the monitor work
+    area), zones are given in fractions, so ``zone_px`` simply multiplies them by the
+    sizes. The backdrop is drawn by the caller: the interactive overlay needs an opaque
+    one, the HUD a translucent one. An empty ``hint`` means no key hint (the HUD does not listen to keys).
     """
-    # крупные зоны первыми, мелкие поверх — как в редакторе
+    # large zones first, small ones on top — as in the editor
     order = sorted(range(len(zones)), key=lambda i: zones[i].w * zones[i].h, reverse=True)
     for i in order:
         z = zones[i]
@@ -267,7 +267,7 @@ def draw_zones(cr, width, height, zones, selected, caption="", hint=HINT):
         cr.set_source_rgba(*ACCENT, 1.0)
         cr.stroke()
 
-    # почему сетка такая: стол и его профиль из `[workspaces]`
+    # why the grid is such: the workspace and its profile from `[workspaces]`
     if caption:
         _label(cr, 16, height - (48 if hint else 30), caption, 11, True, (*ACCENT, 0.92))
     if hint:
@@ -275,27 +275,27 @@ def draw_zones(cr, width, height, zones, selected, caption="", hint=HINT):
 
 
 def draw_overlay(cr, width, height, zones, selected, caption=""):
-    """Интерактивный оверлей целиком: непрозрачная подложка и сетка поверх неё."""
+    """The whole interactive overlay: an opaque backdrop and the grid on top of it."""
     cr.set_source_rgba(*BACKDROP, 0.90)
     cr.paint()
     draw_zones(cr, width, height, zones, selected, caption)
 
 
 def write_shot(path, width, height, zones, selected, caption="", hint=HINT):
-    """Отрисовать оверлей (или HUD, если ``hint`` пуст) в PNG — проверка без интерактива."""
+    """Render the overlay (or the HUD if ``hint`` is empty) into a PNG — a check without interaction."""
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(width), int(height))
     cr = cairo.Context(surface)
-    cr.set_source_rgb(*BACKDROP)  # непрозрачная подложка, чтобы снимок читался
+    cr.set_source_rgb(*BACKDROP)  # an opaque backdrop so that the snapshot reads
     cr.paint()
     draw_zones(cr, width, height, zones, selected, caption, hint)
     surface.write_to_png(path)
 
 
-# ------------------------------------------------------- выбор монитора и окна
+# --------------------------------------------------- picking the monitor and window
 
 
 def active_window_quiet():
-    """Активное окно как id или None, если его нет/X недоступен (без SystemExit)."""
+    """The active window as an id, or None if there is none/X is unavailable (no SystemExit)."""
     try:
         return zt.active_window()
     except SystemExit:
@@ -303,7 +303,7 @@ def active_window_quiet():
 
 
 def pointer_point():
-    """Абсолютная позиция курсора (x, y) или None, если её не спросить."""
+    """The absolute position of the cursor (x, y), or None if it cannot be asked."""
     try:
         display = Gdk.Display.get_default()
         seat = display.get_default_seat()
@@ -314,23 +314,23 @@ def pointer_point():
 
 
 def logical_areas(monitors, scales):
-    """Рабочие области мониторов в логических пикселях GTK, в том же порядке.
+    """The monitor work areas in GTK logical pixels, in the same order.
 
-    ``monitors()`` теперь физический, а GTK-окошки живут в логических пикселях,
-    поэтому окну оверлея и HUD нужна эта же область, переведённая
-    (:func:`zone_units.logical_rect`). Список масштабов короче списка областей —
-    обычное дело без GDK: ``zone_units.scale_at`` даёт 1, и область не меняется.
+    ``monitors()`` is physical now, and GTK windows live in logical pixels,
+    so the overlay and HUD windows need this same area, converted
+    (:func:`zone_units.logical_rect`). The list of scales is shorter than the list of areas —
+    a common case without GDK: ``zone_units.scale_at`` gives 1, and the area does not change.
     """
     return [zu.logical_rect(wa, zu.scale_at(scales, i)) for i, wa in enumerate(monitors)]
 
 
 def pointer_physical(point, monitors, scales):
-    """Логическая точка GDK → физическая точка X или ``None``.
+    """A GDK logical point → a physical X point, or ``None``.
 
-    Указатель GDK приходит в логических пикселях (``pointer_point``), а мониторы,
-    ``--at`` и строки stdin — в физических. Монитор ищется по логическим областям,
-    а не по одному общему коэффициенту: у мониторов бывает свой масштаб, и общее
-    число соврало бы на соседнем экране.
+    The GDK pointer arrives in logical pixels (``pointer_point``), while the monitors,
+    ``--at`` and the stdin lines are in physical ones. The monitor is looked up by logical
+    areas, not by one common coefficient: monitors may have their own scale, and a common
+    number would lie on a neighbouring screen.
     """
     if point is None:
         return None
@@ -340,11 +340,11 @@ def pointer_physical(point, monitors, scales):
 
 
 def pick_monitor(monitors, scales, win_id, args):
-    """Индекс монитора: явный ``--monitor``, иначе монитор окна, иначе под курсором.
+    """The monitor index: an explicit ``--monitor``, else the window monitor, else under the cursor.
 
-    Курсор GDK отдаёт в логических пикселях, а ``monitors`` — физические, поэтому
-    монитор под курсором ищется по логическим областям (:func:`logical_areas`).
-    Монитор окна — наоборот, по физической рамке окна (``window_monitor``).
+    GDK reports the cursor in logical pixels while ``monitors`` are physical, so the
+    monitor under the cursor is looked up by logical areas (:func:`logical_areas`).
+    The window monitor — the other way round, by the physical window frame (``window_monitor``).
     """
     if args.monitor is not None:
         return args.monitor
@@ -360,7 +360,7 @@ def pick_monitor(monitors, scales, win_id, args):
 
 
 def select_by_name(zones, name):
-    """Индекс зоны с именем ``name``; если такой нет — первый."""
+    """The index of the zone named ``name``; the first one if there is none."""
     if name:
         for i, z in enumerate(zones):
             if z.name == name:
@@ -368,7 +368,7 @@ def select_by_name(zones, name):
     return nav.first_index(zones)
 
 
-# ------------------------------------------------------------ интерактивный оверлей
+# -------------------------------------------------------- the interactive overlay
 
 
 class Picker:
@@ -378,9 +378,9 @@ class Picker:
         self.zones = zones
         self.grid = grid
         self.wa = wa
-        self.output = output  # имя выхода: у монитора может быть свой набор зон
+        self.output = output  # the output name: a monitor may have its own zone set
         self.mon_index = mon_index
-        self.scale = zu.scale_value(scale)  # масштаб монитора: wa физическая
+        self.scale = zu.scale_value(scale)  # the monitor scale: wa is physical
         self.args = args
         self.win_id = win_id
         self.caption = caption
@@ -405,8 +405,8 @@ class Picker:
         self.win.set_focus_on_map(True)
         self.win.set_app_paintable(True)
         self.win.set_type_hint(Gdk.WindowTypeHint.DOCK)
-        # Окно GTK — в логических пикселях: `move`/`set_default_size` физическую
-        # рамку на масштабе 2 удвоили бы, и оверлей уехал бы на соседний экран.
+        # A GTK window is in logical pixels: `move`/`set_default_size` would double a physical
+        # frame at scale 2, and the overlay would move to the neighbouring screen.
         win_x, win_y, win_w, win_h = zu.logical_rect(wa, self.scale)
         self.win.move(win_x, win_y)
         self.win.set_default_size(win_w, win_h)
@@ -424,14 +424,14 @@ class Picker:
         self.win.present()
         GLib.timeout_add(80, self.try_grab)
 
-    # ---- состояние
+    # ---- state
 
     def _initial_selection(self, width, height):
-        """Зона под курсором; ``width``/``height`` — физические размеры области.
+        """The zone under the cursor; ``width``/``height`` are the physical sizes of the area.
 
-        Курсор GDK логический, а ``width``/``height`` и ``wa`` физические: без
-        перевода (0,1) вместо середины экрана получалось бы на масштабе 2 вдвое
-        ближе к левому верхнему углу, и первое выделение уезжало бы от курсора.
+        The GDK cursor is logical while ``width``/``height`` and ``wa`` are physical: without
+        the conversion, (0,1) would come out twice as close to the top left corner at scale 2
+        instead of the middle of the screen, and the first selection would slip from the cursor.
         """
         if self.args.select:
             return select_by_name(self.zones, self.args.select)
@@ -445,10 +445,10 @@ class Picker:
                 return under
         return nav.first_index(self.zones)
 
-    # ---- клавиатура
+    # ---- the keyboard
 
     def try_grab(self):
-        """Взять клавиатуру на оверлей (DOCK-окно фокус WM не отдаёт)."""
+        """Take the keyboard for the overlay (the WM gives no focus to a DOCK window)."""
         self._grab_tries += 1
         try:
             display = Gdk.Display.get_default()
@@ -457,7 +457,7 @@ class Picker:
             if status == Gdk.GrabStatus.SUCCESS:
                 self._seat = seat
                 return False
-        except Exception as exc:  # окно могло быть не готово — пробуем ещё раз
+        except Exception as exc:  # the window may not be ready — try again
             if self._grab_tries >= 10:
                 print(_("zone-picker: failed to grab the keyboard: {}").format(exc), file=sys.stderr)
         return self._grab_tries < 10
@@ -490,7 +490,7 @@ class Picker:
             return True
         return False
 
-    # ---- мышь
+    # ---- the mouse
 
     def on_motion(self, widget, ev):
         alloc = widget.get_allocation()
@@ -519,13 +519,13 @@ class Picker:
     def on_destroy(self, _widget):
         Gtk.main_quit()
 
-    # ---- применение и выход
+    # ---- applying and exiting
 
     def apply_selected(self):
         if self.selected is None:
             return
         name = self.zones[self.selected].name
-        # геометрия из того же набора, что и нарисованные зоны (монитор стола)
+        # geometry from the same set as the drawn zones (the workspace monitor)
         rect = self.grid.rect(name, self.wa, self.output)
         x, y, w, h = rect
         if self.args.dry_run:
@@ -553,7 +553,7 @@ class Picker:
         try:
             before = zt.snapshot_window(win, zone=name)
         except Exception:
-            before = None  # геометрию не прочитать — без записи в историю
+            before = None  # the geometry cannot be read — no history record
         zt.apply_zone(win, rect, label=name, verify=self.args.verify, quiet=self.args.quiet)
         if before is not None:
             zt.remember("apply", [before], quiet=self.args.quiet)
@@ -566,15 +566,15 @@ class Picker:
         Gtk.main_quit()
 
 
-# ------------------------------------------------------------------ HUD-оверлей
+# ------------------------------------------------------------------- HUD overlay
 
 
 def parse_point(text):
-    """Точка ``(x, y)`` из строки ``X,Y`` или ``X Y``; ``None`` — если это не пара.
+    """A point ``(x, y)`` from a ``X,Y`` or ``X Y`` string; ``None`` if it is not a pair.
 
-    Один разбор на два входа: ``--at X,Y`` и строки ``X Y`` в stdin у ``--follow``.
-    Watcher перетаскивания печатает позицию курсора именно строкой, поэтому
-    формат с пробелом — основной, а запятая — удобство для ручного запуска.
+    One parser for two inputs: ``--at X,Y`` and the ``X Y`` lines on stdin of ``--follow``.
+    The drag watcher prints the cursor position as a string, hence
+    the space-separated form is the main one and the comma is a convenience for a manual run.
     """
     if isinstance(text, bytes):
         text = text.decode("utf-8", "replace")
@@ -590,7 +590,7 @@ def parse_point(text):
 
 
 def point_spec(text):
-    """``--at X,Y``: точка или понятная ошибка аргументов (код 2)."""
+    """``--at X,Y``: a point, or a clear argument error (code 2)."""
     point = parse_point(text)
     if point is None:
         raise argparse.ArgumentTypeError(
@@ -600,21 +600,21 @@ def point_spec(text):
 
 
 class Hud:
-    """Пассивный оверлей сетки для перетаскивания: рисует, но не берёт ввод.
+    """A passive grid overlay for dragging: it draws but takes no input.
 
-    Отличие от :class:`Picker` — в трёх местах: окно не берёт фокус
-    (``set_accept_focus(False)``/``set_focus_on_map(False)``), клавиатура не
-    захватывается (нет ``Gdk.Seat.grab`` — её держит muffin) и окно прозрачно
-    для ввода, а точку подсветки присылает клиент (``--at`` или stdin). Фон
-    полупрозрачный, чтобы сетка не закрывала перетаскиваемое окно.
+    It differs from :class:`Picker` in three places: the window takes no focus
+    (``set_accept_focus(False)``/``set_focus_on_map(False)``), the keyboard is not
+    grabbed (there is no ``Gdk.Seat.grab`` — muffin holds it) and the window is
+    transparent for input, while the highlight point is sent by the client (``--at`` or stdin).
+    The backdrop is translucent so that the grid does not cover the window being dragged.
     """
 
     def __init__(self, zones, wa, caption="", scale=1):
         self.zones = zones
-        # Рабочая область монитора — физические пиксели X: в них приходят и
-        # точки от watcher'а (`set_point`), и снимок `--shot`.
+        # The monitor work area is in physical X pixels: both the points from the watcher
+        # (`set_point`) and the `--shot` snapshot come in them.
         self.wa = wa
-        self.scale = zu.scale_value(scale)  # масштаб монитора: окно — логическое
+        self.scale = zu.scale_value(scale)  # the monitor scale: the window is logical
         self.caption = caption
         self.selected = None
         self._buf = ""
@@ -630,42 +630,42 @@ class Hud:
         self.win.set_skip_taskbar_hint(True)
         self.win.set_skip_pager_hint(True)
         self.win.set_keep_above(True)
-        # Фокус и клавиатура — чужие: перетаскиванием владеет muffin.
+        # Focus and keyboard belong to others: muffin owns the drag.
         self.win.set_accept_focus(False)
         self.win.set_focus_on_map(False)
         self.win.set_app_paintable(True)
         self.win.set_type_hint(Gdk.WindowTypeHint.DOCK)
-        # Окно GTK — в логических пикселях, `wa` — физическая: физический размер
-        # в `set_default_size` дал бы окно вдвое больше монитора.
+        # A GTK window is in logical pixels, `wa` is physical: a physical size
+        # in `set_default_size` would give a window twice the monitor.
         win_x, win_y, win_w, win_h = zu.logical_rect(wa, self.scale)
         self.win.move(win_x, win_y)
         self.win.set_default_size(win_w, win_h)
-        # Без RGBA-визуала полупрозрачный фон не скомпонуется и станет чёрным.
+        # Without an RGBA visual the translucent backdrop is not composited and turns black.
         screen = self.win.get_screen()
         visual = screen.get_rgba_visual() if screen is not None else None
         if visual is not None and screen.is_composited():
             self.win.set_visual(visual)
         self.win.connect("draw", self.on_draw)
         self.win.connect("destroy", lambda _widget: Gtk.main_quit())
-        # Сначала на экран, потом форма ввода: input shape ставится на живое окно
-        # (и GDK не перезатирает его при отображении).
+        # First onto the screen, then the input shape: the input shape is set on a live
+        # window (and GDK does not overwrite it on mapping).
         self.win.show_all()
         self.input_mode = self.make_input_transparent()
 
-    # ---- ввод не наш
+    # ---- the input is not ours
 
     def make_input_transparent(self):
-        """Сделать окно прозрачным для ввода: события X идут мимо него.
+        """Make the window transparent for input: X events pass it by.
 
-        Работает не всё, что обещает имя: проверено под Xvfb, что
-        ``Gdk.Window.set_pass_through(True)`` выставляет только флаг GDK
-        (``get_pass_through()`` — True), а X input shape остаётся полным, и окно
-        продолжает ловить события. Поэтому сначала ставится пустой input shape
-        (``input_shape_combine_region`` с пустым ``cairo.Region``) — это
-        единственный механизм, который видит X-сервер (расширение SHAPE), — и
-        только потом, поверх, флаг ``set_pass_through``: он говорит самому GDK,
-        что искать окно под курсором надо глубже. Без SHAPE остаётся хотя бы он.
-        Возвращает, что сработало: запросить обратно input shape GDK не даёт.
+        Not everything the name promises works: it was checked under Xvfb that
+        ``Gdk.Window.set_pass_through(True)`` only sets the GDK flag
+        (``get_pass_through()`` — True) while the X input shape stays full and the window
+        keeps catching events. That is why an empty input shape is set first
+        (``input_shape_combine_region`` with an empty ``cairo.Region``) — it is the only
+        mechanism the X server sees (the SHAPE extension) — and only then, on top, the
+        ``set_pass_through`` flag: it tells GDK itself
+        to look for the window under the cursor further down. Without SHAPE at least that one remains.
+        Returns what worked: GDK does not let one ask the input shape back.
         """
         gdk_win = self.win.get_window()
         if gdk_win is None:
@@ -675,19 +675,19 @@ class Hud:
         try:
             gdk_win.input_shape_combine_region(cairo.Region(), 0, 0)
             used.append("input_shape_combine_region")
-        except Exception as exc:  # X-сервер без SHAPE
+        except Exception as exc:  # an X server without SHAPE
             print(_("zone-picker: failed to set the input shape: {}").format(exc), file=sys.stderr)
         try:
             gdk_win.set_pass_through(True)
             used.append("set_pass_through")
-        except Exception as exc:  # старый GTK
+        except Exception as exc:  # an old GTK
             print(_("zone-picker: set_pass_through did not work: {}").format(exc), file=sys.stderr)
         return " + ".join(used) if used else _("none")
 
-    # ---- точка снаружи
+    # ---- a point from outside
 
     def set_point(self, point):
-        """Подсветить зону под экранной точкой (``None`` — снять подсветку)."""
+        """Highlight the zone under a screen point (``None`` clears the highlight)."""
         index = None if point is None else nav.zone_at_point(self.zones, self.wa, point)
         if index != self.selected:
             self.selected = index
@@ -695,10 +695,10 @@ class Hud:
         return index
 
     def apply_point(self, point):
-        """Подсветить точку и сказать в stdout, что именно подсвечено.
+        """Highlight the point and say on stdout what exactly is highlighted.
 
-        Строка нужна watcher'у и дымовому тесту: по ней видно, что процесс жив
-        и точка дошла, не разглядывая окно.
+        The line is for the watcher and the smoke test: by it one sees that the process is alive
+        and the point arrived without looking at the window.
         """
         index = self.set_point(point)
         name = self.zones[index].name if index is not None else _("off the zones")
@@ -706,10 +706,10 @@ class Hud:
         return index
 
     def feed(self, data):
-        """Скормить кусок stdin: разобрать целые строки ``X Y`` и перерисовать.
+        """Feed a chunk of stdin: parse whole ``X Y`` lines and redraw.
 
-        Неполная строка ждёт продолжения (watcher может писать кусками),
-        мусорные строки пропускаются — подсветка от них не мигает.
+        An incomplete line waits for more (the watcher may write in chunks),
+        garbage lines are skipped — the highlight does not blink on them.
         """
         self._buf += data.decode("utf-8", "replace") if isinstance(data, bytes) else str(data)
         while "\n" in self._buf:
@@ -718,28 +718,28 @@ class Hud:
             if point is not None:
                 self.apply_point(point)
 
-    # ---- рисование
+    # ---- drawing
 
     def on_draw(self, widget, cr):
         alloc = widget.get_allocation()
-        # OPERATOR_SOURCE: подложка заменяет содержимое окна целиком. С композитором
-        # виден рабочий стол сквозь HUD_ALPHA, без него — ровная тёмная подложка, а
-        # не остатки предыдущего кадра.
+        # OPERATOR_SOURCE: the backdrop replaces the window contents entirely. With a compositor
+        # the desktop shows through HUD_ALPHA, without one — an even dark backdrop
+        # rather than the leftovers of the previous frame.
         cr.set_operator(cairo.OPERATOR_SOURCE)
         cr.set_source_rgba(*BACKDROP, HUD_ALPHA)
         cr.paint()
         cr.set_operator(cairo.OPERATOR_OVER)
-        # Подсказки про клавиши нет: HUD их не слушает.
+        # No key hint: the HUD does not listen to keys.
         draw_zones(cr, alloc.width, alloc.height, self.zones, self.selected, self.caption, hint="")
         return False
 
 
 def follow_stdin(hud):
-    """Подавать HUD точки из stdin до EOF; окно живёт в главном цикле GTK.
+    """Feed the HUD points from stdin until EOF; the window lives in the GTK main loop.
 
-    Никаких таймеров, двигающих окно или забирающих ввод: единственный источник
-    новых точек — строки ``X Y`` от watcher'а, а конец потока (EOF, SIGTERM)
-    завершает главный цикл. Перезапуск процесса на каждый кадр дал бы мигание.
+    No timers that move the window or take input: the only source of
+    new points is the ``X Y`` lines from the watcher, and the end of the stream (EOF, SIGTERM)
+    finishes the main loop. Restarting the process for every frame would cause flicker.
     """
 
     def on_readable(fd, _condition):
@@ -748,7 +748,7 @@ def follow_stdin(hud):
         except OSError as exc:
             print(_("zone-picker: cannot read stdin: {}").format(exc), file=sys.stderr)
             chunk = b""
-        if not chunk:  # EOF или HUP: кормить больше некому
+        if not chunk:  # EOF or HUP: there is no one left to feed
             Gtk.main_quit()
             return False
         hud.feed(chunk)
@@ -847,18 +847,18 @@ def parse_args(argv):
     return args
 
 
-# Флаги интерактивного режима: в HUD они не имеют смысла — HUD ничего не выбирает,
-# не вкладывает и не печатает о вложении (--quiet только молчит, поэтому безвреден).
+# Interactive-mode flags: in the HUD they make no sense — the HUD selects nothing,
+# places nothing and prints nothing about placing (--quiet only keeps silent, so it is harmless).
 HUD_INCOMPATIBLE = ("select", "window", "dry_run", "verify")
 
 
 def validate_args(ap, args):
-    """Сверить сочетания режимов; негодное — ошибка аргументов (код 2).
+    """Check the combinations of modes; a bad one is an argument error (code 2).
 
-    ``--hud`` — отдельный пассивный режим: он не двигает окна (поэтому нет
-    ``--select``/``--window``/``--dry-run``/``--verify``) и не работает без
-    источника точки. ``ap.error`` печатает usage и выходит с кодом 2 — тот же
-    контракт, что у остальных ошибок разбора.
+    ``--hud`` is a separate passive mode: it does not move windows (hence there is no
+    ``--select``/``--window``/``--dry-run``/``--verify``) and does not work without
+    a point source. ``ap.error`` prints usage and exits with code 2 — the same
+    contract as the other parse errors.
     """
     if not args.hud:
         if args.at is not None or args.follow:
@@ -893,31 +893,31 @@ def main(argv=None):
     conf = args.conf or zt.default_conf()
     if not os.path.exists(conf):
         fail(_("zone-picker: config not found: {}").format(conf))
-    # Стол для разбора профилей: `--workspace N`, иначе активный. Сама сетка
-    # считается после выбора монитора — она зависит от экрана (grid_for_output),
-    # а не только от стола. Стол без профиля молча живёт в общем [zones] (та же
-    # деградация, что в zone-tiler.grid_for_workspace), поэтому подпись стола
-    # и показанная сетка не расходятся.
+    # The workspace for resolving profiles: `--workspace N`, otherwise the active one. The grid
+    # itself is computed after the monitor is picked — it depends on the screen (grid_for_output),
+    # and not only on the workspace. A workspace without a profile silently lives in the common [zones]
+    # (the same degradation as in zone-tiler.grid_for_workspace), so the workspace caption
+    # and the grid shown do not diverge.
     workspace = zt.resolve_workspace(args.workspace)
 
     try:
         Gtk.init()
     except Exception as exc:
         fail(_("zone-picker: failed to open the display: {}").format(exc))
-    # Имена выходов нужны для набора зон монитора `[zones:<выход>]`; порядок
-    # областей тот же, что у zt.monitors(), — по нему и нумеруется `--monitor`.
+    # The output names are needed for the monitor zone set `[zones:<output>]`; the order
+    # of the areas is the same as in zt.monitors() — it is what `--monitor` is numbered by.
     outputs = zt.monitor_outputs()
     monitors = [wa for _unused, wa in outputs]
     if not monitors:
         fail(_("zone-picker: failed to get monitor work areas"))
-    # Масштабы — в том же порядке, что области (пустой список без GDK = масштаб 1).
+    # The scales are in the same order as the areas (an empty list without GDK = scale 1).
     scales = zt.monitor_scales()
     win_id = args.window
     if win_id is None and not args.shot and not args.hud:
         win_id = active_window_quiet()
     if args.hud and args.at is not None and args.monitor is None:
-        # HUD без --monitor живёт на мониторе присланной точки, а не под курсором:
-        # точку задаёт клиент, и именно на его мониторе надо подсвечивать.
+        # Without --monitor the HUD lives on the monitor of the received point, not under the cursor:
+        # the client sets the point, and it is on its monitor that the highlight must go.
         mon_index = monitors.index(zt.monitor_for_point(monitors, args.at))
     else:
         mon_index = pick_monitor(monitors, scales, win_id, args)
@@ -925,10 +925,10 @@ def main(argv=None):
         fail(_("zone-picker: no monitor {}").format(mon_index))
     wa = monitors[mon_index]
     output = outputs[mon_index][0]
-    # Масштаб выбранного монитора: один на окно оверлея и окно HUD.
+    # The scale of the picked monitor: one for the overlay window and the HUD window.
     scale = zu.scale_at(scales, mon_index)
-    # Сетка экрана — тем же резолвером, что у раскладчика: иначе оверлей показал
-    # бы зоны профиля стола, а демон положил бы окно в зоны профиля экрана.
+    # The screen grid — by the same resolver as in the tiler: otherwise the overlay would show
+    # the zones of the workspace profile while the daemon would place the window into the zones of the screen profile.
     grid, screen_profile, desk_profile = screen_grid(conf, output, workspace)
     caption = screen_caption(workspace, desk_profile, output, screen_profile)
     hud_heading = hud_caption(desk_profile, output, screen_profile)
@@ -938,8 +938,8 @@ def main(argv=None):
 
     if args.shot:
         if args.hud:
-            # Снимок HUD — тот же PNG, только без подсказки и с подсветкой точки:
-            # именно по нему видно, что подсветка работает (разные точки — разные файлы).
+            # A HUD snapshot is the same PNG, only without the hint and with the point highlighted:
+            # it is what shows that the highlight works (different points — different files).
             selected = nav.zone_at_point(zones, wa, args.at)
             write_shot(
                 args.shot,
@@ -976,7 +976,7 @@ def main(argv=None):
 
     if args.hud:
         hud = Hud(zones, wa, hud_heading, scale)
-        # Диагностика: единственное доказательство, что окно прозрачно для ввода.
+        # Diagnostics: the only proof that the window is transparent for input.
         print(
             _("zone-picker: the HUD does not take input ({})").format(hud.input_mode),
             file=sys.stderr,
@@ -986,7 +986,7 @@ def main(argv=None):
         if args.follow:
             follow_stdin(hud)
         else:
-            # --at без --shot: дать окну один кадр и выйти, без главного цикла «навсегда».
+            # --at without --shot: give the window one frame and exit, without a main loop "forever".
             GLib.timeout_add(HUD_HOLD_MS, lambda: (Gtk.main_quit(), False)[1])
         Gtk.main()
         return EXIT_OK
