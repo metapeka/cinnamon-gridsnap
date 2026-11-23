@@ -38,8 +38,8 @@ import unittest
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # run as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -61,8 +61,8 @@ hc = load_watcher()
 WIN = 0x400001
 FRAME = (100, 100, 400, 300)
 EXTENTS = (0, 0, 30, 0)
-INSIDE_TITLE = (300, 115)  # полоса 100..138 (30 + запас 8)
-BELOW_TITLE = (300, 200)  # в окне, но ниже полосы
+INSIDE_TITLE = (300, 115)  # the strip 100..138 (30 + a margin of 8)
+BELOW_TITLE = (300, 200)  # inside the window but below the strip
 LEFT_OF_WINDOW = (50, 115)
 
 # The work area of one monitor: 1000x800 in root coordinates.
@@ -320,11 +320,11 @@ class TestThrottle(unittest.TestCase):
         watcher, ctx, _ = make_watcher(clock=clock)
         ctx.__enter__()
         try:
-            self.assertFalse(watcher.motion_due())  # до нажатия
+            self.assertFalse(watcher.motion_due())  # before the press
             watcher.on_press(INSIDE_TITLE, 1)
             self.assertTrue(watcher.motion_due())
             watcher.on_motion((150, 150))
-            self.assertFalse(watcher.motion_due())  # только что отдали точку
+            self.assertFalse(watcher.motion_due())  # the point was just handed over
             clock.advance(hc.POINT_INTERVAL)
             self.assertTrue(watcher.motion_due())
         finally:
@@ -348,7 +348,7 @@ class TestThrottle(unittest.TestCase):
         try:
             watcher.on_press(INSIDE_TITLE, 1)
             self.assertTrue(watcher.on_motion((150, 150)))
-            self.assertFalse(watcher.on_motion((160, 160)))  # слишком часто
+            self.assertFalse(watcher.on_motion((160, 160)))  # too often
             clock.advance(hc.POINT_INTERVAL)
             self.assertTrue(watcher.on_motion((170, 170)))
             self.assertEqual(hud.points, [(150, 150), (170, 170)])
@@ -581,7 +581,7 @@ class TestZones(unittest.TestCase):
             watcher.on_motion((150, 600))
             watcher.on_release((150, 600), 1)
             self.assertEqual(applied, [(WIN, (0, 400, 500, 400), "bl")])
-            self.assertEqual(log, [])  # edge-tiling не трогали вовсе
+            self.assertEqual(log, [])  # edge-tiling was not touched at all
         finally:
             watcher.finish_drag()
             ctx.__exit__(None, None, None)
@@ -838,7 +838,7 @@ class RawFakeClient:
         self.stop = stop
         self.events = list(events)
         self.read_fd, self.write_fd = os.pipe()
-        os.write(self.write_fd, b"x")  # select сразу готов
+        os.write(self.write_fd, b"x")  # select is ready at once
         self.queries = []
 
     def fd(self):
@@ -849,7 +849,7 @@ class RawFakeClient:
         if self.events:
             events, self.events = self.events, []
             return events
-        self.stop.handler()  # очередь пуста — цикл должен выйти
+        self.stop.handler()  # the queue is empty - the loop must exit
         return []
 
 
@@ -915,7 +915,7 @@ class TestServe(unittest.TestCase):
         try:
             client = PollFakeClient(stop, [])
             watcher = RecordingWatcher()
-            stop.handler()  # сигнал ещё до цикла
+            stop.handler()  # the signal is there before the loop
             hc.serve(watcher, client, stop)
         finally:
             stop.close()

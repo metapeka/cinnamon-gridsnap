@@ -47,8 +47,8 @@ import unicodedata
 import unittest
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # run as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -183,7 +183,7 @@ def example_lines():
     try:
         start = lines.index(".nf")
         end = lines.index(".fi", start)
-    except ValueError:  # pragma: no cover — страница сломана
+    except ValueError:  # pragma: no cover - the page is broken
         return []
     return [
         line.strip().replace("\\-", "-")
@@ -284,7 +284,7 @@ class ManMatchesCliTest(unittest.TestCase):
             self.assertIsNotNone(binary, f"пример на неизвестную команду: {line!r}")
             text = self.help_texts.get(tokens[0])
             if text is None:
-                continue  # команда без GTK не запускается — пропускаем
+                continue  # the command does not start without GTK - skipping it
             # The subcommand is the second word; for `profile` it is the third, and its set
             # is defined not by argparse but by PROFILE_ACTIONS in zone-tiler.py.
             if len(tokens) > 1 and tokens[1] == "profile":
@@ -428,7 +428,7 @@ class BuiltPagesTest(unittest.TestCase):
         }
         for locale, ok in expected.items():
             if locale != "C" and not locale_available(locale):
-                continue  # локаль не сгенерирована — проверять нечего
+                continue  # the locale was not generated - nothing to check
             proc = self.render_man(locale, "gridsnap")
             self.assertEqual(proc.returncode, 0, f"{locale}: {proc.stderr}")
             self.assertTrue(ok(proc.stdout), f"{locale}: man gridsnap показал не ту страницу")
