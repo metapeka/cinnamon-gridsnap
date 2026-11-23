@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""zone_ipc — кадрирование и диспетчер команд локального IPC GridSnap.
+"""zone_ipc — framing and the command dispatcher of the local GridSnap IPC.
 
-Чистый модуль: ни X, ни GTK, ни дисплея. Протокол — по одной JSON-строке на
-команду (клиент → демон) и по одной JSON-строке на ответ (демон → клиент).
-Кадрирование (`LineReader`), разбор команд (`parse_command`) и диспетчер с
-**инъекцией обработчиков** (`Dispatcher`) отданы сюда, поэтому всё поведение
-покрывается юнит-тестами без X-сервера. Слушающий UNIX-сокет (`Server`) —
-тонкая обвязка вокруг того же кадрирования.
+A pure module: no X, no GTK, no display. The protocol is one JSON line per
+command (client → daemon) and one JSON line per response (daemon → client).
+Framing (`LineReader`), command parsing (`parse_command`) and the dispatcher with
+**handler injection** (`Dispatcher`) are given to this module, so all the behaviour
+is covered by unit tests without an X server. The listening UNIX socket (`Server`) is
+a thin wrapper around the same framing.
 
-Формат запроса:  {"cmd": "status"} | {"cmd": "apply", "zone": "main", "window": 123}
-Формат ответа:   {"ok": true, ...} | {"ok": false, "error": "...", "code": "..."}
+Request format:   {"cmd": "status"} | {"cmd": "apply", "zone": "main", "window": 123}
+Response format:  {"ok": true, ...} | {"ok": false, "error": "...", "code": "..."}
 """
 
 import contextlib
@@ -23,30 +23,30 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-from zone_i18n import _  # noqa: E402  (строки интерфейса и их перевод)
+from zone_i18n import _  # noqa: E402  (interface strings and their translation)
 
-# Максимальная длина одной строки протокола: защита от неограниченного буфера.
-MAX_LINE = 1 << 20  # 1 МиБ
+# The maximum length of one protocol line: protection against an unbounded buffer.
+MAX_LINE = 1 << 20  # 1 MiB
 
 
 class ProtocolError(Exception):
-    """Битая строка протокола: не JSON, не объект или нет поля `cmd`."""
+    """A broken protocol line: not JSON, not an object, or no `cmd` field."""
 
 
-# ------------------------------------------------------------------ кадрирование
+# ------------------------------------------------------------------- framing
 
 
 def encode_message(payload):
-    """Ответ (или запрос) как JSON-строка протокола: компактный JSON + '\\n'."""
+    """A response (or a request) as a protocol JSON line: compact JSON + '\\n'."""
     return (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
 
 
 def parse_command(raw):
-    """Разобрать одну строку команды в dict. Райзит `ProtocolError`.
+    """Parse one command line into a dict. Raises `ProtocolError`.
 
-    Принимает `bytes` (UTF-8) или `str`. Требует JSON-объект с непустым
-    строковым полем `cmd`; остальные поля не проверяются — ими распоряжается
-    обработчик конкретной команды.
+    Accepts `bytes` (UTF-8) or `str`. Requires a JSON object with a non-empty
+    string field `cmd`; the other fields are not checked — they are up to the
+    handler of the particular command.
     """
     if isinstance(raw, bytes):
         try:
@@ -71,17 +71,17 @@ def parse_command(raw):
     return request
 
 
-# ------------------------------------------------------------------- события
+# -------------------------------------------------------------------- events
 #
-# Подписка — единственная команда, после которой соединение становится
-# **только на чтение**: демон шлёт в него события и больше команд не разбирает
-# (отписка = закрыть соединение). Формат строк — тот же JSON-протокол, поля взяты
-# из `status` (`window` — hex-строка, `zone` — имя или None, `workspace` — номер
-# стола EWMH, `monitor` — [x, y, w, h]).
+# Subscription is the only command after which the connection becomes
+# **read-only**: the daemon sends events into it and parses no more commands
+# (unsubscribing = closing the connection). The line format is the same JSON protocol,
+# the fields come from `status` (`window` is a hex string, `zone` is a name or None,
+# `workspace` is the number of the EWMH desktop, `monitor` is [x, y, w, h]).
 
-# Владелец выбрал: рассказывать про окна и про режим «только эта зона» (замер — в
-# `docs/HANDOFF-2026-11-22-gallery-wayland.md`). Подписка идёт **группами**, а не
-# отдельными видами: клиенту обычно нужно «всё про окна» или «всё про режим».
+# The owner chose: report on windows and on the "this zone only" mode (the measurement is in
+# `docs/HANDOFF-2026-11-22-gallery-wayland.md`). A subscription goes **in groups**, not in
+# separate kinds: a client usually wants "everything about windows" or "everything about the mode".
 EVENT_GROUPS = {
     "window": ("window-appeared", "window-closed", "window-moved"),
     "focus": ("focus-on", "focus-off"),
@@ -91,7 +91,7 @@ SUBSCRIBE_CMD = "subscribe"
 
 
 def event_group(kind):
-    """Группа события (`'window'`/`'focus'`); неизвестный вид — `ProtocolError`."""
+    """The group of an event (`'window'`/`'focus'`); an unknown kind raises `ProtocolError`."""
     for group, kinds in EVENT_GROUPS.items():
         if kind in kinds:
             return group
@@ -99,13 +99,13 @@ def event_group(kind):
 
 
 def parse_subscription(request):
-    """Группы событий из запроса подписки. Райзит `ProtocolError`.
+    """The event groups of a subscription request. Raises `ProtocolError`.
 
-    Без поля `events` подписываемся на всё, что демон умеет (список групп — в
-    `EVENT_GROUPS`): клиенту, которому нужны все события, незачем их перечислять.
-    Пустой список — ошибка, а не «подписка на всё»: иначе опечатка в запросе
-    молча давала бы поток, которого клиент не ждал. Порядок групп — как просил
-    клиент, без повторов.
+    Without the `events` field we subscribe to everything the daemon can do (the list of
+    groups is in `EVENT_GROUPS`): a client that needs all the events has no reason to list them.
+    An empty list is an error, not "subscribe to everything": otherwise a typo in the request
+    would silently give a stream the client was not waiting for. The order of the groups is the one
+    the client asked for, without duplicates.
     """
     raw = request.get("events")
     if raw is None:
@@ -130,18 +130,18 @@ def parse_subscription(request):
 
 
 def subscribe_answer(groups):
-    """Ответ на подписку: какие группы приняты (строка протокола, `bytes`)."""
+    """The subscription answer: which groups were accepted (a protocol line, `bytes`)."""
     return encode_message({"ok": True, "subscribed": list(groups)})
 
 
 class Subscription(dict):
-    """Принятая подписка: ответ обработчика, после которого соединение остаётся.
+    """An accepted subscription: a handler response after which the connection stays.
 
-    Обычный ответ диспетчера `serve_connection` отправляет и обслуживает
-    соединение как командное. Подписка — исключение: обработчик возвращает этот
-    словарь (форма — ровно `subscribe_answer`), диспетчер отдаёт его как есть,
-    а транспорт передаёт соединение в `Subscribers` и больше команд в нём не
-    разбирает. Отписка = закрыть соединение.
+    A normal response is sent by the dispatcher of `serve_connection`, which then serves
+    the connection as a command one. A subscription is the exception: the handler returns this
+    dict (its shape is exactly `subscribe_answer`), the dispatcher passes it through as is,
+    and the transport hands the connection over to `Subscribers` and parses no more commands
+    in it. Unsubscribing = closing the connection.
     """
 
     def __init__(self, groups):
@@ -150,15 +150,15 @@ class Subscription(dict):
 
 
 def wants_event(groups, kind):
-    """Входит ли событие `kind` в подписанные группы."""
+    """Whether event `kind` belongs to the subscribed groups."""
     return event_group(kind) in groups
 
 
 def event_line(kind, **fields):
-    """Строка события для подписчика (`bytes`); вид события проверяется.
+    """A line for a subscriber (`bytes`); the event kind is checked.
 
-    Поля кладутся рядом с `event`, порядок не важен, лишние поля не проверяются —
-    форму каждого события задают сборщики ниже, а тест их и стережёт.
+    The fields sit next to `event`, the order does not matter, extra fields are not checked —
+    the shape of every event is set by the builders below, and the test guards it.
     """
     event_group(kind)
     payload = {"event": kind}
@@ -167,19 +167,19 @@ def event_line(kind, **fields):
 
 
 def event_window_appeared(window, zone=None, workspace=None, monitor=None):
-    """Окно появилось: `zone` — куда встало (None — никуда, напр. под `[ignore]`)."""
+    """A window appeared: `zone` is where it landed (None — nowhere, e.g. under `[ignore]`)."""
     return event_line(
         "window-appeared", window=hex(window), zone=zone, workspace=workspace, monitor=monitor
     )
 
 
 def event_window_closed(window, zone=None):
-    """Окно ушло; `zone` — где оно стояло в последний раз (None — не знаем)."""
+    """A window left; `zone` is where it stood last (None — we do not know)."""
     return event_line("window-closed", window=hex(window), zone=zone)
 
 
 def event_window_moved(window, zone, previous=None, workspace=None, monitor=None):
-    """Окно сменило зону, не появляясь и не закрываясь (команда, arrange, reflow)."""
+    """A window changed its zone without appearing or closing (a command, arrange, reflow)."""
     return event_line(
         "window-moved",
         window=hex(window),
@@ -191,7 +191,7 @@ def event_window_moved(window, zone, previous=None, workspace=None, monitor=None
 
 
 def event_focus_on(zone, window=None, minimized=0):
-    """Включился режим «только эта зона»: окно `zone`, свернуто `minimized` чужих."""
+    """The "this zone only" mode came on: the window is in `zone`, `minimized` foreign collapsed."""
     return event_line(
         "focus-on",
         zone=zone,
@@ -201,16 +201,16 @@ def event_focus_on(zone, window=None, minimized=0):
 
 
 def event_focus_off(zone=None, restored=0, total=0):
-    """Режим выключился: развёрнуто `restored` из `total` свёрнутых им окон."""
+    """The mode went off: `restored` of the `total` windows it had collapsed were expanded."""
     return event_line("focus-off", zone=zone, restored=restored, total=total)
 
 
 class LineReader:
-    """Копит байты потока и выдаёт завершённые строки (по '\\n').
+    """Accumulates the bytes of a stream and yields complete lines (split on '\\n').
 
-    Строки отдаются без завершающего перевода; незавершённый хвост остаётся в
-    буфере (`tail`) до следующей порции. Превышение `max_line` на хвосте —
-    `ProtocolError`: иначе некорректный клиент выест память демона.
+    Lines are returned without the terminating newline; an unfinished tail stays in the
+    buffer (`tail`) until the next portion. Exceeding `max_line` on the tail is
+    a `ProtocolError`: otherwise a broken client would eat the memory of the daemon.
     """
 
     def __init__(self, max_line=MAX_LINE):
@@ -228,21 +228,21 @@ class LineReader:
         return lines
 
     def tail(self):
-        """Незавершённый хвост буфера (после EOF в нём может лежать команда)."""
+        """The unfinished tail of the buffer (after EOF it may still hold a command)."""
         return self.buf
 
 
-# ------------------------------------------------------------------- диспетчер
+# ------------------------------------------------------------------- dispatcher
 
 
 class Dispatcher:
-    """Раскладывает строку команды по обработчикам, инъектированным снаружи.
+    """Routes a command line to the handlers injected from outside.
 
-    Обработчик получает разобранный запрос-dict и возвращает dict (или None —
-    пустой ответ). Исключения обработчика (включая `SystemExit`: `fail()` в
-    layout-коде бросает именно его) не вылетают наружу, а превращаются в
-    `{"ok": false}`: одна плохая команда не должна ронять демон.
-    `KeyboardInterrupt` не перехватывается.
+    A handler receives the parsed request dict and returns a dict (or None —
+    an empty response). Handler exceptions (including `SystemExit`: `fail()` in the
+    layout code raises exactly that) do not escape outside, but turn into
+    `{"ok": false}`: one bad command must not bring the daemon down.
+    `KeyboardInterrupt` is not caught.
     """
 
     def __init__(self, handlers=None):
@@ -272,9 +272,9 @@ class Dispatcher:
         if result is None:
             result = {}
         if isinstance(result, Subscription):
-            # Подписка — не обычный ответ: её форма уже готова, а соединение по
-            # ней переходит в подписчики (`serve_connection`). Обёртка `{"ok":
-            # True}` потеряла бы обе вещи.
+            # A subscription is not a normal response: its shape is already prepared, and the
+            # connection moves on to the subscribers because of it (`serve_connection`). The
+            # `{"ok": True}` wrapper would lose both things.
             return result
         if not isinstance(result, dict):
             return {
@@ -287,7 +287,7 @@ class Dispatcher:
         return response
 
 
-# ------------------------------------------------------------------ соединение
+# ------------------------------------------------------------------ connection
 
 
 def _send_line(conn, payload):
@@ -299,17 +299,17 @@ def _send_line(conn, payload):
 
 
 def serve_connection(conn, dispatcher, subscribers=None):
-    """Читать команды из соединения до EOF и отвечать строкой на каждую.
+    """Read commands from the connection until EOF and answer each with a line.
 
-    Возвращает список отправленных ответов (dict). Наружу не бросает: битая
-    строка даёт ответ об ошибке, обрыв связи просто завершает обслуживание.
-    Хвост без '\\n' на EOF тоже разбирается — так короткий клиент может не
-    слать завершающий перевод строки.
+    Returns the list of responses sent (dict). It raises nothing outside: a broken
+    line gives an error response, a dropped connection merely ends the serving.
+    A tail without '\\n' at EOF is parsed too — that way a short client need not
+    send the terminating newline.
 
-    Команда `subscribe` (ответ — `Subscription`) — единственная, после которой
-    соединение **не** закрывается: оно уходит в `subscribers` (`Subscribers`) и
-    дальше служит только для событий. Без реестра соединение просто закрывается:
-    подписки нет, но и зависшего клиента не остаётся.
+    The `subscribe` command (its response is a `Subscription`) is the only one after which
+    the connection is **not** closed: it goes into `subscribers` (`Subscribers`) and
+    from then on serves only events. Without a registry the connection is simply closed:
+    there is no subscription, but no stuck client is left behind either.
     """
     reader = LineReader()
     responses = []
@@ -334,7 +334,7 @@ def serve_connection(conn, dispatcher, subscribers=None):
             break
         for line in lines:
             if not line.strip():
-                continue  # пустую строку молча пропускаем (keepalive)
+                continue  # skip an empty line silently (keepalive)
             response = dispatcher.dispatch(line)
             responses.append(response)
             if not _send_line(conn, response):
@@ -347,7 +347,7 @@ def serve_connection(conn, dispatcher, subscribers=None):
 
 
 def read_response(conn, timeout=None):
-    """Прочитать один JSON-ответ из соединения. Райзит `ProtocolError`/`OSError`."""
+    """Read one JSON response from the connection. Raises `ProtocolError`/`OSError`."""
     if timeout is not None:
         conn.settimeout(timeout)
     reader = LineReader()
@@ -368,14 +368,14 @@ def read_response(conn, timeout=None):
             return obj
 
 
-# --------------------------------------------------------------------- сокет
+# --------------------------------------------------------------------- socket
 
 
 def socket_dir():
-    """Каталог для сокета демона: `$XDG_RUNTIME_DIR/gridsnap`.
+    """The directory for the daemon socket: `$XDG_RUNTIME_DIR/gridsnap`.
 
-    Без `XDG_RUNTIME_DIR` — приватный каталог в /tmp с uid пользователя, чтобы
-    разные пользователи машины не мешали друг другу.
+    Without `XDG_RUNTIME_DIR` it is a private directory in /tmp with the uid of the user, so that
+    different users of the machine do not get in each other's way.
     """
     runtime = os.environ.get("XDG_RUNTIME_DIR")
     if runtime:
@@ -384,18 +384,18 @@ def socket_dir():
 
 
 def default_socket_path():
-    """Путь сокета по умолчанию: `<socket_dir()>/daemon.sock`."""
+    """The default socket path: `<socket_dir()>/daemon.sock`."""
     return os.path.join(socket_dir(), "daemon.sock")
 
 
 def _unlink_quiet(path):
-    """Убрать файл сокета; ошибку удаления (уже удалён, нет прав) — глотаем."""
+    """Remove the socket file; an unlink error (already gone, no permission) is swallowed."""
     with contextlib.suppress(OSError):
         os.unlink(path)
 
 
 def _is_live_socket(path):
-    """True, если на `path` уже отвечает живой сервер (демон уже запущен)."""
+    """True if a live server already answers on `path` (the daemon is already running)."""
     probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         probe.settimeout(0.5)
@@ -408,39 +408,39 @@ def _is_live_socket(path):
 
 
 class Subscribers:
-    """Подписчики демона: неблокирующая рассылка событий по одной строке.
+    """The subscribers of the daemon: non-blocking delivery of events, one line each.
 
-    Событие — новость, а не очередь: догнать пропущенное нельзя, поэтому
-    подписчика, который не успевает читать (`send` не уложился в буфер сокета),
-    демон **отбрасывает**, а не копит за него буфер. Оборванный подписчик (`poll`
-    увидел EOF) отбрасывается так же. Наружу ничего не бросается: обрыв клиента
-    не должен ронять демон.
+    An event is news, not a queue: what was missed cannot be caught up, so
+    a subscriber that does not keep up with reading (`send` did not fit into the socket buffer)
+    is **dropped** by the daemon instead of buffering for it. A broken subscriber (`poll`
+    saw EOF) is dropped the same way. Nothing is raised outside: a broken client
+    must not bring the daemon down.
 
-    Соединение живёт в наборе до обрыва или отброса; команды в него после
-    подписки не разбираются — только рассылка.
+    A connection lives in the set until it breaks or is dropped; commands in it after
+    the subscription are not parsed — only the delivery.
     """
 
     def __init__(self):
-        # Соединение -> подписанные группы. Ключ — сам сокет (тождество), а не
-        # номер дескриптора: он переиспользуется после `close`.
+        # Connection -> subscribed groups. The key is the socket itself (identity), not the
+        # descriptor number: it is reused after `close`.
         self._subs = {}
 
     def add(self, conn, groups):
-        """Взять соединение в подписчики: дальше в него только пишем."""
+        """Take a connection into the subscribers: from now on we only write to it."""
         conn.setblocking(False)
         self._subs[conn] = tuple(groups)
         return conn
 
     def has(self, conn):
-        """Уже ли это соединение — подписчик."""
+        """Whether this connection is already a subscriber."""
         return conn in self._subs
 
     def groups(self, conn):
-        """Подписанные группы соединения (пусто, если оно не подписчик)."""
+        """The subscribed groups of a connection (empty if it is not a subscriber)."""
         return self._subs.get(conn, ())
 
     def filenos(self):
-        """Дескрипторы подписчиков — для `select` в цикле демона."""
+        """The descriptors of the subscribers — for `select` in the daemon loop."""
         out = []
         for conn in self._subs:
             try:
@@ -450,15 +450,15 @@ class Subscribers:
         return out
 
     def count(self):
-        """Сколько подписчиков сейчас."""
+        """How many subscribers there are now."""
         return len(self._subs)
 
     def wants(self, kind):
-        """Нужно ли это событие хоть кому-то: без него строка не собирается."""
+        """Whether this event is needed by anyone: without it the line is not built."""
         return any(wants_event(groups, kind) for groups in self._subs.values())
 
     def drop(self, conn):
-        """Убрать и закрыть подписчика. `False` — его уже не было."""
+        """Remove and close a subscriber. `False` — it was not there any more."""
         if self._subs.pop(conn, None) is None:
             return False
         with contextlib.suppress(OSError):
@@ -466,10 +466,10 @@ class Subscribers:
         return True
 
     def broadcast(self, kind, line):
-        """Отправить строку события подписчикам, которым нужна его группа.
+        """Send an event line to the subscribers that need its group.
 
-        Возвращает число подписчиков, которым строка ушла. Медленный или уже
-        оборванный подписчик отбрасывается — иначе буфер копился бы в демоне.
+        Returns the number of subscribers the line went to. A slow or already
+        broken subscriber is dropped — otherwise the buffer would pile up in the daemon.
         """
         sent = 0
         for conn, groups in list(self._subs.items()):
@@ -477,17 +477,17 @@ class Subscribers:
                 continue
             try:
                 conn.sendall(line)
-            except OSError:  # в т.ч. BlockingIOError: не читает — не копим
+            except OSError:  # incl. BlockingIOError: it is not reading — we do not buffer
                 self.drop(conn)
                 continue
             sent += 1
         return sent
 
     def poll(self):
-        """Забрать то, что прислали подписчики: пустое чтение — обрыв.
+        """Take what the subscribers have sent: an empty read is a broken connection.
 
-        После подписки соединение только на чтение, поэтому присланные байты
-        просто выбрасываются: важен только обрыв клиента.
+        After the subscription a connection is read-only, so the bytes it sends
+        are simply thrown away: only the disconnect of the client matters.
         """
         dropped = 0
         for conn in list(self._subs):
@@ -503,22 +503,22 @@ class Subscribers:
         return dropped
 
     def close_all(self):
-        """Закрыть всех подписчиков (выход демона)."""
+        """Close all the subscribers (daemon exit)."""
         for conn in list(self._subs):
             self.drop(conn)
 
 
 class Server:
-    """Слушающий UNIX-сокет: принимает соединения и раздаёт их диспетчеру.
+    """A listening UNIX socket: accepts connections and hands them out to the dispatcher.
 
-    Права: каталог сокета — 0700, сам сокет — 0600. Чужой живой сокет по тому
-    же пути не перетирается (`OSError`), мёртвый (остался от упавшего процесса)
-    снимается и пересоздаётся.
+    Permissions: the socket directory is 0700, the socket itself is 0600. A live socket of someone
+    else on the same path is not overwritten (`OSError`), a dead one (left by a crashed process)
+    is removed and created again.
 
-    `subscribers` — реестр подписчиков: в него уходят соединения после команды
-    `subscribe`. Демон передаёт сюда **тот же** реестр, в который рассылает
-    события (`Daemon.subscribers`); без него подписка остаётся без рассылки, и
-    соединение просто закрывается.
+    `subscribers` is the registry of subscribers: connections go there after the
+    `subscribe` command. The daemon passes in **the same** registry it delivers
+    events to (`Daemon.subscribers`); without it the subscription is left without delivery, and
+    the connection is simply closed.
     """
 
     def __init__(self, path, dispatcher, subscribers=None, mode=0o600, backlog=8):
@@ -536,7 +536,7 @@ class Server:
             if _is_live_socket(path):
                 raise OSError(_("socket {path} is already served by another process").format(
                     path=path))
-            _unlink_quiet(path)  # мёртвый сокет от упавшего демона
+            _unlink_quiet(path)  # a dead socket from a crashed daemon
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             self.sock.bind(path)
@@ -551,11 +551,11 @@ class Server:
         return self.sock.fileno()
 
     def accept_all(self, conn_timeout=2.0):
-        """Принять все готовые соединения и обслужить их.
+        """Accept all the ready connections and serve them.
 
-        `conn_timeout` ограничивает recv на каждом соединении: даже медленный
-        или подвисший клиент не заблокирует X-цикл демона навсегда. Возвращает
-        список ответов (для журнала).
+        `conn_timeout` bounds recv on every connection: even a slow
+        or hung client will not block the X loop of the daemon forever. Returns the
+        list of responses (for the log).
         """
         responses = []
         while True:
@@ -571,16 +571,16 @@ class Server:
                     serve_connection(conn, self.dispatcher, self.subscribers)
                 )
             finally:
-                # Подписанное соединение живёт в реестре и закрывается там, а не
-                # здесь: закрыть его тут значило бы оборвать подписку сразу
-                # после ответа.
+                # A subscribed connection lives in the registry and is closed there, not
+                # here: closing it here would mean cutting the subscription off right
+                # after the response.
                 if not self.subscribers.has(conn):
                     with contextlib.suppress(OSError):
                         conn.close()
         return responses
 
     def close(self):
-        """Закрыть подписчиков, сокет и убрать файл. Идемпотентно."""
+        """Close the subscribers, the socket, and remove the file. Idempotent."""
         self.subscribers.close_all()
         with contextlib.suppress(OSError):
             self.sock.close()
