@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Тесты перемещения окна в соседнюю зону (`move`) и секции `[move]`.
+"""Tests for moving a window into a neighbouring zone (`move`) and the `[move]` section.
 
-Без X-сервера и GTK: мониторы, рамка окна и укладка подменяются, поэтому
-проверяется именно логика — откуда и куда едет окно, что бывает на краю сетки
-и с окном вне зон, что `--dry-run` ничего не двигает, а `undo` получает запись
-истории. Отдельно — разбор необязательной секции `[move]`
-(`zone_config.load_move_keys`: нет секции — умолчания, unknown key — код 3),
-`keys --move` и то, что сохранение зон из `zone_config` секцию не теряет.
+Without an X server and GTK: the monitors, the window frame and the tiling are replaced, so
+what is checked is exactly the logic - where the window moves from and to, what happens on the grid
+edge and with a window outside the zones, that `--dry-run` moves nothing, and that `undo` gets a
+history record. Separately, the parsing of the optional `[move]` section
+(`zone_config.load_move_keys`: no section - the defaults, an unknown key - code 3),
+`keys --move` and the fact that saving the zones from `zone_config` does not lose the section.
 
-Запуск:
+Run:
     python3 tests/test_move.py
     python3 -m unittest discover -s tests -v
 """
@@ -26,8 +26,8 @@ import unittest
 from unittest import mock
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # run as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -58,17 +58,17 @@ def load_setup_hotkeys():
 MONITOR = ("monitor-0", (0, 0, 1000, 1000))
 HDMI = ("HDMI-1", (1000, 0, 1000, 1000))
 
-# Две половины: по ним видно и переезд «из левой в правую», и край сетки.
+# Two halves: they show both the move "from the left into the right one" and the grid edge.
 TWO_HALVES = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\nleft = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\n"
 )
-# Щель посередине: окно в ней не попадает ни в одну зону.
+# A gap in the middle: a window in it falls into no zone.
 GAP = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\nleft = 0, 0, 0.4, 1\nright = 0.6, 0, 0.4, 1\n"
 )
-# Набор монитора HDMI-1: свои имена зон, которых в общем наборе нет.
+# The set of monitor HDMI-1: its own zone names, which the common set does not have.
 WITH_HDMI = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\nleft = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\n"
@@ -77,7 +77,7 @@ WITH_HDMI = (
 
 
 class MoveCase(unittest.TestCase):
-    """Временный конфиг и подменённые X-зависимости: рамку окна задаёт тест."""
+    """A temporary config and replaced X dependencies: the test sets the window frame."""
 
     config = TWO_HALVES
 
@@ -87,9 +87,9 @@ class MoveCase(unittest.TestCase):
         self.conf = os.path.join(self.dir, "zones.conf")
         self.write_conf(self.config)
         self.zt = load_tiler()
-        self.frame = (50, 50, 100, 100)  # окно в левой зоне
-        self.applied = []  # (окно, рамка, подпись)
-        self.history = []  # (вид операции, записи)
+        self.frame = (50, 50, 100, 100)  # a window in the left zone
+        self.applied = []  # (window, frame, label)
+        self.history = []  # (kind of operation, records)
         for name, value in (
             ("monitor_outputs", lambda: [MONITOR]),
             ("current_workspace", lambda: None),
@@ -104,7 +104,7 @@ class MoveCase(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    # ---- подмена X
+    # ---- replacing X
 
     def _apply(self, window, rect, label="", **_kwargs):
         self.applied.append((window, rect, label))
@@ -115,14 +115,14 @@ class MoveCase(unittest.TestCase):
     def _remember(self, kind, records, quiet=False):
         self.history.append((kind, records))
 
-    # ---- запуск
+    # ---- running
 
     def write_conf(self, text):
         with open(self.conf, "w", encoding="utf-8") as fh:
             fh.write(text)
 
     def run_cli(self, *argv):
-        """(код, stdout, stderr) — `main` в процессе, без подпроцесса и X."""
+        """(code, stdout, stderr) - `main` in the process, without a subprocess and X."""
         out, err = io.StringIO(), io.StringIO()
         code = 0
         try:
@@ -145,7 +145,7 @@ class MoveCase(unittest.TestCase):
 
 
 class MoveNeighbourTest(MoveCase):
-    """Куда едет окно: сосед по геометрии, край сетки, окно вне зон."""
+    """Where the window moves: the neighbour by geometry, the grid edge, a window outside the zones."""
 
     def test_window_in_left_zone_moves_to_right(self):
         code, out, err = self.run_cli("move", "right")
@@ -163,7 +163,7 @@ class MoveNeighbourTest(MoveCase):
         self.assertEqual(records[0]["zone"], "right")
 
     def test_neighbour_on_edge_is_not_an_error(self):
-        self.frame = (700, 50, 100, 100)  # правая половина
+        self.frame = (700, 50, 100, 100)  # the right half
         code, _out, err = self.run_cli("move", "right")
         self.assertEqual(code, 0)
         self.assertEqual(self.applied, [])
@@ -178,7 +178,7 @@ class MoveNeighbourTest(MoveCase):
         self.assertEqual(err, "")
 
     def test_window_outside_zones_takes_nearest_centre(self):
-        # Щель 0.4..0.6: центр окна 0.52 ближе к центру правой зоны (0.8).
+        # The gap 0.4..0.6: the centre of the window 0.52 is closer to the centre of the right zone (0.8).
         self.write_conf(GAP)
         self.frame = (470, 400, 100, 100)
         code, _out, err = self.run_cli("move", "left")
@@ -187,7 +187,7 @@ class MoveNeighbourTest(MoveCase):
 
     def test_window_outside_zones_on_edge_still_reports_no_neighbour(self):
         self.write_conf(GAP)
-        self.frame = (470, 400, 100, 100)  # ближайшая зона — правая
+        self.frame = (470, 400, 100, 100)  # the nearest zone - the right one
         code, _out, err = self.run_cli("move", "right")
         self.assertEqual(code, 0)
         self.assertEqual(self.applied, [])
@@ -195,7 +195,7 @@ class MoveNeighbourTest(MoveCase):
 
     def test_window_on_monitor_uses_its_zone_set(self):
         self.write_conf(WITH_HDMI)
-        self.frame = (1100, 100, 100, 100)  # левая половина HDMI-1
+        self.frame = (1100, 100, 100, 100)  # the left half of HDMI-1
         with mock.patch.object(self.zt, "monitor_outputs", lambda: [MONITOR, HDMI]):
             code, _out, err = self.run_cli("move", "right")
         self.assertEqual(code, 0, err)
@@ -203,8 +203,8 @@ class MoveNeighbourTest(MoveCase):
         self.assertEqual(self.applied, [(0x1234, expected, "hdmi-right")])
 
     def test_monitor_flag_overrides_window_monitor(self):
-        # Окно на первом мониторе, а --monitor указывает на HDMI-1: берётся
-        # набор зон HDMI-1, а не тот, где окно лежит.
+        # The window is on the first monitor, while --monitor points at HDMI-1: the
+        # set of HDMI-1 is taken, not the one where the window lies.
         self.write_conf(WITH_HDMI)
         with mock.patch.object(self.zt, "monitor_outputs", lambda: [MONITOR, HDMI]):
             code, _out, err = self.run_cli("move", "right", "--monitor", "HDMI-1")
@@ -233,7 +233,7 @@ class MoveNeighbourTest(MoveCase):
 
 
 class MoveFailuresTest(MoveCase):
-    """Ошибки выполнения: окно не прочитать, X недоступен."""
+    """Runtime errors: the window cannot be read, X is unavailable."""
 
     def test_unreadable_window_is_execution_error(self):
         def boom(win, extents):
@@ -254,16 +254,16 @@ class MoveFailuresTest(MoveCase):
 
 
 class MoveGeometryTest(unittest.TestCase):
-    """Чистые `nearest_zone`/`move_zone_index` — без конфига и X."""
+    """The pure `nearest_zone`/`move_zone_index` - without a config and X."""
 
     def setUp(self):
         self.zt = load_tiler()
         self.nav = self.zt.picker_nav()
         self.zones = [
-            (0.0, 0.0, 0.5, 0.5),  # 0: левый верх
-            (0.5, 0.0, 0.5, 0.5),  # 1: правый верх
-            (0.0, 0.5, 0.5, 0.5),  # 2: левый низ
-            (0.5, 0.5, 0.5, 0.5),  # 3: правый низ
+            (0.0, 0.0, 0.5, 0.5),  # 0: left top
+            (0.5, 0.0, 0.5, 0.5),  # 1: right top
+            (0.0, 0.5, 0.5, 0.5),  # 2: left bottom
+            (0.5, 0.5, 0.5, 0.5),  # 3: right bottom
         ]
 
     def test_nearest_zone_by_centre(self):
@@ -272,24 +272,24 @@ class MoveGeometryTest(unittest.TestCase):
         self.assertIsNone(self.zt.nearest_zone([], 0.5, 0.5))
 
     def test_move_index_matches_picker_rule(self):
-        # Сосед берётся правилом пикера, а не своей копией: сверяем с ним.
+        # The neighbour is taken by the picker's rule, not by a copy of it: we compare with it.
         for direction in self.nav.DIRECTIONS:
             here, there = self.zt.move_zone_index(self.zones, direction, 0.25, 0.25)
             self.assertEqual(here, 0)
             self.assertEqual(there, self.nav.move_selection(self.zones, 0, direction))
 
     def test_point_in_gap_uses_nearest_zone(self):
-        # Точка вне всех зон (за правым-нижним краем) — берётся ближайшая зона.
+        # A point outside all zones (past the bottom-right edge) - the nearest zone is taken.
         here, there = self.zt.move_zone_index(self.zones, "up", 1.05, 0.55)
-        self.assertEqual(here, 3)  # ближайший центр — правый низ
-        self.assertEqual(there, 1)  # «вверх» из него — правая верхняя
+        self.assertEqual(here, 3)  # the nearest centre - the right bottom
+        self.assertEqual(there, 1)  # "up" from it - the right top
 
     def test_empty_set_gives_nothing(self):
         self.assertEqual(self.zt.move_zone_index([], "left", 0.5, 0.5), (None, None))
 
 
 class MoveSectionTest(unittest.TestCase):
-    """Разбор `[move]` в `zone_config` — без X и GTK."""
+    """Parsing `[move]` in `zone_config` - without X and GTK."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-move-conf-")
@@ -349,7 +349,7 @@ class MoveSectionTest(unittest.TestCase):
         self.assertIn("empty shortcut", err.getvalue())
 
     def test_section_is_not_a_foreign_section(self):
-        # `[move]` — своя секция: редактор не должен таскать её как «чужую».
+        # `[move]` is a section of its own: the editor must not carry it as a "foreign" one.
         self.write(TWO_HALVES + "[move]\nleft = <Super>h\n[daemon]\nreflow = off\n")
         self.assertNotIn("move", zc.load_extra_sections(self.path))
         self.assertIn("daemon", zc.load_extra_sections(self.path))
@@ -363,11 +363,11 @@ class MoveSectionTest(unittest.TestCase):
         text = self.read()
         self.assertIn("[move]", text)
         self.assertEqual(zc.load_move_keys(self.path)["left"], "<Super><Alt>h")
-        # Комментарий внутри секции тоже переживает сохранение зон.
+        # A comment inside the section also survives saving the zones.
         self.assertIn("# мои клавиши", text)
 
     def test_editor_roundtrip_keeps_move_section(self):
-        # Как сохраняет редактор: все наборы + «чужие» секции одним вызовом.
+        # The way the editor saves: all the sets + the "foreign" sections in one call.
         self.write(
             TWO_HALVES
             + "[move]\nup = <Super>k\n"
@@ -379,8 +379,8 @@ class MoveSectionTest(unittest.TestCase):
         self.assertIn("[rules]", self.read())
 
     def test_apply_profile_keeps_move_section(self):
-        # `profile use` переписывает zones.conf под профиль, но `[move]` —
-        # настройка человека, а не раскладка: она должна остаться.
+        # `profile use` rewrites zones.conf for the profile, but `[move]` is
+        # a person's setting, not a layout: it must stay.
         self.write(TWO_HALVES + "[move]\nleft = <Super><Alt>h\n")
         zc.save_profile("work", zc.load_zones(self.path), None, self.path)
         zc.apply_profile("work", self.path)
@@ -402,7 +402,7 @@ class MoveSectionTest(unittest.TestCase):
 
 
 class KeysMoveCliTest(unittest.TestCase):
-    """`zone-tiler.py keys --move` — источник сочетаний для setup-hotkeys."""
+    """`zone-tiler.py keys --move` - the source of the combinations for setup-hotkeys."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-move-keys-")
@@ -454,10 +454,10 @@ class KeysMoveCliTest(unittest.TestCase):
 
 
 class HotkeyNamesTest(unittest.TestCase):
-    """`setup-hotkeys`: имена сочетаний и предупреждение о конфликте с muffin.
+    """`setup-hotkeys`: the names of the combinations and the warning about a conflict with muffin.
 
-    Сами `gsettings` не трогаются: `zone_pairs` и `push_tile_bindings`
-    подменяются, проверяется сборка плана установки.
+    The `gsettings` themselves are not touched: `zone_pairs` and `push_tile_bindings`
+    are replaced, what is checked is the assembly of the install plan.
     """
 
     def setUp(self):
