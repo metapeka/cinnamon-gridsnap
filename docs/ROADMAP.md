@@ -1,5 +1,10 @@
 # GridSnap — план развития
 
+> **Note (wave 8).** The repository language is English now — see `AGENTS.md`. This file is still
+> Russian and is translated as it is touched. The language inversion itself (English source, `ru`/`zh_CN`
+> catalogs, an English man source) is merged in PR #51; what is still Russian and how it is translated is
+> listed in `docs/HANDOFF-2026-11-22-lang-inversion.md`.
+
 GridSnap сегодня: **визуальный редактор зон + раскладчик окон для Cinnamon/X11**. Зона — прямоугольник,
 заданный в долях рабочей области; окно кладётся в зону по горячей клавише. Работает поверх muffin через
 EWMH, компенсирует рамку окна (`_NET_FRAME_EXTENTS`), поэтому попадание — пиксель в пиксель.
