@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Юнит-тесты чистой геометрии редактора — без X-сервера и без GTK.
+"""Unit tests of the pure editor geometry — no X server and no GTK.
 
-Проверяют `zone_geom`: расчёт «экрана» на холсте, перевод долей в пиксели и
-обратно, прилипание (направляющие, края зон, допуск, пропуск своей зоны),
-перетаскивание (move/resize, границы, минимальный размер), сдвиг с клавиатуры,
-колесо и попадание курсора.
+They check `zone_geom`: the "screen" calculation on the canvas, converting fractions into pixels and
+back, snapping (guides, zone edges, tolerance, skipping the zone's own edges),
+dragging (move/resize, bounds, the minimum size), keyboard nudging, the
+scroll wheel and the cursor hit test.
 
-Запуск:
+Running:
     python3 tests/test_zone_geom.py
 """
 
@@ -16,8 +16,8 @@ import sys
 import unittest
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # run as `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -40,7 +40,7 @@ class TestScreenRect(unittest.TestCase):
         self.assertAlmostEqual(sy, (800 - sh) / 2)
 
     def test_respects_workarea_offset(self):
-        # смещение рабочей области на размер «экрана» не влияет
+        # the work-area offset does not affect the "screen" size
         a = geom.screen_rect(1000, 800, (100, 40, 1000, 500))
         b = geom.screen_rect(1000, 800, (0, 0, 1000, 500))
         self.assertEqual(a, b)
@@ -110,7 +110,7 @@ class TestSnapMove(unittest.TestCase):
 
     def test_right_edge_snaps(self):
         zones = [Rect(0.3, 0, 0.5, 1)]
-        # правый край 0.29 притягивается к 0.3 -> зона начинается с 0.1
+        # the right edge 0.29 snaps to 0.3 -> the zone starts at 0.1
         self.assertAlmostEqual(geom.snap_move(0.09, 0.2, "x", 0.011, zones), 0.1)
 
     def test_outside_any_magnet_is_unchanged(self):
@@ -139,7 +139,7 @@ class TestDragMove(unittest.TestCase):
         self.assertAlmostEqual(new[0], 0.3)
 
     def test_dragged_zone_not_used_as_magnet(self):
-        # своя же зона не должна притягивать к собственным краям
+        # a zone must not snap to its own edges
         zones = [Rect(0.1, 0.0, 0.2, 0.2)]
         new = geom.drag_rect((0.1, 0.0, 0.2, 0.2), "move", set(), (0.0, 0.0), (0.005, 0.0), zones, 0.02, 0.02, skip=0)
         self.assertAlmostEqual(new[0], 0.105)
@@ -208,7 +208,7 @@ class TestNudgeAndScroll(unittest.TestCase):
 
 class TestHitTest(unittest.TestCase):
     SCREEN = (0, 0, 1000, 1000)
-    ZONES = (Rect(0.1, 0.1, 0.2, 0.2),)  # пиксели: x=100 y=100 w=200 h=200
+    ZONES = (Rect(0.1, 0.1, 0.2, 0.2),)  # pixels: x=100 y=100 w=200 h=200
 
     def test_inside_is_move(self):
         self.assertEqual(geom.hit_test(200, 200, self.SCREEN, self.ZONES), (0, "move", set()))
@@ -229,7 +229,7 @@ class TestHitTest(unittest.TestCase):
         self.assertEqual(geom.hit_test(50, 50, self.SCREEN, self.ZONES), (None, "", set()))
 
     def test_topmost_zone_wins(self):
-        zones = [Rect(0, 0, 0.5, 0.5), Rect(0.25, 0.25, 0.5, 0.5)]  # вторая нарисована поверх
+        zones = [Rect(0, 0, 0.5, 0.5), Rect(0.25, 0.25, 0.5, 0.5)]  # the second is drawn on top
         idx, _, _ = geom.hit_test(300, 300, (0, 0, 1000, 1000), zones)
         self.assertEqual(idx, 1)
 
