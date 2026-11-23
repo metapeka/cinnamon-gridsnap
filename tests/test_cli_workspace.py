@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Тесты `--workspace`: команды работают сеткой своего рабочего стола.
+"""Tests for `--workspace`: the commands work with the grid of their own workspace.
 
-Без X и GTK: `monitor_outputs`, `current_workspace`, `read_client_list` и
-`read_window_meta` подменяются, а рамки считаются чистой геометрией `Grid`.
-Проверяется главное: стол с профилем берёт зоны профиля, стол без профиля и
-неизвестный стол — общий `[zones]`, неверный номер стола — код 2, зона не из
-набора — код 3 с перечнем доступных, а первая строка `list` остаётся такой,
-какой её ждёт апплет.
+Without X and GTK: `monitor_outputs`, `current_workspace`, `read_client_list` and
+`read_window_meta` are replaced, and the frames are computed by the pure geometry of `Grid`.
+The main thing is checked: a workspace with a profile takes the zones of the profile, a workspace without a profile and
+an unknown workspace — the general `[zones]`, a wrong workspace number — exit code 2, a zone outside the
+set — exit code 3 with the list of the available ones, while the first line of `list` stays the way
+the applet expects it.
 
-Запуск:
+Running:
     python3 tests/test_cli_workspace.py
 """
 
@@ -25,14 +25,14 @@ from unittest import mock
 
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)  # zone-tiler и его модули
+    sys.path.insert(0, ROOT)  # zone-tiler and its modules
 TILER = os.path.join(ROOT, "zone-tiler.py")
 
 
@@ -43,23 +43,23 @@ def load_tiler():
     return module
 
 
-# Общий набор: одна зона `main` на половину экрана.
+# The general set: one zone `main` for half the screen.
 BASE = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\nmain = 0, 0, 0.5, 1\n"
 )
-# Профиль стола: свои имена зон, которых в общем наборе нет.
+# The workspace profile: its own zone names that the general set does not have.
 PROFILE = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\nvideo = 0, 0, 1, 0.75\nside = 0, 0.75, 1, 0.25\n"
 )
-# Стол 2 (в Cinnamon) — это индекс 1 в EWMH.
+# Workspace 2 (in Cinnamon) is index 1 in EWMH.
 WORKSPACES = "[workspaces]\n2 = cinema\n"
 MONITOR = ("monitor-0", (0, 0, 1920, 1000))
 
 
 class WorkspaceCliCase(unittest.TestCase):
-    """Временный конфиг с профилем стола и подменённые X-зависимости."""
+    """A temporary config with a workspace profile and the replaced X dependencies."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="gridsnap-cli-ws-")
@@ -72,7 +72,7 @@ class WorkspaceCliCase(unittest.TestCase):
         with open(os.path.join(templates, "cinema.conf"), "w", encoding="utf-8") as fh:
             fh.write(PROFILE)
         self.zt = load_tiler()
-        # Монитор и стол подменяются: DISPLAY в тестах не нужен.
+        # The monitor and the workspace are replaced: DISPLAY is not needed in the tests.
         for name, value in (
             ("monitor_outputs", lambda: [MONITOR]),
             ("current_workspace", lambda: None),
@@ -86,7 +86,7 @@ class WorkspaceCliCase(unittest.TestCase):
             fh.write(text)
 
     def run_cli(self, *argv):
-        """(код, stdout, stderr) — `main` в процессе, без подпроцесса и X."""
+        """(code, stdout, stderr) — `main` in the process, without a subprocess and X."""
         out, err = io.StringIO(), io.StringIO()
         code = 0
         try:
@@ -97,12 +97,12 @@ class WorkspaceCliCase(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def grid_by_workspace(self, workspace):
-        """Какая сетка достаётся столу — через те же функции, что у CLI."""
+        """Which grid a workspace gets — through the same functions as in the CLI."""
         return self.zt.grid_for_workspace(self.conf, workspace)
 
 
 class WorkspaceArgTest(WorkspaceCliCase):
-    """Разбор `--workspace` и значение по умолчанию."""
+    """Parsing `--workspace` and the default value."""
 
     def test_explicit_number_stays_number(self):
         self.assertEqual(self.zt.workspace_spec("0"), 0)
@@ -138,23 +138,23 @@ class WorkspaceArgTest(WorkspaceCliCase):
 
 
 class ApplyWorkspaceTest(WorkspaceCliCase):
-    """`apply` считает рамку по сетке выбранного стола."""
+    """`apply` computes the frame by the grid of the chosen workspace."""
 
     def test_profile_zone_on_mapped_workspace(self):
-        # --workspace 1 — второй стол (EWMH с нуля), профиль cinema.
+        # --workspace 1 is the second workspace (EWMH counts from zero), the cinema profile.
         code, out, _ = self.run_cli("apply", "video", "--workspace", "1", "--dry-run")
         self.assertEqual(code, 0)
-        # video = 0, 0, 1, 0.75 рабочей области 1920x1000
+        # video = 0, 0, 1, 0.75 of the 1920x1000 work area
         self.assertIn("video: x=0 y=0 1920x750", out)
 
     def test_general_zone_on_workspace_zero(self):
         code, out, _ = self.run_cli("apply", "main", "--workspace", "0", "--dry-run")
         self.assertEqual(code, 0)
-        # main = половина ширины из общего [zones]
+        # main = half the width from the general [zones]
         self.assertIn("main: x=0 y=0 960x1000", out)
 
     def test_profile_zone_is_absent_on_general_workspace(self):
-        # На столе без профиля зоны профиля не существует — ошибка конфига.
+        # On a workspace without a profile the zone of the profile does not exist — a config error.
         code, _, err = self.run_cli("apply", "video", "--workspace", "0", "--dry-run")
         self.assertEqual(code, self.zt.EXIT_CONFIG)
         self.assertIn("no zone 'video'", err)
@@ -166,19 +166,19 @@ class ApplyWorkspaceTest(WorkspaceCliCase):
         self.assertIn("no zone 'main'", err)
         self.assertIn("workspace 2", err)
         self.assertIn("cinema", err)
-        # перечень доступных зон — из профиля, а не из общего набора
+        # the list of the available zones comes from the profile, not from the general set
         self.assertIn("side", err)
         self.assertIn("video", err)
 
     def test_sticky_workspace_keeps_general_zones(self):
-        # Стол без профиля (workspace 0) — прежнее поведение.
+        # A workspace without a profile (workspace 0) — the previous behaviour.
         code, out, _ = self.run_cli("apply", "main", "--workspace", "0", "--dry-run")
         self.assertEqual(code, 0)
         self.assertIn("main:", out)
 
 
 class CurrentWorkspaceTest(WorkspaceCliCase):
-    """`--workspace current` и отсутствие аргумента идут за активным столом."""
+    """`--workspace current` and the absent argument follow the active workspace."""
 
     def test_current_uses_profile_of_active_workspace(self):
         with mock.patch.object(self.zt, "current_workspace", return_value=1):
@@ -187,7 +187,7 @@ class CurrentWorkspaceTest(WorkspaceCliCase):
             self.assertIn("1920x750", out)
 
     def test_default_is_current_workspace(self):
-        # Без --workspace вообще: тот же active workspace, без X.
+        # Without --workspace at all: the same active workspace, without X.
         with mock.patch.object(self.zt, "current_workspace", return_value=1):
             code, out, _ = self.run_cli("apply", "side", "--dry-run")
         self.assertEqual(code, 0)
@@ -195,7 +195,7 @@ class CurrentWorkspaceTest(WorkspaceCliCase):
         self.assertIn("side: x=0 y=750 1920x250", out)
 
     def test_current_without_display_falls_back_to_general(self):
-        # current_workspace() вернул None (нет DISPLAY) — общий zones.conf.
+        # current_workspace() returned None (no DISPLAY) — the general zones.conf.
         with mock.patch.object(self.zt, "current_workspace", return_value=None):
             code, out, _ = self.run_cli("apply", "main", "--workspace", "current", "--dry-run")
         self.assertEqual(code, 0)
@@ -209,7 +209,7 @@ class CurrentWorkspaceTest(WorkspaceCliCase):
 
 
 class BadWorkspaceValueTest(WorkspaceCliCase):
-    """Неверное значение `--workspace` — ошибка аргументов (код 2)."""
+    """A wrong `--workspace` value is an argument error (exit code 2)."""
 
     def test_abc_is_usage_error(self):
         code, _, err = self.run_cli("list", "--workspace", "abc")
@@ -229,13 +229,13 @@ class BadWorkspaceValueTest(WorkspaceCliCase):
 
 
 class ListWorkspaceTest(WorkspaceCliCase):
-    """`list` показывает зоны стола и называет профиль."""
+    """`list` shows the zones of the workspace and names the profile."""
 
     def test_list_profile_workspace(self):
         code, out, _ = self.run_cli("list", "--workspace", "1")
         self.assertEqual(code, 0)
         lines = out.splitlines()
-        # Формат первой строки не сломан: его разбирает апплет.
+        # The format of the first line is not broken: the applet parses it.
         self.assertTrue(lines[0].startswith("monitor 0 work area: 0,0 1920x1000"))
         self.assertIn("cinema", lines[0])
         self.assertIn("video", out)
@@ -254,7 +254,7 @@ class ListWorkspaceTest(WorkspaceCliCase):
         self.assertNotIn("profile", out)
 
     def test_list_without_mapping_is_unchanged(self):
-        # В конфиге нет [workspaces] — прежнее поведение и прежняя строка.
+        # The config has no [workspaces] — the previous behaviour and the previous line.
         self.write_conf(BASE)
         code, out, _ = self.run_cli("list")
         self.assertEqual(code, 0)
@@ -263,7 +263,7 @@ class ListWorkspaceTest(WorkspaceCliCase):
 
 
 class ArrangeAndStackWorkspaceTest(WorkspaceCliCase):
-    """`arrange`/`stack` раскладывают зонами сетки выбранного стола."""
+    """`arrange`/`stack` lay out with the zones of the chosen workspace's grid."""
 
     def test_arrange_uses_profile_zones(self):
         meta = self.zt.WindowMeta("Firefox", "окно", frozenset())
@@ -276,7 +276,7 @@ class ArrangeAndStackWorkspaceTest(WorkspaceCliCase):
                 ):
             code, out, _ = self.run_cli("arrange", "--workspace", "1", "--dry-run")
             self.assertEqual(code, 0)
-            # первая свободная зона профиля по порядку файла — video
+            # the first free zone of the profile in file order — video
             self.assertIn("zone 'video'", out)
             self.assertIn("1920x750", out)
 
@@ -300,13 +300,13 @@ class ArrangeAndStackWorkspaceTest(WorkspaceCliCase):
 
 
 class KeysAndProfileUnaffectedTest(WorkspaceCliCase):
-    """`keys` и `profile *` не зависят от стола."""
+    """`keys` and `profile *` do not depend on the workspace."""
 
     def test_keys_are_read_from_file_not_profile(self):
         self.write_conf(BASE + WORKSPACES + "[keys]\nmain = <Super><Alt>1\n")
         code, out, _ = self.run_cli("keys", "--workspace", "1")
         self.assertEqual(code, 0)
-        # [keys] общая на файл: профиль стола её не подменяет
+        # [keys] is shared per file: the workspace profile does not replace it
         self.assertIn("main\t<Super><Alt>1", out)
 
     def test_profile_list_is_file_level(self):
@@ -320,11 +320,11 @@ if __name__ == "__main__":
 
 
 class ConfWorkspaceTest(WorkspaceCliCase):
-    """`--workspace conf` — сетка zones.conf без профилей столов.
+    """`--workspace conf` — the grid of zones.conf without the workspace profiles.
 
-    Это нужно редактору: холст показывает зоны самого `zones.conf`, поэтому
-    «проверить зону» обязано считать ту же сетку, даже когда active workspace
-    сопоставлен профилю.
+    The editor needs this: the canvas shows the zones of `zones.conf` itself, so
+    "check the zone" must compute the same grid even when the active workspace is
+    mapped to a profile.
     """
 
     def test_spec_parses_conf(self):
@@ -332,7 +332,7 @@ class ConfWorkspaceTest(WorkspaceCliCase):
         self.assertEqual(self.zt.workspace_spec("CONF"), self.zt.WORKSPACE_CONF)
 
     def test_grid_is_general_even_for_mapped_workspace(self):
-        # Активный стол — второй (индекс 1) и он сопоставлен профилю cinema.
+        # The active workspace is the second one (index 1) and it is mapped to the cinema profile.
         with mock.patch.object(self.zt, "current_workspace", lambda: 1):
             grid = self.zt.grid_for_workspace(self.conf, self.zt.WORKSPACE_CONF)
         self.assertEqual(sorted(grid.zones), ["main"])
@@ -348,7 +348,7 @@ class ConfWorkspaceTest(WorkspaceCliCase):
         self.assertNotIn("profile", out)
 
     def test_apply_uses_general_zones(self):
-        # Зона профиля на этом столе недоступна: сетка взята из zones.conf.
+        # The zone of the profile is not available on this workspace: the grid was taken from zones.conf.
         code, _out, err = self.run_cli(
             "apply", "video", "--workspace", "conf", "--dry-run"
         )

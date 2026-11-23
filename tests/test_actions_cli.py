@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Юнит-тесты команды `action` — без X-сервера, GTK и живого терминала.
+"""Unit tests for the `action` command — without an X server, GTK and a live terminal.
 
-Проверяют то, что не требует дисплея: разбор записи `[action:<имя>]` и коды
-ошибок (3 — конфиг, 1 — отказ по состоянию, 0 — успех и честный no-op), выбор
-предмета действия (зона из записи, активное окно, окно outside zones), контекст
-`zone_actions.ActionContext`, `--dry-run` для встроенного действия и для
-команды, запуск внешней команды с `GRIDSNAP_*` и готовым `argv`, а также
-встроенные `show-window`, `mirror`, `terminal` и `minimize-others`.
+What does not need a display is checked: parsing the record `[action:<name>]` and the exit
+codes (3 — config, 1 — a refusal by state, 0 — success and an honest no-op), the choice of
+the subject of the action (a zone from the record, the active window, a window outside zones), the context
+of `zone_actions.ActionContext`, `--dry-run` for a built-in action and for a
+command, running an external command with `GRIDSNAP_*` and a ready-made `argv`, and also
+the built-ins `show-window`, `mirror`, `terminal` and `minimize-others`.
 
-Окна, рамки, мониторы и запуск процессов подменяются: тест проверяет решения
-раскладчика, а не muffin. Живые встроенные действия проверяет дымовой
-`tests/smoke-actions.sh`.
+The windows, the frames, the monitors and the process spawning are replaced: the test checks the decisions
+of the tiler, not muffin. The live built-in actions are checked by the smoke
+scenario `tests/smoke-actions.sh`.
 
-Запуск:
+Running:
     python3 tests/test_actions_cli.py
     python3 -m unittest discover -s tests -v
 """
@@ -30,8 +30,8 @@ import unittest
 from unittest import mock
 
 try:
-    import i18n_env  # noqa: F401  (тесты идут на исходном языке)
-except ImportError:  # запуск вида `python3 -m unittest tests.<модуль>`
+    import i18n_env  # noqa: F401  (the tests run in the source language)
+except ImportError:  # a run of the form `python3 -m unittest tests.<module>`
     from tests import i18n_env  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -51,7 +51,7 @@ def load_tiler():
     return module
 
 
-UI_HEIGHT = 30  # высота полосы вкладок в конфиге теста, а не умолчание 22
+UI_HEIGHT = 30  # the height of the tab strip in the test config, not the default 22
 
 MONITOR = ("eDP-1", (0, 0, 1000, 1000))
 LEFT = (0, 0, 500, 1000)
@@ -64,7 +64,7 @@ TWO_HALVES = (
     "[zones]\nleft = 0, 0, 0.5, 1\nright = 0.5, 0, 0.5, 1\n"
     f"[tabs]\nheight = {UI_HEIGHT}\n"
 )
-# Зона во весь экран: зеркало горизонтально — она сама, и партнёра нет.
+# A zone over the whole screen: the horizontal mirror is itself, and there is no partner.
 FULL_SCREEN = (
     "[grid]\ncols = 1.0\nrows = 1.0\n"
     "[zones]\nfull = 0, 0, 1, 1\n"
@@ -73,7 +73,7 @@ FULL_SCREEN = (
 
 
 class FakeX11:
-    """Поддельное X-соединение: запоминает активации и закрытия."""
+    """A fake X connection: records the activations and the closes."""
 
     def __init__(self):
         self.activated = []
@@ -87,7 +87,7 @@ class FakeX11:
 
 
 class ActionCase(unittest.TestCase):
-    """Временный конфиг, подменённые X-зависимости и подменённый `load_actions`."""
+    """A temporary config, the replaced X dependencies and a replaced `load_actions`."""
 
     config = TWO_HALVES
 
@@ -102,9 +102,9 @@ class ActionCase(unittest.TestCase):
         self.clients = []
         self.frames = {}
         self.desktop = None
-        self.applied = []  # (окно, рамка, подпись)
+        self.applied = []  # (window, frame, label)
         self.activated = []
-        self.history = []  # (вид операции, записи)
+        self.history = []  # (kind of operation, records)
         self.actions = {}
         self.popen = []
         for name, value in (
@@ -132,7 +132,7 @@ class ActionCase(unittest.TestCase):
         actions.start()
         self.addCleanup(actions.stop)
 
-    # ---- подмена X и процессов
+    # ---- replacing X and the processes
 
     def _frame(self, window, extents):
         if window not in self.frames:
@@ -160,7 +160,7 @@ class ActionCase(unittest.TestCase):
         return types.SimpleNamespace(pid=4242)
 
     def _spawn_window(self, window):
-        """`Popen`, который «запускает» терминал: окно появляется в списке клиентов."""
+        """`Popen` that "launches" a terminal: the window appears in the client list."""
 
         def spawn(argv, **kwargs):
             self.popen.append((argv, kwargs))
@@ -169,13 +169,13 @@ class ActionCase(unittest.TestCase):
 
         return spawn
 
-    # ---- запуск
+    # ---- running
 
     def action(self, name, **record):
         self.actions = {name: dict(record)}
 
     def run_cli(self, *argv):
-        """(код, stdout, stderr) — `main` в процессе, без подпроцесса и X."""
+        """(code, stdout, stderr) — `main` in the process, without a subprocess and X."""
         out, err = io.StringIO(), io.StringIO()
         code = 0
         try:
@@ -193,7 +193,7 @@ class ActionCase(unittest.TestCase):
 
 
 class ActionRecordTest(ActionCase):
-    """Имя действия, запись и коды ошибок конфига."""
+    """The action name, the record and the config error codes."""
 
     def test_missing_name_is_config_error(self):
         code, _out, err = self.run_cli("action")
@@ -208,8 +208,8 @@ class ActionRecordTest(ActionCase):
         self.assertIn("probe", err)
 
     def test_unknown_builtin_is_config_error(self):
-        # `load_actions` в конфиге такого не пропустит, но ядро тоже обязано
-        # сказать «такого встроенного нет», а не «команда не запустилась».
+        # `load_actions` would not let this through in the config, but the core must
+        # also say "there is no such built-in", not "the command did not start".
         self.actions = {"bad": {"run": "builtin:что-то"}}
         code, _out, err = self.run_cli("action", "bad")
         self.assertEqual(code, 3)
@@ -229,7 +229,7 @@ class ActionRecordTest(ActionCase):
 
 
 class ActionSubjectTest(ActionCase):
-    """Предмет действия: зона из записи, активное окно, окно outside zones."""
+    """The subject of the action: a zone from the record, the active window, a window outside zones."""
 
     def test_active_window_in_record_zone_is_the_subject(self):
         self.action("probe", run="/bin/echo {window}", zone="left")
@@ -244,7 +244,7 @@ class ActionSubjectTest(ActionCase):
         self.assertIn("workspace 1", out)
 
     def test_active_window_outside_zone_takes_topmost_in_client_list(self):
-        # Список идёт снизу вверх: верхнее — последнее; активное окно в другой зоне.
+        # The list goes bottom-up: the topmost is the last; the active window is in another zone.
         self.action("probe", run="/bin/echo {window}", zone="left")
         self.place(0x11, rect=RIGHT)
         self.place(0x12, 0x13, rect=LEFT)
@@ -298,7 +298,7 @@ class ActionSubjectTest(ActionCase):
 
 
 class ActionCommandTest(ActionCase):
-    """Внешняя команда: `argv`, `GRIDSNAP_*`, отсоединённый запуск."""
+    """An external command: `argv`, `GRIDSNAP_*`, a detached spawn."""
 
     def test_dry_run_prints_context_and_argv_without_spawning(self):
         self.action(
@@ -333,7 +333,7 @@ class ActionCommandTest(ActionCase):
         self.assertEqual(env["GRIDSNAP_W"], "500")
         self.assertEqual(env["GRIDSNAP_H"], "1000")
         self.assertEqual(env["GRIDSNAP_MONITOR"], "eDP-1")
-        self.assertEqual(env["GRIDSNAP_WORKSPACE"], "0")  # EWMH: столы с нуля
+        self.assertEqual(env["GRIDSNAP_WORKSPACE"], "0")  # EWMH: workspaces count from zero
         self.assertEqual(env["GRIDSNAP_CLASS"], "xterm")
         self.assertEqual(env["GRIDSNAP_CONF"], os.path.abspath(self.conf))
         self.assertIn("started", out)
@@ -356,7 +356,7 @@ class ActionCommandTest(ActionCase):
 
 
 class ActionShowWindowTest(ActionCase):
-    """`builtin:show-window`: сосед по кольцу вкладок и no-op на пустой зоне."""
+    """`builtin:show-window`: the neighbour in the tab ring and a no-op on an empty zone."""
 
     def test_raises_next_tab_from_active(self):
         self.action("show", run="builtin:show-window", zone="left")
@@ -378,7 +378,7 @@ class ActionShowWindowTest(ActionCase):
     def test_single_window_is_shown(self):
         self.action("show", run="builtin:show-window", zone="left")
         self.place(0x11, rect=LEFT)
-        self.active = 0x99  # активное окно вне стопки
+        self.active = 0x99  # the active window is outside the stack
         code, _out, err = self.run_cli("action", "show", "--quiet")
         self.assertEqual(code, 0, err)
         self.assertEqual(self.activated, [0x11])
@@ -414,8 +414,8 @@ class ActionShowWindowTest(ActionCase):
         self.assertIn("plan: raise window 0x12", out)
 
     def test_dry_run_on_empty_zone_prints_context_and_plan(self):
-        # `--dry-run` обещан любому действию: и на пустой зоне он печатает
-        # контекст и план (в stdout), а не молчит и не трогает окна.
+        # `--dry-run` is promised to every action: on an empty zone it prints the
+        # context and the plan (to stdout), instead of staying silent and not touching the windows.
         self.action("show", run="builtin:show-window", zone="left")
         self.place(0x11, rect=RIGHT)
         code, out, err = self.run_cli("action", "show", "--dry-run")
@@ -426,7 +426,7 @@ class ActionShowWindowTest(ActionCase):
 
 
 class ActionMirrorTest(ActionCase):
-    """`builtin:mirror`: обмен окнами, рамки по числу окон, история."""
+    """`builtin:mirror`: swapping windows, frames by the number of windows, the history."""
 
     def test_swaps_two_single_window_zones(self):
         self.action("mir", run="builtin:mirror", zone="left")
@@ -445,9 +445,9 @@ class ActionMirrorTest(ActionCase):
         )
 
     def test_frames_follow_window_counts_after_swap(self):
-        # Слева два окна, справа одно: предмет действия (0x11) уходит вправо,
-        # правое — влево; в левой зоне снова двое — общая рамка вкладки, правой
-        # хватает всей зоны.
+        # On the left two windows, on the right one: the subject of the action (0x11) goes to the right,
+        # the right one — to the left; the left zone has two again — the shared tab frame, the right one
+        # needs the whole zone.
         self.action("mir", run="builtin:mirror", zone="left")
         self.place(0x11, 0x12, rect=LEFT_TAB)
         self.place(0x22, rect=RIGHT)
@@ -462,7 +462,7 @@ class ActionMirrorTest(ActionCase):
         self.action("mir", run="builtin:mirror", zone="left")
         self.place(0x11, 0x12, rect=LEFT_TAB)
         self.place(0x22, rect=RIGHT)
-        self.active = 0x99  # активное окно outside zones: предмета в зоне нет
+        self.active = 0x99  # the active window is outside zones: there is no subject in the zone
         code, _out, err = self.run_cli("action", "mir", "--quiet")
         self.assertEqual(code, 0, err)
         self.assertEqual(self.frames[0x12], RIGHT)
@@ -518,7 +518,7 @@ class ActionMirrorTest(ActionCase):
 
 
 class ActionTerminalTest(ActionCase):
-    """`builtin:terminal`: запуск, ожидание нового окна, рамка по числу окон."""
+    """`builtin:terminal`: the spawn, waiting for a new window, the frame by the number of windows."""
 
     def setUp(self):
         super().setUp()
@@ -556,8 +556,8 @@ class ActionTerminalTest(ActionCase):
         self.place(0x11, rect=LEFT)
 
         def spawn(argv, **kwargs):
-            # Первым в списке появляется «splash» 0x33: он под is excluded, и брать
-            # его вместо терминала нельзя.
+            # The "splash" 0x33 appears first in the list: it is excluded, and taking
+            # it instead of the terminal is not allowed.
             self.popen.append((argv, kwargs))
             self.place(0x33, 0x44, rect=(0, 0, 100, 100))
             return types.SimpleNamespace(pid=4242)
@@ -597,7 +597,7 @@ class ActionTerminalTest(ActionCase):
 
 
 class ActionMinimizeOthersTest(ActionCase):
-    """`builtin:minimize-others` переиспользует `focus`, а не копирует его."""
+    """`builtin:minimize-others` reuses `focus` instead of copying it."""
 
     def test_delegates_to_focus_with_zone_and_window(self):
         self.action("min", run="builtin:minimize-others", zone="left")
