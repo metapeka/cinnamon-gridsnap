@@ -1,43 +1,43 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""zone-tabstrip.py — полоса вкладок поверх зоны: рисует, клик отдаёт демону.
+"""zone-tabstrip.py — tab strip above a zone: it draws it, hands clicks to the daemon.
 
-Процесс запускает демон (``zone-daemon.py``) на все зоны сразу:
+The daemon (``zone-daemon.py``) starts the process for all zones at once:
 
     python3 zone-tabstrip.py --conf <zones.conf>
 
-Дальше это фильтр: демон пишет в stdin построчные **полные** снимки
-(``zone_tabs.strips_payload``), полоса рисует по одному окну на запись:
+After that it is a filter: the daemon writes line-wise **full** snapshots to stdin
+(``zone_tabs.strips_payload``), and the strip draws one window per record:
 
     {"strips": [{"zone": "main", "rect": [0, 0, 960, 22],
                  "tabs": [{"window": 12345, "title": "Firefox", "active": true}]}]}
 
-Окно полосы — override-redirect (``Gtk.WindowType.POPUP``): оно выше окон зоны,
-не берёт фокус, не попадает в список задач и не перехватывает ввод. Окно зоны
-стоит **ниже** полосы (зона минус полоса, ``zone_tabs.tab_rect``), поэтому
-полоса не мешает тащить окно за его заголовок — она его не перекрывает.
-Клик по вкладке уходит в сокет демона (``zone_ipc``) запросом
-``zone_tabs.tabs_switch_command``, как у ``gridsnap-ctl``: отдельного канала у
-полосы нет.
+The strip window is override-redirect (``Gtk.WindowType.POPUP``): it sits above the zone
+windows, takes no focus, does not appear in the task list and does not intercept input. The zone
+window sits **below** the strip (zone minus strip, ``zone_tabs.tab_rect``), which is why
+the strip does not get in the way of dragging a window by its title — it never covers it.
+A click on a tab goes to the daemon socket (``zone_ipc``) as a request
+``zone_tabs.tabs_switch_command``, the same way ``gridsnap-ctl`` does it: the strip has
+no channel of its own.
 
-Два пространства координат: рамка ``rect`` в снимке — **физические** пиксели X
-(это координаты окна зоны), а окно GTK живёт в **логических**. Перевод — один,
-в :func:`window_rect` через ``zone_units.logical_rect``, с масштабом монитора
-под центром самой полосы: при ``GDK_SCALE=2`` без него полоса уехала бы вдвое
-дальше зоны и выросла бы вдвое. Тот же масштаб переводит и локальные координаты:
-cairo в окне рисует в логических пикселях (:func:`local_rect`), а событие клика
-приходит в них же, тогда как рамки вкладок в снимке — физические (:func:`local_point`).
-Без этого при масштабе 2 вкладки рисовались бы вдвое шире полосы, и в окне
-оставалась бы одна, растянутая на всю ширину.
+Two coordinate spaces: the ``rect`` frame in the snapshot is **physical** X pixels
+(those are the coordinates of the zone window), while the GTK window lives in **logical** ones. The conversion is single,
+in :func:`window_rect` via ``zone_units.logical_rect``, with the monitor scale
+under the centre of the strip itself: with ``GDK_SCALE=2`` and no conversion the strip would move twice as far
+from the zone and grow twice as large. The same scale converts local coordinates:
+cairo in the window draws in logical pixels (:func:`local_rect`), and the click event
+arrives in them as well, while tab frames in the snapshot are physical (:func:`local_point`).
+Without that, at scale 2 the tabs would be drawn twice as wide as the strip, and a single one
+would remain in the window, stretched over its whole width.
 
-Пустой снимок (``{"strips": []}``) убирает все окна полос, EOF в stdin —
-завершение процесса: демон закрыл поток, значит полос больше некому показывать.
+An empty snapshot (``{"strips": []}``) removes all strip windows, EOF on stdin means
+the process ends: the daemon closed the stream, so there is nobody left to show strips to.
 
-Чистая часть — в ``zone_tabstrip_nav`` (разбор снимка, рамки вкладок, подписи,
-вкладка под точкой клика), без GTK; здесь только окна, cairo и сокет. Без GTK
-(``python3-gi``, ``gir1.2-gtk-3.0``) процесс честно говорит об этом в stderr и
-выходит с кодом 1: тихо не рисовать полосу нельзя — тогда непонятно, почему
-вкладок не видно.
+The pure part lives in ``zone_tabstrip_nav`` (snapshot parsing, tab frames, captions,
+the tab under the click point), without GTK; here there are only windows, cairo and the socket. Without GTK
+(``python3-gi``, ``gir1.2-gtk-3.0``) the process says so honestly on stderr and
+exits with code 1: silently not drawing the strip is not allowed — then it is unclear why
+the tabs are not visible.
 """
 
 import argparse
@@ -51,14 +51,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-import zone_tabstrip_nav as nav  # noqa: E402  (ищем рядом с собой, как устанавливается)
-import zone_units  # noqa: E402  (единственный перевод логических px в физические)
-import window_backend  # noqa: E402  (оконный слой: X11-бэкенд GDK и масштаб)
-from zone_i18n import _  # noqa: E402  (там же: строки интерфейса и их перевод)
+import zone_tabstrip_nav as nav  # noqa: E402  (looked up next to itself, the way it is installed)
+import zone_units  # noqa: E402  (the only conversion of logical px to physical ones)
+import window_backend  # noqa: E402  (window layer: GDK X11 backend and scale)
+from zone_i18n import _  # noqa: E402  (same place: interface strings and their translation)
 
-# Полоса ставит себя по координатам X, поэтому GDK обязан быть на X11-бэкенде —
-# иначе в Wayland-сессии `move()` ничего не делает (замер: docs/RESEARCH-wayland-recon.md).
-# Вызов до первого `load_gtk()`: после инициализации GDK бэкенд не переключить.
+# The strip places itself by X coordinates, so GDK has to be on the X11 backend —
+# otherwise in a Wayland session `move()` does nothing (measurement: docs/RESEARCH-wayland-recon.md).
+# The call comes before the first `load_gtk()`: after GDK initialisation the backend cannot be switched.
 window_backend.prefer_x11_gdk()
 
 VERSION = "0.2.0"
@@ -66,12 +66,12 @@ VERSION = "0.2.0"
 EXIT_OK = 0
 EXIT_FAIL = 1
 
-# Сколько ждать ответа демона на клик, секунд. Клик обрабатывается в главном
-# цикле GTK, поэтому ожидание короткое: подвисший демон не должен замораживать
-# перерисовку полос, а «демона нет» и так видно по connect.
+# How long to wait for the daemon answer to a click, seconds. The click is handled in the GTK
+# main loop, so the wait is short: a hung daemon must not freeze
+# strip redraws, and "there is no daemon" is visible from connect anyway.
 DAEMON_TIMEOUT = 1.0
 
-# Цвета полосы: подложка, вкладка, активная вкладка, подписи, акцент сверху.
+# Strip colours: background, tab, active tab, captions, accent on top.
 STRIP_BG = (0.13, 0.14, 0.17)
 TAB_BG = (0.20, 0.22, 0.26)
 TAB_ACTIVE_BG = (0.32, 0.36, 0.44)
@@ -81,8 +81,8 @@ ACCENT = (1.0, 0.71, 0.33)
 ACCENT_H = 2
 FONT = "Sans 8"
 
-# GTK/cairo подтягиваются лениво (`load_gtk`), чтобы без них можно было отличить
-# «нет библиотеки» от «нет дисплея» и сказать человеку, чего именно не хватает.
+# GTK/cairo are pulled in lazily (`load_gtk`) so that without them one can tell
+# "no library" from "no display" and tell the user exactly what is missing.
 Gtk = Gdk = GLib = Pango = PangoCairo = cairo = None
 
 
@@ -92,27 +92,27 @@ def fail(message, code=EXIT_FAIL):
 
 
 def tabs_module():
-    """Модуль `zone_tabs`: запрос клика живёт только там (контракт волны)."""
-    import zone_tabs  # noqa: PLC0415 — ленивый импорт, рядом с полосой
+    """The `zone_tabs` module: the click request lives only there (wave contract)."""
+    import zone_tabs  # noqa: PLC0415 — lazy import, next to the strip
 
     return zone_tabs
 
 
-# Раскладчик (`zone-tiler.py`) нужен полосе только за масштабом монитора: рамки,
-# подписи и порядок вкладок приходят в снимке. Загружается один раз и лениво: без
-# X и GDK он ответить не может, а повторять его загрузку на каждый снимок — это
-# заново читать xrandr и GDK на каждой перерисовке полосы.
+# The tiler (`zone-tiler.py`) is needed by the strip only for the monitor scale: frames,
+# captions and tab order come in the snapshot. It is loaded once and lazily: without
+# X and GDK it cannot answer, and reloading it on every snapshot would mean
+# reading xrandr and GDK again on every strip redraw.
 _ZT = None
 _ZT_LOADED = False
 
 
 def tiler_module():
-    """Раскладчик рядом с полосой — или ``None``, если он не загрузился.
+    """The tiler next to the strip — or ``None`` if it did not load.
 
-    Соседний hyphen-модуль берётся по своему пути, а не по ``sys.path``: полоса
-    ставится и рядом с исходниками, и в ``/usr/lib/gridsnap``. Сбой загрузки — не
-    падение полосы: без раскладчика масштаба не спросить, и полоса ведёт себя как
-    до волны DPI (масштаб 1).
+    The neighbouring hyphen module is taken by its own path, not via ``sys.path``: the strip
+    is installed both next to the sources and in ``/usr/lib/gridsnap``. A load failure is not
+    a strip crash: without the tiler the scale cannot be asked for, and the strip behaves as
+    it did before the DPI wave (scale 1).
     """
     global _ZT, _ZT_LOADED
     if not _ZT_LOADED:
@@ -127,19 +127,19 @@ def tiler_module():
             sys.modules[spec.name] = mod
             spec.loader.exec_module(mod)
             _ZT = mod
-        except Exception:  # нет модуля, нет его зависимостей — масштаб будет 1
+        except Exception:  # no module, no its dependencies — the scale will be 1
             _ZT = None
     return _ZT
 
 
 def strip_scale(point):
-    """Масштаб монитора под **физической** точкой; 1 — спросить не у кого.
+    """Monitor scale under a **physical** point; 1 — there is nobody to ask.
 
-    Масштаб берётся у раскладчика (`zone-tiler.scale_at_point`): рабочие области
-    мониторов и масштабы GDK живут там, и своего разбора мониторов полоса не
-    держит. Если X или GDK нет, раскладчик может не ответить вовсе — вплоть до
-    ``SystemExit`` из `monitors` (`fail`), — поэтому здесь ловится и он: сбой
-    чтения масштаба не должен ронять полосу.
+    The scale comes from the tiler (`zone-tiler.scale_at_point`): monitor work areas
+    and GDK scales live there, and the strip keeps no monitor parsing
+    of its own. If X or GDK is missing, the tiler may not answer at all — up to
+    ``SystemExit`` from `monitors` (`fail`) — so it is caught here too: a failure
+    to read the scale must not bring the strip down.
     """
     zt = tiler_module()
     if zt is None:
@@ -151,41 +151,41 @@ def strip_scale(point):
 
 
 def strip_center(rect):
-    """Центр физической рамки полосы — под ним берётся масштаб монитора."""
+    """Centre of the physical strip frame — the monitor scale is taken under it."""
     x, y, w, h = (int(round(float(v))) for v in rect)
     return (x + w // 2, y + h // 2)
 
 
 def window_rect(rect, scale_of=strip_scale):
-    """Физическая рамка полосы из снимка → рамка окна GTK, в логических px.
+    """Physical strip frame from the snapshot → GTK window frame, in logical px.
 
-    Демон присылает рамку полосы в **физических** пикселях X (это координаты
-    окна зоны), а GTK считает в **логических**: при ``GDK_SCALE=2`` монитор
-    1920x1080 виден как 960x540. Без перевода полоса уехала бы вдвое дальше зоны
-    и выросла бы вдвое — `set_size_request(1920, 22)` заказал бы окно 3840x44.
+    The daemon sends the strip frame in **physical** X pixels (those are the coordinates
+    of the zone window), while GTK counts in **logical** ones: with ``GDK_SCALE=2`` a monitor
+    1920x1080 looks like 960x540. Without the conversion the strip would move twice as far from the zone
+    and grow twice as large — `set_size_request(1920, 22)` would order a 3840x44 window.
 
-    Масштаб спрашивается под центром самой полосы (`scale_of`), а не под первым
-    монитором: полоса может стоять на экране с другим масштабом. Размеры после
-    перевода — целые и не меньше 1 px: окно нулевого размера не покажет ни
-    подписи, ни рамки вкладки. Точка и размеры считаются в физических px, поэтому
-    центр берётся до перевода.
+    The scale is asked under the centre of the strip itself (`scale_of`), not under the first
+    monitor: the strip may sit on a screen with a different scale. After the conversion
+    the sizes are whole numbers and at least 1 px: a window of zero size would show neither
+    a caption nor a tab frame. The point and the sizes are counted in physical px, so
+    the centre is taken before the conversion.
     """
     x, y, w, h = (int(round(float(v))) for v in rect)
     try:
         scale = zone_units.scale_value(scale_of(strip_center(rect)))
-    except Exception:  # масштаб не спросили — как раньше, на масштабе 1
+    except Exception:  # the scale was not asked — as before, at scale 1
         scale = 1
     lx, ly, lw, lh = zone_units.logical_rect((x, y, w, h), scale)
     return int(lx), int(ly), max(1, int(lw)), max(1, int(lh))
 
 
 def local_rect(rect, origin, scale):
-    """Рамка вкладки из снимка (физические px) → локальные логические px окна.
+    """Tab frame from the snapshot (physical px) → local logical px of the window.
 
-    Окно GTK живёт в логических пикселях, и cairo в нём тоже логический: при
-    масштабе 2 физическое смещение внутри полосы — это вдвое большее число
-    логических пикселей, поэтому смещения и размеры делятся на масштаб. Начало
-    координат — левый верхний угол полосы (`origin`, физическая рамка из снимка).
+    The GTK window lives in logical pixels, and cairo in it is logical too: at
+    scale 2 a physical offset inside the strip is twice as many
+    logical pixels, so offsets and sizes are divided by the scale. The origin
+    of coordinates is the top left corner of the strip (`origin`, the physical frame from the snapshot).
     """
     x, y, w, h = rect
     s = zone_units.scale_value(scale)
@@ -193,18 +193,18 @@ def local_rect(rect, origin, scale):
 
 
 def local_point(point, origin, scale):
-    """Точка клика из логических px окна → физические px снимка.
+    """Click point from logical px of the window → physical px of the snapshot.
 
-    Обратна :func:`local_rect`: `nav.tab_under` и рамки вкладок считают в
-    физических пикселях экрана, а событие GTK приходит в логических координатах
-    окна полосы.
+    The inverse of :func:`local_rect`: `nav.tab_under` and tab frames count in
+    physical screen pixels, while the GTK event arrives in logical coordinates
+    of the strip window.
     """
     s = zone_units.scale_value(scale)
     return origin[0] + point[0] * s, origin[1] + point[1] * s
 
 
 def load_gtk():
-    """Импортировать GTK 3 и cairo; без них — сообщение в stderr и код 1."""
+    """Import GTK 3 and cairo; without them — a message on stderr and code 1."""
     global Gtk, Gdk, GLib, Pango, PangoCairo, cairo
     try:
         import cairo as cairo_module
@@ -232,13 +232,13 @@ def load_gtk():
 
 
 def send_request(request, path=None, timeout=DAEMON_TIMEOUT):
-    """Отправить запрос демону; `None` — демона нет или он не ответил.
+    """Send a request to the daemon; `None` — there is no daemon or it did not answer.
 
-    Сокет тот же, что у `gridsnap-ctl` (`zone_ipc`): клик по вкладке — обычная
-    команда демона, а не новый канал. Ошибки сети здесь не падение: окно полосы
-    остаётся на экране, а причина уходит в stderr демона (его же stderr).
+    The socket is the same as `gridsnap-ctl` uses (`zone_ipc`): a tab click is an ordinary
+    daemon command, not a new channel. Network errors are not a crash here: the strip window
+    stays on screen, and the reason goes to the daemon stderr (its own stderr).
     """
-    import zone_ipc  # noqa: PLC0415 — ленивый импорт, рядом с полосой
+    import zone_ipc  # noqa: PLC0415 — lazy import, next to the strip
 
     conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     conn.settimeout(timeout)
@@ -259,12 +259,12 @@ def send_request(request, path=None, timeout=DAEMON_TIMEOUT):
 
 
 class Strip:
-    """Одно окно-полоса над зоной: override-redirect, без фокуса, с кликом.
+    """One strip window above a zone: override-redirect, without focus, with a click.
 
-    Окно — ``Gtk.WindowType.POPUP``: на X11 это override-redirect, поэтому
-    muffin его не оформляет, не ставит в список задач и не даёт ему фокус. Свой
-    размер и место полоса получает из снимка, а не из оконного менеджера, — так
-    она и остаётся приклеенной к верхней кромке зоны.
+    The window is ``Gtk.WindowType.POPUP``: on X11 that is override-redirect, so
+    muffin does not decorate it, does not put it in the task list and does not give it focus. The strip
+    gets its size and place from the snapshot, not from the window manager, — that is how
+    it stays glued to the top edge of the zone.
     """
 
     def __init__(self, zone, owner):
@@ -281,7 +281,7 @@ class Strip:
         self.win.set_skip_taskbar_hint(True)
         self.win.set_skip_pager_hint(True)
         self.win.set_keep_above(True)
-        # Фокус и клавиатура — чужие: их держит окно зоны, полоса только рисует.
+        # Focus and keyboard belong to others: the zone window holds them, the strip only draws.
         self.win.set_accept_focus(False)
         self.win.set_focus_on_map(False)
         self.win.set_app_paintable(True)
@@ -290,10 +290,10 @@ class Strip:
         self.win.connect("destroy", self.on_destroy)
         self.shown = False
 
-    # ---- снимок
+    # ---- snapshot
 
     def show_record(self, record):
-        """Показать (или обновить) полосу по записи снимка; без рамки — убрать."""
+        """Show (or update) the strip from a snapshot record; without a frame — remove it."""
         rect = nav.record_rect(record)
         if rect is None or self.win is None:
             self.destroy()
@@ -301,16 +301,16 @@ class Strip:
         self.record = record
         self.rows = nav.layout(record)
         self.rect = rect
-        # `self.rect` и рамки вкладок — в физических пикселях X, как в снимке;
-        # окно же GTK живёт в логических, поэтому и место окна, и локальные
-        # координаты рисования с кликом переводятся одним и тем же масштабом.
-        # Читается он раз на снимок: `scale_at_point` — это GDK и xrandr.
+        # `self.rect` and tab frames are in physical X pixels, as in the snapshot;
+        # the GTK window lives in logical ones, so both the window position and the local
+        # drawing and click coordinates are converted by one and the same scale.
+        # It is read once per snapshot: `scale_at_point` means GDK and xrandr.
         self.scale = zone_units.scale_value(strip_scale(strip_center(rect)))
         x, y, w, h = window_rect(rect, lambda _point: self.scale)
-        # Размер — через `set_size_request`, а не `resize`/`set_default_size`:
-        # окно POPUP рождается 200x200 и после `show_all` resize игнорирует
-        # (проверено под Xvfb: `xwininfo` показывает 200 px в высоту). Полоса
-        # высотой 200 накрыла бы окно зоны и съела бы его клики.
+        # The size goes through `set_size_request`, not `resize`/`set_default_size`:
+        # a POPUP window is born 200x200 and after `show_all` ignores resize
+        # (checked under Xvfb: `xwininfo` shows 200 px in height). A strip
+        # 200 px high would cover the zone window and eat its clicks.
         self.win.set_size_request(w, h)
         self.win.move(x, y)
         if not self.shown:
@@ -319,7 +319,7 @@ class Strip:
         self.win.queue_draw()
 
     def destroy(self):
-        """Убрать окно полосы (зона пропала, снимок стал пустым, EOF). Идемпотентно."""
+        """Remove the strip window (the zone disappeared, the snapshot became empty, EOF). Idempotent."""
         win, self.win = self.win, None
         self.shown = False
         self.record, self.rows, self.rect, self.scale = None, [], None, 1
@@ -330,15 +330,15 @@ class Strip:
         self.win = None
         self.owner.forget(self)
 
-    # ---- клик
+    # ---- click
 
     def on_button_press(self, _widget, event):
-        """Клик по вкладке → команда демону «показать это окно в этой зоне»."""
+        """Click on a tab → a command to the daemon "show this window in this zone"."""
         if self.win is None or self.rect is None or event.button != 1:
             return False
-        # Событие приходит в логических координатах окна полосы, а рамки вкладок
-        # и `nav.tab_under` — в физических экранных: переводим масштабом полосы,
-        # чтобы попадание считалось одним кодом с тестами.
+        # The event arrives in logical coordinates of the strip window, while tab frames
+        # and `nav.tab_under` are in physical screen ones: we convert with the strip scale
+        # so that the hit is counted by the same code as in the tests.
         point = local_point((event.x, event.y), self.rect, self.scale)
         window = nav.tab_under(self.record, point)
         if window is None:
@@ -355,13 +355,13 @@ class Strip:
             print(_("zone-tabstrip: the daemon refused: {}").format(reason), file=sys.stderr)
         return True
 
-    # ---- рисование
+    # ---- drawing
 
     def on_draw(self, widget, cr):
         if self.rect is None:
             return False
         alloc = widget.get_allocation()
-        # OPERATOR_SOURCE: подложка заменяет кадр целиком, без остатков прошлого.
+        # OPERATOR_SOURCE: the background replaces the whole frame, without leftovers of the past one.
         cr.set_operator(cairo.OPERATOR_SOURCE)
         cr.set_source_rgb(*STRIP_BG)
         cr.rectangle(0, 0, alloc.width, alloc.height)
@@ -373,7 +373,7 @@ class Strip:
             cr.rectangle(x, y, w, h)
             cr.fill()
             if row["active"]:
-                # Активная вкладка — не только цветом: сверху акцентная полоска.
+                # The active tab is not marked by colour alone: an accent stripe on top.
                 cr.set_source_rgb(*ACCENT)
                 cr.rectangle(x, y, w, min(ACCENT_H / self.scale, h))
                 cr.fill()
@@ -381,19 +381,19 @@ class Strip:
         return False
 
     def local_rect(self, row):
-        """Рамка вкладки в локальных логических px окна (для cairo)."""
+        """Tab frame in local logical px of the window (for cairo)."""
         return local_rect(row["rect"], self.rect, self.scale)
 
     def draw_label(self, cr, row):
-        """Подпись вкладки внутри её рамки: обрезается по ширине, по центру по высоте."""
+        """Tab caption inside its frame: clipped by width, centred by height."""
         x, y, w, h = self.local_rect(row)
         pad = nav.TAB_PADDING / self.scale
         inner = max(1, int(w) - 2 * pad)
         layout = PangoCairo.create_layout(cr)
         layout.set_text(row["label"], -1)
         layout.set_font_description(Pango.FontDescription(FONT))
-        # Подпись уже обрезана по средней ширине символа (nav.fit_title); здесь
-        # вторая, точная защита: Pango сам поставит многоточие, если шрифт шире.
+        # The caption is already clipped by the average character width (nav.fit_title); here
+        # is the second, exact guard: Pango will put the ellipsis itself if the font is wider.
         layout.set_ellipsize(Pango.EllipsizeMode.END)
         layout.set_width(inner * Pango.SCALE)
         _lw, lh = layout.get_pixel_size()
@@ -407,19 +407,19 @@ class Strip:
 
 
 class Tabstrip:
-    """Полосы всех зон: один процесс, одна полоса-окно на запись снимка."""
+    """Strips of all zones: one process, one strip window per snapshot record."""
 
     def __init__(self, socket_path=None):
         self.socket_path = socket_path
-        self.strips = {}  # имя зоны -> Strip
+        self.strips = {}  # zone name -> Strip
         self.buf = ""
 
     def apply(self, records):
-        """Привести окна полос к снимку: новые — создать, пропавшие — убрать.
+        """Bring the strip windows in line with the snapshot: new ones — create, gone ones — remove.
 
-        Снимок полный, поэтому «зона пропала» — это её отсутствие в снимке, а не
-        отдельное сообщение. Порядок записей — порядок зон в конфиге; на экране
-        он ни на что не влияет, окна независимы.
+        The snapshot is full, so "the zone disappeared" is its absence from the snapshot, not
+        a separate message. The order of records is the order of zones in the config; on screen
+        it affects nothing, the windows are independent.
         """
         seen = set()
         for record in records:
@@ -434,12 +434,12 @@ class Tabstrip:
             self.strips.pop(name).destroy()
 
     def feed(self, data):
-        """Скормить кусок stdin: разобрать целые строки и применить снимки.
+        """Feed a chunk of stdin: parse whole lines and apply the snapshots.
 
-        Неполная строка ждёт продолжения, мусорная пропускается: полоса не
-        должна исчезать из-за одной битой строки (``nav.parse_snapshot`` вернёт
-        ``None``), а пустой снимок ``{"strips": []}`` — законная команда убрать
-        все полосы.
+        An incomplete line waits for the rest, a garbage one is skipped: the strip must not
+        disappear because of one broken line (``nav.parse_snapshot`` will return
+        ``None``), and an empty snapshot ``{"strips": []}`` is a legitimate command to remove
+        all strips.
         """
         if isinstance(data, bytes):
             data = data.decode("utf-8", "replace")
@@ -451,12 +451,12 @@ class Tabstrip:
                 self.apply(records)
 
     def forget(self, strip):
-        """Убрать полосу из учёта (её окно уничтожили снаружи)."""
+        """Remove a strip from the bookkeeping (its window was destroyed from outside)."""
         if self.strips.get(strip.zone) is strip:
             self.strips.pop(strip.zone, None)
 
     def close(self):
-        """Убрать все окна полос (EOF в stdin, сигнал, конец работы)."""
+        """Remove all strip windows (EOF on stdin, a signal, the end of work)."""
         for strip in list(self.strips.values()):
             strip.destroy()
         self.strips.clear()
@@ -484,7 +484,7 @@ def main(argv=None):
     load_gtk()
     try:
         ready = Gtk.init_check()[0]
-    except Exception as exc:  # GTK есть, но не поднялся (нет дисплея и т. п.)
+    except Exception as exc:  # GTK is there but did not start (no display, etc.)
         fail(_("zone-tabstrip: GTK failed to start: {}").format(exc), EXIT_FAIL)
     if not ready:
         fail(
@@ -500,7 +500,7 @@ def main(argv=None):
         except OSError as exc:
             print(_("zone-tabstrip: cannot read stdin: {}").format(exc), file=sys.stderr)
             chunk = b""
-        if not chunk:  # EOF или HUP: демон закрыл поток, кормить больше некому
+        if not chunk:  # EOF or HUP: the daemon closed the stream, there is nobody left to feed
             strips.close()
             Gtk.main_quit()
             return False
