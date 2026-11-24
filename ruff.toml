@@ -1,0 +1,9 @@
+# Lint gate that carries no taste: syntax errors, undefined names, redefined or
+# shadowed functions. Nothing about formatting or style.
+# pyright/basedpyright is installed for navigation only (see pyrightconfig.json):
+# the modules are untyped ctypes/GTK code loaded through `importlib`, so a type
+# pass over them reports mostly its own blind spots.
+target-version = "py310"
+
+[lint]
+select = ["E9", "F821", "F811", "F823"]

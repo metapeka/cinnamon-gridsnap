@@ -331,6 +331,13 @@ check:
 	@$(PYTHON) -m compileall -q $(MODULES) $(CLIENTS) tools tests
 	@env -u DISPLAY $(PYTHON) -m unittest discover -s tests
 
+# `make lint` — ruff: syntax errors, undefined/redefined names (config in ruff.toml).
+# Needs `ruff` on PATH (`uv tool install ruff`); the gate is local, CI still runs the
+# compile step and the tests. Type checking is deliberately off: see AGENTS.md.
+lint:
+	@command -v ruff >/dev/null || { echo "make: ruff не найден: uv tool install ruff" >&2; exit 1; }
+	@ruff check .
+
 # `make smoke` — один дымовой сценарий на своём Xvfb (:89-:99) с muffin и
 # тестовым окном: проверяется реальная раскладка пиксель в пиксель. Нужны
 # Xvfb, muffin, dbus-run-session; каждый сценарий поднимает свой дисплей, так
