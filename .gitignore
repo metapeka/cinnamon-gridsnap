@@ -21,3 +21,11 @@ man/build/
 
 # резервные копии msgmerge (создаются при обновлении каталогов)
 *.po~
+
+# профили раскладок живого чекаута (`zone-tiler.py profile save` кладёт их рядом
+# с zones.conf); в репозитории их нет — это данные владельца, а не поставка
+templates/
+
+# служебные файлы сессии omp/handoff-supervisor
+.omp-handoff-session.json
+.omp-handoff-supervisor.lock/

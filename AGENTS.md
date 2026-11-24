@@ -4,6 +4,9 @@ Every agent reads this file automatically (pi/ThinkRail pick up `AGENTS.md`/`AGE
 `CLAUDE.md` as project context). Only process rules live here; the product itself is described in
 `SPEC.md`, `docs/architecture.md`, `docs/specs/`, and the plan in `docs/ROADMAP.md`.
 
+Start a fresh session with `HANDOFF.md` at the root: snapshot, module map, gates, open work and the
+traps. Per-wave history is in `docs/HANDOFF-<date>-<slug>.md`; do not rewrite it, add a new file.
+
 ## Language
 
 **Everything in the repository is in English**: code, comments, docstrings, messages, tests, specs, man
@@ -54,6 +57,20 @@ edited, which commands to run, and “if something is missing, do not fix it —
 - A worker's report carries **raw command output**, not “verified”. The coordinator re-runs the gates
   anyway: `env -u DISPLAY python3 -m unittest discover -s tests` and one smoke scenario.
 - Wording like “should work” counts as no verification at all.
+
+### Quick loop
+
+| Step | Command | Time |
+|---|---|---|
+| Units (always, `env -u DISPLAY` matters) | `make test` | ~25 s |
+| Units + `compileall` (first CI job) | `make check` | ~30 s |
+| One pixel-for-pixel smoke on private Xvfb | `make smoke` | ~5–40 s |
+| Every smoke, one by one | `for s in tests/smoke*.sh; do env -u DISPLAY dbus-run-session -- sh tests/run-smoke.sh "$s"; echo "$s rc=$?"; done` | minutes |
+| Version, catalogs, man pages | `make check-version check-i18n check-man-i18n` | ~10 s each |
+
+`make test` and the smokes never touch the live session: units run without `DISPLAY`, smokes raise their
+own `:89`–`:99`. The root `zones.conf` is the owner's live layout — tests must pass their own `--conf`
+in a temp directory, and `setup-hotkeys.py` tests must stay on a `keyfile` gsettings sandbox.
 
 ## Watchers (so we never wait in silence)
 

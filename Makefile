@@ -98,7 +98,7 @@ MO_RECIPES := $(foreach l,$(LANGS),\
                   "$(DEBROOT)/usr/share/locale/$(l)/LC_MESSAGES/$(APPLET_NAME).mo";)
 
 .PHONY: all tarball deb aur version clean check-version pot mo check-i18n \
-        man-pot man check-man-i18n
+        man-pot man check-man-i18n test check smoke
 
 all: tarball deb
 
@@ -317,6 +317,26 @@ aur: check-version
 	@bash -n PKGBUILD
 	@cp PKGBUILD "$(DIST)/PKGBUILD"
 	@echo "рецепт AUR: $(DIST)/PKGBUILD (pkgver=$(AUR_VERSION), pkgrel из файла)"
+
+# ------------------------------------------------------------ разработка
+
+# `make test` — только юнит-тесты без X-сервера: тот же гейт, что в CI. Быстрый
+# цикл правки: ~25 с на 1430+ тестов. `env -u DISPLAY` обязателен: с живым
+# дисплеем часть тестов лезет в настоящую сессию владельца.
+test:
+	@env -u DISPLAY $(PYTHON) -m unittest discover -s tests
+
+# `make check` — компиляция всех модулей плюс тесты (первый job CI целиком).
+check:
+	@$(PYTHON) -m compileall -q $(MODULES) $(CLIENTS) tools tests
+	@env -u DISPLAY $(PYTHON) -m unittest discover -s tests
+
+# `make smoke` — один дымовой сценарий на своём Xvfb (:89-:99) с muffin и
+# тестовым окном: проверяется реальная раскладка пиксель в пиксель. Нужны
+# Xvfb, muffin, dbus-run-session; каждый сценарий поднимает свой дисплей, так
+# что живая сессия не задевается. Остальные — `sh tests/run-smoke.sh tests/smoke-*.sh`.
+smoke:
+	@env -u DISPLAY dbus-run-session -- sh tests/run-smoke.sh tests/smoke.sh
 
 clean:
 	@rm -rf "$(BUILD)" "$(DIST)" "$(MAN_BUILD)"
