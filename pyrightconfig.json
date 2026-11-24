@@ -1,0 +1,12 @@
+{
+  "include": ["*.py", "tools", "tests"],
+  "exclude": ["build", "dist", "locale", "man/build", "**/__pycache__", "site/assets"],
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "off",
+  "reportMissingImports": "none",
+  "reportMissingTypeStubs": "none",
+  "reportUnusedImport": "none",
+  "reportUnusedVariable": "none",
+  "reportUnusedFunction": "none",
+  "reportUnusedParameter": "none"
+}

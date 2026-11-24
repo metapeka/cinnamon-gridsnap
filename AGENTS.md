@@ -66,7 +66,13 @@ edited, which commands to run, and “if something is missing, do not fix it —
 | Units + `compileall` (first CI job) | `make check` | ~30 s |
 | One pixel-for-pixel smoke on private Xvfb | `make smoke` | ~5–40 s |
 | Every smoke, one by one | `for s in tests/smoke*.sh; do env -u DISPLAY dbus-run-session -- sh tests/run-smoke.sh "$s"; echo "$s rc=$?"; done` | minutes |
+| Lint (undefined/shadowed names, `pyflakes` subset) | `make lint` (needs `uv tool install ruff`) | ~1 s |
 | Version, catalogs, man pages | `make check-version check-i18n check-man-i18n` | ~10 s each |
+
+Type checking is deliberately off (`pyrightconfig.json`: `typeCheckingMode: off`).
+basedpyright is installed for navigation only — definition, references, hover, rename —
+because the modules are untyped ctypes/GTK code loaded through `importlib`, and a type
+pass reports mostly its own blind spots. Lint rules live in `ruff.toml` and carry no taste.
 
 `make test` and the smokes never touch the live session: units run without `DISPLAY`, smokes raise their
 own `:89`–`:99`. The root `zones.conf` is the owner's live layout — tests must pass their own `--conf`

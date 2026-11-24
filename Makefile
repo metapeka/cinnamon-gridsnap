@@ -98,7 +98,7 @@ MO_RECIPES := $(foreach l,$(LANGS),\
                   "$(DEBROOT)/usr/share/locale/$(l)/LC_MESSAGES/$(APPLET_NAME).mo";)
 
 .PHONY: all tarball deb aur version clean check-version pot mo check-i18n \
-        man-pot man check-man-i18n test check smoke
+        man-pot man check-man-i18n test check lint smoke
 
 all: tarball deb
 

@@ -26,9 +26,15 @@ Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave
 | Compile | `make check` | `compileall` over modules + tools + tests, then units |
 | One smoke | `make smoke` | a window lands in each zone pixel-for-pixel on a private Xvfb + muffin |
 | All smokes | `for s in tests/smoke*.sh; do env -u DISPLAY dbus-run-session -- sh tests/run-smoke.sh "$s"; echo "$s rc=$?"; done` | daemon, tabs, focus, monitor profiles, actions, hotcorners, events… |
+| Lint | `make lint` (`ruff check .`, rules `ruff.toml`) | undefined, shadowed or redefined names; ~1 s |
 | Version | `make check-version` | `VERSION` agrees across six files, PKGBUILD, man page, changelog |
 | Catalogs | `make check-i18n` | `msgfmt --check`, templates vs code, no `ru.po` source catalog |
 | Man pages | `make check-man-i18n` | po4a build, `--…` keys vs `--help`, widths under `zh_CN`/`ru_RU` |
+
+Editor tooling: `basedpyright` and `ruff` are installed via `uv tool install`; the LSP setup is
+navigation-only (`pyrightconfig.json` with `typeCheckingMode: off`) because most modules are untyped
+ctypes/GTK code loaded through `importlib`. Type-checking warnings that remain are expected noise;
+the real gates are `make lint`, `make test` and the smokes.
 
 Rules: `env -u DISPLAY` always for units — with a live display some tests reach into the owner's session.
 Smoke scripts raise their own `:89`–`:99`, so they are safe on a live desktop, but never point one at `:0`.
@@ -72,6 +78,8 @@ Behaviour contracts live in `docs/specs/` (18 files, one per module feature). Ar
 | The root `zones.conf` is the live desktop layout | Never “fix” it as test data and never commit it without the owner's ask. Every test and smoke uses its own `--conf` in a temp dir. |
 | Real Cinnamon keybindings | `setup-hotkeys.py` talks to `gsettings`; tests must use a **keyfile backend sandbox** (`GSETTINGS_BACKEND=keyfile`, `XDG_CONFIG_HOME` inside a temp dir). One earlier session wrote probe keys into the owner's live session — restore by hand. |
 | Display | Units with `env -u DISPLAY`; smoke with `dbus-run-session` and `env -u DISPLAY`; never place windows on `:0`. |
+| Type checking is off on purpose | `pyrightconfig.json` keeps the server for navigation only; do not flip `typeCheckingMode` to `basic`/`strict` — `importlib`-loaded siblings and ctypes give hundreds of false errors |
+| Rename blind spot | modules loaded via `importlib` (`zt.fail`, `tiler.*`, `zone_config_module()`) are invisible to `lsp rename`: it renamed `fail` in 67 places inside `zone-tiler.py` and missed 28 `zt.fail` in `zone_config.py`. Preview the edit count, then `grep` for `zt\.`/`tiler\.`/`zd\.` uses before applying; `make lint` (F821) catches a missed name at once |
 | Muffin reparents clients | `SubstructureNotify` on root yields frame windows without `WM_CLASS`. The daemon listens for `_NET_CLIENT_LIST` changes and reconciles through `xprop`. |
 | Translations and man pages are generated | After changing a source string: `make pot`; after changing a man page: `make man-pot`, then refresh `po/man/ru.po` and `zh_CN.po`. CI fails on a stale template. |
 | Version is duplicated | `VERSION` in `zone-tiler.py`, `zone-daemon.py`, `zone-hotcorners.py`, `zone-tabstrip.py`, `gridsnap-ctl`, PKGBUILD, `man/gridsnap.1`, `debian/changelog` — `make check-version`. |
