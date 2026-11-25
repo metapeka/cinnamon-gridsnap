@@ -98,7 +98,7 @@ MO_RECIPES := $(foreach l,$(LANGS),\
                   "$(DEBROOT)/usr/share/locale/$(l)/LC_MESSAGES/$(APPLET_NAME).mo";)
 
 .PHONY: all tarball deb aur version clean check-version pot mo check-i18n \
-        man-pot man check-man-i18n test check lint smoke
+        man-pot man check-man-i18n test check verify lint smoke
 
 all: tarball deb
 
@@ -330,6 +330,9 @@ test:
 check:
 	@$(PYTHON) -m compileall -q $(MODULES) $(CLIENTS) tools tests
 	@env -u DISPLAY $(PYTHON) -m unittest discover -s tests
+
+# `make verify` — the single local gate; it delegates to `check`, so the tests run once.
+verify: check
 
 # `make lint` — ruff: syntax errors, undefined/redefined names (config in ruff.toml).
 # Needs `ruff` on PATH (`uv tool install ruff`); the gate is local, CI still runs the

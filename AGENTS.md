@@ -64,6 +64,7 @@ edited, which commands to run, and “if something is missing, do not fix it —
 |---|---|---|
 | Units (always, `env -u DISPLAY` matters) | `make test` | ~25 s |
 | Units + `compileall` (first CI job) | `make check` | ~30 s |
+| Everything local, one entry point | `make verify` (delegates to `check`) | ~30 s |
 | One pixel-for-pixel smoke on private Xvfb | `make smoke` | ~5–40 s |
 | Every smoke, one by one | `for s in tests/smoke*.sh; do env -u DISPLAY dbus-run-session -- sh tests/run-smoke.sh "$s"; echo "$s rc=$?"; done` | minutes |
 | Lint (undefined/shadowed names, `pyflakes` subset) | `make lint` (needs `uv tool install ruff`) | ~1 s |

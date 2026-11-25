@@ -815,6 +815,9 @@ What is in the menu, which settings exist and what the limits are — in `contri
 <!-- section: checks -->
 ## 12. The checks that were run
 
+`make verify` is the single local gate: it delegates to `make check` (compilation plus the unit
+tests), so the tests are not run twice.
+
 * unit tests without X (parser, rules, reflow, daemon, the `zone_ipc` IPC, the config layer and the
   bindings of profiles to screens, arrange/undo, the tab core `zone_tabs`, the strip navigation
   `zone_tabstrip_nav`, the editor geometry `zone_geom`, the zone picker navigation
