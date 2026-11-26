@@ -9,7 +9,7 @@ Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave
 
 | What | Value |
 |---|---|
-| Code | `main` = `ea2dc1e`: both theme waves merged (palette + wallpaper); 3 commits ahead of `origin/main`, **not pushed** |
+| Code | `main` = `ea2dc1e` (both theme waves: palette `8b61c61`, wallpaper `ea2dc1e`) plus their handoff records; ahead of `origin/main`, **not pushed** |
 | Version | `0.2.0`, tag `v0.2.0` |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
