@@ -23,7 +23,8 @@ The file is optional and its absence changes almost nothing: the defaults below 
 colours the surfaces drew before the theme existed — the picker, the HUD and the editor are exact.
 The tab strip moves one step darker, because it now shares the panel and card shades with the editor:
 its strip goes `#21242b` → `#1c1f24` (`bg_panel`) and a tab `#333842` → `#2b2e36` (`bg_card`); the
-active tab (`#525c70`) and the captions are unchanged. The format is INI, the same family as
+active tab (`#525c70`) and the captions are unchanged. `man gridsnap` documents the file under
+CONFIGURATION (`theme.conf`) and lists it under FILES. The format is INI, the same family as
 `zones.conf`, and not TOML on purpose: `tomllib` arrived in Python 3.11, Cinnamon ships on
 distributions with 3.10 (Mint 21), and an import error here would take the whole picker down, not
 just the theme.

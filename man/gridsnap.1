@@ -613,6 +613,39 @@ start.
 The section is optional. \fBreflow = off | neighbors\fP (\fIoff\fP by default;
 case and spaces do not matter, an unknown value is treated as \fIoff\fP). The
 \fIneighbors\fP mode is described in the COMMANDS section.
+.SS theme.conf
+An optional second INI file next to \fIzones.conf\fP: one palette for the
+surfaces GridSnap draws itself — the picker overlay, the hot\-corners HUD, the
+tab strip and the editor. The section \fB[theme]\fP holds the switches,
+\fB[colors]\fP the colours (a colour in \fB[theme]\fP is accepted too). Without
+the file every surface keeps its built\-in colours. Unknown keys are ignored; a
+malformed value keeps the base colour and prints one warning on stderr, so a
+typo never hides the grid.
+.PP
+Colours are \fI#RRGGBB\fP: \fIbg\fP (behind everything), \fIbg_panel\fP (the tab
+strip, the editor canvas), \fIbg_card\fP (a tab, a button, an entry),
+\fIbg_hover\fP (the active tab, a hovered button), \fIfg\fP, \fIfg_muted\fP,
+\fIaccent\fP (the selection, the active tab stripe, a checked button),
+\fIborder\fP, \fIdanger\fP, \fIok\fP, and \fIzones\fP — up to 16 zone colours
+separated by commas; without \fIzones\fP eight hues are derived from
+\fIaccent\fP.
+.PP
+In \fB[theme]\fP: \fBpreset\fP is one of \fI43pr\fP, \fInord\fP,
+\fItokyo\-night\fP, \fIcatppuccin\-mocha\fP, \fIgraphite\fP (the \fB[colors]\fP
+values override whatever the preset names); \fBradius\fP is the zone corner
+radius in px, 0..64, \fI10\fP by default; \fBfont\fP is the Pango family of the
+labels, \fISans\fP by default.
+.PP
+The editor's “From the wallpaper…” action writes this file from the desktop
+picture and marks its first line as generated; the running daemon then follows
+\fIpicture\-uri\fP and rewrites the palette when the image changes. Deleting the
+file — or removing that first line — returns the built\-in colours and stops the
+refresh.
+.PP
+The file does not theme window decorations: Muffin never reads a metacity
+theme, so the borders of server\-side decorated windows stay as it draws them.
+The editor can also write a GTK 3 controls theme with the same palette; picking
+it in Cinnamon Settings is the user's action.
 .SH EXAMPLES
 .nf
 gridsnap\-tiler list
@@ -682,6 +715,12 @@ installs only the zone keys from \fB[keys]\fP.
 The active config (honouring \fI$XDG_CONFIG_HOME\fP). If the file does not
 exist, \fIzones.conf\fP next to the code (\fI/usr/lib/gridsnap/zones.conf\fP) is
 read and written.
+.TP
+\fI~/.config/gridsnap/theme.conf\fP
+The optional palette of the GridSnap surfaces, in the directory of the active
+\fIzones.conf\fP. The editor writes it from the wallpaper and the daemon keeps
+it in step while its first line says it was generated; deleting it returns the
+built\-in colours.
 .TP
 \fI~/.local/state/gridsnap/history.json\fP
 The layout history (honouring \fI$XDG_STATE_HOME\fP): JSON, the last 20
