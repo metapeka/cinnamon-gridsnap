@@ -1,15 +1,15 @@
 # HANDOFF — current state of GridSnap
 
 Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave history lives in
-`docs/HANDOFF-<date>-<slug>.md`; the newest are `docs/HANDOFF-2026-11-26-theme-refresh.md`,
-`docs/HANDOFF-2026-11-26-theme-wallpaper.md`, `docs/HANDOFF-2026-11-26-design-theme.md` and
-`docs/HANDOFF-2026-11-22-comments.md` — read them only when you need the “why”.
+`docs/HANDOFF-<date>-<slug>.md`; the newest are `docs/HANDOFF-2026-11-26-man-theme.md`,
+`docs/HANDOFF-2026-11-26-theme-refresh.md`, `docs/HANDOFF-2026-11-26-theme-wallpaper.md` and
+`docs/HANDOFF-2026-11-26-design-theme.md` — read them only when you need the “why”.
 
 ## Snapshot
 
 | What | Value |
 |---|---|
-| Code | `main` = `32b6aa5` (three theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`) plus their handoff records; ahead of `origin/main`, **not pushed** |
+| Code | `main` = `60f288d` (theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`) plus their handoff records; ahead of `origin/main`, **not pushed** |
 | Version | `0.2.0`, tag `v0.2.0` |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
@@ -72,7 +72,7 @@ Behaviour contracts live in `docs/specs/` (18 files, one per module feature). Ar
 | Debian archive | `.deb` builds, license declared, lintian clean; missing ITP bug, sponsor, review. |
 | Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. |
 | Owner actions after the last wave | Add the applet to the panel; after a Cinnamon restart re-run `python3 setup-hotkeys.py --remove` once (see `docs/HANDOFF-2026-11-22-events.md`). |
-| Design track (43PR palette) | **Three waves merged into `main`** (`8b61c61` palette, `ea2dc1e` wallpaper, `32b6aa5` refresh), not pushed. Optional `theme.conf`, five presets, zone-hue derivation, editor GTK sheet; **Theme** menu in the editor: palette from the wallpaper (GdkPixbuf sampling, no new dependency) and a generated GTK controls theme. A generated file now follows `picture-uri` through the daemon (5 s poll, marker-only, `--once` excluded). Contracts `docs/specs/theme.md`; records `docs/HANDOFF-2026-11-26-design-theme.md`, `docs/HANDOFF-2026-11-26-theme-wallpaper.md` and `docs/HANDOFF-2026-11-26-theme-refresh.md`. Next: the man page for `theme.conf`. Window borders are **not** themable (Muffin never reads metacity themes); the QML shell is not portable (Quickshell needs Hyprland/Wayland). |
+| Design track (43PR palette) | **Four waves merged into `main`** (`8b61c61` palette, `ea2dc1e` wallpaper, `32b6aa5` refresh, `60f288d` man page), not pushed. Optional `theme.conf`, five presets, zone-hue derivation, editor GTK sheet; **Theme** menu in the editor: palette from the wallpaper (GdkPixbuf sampling, no new dependency) and a generated GTK controls theme. A generated file follows `picture-uri` through the daemon (5 s poll, marker-only, `--once` excluded), and `man gridsnap` documents `theme.conf` in CONFIGURATION/FILES with `ru`/`zh_CN` translations. Contracts `docs/specs/theme.md`; records `docs/HANDOFF-2026-11-26-design-theme.md`, `…-theme-wallpaper.md`, `…-theme-refresh.md` and `…-man-theme.md`. Next (optional): rewrite the generated controls theme on a wallpaper change. Window borders are **not** themable (Muffin never reads metacity themes); the QML shell is not portable (Quickshell needs Hyprland/Wayland). |
 
 ## Sharp edges
 
