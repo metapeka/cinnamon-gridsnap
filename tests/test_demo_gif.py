@@ -52,6 +52,23 @@ MIN_FRAMES = 11
 MAX_BYTES = int(2.5 * 1024 * 1024)
 
 
+def pixbuf_available():
+    """Whether the helper can sample at all: it goes through `zone_theme.from_wallpaper`.
+
+    The pure part of this module needs no GTK, but the sampling does: `zone_theme` asks
+    GdkPixbuf, and the CI job that runs the units installs no `python3-gi`. A scene can still
+    be checked for its inputs (the marker, the pinned wallpaper, `OPEN_PID`) there.
+    """
+    try:
+        import gi
+
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import GdkPixbuf  # noqa: F401
+    except (ImportError, ValueError):
+        return False
+    return True
+
+
 def skip_subblocks(data, offset):
     """Skip a chain of GIF sub-blocks (size + data, a zero block ends it)."""
     while offset < len(data):
@@ -231,6 +248,8 @@ class ScenePaletteTest(unittest.TestCase):
     def test_draws_a_wallpaper_and_writes_the_theme(self):
         import tempfile
 
+        if not pixbuf_available():
+            self.skipTest("GdkPixbuf is not available: the palette cannot be sampled")
         with tempfile.TemporaryDirectory() as work:
             code = (
                 "import runpy, sys; sys.argv = ['scene-palette.py', '--out', %r,"
