@@ -35,6 +35,7 @@ gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gdk, Gtk, Pango, PangoCairo  # noqa: E402  # type: ignore
 
 import zone_geom as geom  # noqa: E402
+import zone_theme  # noqa: E402  (one palette for every surface: theme.conf next to zones.conf)
 from zone_config import (  # noqa: E402
     GalleryError,
     MONITORS_SECTION,
@@ -70,12 +71,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
 HOTKEYS = os.path.join(HERE, "setup-hotkeys.py")
 
-PALETTE = [
-    (0.36, 0.62, 0.92), (0.42, 0.78, 0.58), (0.92, 0.66, 0.36),
-    (0.80, 0.50, 0.85), (0.42, 0.80, 0.85), (0.92, 0.52, 0.52),
-    (0.72, 0.76, 0.40), (0.62, 0.62, 0.92),
-]
-ACCENT = (1.0, 0.71, 0.33)
+# The canvas paints from the theme of the window (`Editor.theme`) — the same tokens as the picker
+# and the tab strip; without `theme.conf` these are the colours the editor always had.
 
 
 CONF = zt.default_conf()
@@ -196,19 +193,20 @@ class Canvas(Gtk.DrawingArea):
     # ---- events
 
     def on_draw(self, widget, cr):
-        cr.set_source_rgb(0.11, 0.12, 0.14)
+        theme = self.editor.theme
+        cr.set_source_rgb(*theme.rgb("bg_panel"))
         cr.paint()
 
         sx, sy, sw, sh = self.screen_rect()
         # "screen"
-        rounded_path(cr, sx - 6, sy - 6, sw + 12, sh + 12, 10)
-        cr.set_source_rgb(0.17, 0.18, 0.21)
+        rounded_path(cr, sx - 6, sy - 6, sw + 12, sh + 12, theme.radius)
+        cr.set_source_rgb(*theme.rgb("bg_card"))
         cr.fill()
 
         # guide lines
         cr.set_line_width(1)
         for g in geom.GUIDES[1:-1]:
-            cr.set_source_rgba(1, 1, 1, 0.05)
+            cr.set_source_rgba(*theme.rgb("fg"), 0.05)
             cr.move_to(sx + g * sw, sy)
             cr.line_to(sx + g * sw, sy + sh)
             cr.move_to(sx, sy + g * sh)
@@ -221,8 +219,8 @@ class Canvas(Gtk.DrawingArea):
         for i in order:
             z = zones[i]
             x, y, w, h = self.to_px(z)
-            col = PALETTE[i % len(PALETTE)]
-            rounded_path(cr, x + 1.5, y + 1.5, max(1, w - 3), max(1, h - 3), 8)
+            col = theme.zone_rgb(i)
+            rounded_path(cr, x + 1.5, y + 1.5, max(1, w - 3), max(1, h - 3), max(0, theme.radius - 2))
             cr.set_source_rgba(col[0], col[1], col[2], 0.30)
             cr.fill_preserve()
             cr.set_line_width(1.2)
@@ -237,39 +235,40 @@ class Canvas(Gtk.DrawingArea):
         if self.editor.selected is not None and self.editor.selected < len(zones):
             z = zones[self.editor.selected]
             x, y, w, h = self.to_px(z)
-            rounded_path(cr, x + 1.5, y + 1.5, max(1, w - 3), max(1, h - 3), 8)
+            rounded_path(cr, x + 1.5, y + 1.5, max(1, w - 3), max(1, h - 3), max(0, theme.radius - 2))
             cr.set_line_width(2.4)
-            cr.set_source_rgba(*ACCENT, 1)
+            cr.set_source_rgba(*theme.rgb("accent"), 1)
             cr.stroke()
 
         # the work area frame
         cr.set_line_width(1.6)
-        cr.set_source_rgba(1, 1, 1, 0.35)
+        cr.set_source_rgba(*theme.rgb("fg"), 0.35)
         cr.rectangle(sx, sy, sw, sh)
         cr.stroke()
 
         # legend
-        cr.set_source_rgba(1, 1, 1, 0.45)
+        cr.set_source_rgba(*theme.rgb("fg"), 0.45)
         lay = widget.create_pango_layout(
             _(
                 "work area {}×{} px · drag a zone with the mouse, drag the edge for size, double click for a new zone"
             ).format(self.editor.workarea()[2], self.editor.workarea()[3])
         )
-        lay.set_font_description(Pango.FontDescription("Sans 9"))
+        lay.set_font_description(Pango.FontDescription(theme.font_desc(9)))
         cr.move_to(sx, sy + sh + 8)
         PangoCairo.show_layout(cr, lay)
 
     def draw_label(self, cr, z, x, y, w, h):
         if w < 34 or h < 22:
             return
+        theme = self.editor.theme
         pad = 9
         inner = max(10, w - 2 * pad)
         layout = self.create_pango_layout("")
         layout.set_width(int(inner * Pango.SCALE))
         layout.set_ellipsize(Pango.EllipsizeMode.END)
-        layout.set_font_description(Pango.FontDescription("Sans Bold 11"))
+        layout.set_font_description(Pango.FontDescription(theme.font_desc(11, bold=True)))
         layout.set_text(z.name, -1)
-        cr.set_source_rgba(1, 1, 1, 0.92)
+        cr.set_source_rgba(*theme.rgb("fg"), 0.92)
         cr.move_to(x + pad, y + pad - 2)
         PangoCairo.show_layout(cr, layout)
 
@@ -280,9 +279,9 @@ class Canvas(Gtk.DrawingArea):
             layout2 = self.create_pango_layout("")
             layout2.set_width(int(inner * Pango.SCALE))
             layout2.set_ellipsize(Pango.EllipsizeMode.END)
-            layout2.set_font_description(Pango.FontDescription("Sans 8"))
+            layout2.set_font_description(Pango.FontDescription(theme.font_desc(8)))
             layout2.set_text(sub, -1)
-            cr.set_source_rgba(1, 1, 1, 0.62)
+            cr.set_source_rgba(*theme.rgb("fg"), 0.62)
             cr.move_to(x + pad, y + pad + 16)
             PangoCairo.show_layout(cr, layout2)
 
@@ -410,9 +409,11 @@ class Canvas(Gtk.DrawingArea):
 
 
 class Editor(Gtk.Window):
-    def __init__(self, conf_path):
+    def __init__(self, conf_path, theme=None):
         super().__init__(title=_("Gridsnap - window grid"))
         self.conf_path = conf_path
+        self.theme = theme if theme is not None else zone_theme.load(conf_path)
+        apply_theme(self, self.theme)
         self.set_icon_name("gridsnap")
         # Monitors are keyed by output names: the name addresses the zone set `[zones:<output>]`.
         self.outputs = zt.monitor_outputs()
@@ -772,7 +773,7 @@ class Editor(Gtk.Window):
             box.set_border_width(4)
             swatch = Gtk.DrawingArea()
             swatch.set_size_request(10, 10)
-            col = PALETTE[i % len(PALETTE)]
+            col = self.theme.zone_rgb(i)
             swatch.connect("draw", self._draw_swatch, col)
             name = Gtk.Label(label=z.name, xalign=0)
             size = Gtk.Label(label=f"{z.w:.0%}×{z.h:.0%}")
@@ -1496,6 +1497,40 @@ class Editor(Gtk.Window):
 # ---------------------------------------------------------------------- main
 
 
+def theme_provider(theme):
+    provider = Gtk.CssProvider()
+    provider.load_from_data(theme.gtk_css().encode("utf-8"))
+    return provider
+
+
+def apply_theme(window, theme):
+    """The editor's GTK sheet from the same tokens. A full GTK theme is a different product.
+
+    A provider attached to a widget's style context styles that widget only, so the real window
+    takes the sheet on its screen (all descendants follow). The `--shot` path moves the contents
+    into a `Gtk.OffscreenWindow`, which is not on any screen — there the sheet goes on every
+    widget of the tree (see :func:`apply_theme_tree`).
+    """
+    screen = window.get_screen()
+    if screen is not None:
+        Gtk.StyleContext.add_provider_for_screen(
+            screen, theme_provider(theme), Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+
+def apply_theme_tree(root, theme):
+    """The same sheet on every widget of a tree: what an offscreen snapshot needs."""
+    provider = theme_provider(theme)
+    stack = [root]
+    while stack:
+        widget = stack.pop()
+        widget.get_style_context().add_provider(
+            provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+        if isinstance(widget, Gtk.Container):
+            stack.extend(widget.get_children())
+
+
 def main():
     Gtk.Window.set_default_icon_name("gridsnap")
     ap = argparse.ArgumentParser(description=_("Gridsnap - visual zone grid editor"))
@@ -1506,17 +1541,21 @@ def main():
     )
     ap.add_argument("--monitor", type=int, default=0)
     args = ap.parse_args()
+    theme = zone_theme.load(args.conf)
 
     if args.shot:
         win = Gtk.OffscreenWindow()
         win.set_size_request(1140, 720)
-        ed = Editor(args.conf)
+        ed = Editor(args.conf, theme)
         ed.select_monitor_index(args.monitor)
         # the editor is a window of its own; for a snapshot we move its contents offscreen
         child = ed.get_child()
         ed.remove(child)
         win.add(child)
         win.show_all()
+        # OffscreenWindow is not on a screen, so the screen-wide sheet never reaches it: paint the
+        # tree itself, which is also what the snapshot shows.
+        apply_theme_tree(win, theme)
         for _unused in range(40):
             while Gtk.events_pending():
                 Gtk.main_iteration()
@@ -1525,7 +1564,7 @@ def main():
         print(_("snapshot saved: {}").format(args.shot))
         return
 
-    ed = Editor(args.conf)
+    ed = Editor(args.conf, theme)
     ed.select_monitor_index(args.monitor)
     ed.show_all()
     ed.connect("destroy", Gtk.main_quit)

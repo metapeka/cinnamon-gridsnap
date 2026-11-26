@@ -286,6 +286,45 @@ mkdir -p ~/.config/gridsnap && cp zones.conf ~/.config/gridsnap/
 The path can always be set explicitly with the `--conf` flag. Layout profiles live next to
 `zones.conf` in the `templates/` subdirectory (by default `~/.config/gridsnap/templates/`).
 
+### 3.4. Colours: `theme.conf`
+
+Every surface GridSnap draws — the picker overlay, the hot-corners HUD, the tab strip above a zone
+and the editor's canvas — takes its colours from one optional file next to `zones.conf`:
+
+```ini
+# ~/.config/gridsnap/theme.conf
+[theme]
+preset = 43pr              # a base palette; optional
+radius = 10                # zone corner radius, px
+font = JetBrains Mono      # anything Pango knows; the default is Sans
+
+[colors]
+accent   = #ffffff         # the selected zone, the active tab stripe
+bg       = #000000         # behind everything: the overlay backdrop
+bg_panel = #050505         # a panel: the tab strip, the editor canvas
+bg_card  = #0d0d0d         # a raised surface: a tab, the editor "screen"
+bg_hover = #242832         # the active tab
+fg       = #ffffff
+fg_muted = #8b93a7
+border   = #151515
+danger   = #ff003c
+ok       = #00ff9c
+zones    = #5c9eeb, #6bc794, #eba85c, #cc80d9, #6bccd9, #eb8585, #b8c266, #9e9eeb
+```
+
+Colours are `#RRGGBB`; `zones` is a comma-separated list of up to 16 zone hues — without it eight
+hues are derived from `accent`, so even a monochrome accent keeps the grid readable. `preset` picks
+one of the built-in palettes — `43pr`, `nord`, `tokyo-night`, `catppuccin-mocha`, `graphite` —
+transcribed from [43PR/dotfiles](https://github.com/43PR/dotfiles) (MIT); the `[colors]` section
+then overrides whatever it names.
+
+Without the file every tool keeps its palette: the defaults are the colours the picker, the HUD and
+the editor always drew, and the tab strip moves one step darker because it now shares the panel and
+card shades with the editor. A typo in a colour never hides the grid — that line keeps its base
+colour and a warning goes to stderr. The file is read by the picker, the hot-corners HUD, the tab
+strip and the editor; it does not touch the window decorations or the panel, those belong to the
+Cinnamon theme. The contract lives in `docs/specs/theme.md`.
+
 <!-- section: tiler -->
 ## 4. The tiler from the terminal
 

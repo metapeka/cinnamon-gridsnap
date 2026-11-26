@@ -117,7 +117,7 @@ DOMAINS="gridsnap gridsnap@metapeka"
 MODULES="zone-tiler.py zone-daemon.py zone-editor.py zone_config.py zone_geom.py
          zone_reflow.py zone-picker.py zone_picker_nav.py zone-hotcorners.py
          zone_ipc.py zone_actions.py zone_tabs.py zone-tabstrip.py
-         zone_tabstrip_nav.py zone_units.py window_backend.py
+         zone_tabstrip_nav.py zone_units.py zone_theme.py window_backend.py
          setup-hotkeys.py make-icon.py zone_i18n.py"
 
 refresh_caches() {

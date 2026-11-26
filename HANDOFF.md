@@ -1,18 +1,19 @@
 # HANDOFF — current state of GridSnap
 
 Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave history lives in
-`docs/HANDOFF-<date>-<slug>.md`; the newest are `docs/HANDOFF-2026-11-22-comments.md` and
-`docs/HANDOFF-2026-11-22-lang-inversion.md` — read them only when you need the “why”.
+`docs/HANDOFF-<date>-<slug>.md`; the newest are `docs/HANDOFF-2026-11-26-design-theme.md`,
+`docs/HANDOFF-2026-11-22-comments.md` and `docs/HANDOFF-2026-11-22-lang-inversion.md` — read them
+only when you need the “why”.
 
 ## Snapshot
 
 | What | Value |
 |---|---|
-| Code | `main` = `5031f29`, **frozen as the design base** (2026-11-26); 114 commits after `v0.2.0` |
+| Code | `main` = `5031f29`, **frozen as the design base** (2026-11-26); the design work lives on `design/43pr-theme` (worktree `../gridsnap-design`) |
 | Version | `0.2.0`, tag `v0.2.0` |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
-| Tests | `1431` unit tests, `OK` in ~25 s without X (15 skipped) |
+| Tests | `1456` unit tests, `OK` in ~17 s without X (15 skipped) |
 | Smoke | `13` scenarios under `tests/smoke*.sh`, each on its own Xvfb display |
 | CI | Green on `main` (run `45097865174`), 5 jobs |
 | Open PRs | None |
@@ -55,6 +56,7 @@ Smoke scripts raise their own `:89`–`:99`, so they are safe on a live desktop,
 | `setup-hotkeys.py` | 376 | `gsettings` registration of Cinnamon custom keybindings |
 | `zone_actions.py` | 348 | `[action:<name>]`: built-ins and external commands with `GRIDSNAP_*` |
 | `zone_i18n.py` | 333 | gettext wrapper: source `en`, catalogs `ru`, `zh_CN` |
+| `zone_theme.py` | 443 | one palette for the picker, the HUD, the tab strip and the editor: optional `theme.conf` next to `zones.conf`, five presets, zone-hue derivation, the editor's GTK sheet |
 | `zone_geom.py` | 333 | fractions ↔ pixels, frame extents, snapping helpers |
 | `gridsnap-ctl` | 289 | CLI client for the daemon (also `watch`, `status`, `reload`) |
 | `zone_tabs.py`, `zone_tabstrip_nav.py`, `zone_picker_nav.py`, `zone_units.py`, `zone_reflow.py`, `make-icon.py` | 88–225 each | pure helpers: tab layout, keyboard nav, unit parsing, reflow, icons |
@@ -70,13 +72,14 @@ Behaviour contracts live in `docs/specs/` (18 files, one per module feature). Ar
 | Debian archive | `.deb` builds, license declared, lintian clean; missing ITP bug, sponsor, review. |
 | Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. |
 | Owner actions after the last wave | Add the applet to the panel; after a Cinnamon restart re-run `python3 setup-hotkeys.py --remove` once (see `docs/HANDOFF-2026-11-22-events.md`). |
-| Design track (43PR palette) | Branch `design/43pr-theme` in the `../gridsnap-design` worktree. Scope: one optional `theme.conf` next to `zones.conf`, embedded presets transcribed from 43PR/dotfiles (MIT), the HUD, the tab strip and the editor drawn from the same tokens. The QML shell (bar, panels) is **not** ported: Quickshell needs Hyprland/Wayland. Contract: `docs/specs/theme.md` on the branch. |
+| Design track (43PR palette) | **Implemented** on `design/43pr-theme`, awaiting review and merge: optional `theme.conf`, five presets, zone-hue derivation, the editor's GTK sheet. Contract `docs/specs/theme.md`, wave record `docs/HANDOFF-2026-11-26-design-theme.md`. The QML shell (bar, panels) is still **not** ported: Quickshell needs Hyprland/Wayland. |
 
 ## Sharp edges
 
 | Trap | What to do |
 |---|---|
 | The root `zones.conf` is the live desktop layout | Never “fix” it as test data and never commit it without the owner's ask. Every test and smoke uses its own `--conf` in a temp dir. |
+| `theme.conf` follows the resolved `zones.conf` | In this checkout the resolved config is the root `zones.conf`, so a `theme.conf` at the root would be the owner's live palette — never commit one without asking. Tests and smokes keep their themes in temp directories. |
 | Real Cinnamon keybindings | `setup-hotkeys.py` talks to `gsettings`; tests must use a **keyfile backend sandbox** (`GSETTINGS_BACKEND=keyfile`, `XDG_CONFIG_HOME` inside a temp dir). One earlier session wrote probe keys into the owner's live session — restore by hand. |
 | Display | Units with `env -u DISPLAY`; smoke with `dbus-run-session` and `env -u DISPLAY`; never place windows on `:0`. |
 | Type checking is off on purpose | `pyrightconfig.json` keeps the server for navigation only; do not flip `typeCheckingMode` to `basic`/`strict` — `importlib`-loaded siblings and ctypes give hundreds of false errors |

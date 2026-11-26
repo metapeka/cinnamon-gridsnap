@@ -2664,3 +2664,39 @@ msgstr "gridsnap-ctl: у watch нет зоны/окна/монитора"
 #, python-brace-format
 msgid "gridsnap-ctl: {error}"
 msgstr "gridsnap-ctl: {error}"
+
+#: zone_theme.py
+msgid "zone-theme: {}"
+msgstr "zone-theme: {}"
+
+#: zone_theme.py
+msgid "cannot read {}: {}"
+msgstr "не удалось прочитать {}: {}"
+
+#: zone_theme.py
+msgid "unknown preset \"{}\", the default palette is used"
+msgstr "неизвестный пресет «{}», используется палитра по умолчанию"
+
+#: zone_theme.py
+msgid "{}: \"{}\" is not #RRGGBB, the base colour is kept"
+msgstr "{}: «{}» — не #RRGGBB, цвет основы сохранён"
+
+#: zone_theme.py
+msgid "zone colour \"{}\" is not #RRGGBB, skipped"
+msgstr "цвет зоны «{}» — не #RRGGBB, пропущен"
+
+#: zone_theme.py
+msgid "more than {} zone colours, the extra ones are ignored"
+msgstr "цветов зон больше {}, лишние игнорируются"
+
+#: zone_theme.py
+msgid "{}: \"{}\" is not an integer, the default is kept"
+msgstr "{}: «{}» — не целое число, значение по умолчанию сохранено"
+
+#: zone_theme.py
+msgid "{}: {} is outside {}..{}, the default is kept"
+msgstr "{}: {} вне диапазона {}..{}, значение по умолчанию сохранено"
+
+#: zone_theme.py
+msgid "font: \"{}\" is not a family name, the default is kept"
+msgstr "font: «{}» — не имя семейства, значение по умолчанию сохранено"

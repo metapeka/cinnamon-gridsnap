@@ -53,6 +53,7 @@ if HERE not in sys.path:
 
 import zone_tabstrip_nav as nav  # noqa: E402  (looked up next to itself, the way it is installed)
 import zone_units  # noqa: E402  (the only conversion of logical px to physical ones)
+import zone_theme  # noqa: E402  (one palette for every surface: theme.conf next to zones.conf)
 import window_backend  # noqa: E402  (window layer: GDK X11 backend and scale)
 from zone_i18n import _  # noqa: E402  (same place: interface strings and their translation)
 
@@ -71,15 +72,10 @@ EXIT_FAIL = 1
 # strip redraws, and "there is no daemon" is visible from connect anyway.
 DAEMON_TIMEOUT = 1.0
 
-# Strip colours: background, tab, active tab, captions, accent on top.
-STRIP_BG = (0.13, 0.14, 0.17)
-TAB_BG = (0.20, 0.22, 0.26)
-TAB_ACTIVE_BG = (0.32, 0.36, 0.44)
-TAB_FG = (0.78, 0.80, 0.84)
-TAB_ACTIVE_FG = (1.0, 1.0, 1.0)
-ACCENT = (1.0, 0.71, 0.33)
+# The strip paints from the same tokens as the picker and the editor; `main` replaces this palette
+# with the theme next to the config (an absent theme keeps exactly the colours the strip had).
+THEME = zone_theme.default_theme()
 ACCENT_H = 2
-FONT = "Sans 8"
 
 # GTK/cairo are pulled in lazily (`load_gtk`) so that without them one can tell
 # "no library" from "no display" and tell the user exactly what is missing.
@@ -363,18 +359,18 @@ class Strip:
         alloc = widget.get_allocation()
         # OPERATOR_SOURCE: the background replaces the whole frame, without leftovers of the past one.
         cr.set_operator(cairo.OPERATOR_SOURCE)
-        cr.set_source_rgb(*STRIP_BG)
+        cr.set_source_rgb(*THEME.rgb("bg_panel"))
         cr.rectangle(0, 0, alloc.width, alloc.height)
         cr.fill()
         cr.set_operator(cairo.OPERATOR_OVER)
         for row in self.rows:
             x, y, w, h = self.local_rect(row)
-            cr.set_source_rgb(*(TAB_ACTIVE_BG if row["active"] else TAB_BG))
+            cr.set_source_rgb(*(THEME.rgb("bg_hover") if row["active"] else THEME.rgb("bg_card")))
             cr.rectangle(x, y, w, h)
             cr.fill()
             if row["active"]:
                 # The active tab is not marked by colour alone: an accent stripe on top.
-                cr.set_source_rgb(*ACCENT)
+                cr.set_source_rgb(*THEME.rgb("accent"))
                 cr.rectangle(x, y, w, min(ACCENT_H / self.scale, h))
                 cr.fill()
             self.draw_label(cr, row)
@@ -391,13 +387,13 @@ class Strip:
         inner = max(1, int(w) - 2 * pad)
         layout = PangoCairo.create_layout(cr)
         layout.set_text(row["label"], -1)
-        layout.set_font_description(Pango.FontDescription(FONT))
+        layout.set_font_description(Pango.FontDescription(THEME.font_desc(8)))
         # The caption is already clipped by the average character width (nav.fit_title); here
         # is the second, exact guard: Pango will put the ellipsis itself if the font is wider.
         layout.set_ellipsize(Pango.EllipsizeMode.END)
         layout.set_width(inner * Pango.SCALE)
         _lw, lh = layout.get_pixel_size()
-        cr.set_source_rgb(*(TAB_ACTIVE_FG if row["active"] else TAB_FG))
+        cr.set_source_rgb(*(THEME.rgb("fg") if row["active"] else THEME.rgb("fg_muted")))
         cr.save()
         cr.rectangle(x + pad, y, inner, h)
         cr.clip()
@@ -480,6 +476,10 @@ def main(argv=None):
     )
     ap.add_argument("--version", action="version", version=f"zone-tabstrip {VERSION}")
     args = ap.parse_args(argv)
+
+    # The palette next to the config; the daemon passes `--conf` when it starts the strip.
+    global THEME
+    THEME = zone_theme.load(args.conf)
 
     load_gtk()
     try:

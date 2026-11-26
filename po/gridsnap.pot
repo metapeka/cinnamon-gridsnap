@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.2.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-23 02:44+0300\n"
+"POT-Creation-Date: 2026-11-26 06:13+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2575,6 +2575,42 @@ msgstr ""
 #: make-icon.py
 #, python-brace-format
 msgid "Gridsnap icons: {sizes}"
+msgstr ""
+
+#: zone_theme.py
+msgid "zone-theme: {}"
+msgstr ""
+
+#: zone_theme.py
+msgid "cannot read {}: {}"
+msgstr ""
+
+#: zone_theme.py
+msgid "unknown preset \"{}\", the default palette is used"
+msgstr ""
+
+#: zone_theme.py
+msgid "{}: \"{}\" is not #RRGGBB, the base colour is kept"
+msgstr ""
+
+#: zone_theme.py
+msgid "zone colour \"{}\" is not #RRGGBB, skipped"
+msgstr ""
+
+#: zone_theme.py
+msgid "more than {} zone colours, the extra ones are ignored"
+msgstr ""
+
+#: zone_theme.py
+msgid "{}: \"{}\" is not an integer, the default is kept"
+msgstr ""
+
+#: zone_theme.py
+msgid "{}: {} is outside {}..{}, the default is kept"
+msgstr ""
+
+#: zone_theme.py
+msgid "font: \"{}\" is not a family name, the default is kept"
 msgstr ""
 
 #: gridsnap-ctl

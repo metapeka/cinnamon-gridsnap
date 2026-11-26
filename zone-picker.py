@@ -63,17 +63,14 @@ from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402  # typ
 import zone_config as zc  # noqa: E402
 import zone_picker_nav as nav  # noqa: E402
 import zone_units as zu  # noqa: E402  (converts GTK logical pixels to physical X ones)
+import zone_theme  # noqa: E402  (one palette for every surface: theme.conf next to zones.conf)
 from zone_i18n import _  # noqa: E402  (the same place: interface strings and their translation)
 
 zt = zc.zt  # zone-tiler.py loaded by zone_config (the config parser and the layout)
 
-PALETTE = [
-    (0.36, 0.62, 0.92), (0.42, 0.78, 0.58), (0.92, 0.66, 0.36),
-    (0.80, 0.50, 0.85), (0.42, 0.80, 0.85), (0.92, 0.52, 0.52),
-    (0.72, 0.76, 0.40), (0.62, 0.62, 0.92),
-]
-ACCENT = (1.0, 0.71, 0.33)
-BACKDROP = (0.07, 0.08, 0.10)
+# The palette of the grid, the backdrop and the accent; `main` replaces it with the theme that
+# sits next to the config (an absent theme keeps exactly these colours).
+THEME = zone_theme.default_theme()
 HINT = _("arrows - select · Enter - place · Esc - cancel")
 # The HUD backdrop and the pause of the one-shot draw: the grid is visible and so is
 # the desktop, while the process itself does not hang after the frame.
@@ -214,7 +211,7 @@ def _rounded(cr, x, y, w, h, r):
 def _label(cr, x, y, text, size, bold, rgba, width=None):
     layout = PangoCairo.create_layout(cr)
     layout.set_text(text, -1)
-    layout.set_font_description(Pango.FontDescription(("Sans Bold " if bold else "Sans ") + str(size)))
+    layout.set_font_description(Pango.FontDescription(THEME.font_desc(size, bold)))
     if width:
         layout.set_width(int(max(1, width) * Pango.SCALE))
         layout.set_ellipsize(Pango.EllipsizeMode.END)
@@ -236,8 +233,8 @@ def draw_zones(cr, width, height, zones, selected, caption="", hint=HINT):
     for i in order:
         z = zones[i]
         x, y, w, h = z.x * width, z.y * height, z.w * width, z.h * height
-        col = PALETTE[i % len(PALETTE)]
-        _rounded(cr, x + 2, y + 2, max(1, w - 4), max(1, h - 4), 10)
+        col = THEME.zone_rgb(i)
+        _rounded(cr, x + 2, y + 2, max(1, w - 4), max(1, h - 4), THEME.radius)
         cr.set_source_rgba(col[0], col[1], col[2], 0.20)
         cr.fill_preserve()
         cr.set_line_width(1.4)
@@ -260,23 +257,23 @@ def draw_zones(cr, width, height, zones, selected, caption="", hint=HINT):
     if selected is not None and 0 <= selected < len(zones):
         z = zones[selected]
         x, y, w, h = z.x * width, z.y * height, z.w * width, z.h * height
-        _rounded(cr, x + 2, y + 2, max(1, w - 4), max(1, h - 4), 10)
-        cr.set_source_rgba(*ACCENT, 0.16)
+        _rounded(cr, x + 2, y + 2, max(1, w - 4), max(1, h - 4), THEME.radius)
+        cr.set_source_rgba(*THEME.rgb("accent"), 0.16)
         cr.fill_preserve()
         cr.set_line_width(3.0)
-        cr.set_source_rgba(*ACCENT, 1.0)
+        cr.set_source_rgba(*THEME.rgb("accent"), 1.0)
         cr.stroke()
 
     # why the grid is such: the workspace and its profile from `[workspaces]`
     if caption:
-        _label(cr, 16, height - (48 if hint else 30), caption, 11, True, (*ACCENT, 0.92))
+        _label(cr, 16, height - (48 if hint else 30), caption, 11, True, (*THEME.rgb("accent"), 0.92))
     if hint:
         _label(cr, 16, height - 30, hint, 11, False, (1, 1, 1, 0.72))
 
 
 def draw_overlay(cr, width, height, zones, selected, caption=""):
     """The whole interactive overlay: an opaque backdrop and the grid on top of it."""
-    cr.set_source_rgba(*BACKDROP, 0.90)
+    cr.set_source_rgba(*THEME.rgb("bg"), 0.90)
     cr.paint()
     draw_zones(cr, width, height, zones, selected, caption)
 
@@ -285,7 +282,7 @@ def write_shot(path, width, height, zones, selected, caption="", hint=HINT):
     """Render the overlay (or the HUD if ``hint`` is empty) into a PNG — a check without interaction."""
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(width), int(height))
     cr = cairo.Context(surface)
-    cr.set_source_rgb(*BACKDROP)  # an opaque backdrop so that the snapshot reads
+    cr.set_source_rgb(*THEME.rgb("bg"))  # an opaque backdrop so that the snapshot reads
     cr.paint()
     draw_zones(cr, width, height, zones, selected, caption, hint)
     surface.write_to_png(path)
@@ -726,7 +723,7 @@ class Hud:
         # the desktop shows through HUD_ALPHA, without one — an even dark backdrop
         # rather than the leftovers of the previous frame.
         cr.set_operator(cairo.OPERATOR_SOURCE)
-        cr.set_source_rgba(*BACKDROP, HUD_ALPHA)
+        cr.set_source_rgba(*THEME.rgb("bg"), HUD_ALPHA)
         cr.paint()
         cr.set_operator(cairo.OPERATOR_OVER)
         # No key hint: the HUD does not listen to keys.
@@ -893,6 +890,9 @@ def main(argv=None):
     conf = args.conf or zt.default_conf()
     if not os.path.exists(conf):
         fail(_("zone-picker: config not found: {}").format(conf))
+    # The palette next to the config: an absent or broken theme keeps the colours above.
+    global THEME
+    THEME = zone_theme.load(conf)
     # The workspace for resolving profiles: `--workspace N`, otherwise the active one. The grid
     # itself is computed after the monitor is picked — it depends on the screen (grid_for_output),
     # and not only on the workspace. A workspace without a profile silently lives in the common [zones]

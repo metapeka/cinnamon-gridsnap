@@ -2662,4 +2662,40 @@ msgstr "gridsnap-ctl：watch 没有区域/窗口/显示器"
 #: gridsnap-ctl
 #, python-brace-format
 msgid "gridsnap-ctl: {error}"
-msgstr "gridsnap-ctl: {error}"
+msgstr "gridsnap-ctl：{error}"
+
+#: zone_theme.py
+msgid "zone-theme: {}"
+msgstr "zone-theme: {}"
+
+#: zone_theme.py
+msgid "cannot read {}: {}"
+msgstr "无法读取 {}：{}"
+
+#: zone_theme.py
+msgid "unknown preset \"{}\", the default palette is used"
+msgstr "未知预设“{}”，使用默认调色板"
+
+#: zone_theme.py
+msgid "{}: \"{}\" is not #RRGGBB, the base colour is kept"
+msgstr "{}：“{}”不是 #RRGGBB，保留基础颜色"
+
+#: zone_theme.py
+msgid "zone colour \"{}\" is not #RRGGBB, skipped"
+msgstr "区域颜色“{}”不是 #RRGGBB，已跳过"
+
+#: zone_theme.py
+msgid "more than {} zone colours, the extra ones are ignored"
+msgstr "区域颜色超过 {} 个，多余的被忽略"
+
+#: zone_theme.py
+msgid "{}: \"{}\" is not an integer, the default is kept"
+msgstr "{}：“{}”不是整数，保留默认值"
+
+#: zone_theme.py
+msgid "{}: {} is outside {}..{}, the default is kept"
+msgstr "{}：{} 超出 {}..{} 范围，保留默认值"
+
+#: zone_theme.py
+msgid "font: \"{}\" is not a family name, the default is kept"
+msgstr "font：“{}”不是字体族名称，保留默认值"
