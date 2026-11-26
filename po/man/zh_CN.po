@@ -4,7 +4,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap\n"
-"POT-Creation-Date: 2026-11-23 03:08+0300\n"
+"POT-Creation-Date: 2026-11-26 07:10+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: Chinese\n"
@@ -269,7 +269,17 @@ msgid ""
 "and it turns itself off only when the target window closes **while the "
 "daemon is running**; leaving works from any workspace — the command switches "
 "to the mode's workspace itself and restores the windows."
-msgstr "「只留这个区域」模式：活动窗口（B<--window> I<XID> 可手工指定窗口）放入区域，同时 I<同一工作桌面和显示器> 上的其余窗口被最小化（I<WM_CHANGE_STATE>，值为 I<IconicState>）。不给区域时窗口留在原处——此时模式意为「只留这个窗口」。模式已激活时再次执行 B<focus> 会退出模式，并且只展开 I<由模式最小化的那些> 窗口（I<_NET_ACTIVE_WINDOW>，目标窗口最后）；手工最小化的窗口保持最小化，B<[ignore]> 下的窗口和特殊类型（对话框、splash）既不最小化也不妨碍操作。B<--off> 是给脚本和第二个按键的显式退出。B<--dry-run> 打印将会做什么，不移动任何东西。模式属于它所在的工作桌面，切换桌面不会解除（只有活动桌面上才能展开），而 **在守护进程运行时** 只有目标窗口关闭才会自行结束；退出可在任意桌面进行——命令自己切到模式所在的桌面并展开窗口。"
+msgstr ""
+"「只留这个区域」模式：活动窗口（B<--window> I<XID> 可手工指定窗口）放入区域，"
+"同时 I<同一工作桌面和显示器> 上的其余窗口被最小化（I<WM_CHANGE_STATE>，值为 "
+"I<IconicState>）。不给区域时窗口留在原处——此时模式意为「只留这个窗口」。模式"
+"已激活时再次执行 B<focus> 会退出模式，并且只展开 I<由模式最小化的那些> 窗口"
+"（I<_NET_ACTIVE_WINDOW>，目标窗口最后）；手工最小化的窗口保持最小化，"
+"B<[ignore]> 下的窗口和特殊类型（对话框、splash）既不最小化也不妨碍操作。B<--"
+"off> 是给脚本和第二个按键的显式退出。B<--dry-run> 打印将会做什么，不移动任何"
+"东西。模式属于它所在的工作桌面，切换桌面不会解除（只有活动桌面上才能展开），"
+"而 **在守护进程运行时** 只有目标窗口关闭才会自行结束；退出可在任意桌面进行——"
+"命令自己切到模式所在的桌面并展开窗口。"
 
 #. type: Plain text
 #: man/gridsnap.1:103
@@ -1049,7 +1059,10 @@ msgid ""
 "and put it into I<ZONE>; without a zone the window is not moved. A repeated "
 "command and B<--off> leave the mode. B<focus> has no B<--monitor>: the area "
 "is taken from the target window."
-msgstr "「只留这个区域」模式：最小化同一桌面和显示器上除目标（B<--window> I<XID>，默认是活动窗口）之外的所有窗口，并把它放入 I<区域>；不给区域时窗口不移动。重复命令和 B<--off> 都是退出。B<focus> 没有 B<--monitor>：范围取自目标窗口。"
+msgstr ""
+"「只留这个区域」模式：最小化同一桌面和显示器上除目标（B<--window> I<XID>，默"
+"认是活动窗口）之外的所有窗口，并把它放入 I<区域>；不给区域时窗口不移动。重复"
+"命令和 B<--off> 都是退出。B<focus> 没有 B<--monitor>：范围取自目标窗口。"
 
 #. type: TP
 #: man/gridsnap.1:402
@@ -1737,14 +1750,90 @@ msgstr ""
 "该段可选。B<reflow = off | neighbors>（默认 I<off>；大小写和空格无关紧要，未"
 "知值按 I<off> 处理）。I<neighbors> 模式见「命令」一节。"
 
-#. type: SH
+#. type: SS
 #: man/gridsnap.1:616
+#, no-wrap
+msgid "theme.conf"
+msgstr "theme.conf"
+
+#. type: Plain text
+#: man/gridsnap.1:624
+msgid ""
+"An optional second INI file next to I<zones.conf>: one palette for the "
+"surfaces GridSnap draws itself — the picker overlay, the hot-corners HUD, "
+"the tab strip and the editor. The section B<[theme]> holds the switches, "
+"B<[colors]> the colours (a colour in B<[theme]> is accepted too). Without "
+"the file every surface keeps its built-in colours. Unknown keys are ignored; "
+"a malformed value keeps the base colour and prints one warning on stderr, so "
+"a typo never hides the grid."
+msgstr ""
+"可选的第二个 INI 文件，位于 I<zones.conf> 旁边：为 GridSnap 自己绘制的界面提供一套配色——"
+"选择器覆盖层、热角 HUD、标签栏和编辑器。B<[theme]> 段保存开关，B<[colors]> 段保存颜色"
+"（B<[theme]> 中的颜色也接受）。没有该文件时，每个界面保留内置颜色。未知键被忽略；格式错误的"
+"值保留基色并向 stderr 打印一条警告，因此一个笔误永远不会让网格消失。"
+
+#. type: Plain text
+#: man/gridsnap.1:632
+msgid ""
+"Colours are I<#RRGGBB>: I<bg> (behind everything), I<bg_panel> (the tab "
+"strip, the editor canvas), I<bg_card> (a tab, a button, an entry), "
+"I<bg_hover> (the active tab, a hovered button), I<fg>, I<fg_muted>, "
+"I<accent> (the selection, the active tab stripe, a checked button), "
+"I<border>, I<danger>, I<ok>, and I<zones> — up to 16 zone colours separated "
+"by commas; without I<zones> eight hues are derived from I<accent>."
+msgstr ""
+"颜色为 I<#RRGGBB>：I<bg>（所有内容之后的背景）、I<bg_panel>（标签栏、编辑器画布）、"
+"I<bg_card>（标签页、按钮、输入框）、I<bg_hover>（活动标签页、悬停按钮）、I<fg>、"
+"I<fg_muted>、I<accent>（选中、活动标签页色条、按下按钮）、I<border>、I<danger>、"
+"I<ok>，以及 I<zones>——最多 16 个区域颜色，以逗号分隔；没有 I<zones> 时从 I<accent> "
+"推导出八种色调。"
+
+#. type: Plain text
+#: man/gridsnap.1:638
+msgid ""
+"In B<[theme]>: B<preset> is one of I<43pr>, I<nord>, I<tokyo-night>, "
+"I<catppuccin-mocha>, I<graphite> (the B<[colors]> values override whatever "
+"the preset names); B<radius> is the zone corner radius in px, 0..64, I<10> "
+"by default; B<font> is the Pango family of the labels, I<Sans> by default."
+msgstr ""
+"在 B<[theme]> 中：B<preset> 是 I<43pr>、I<nord>、I<tokyo-night>、"
+"I<catppuccin-mocha>、I<graphite> 之一（B<[colors]> 的值覆盖预设命名的值）；"
+"B<radius> 是区域圆角半径（px，0..64，默认 I<10>）；B<font> 是标签的 Pango 字族，"
+"默认 I<Sans>。"
+
+#. type: Plain text
+#: man/gridsnap.1:644
+msgid ""
+"The editor's “From the wallpaper…” action writes this file from the desktop "
+"picture and marks its first line as generated; the running daemon then "
+"follows I<picture-uri> and rewrites the palette when the image changes. "
+"Deleting the file — or removing that first line — returns the built-in "
+"colours and stops the refresh."
+msgstr ""
+"编辑器的“从壁纸…”操作根据桌面图片写入该文件，并把第一行标记为已生成；随后运行中的"
+"守护进程跟踪 I<picture-uri>，在图片变化时重写配色。删除该文件——或去掉第一行——"
+"即恢复内置颜色并停止刷新。"
+
+#. type: Plain text
+#: man/gridsnap.1:649
+msgid ""
+"The file does not theme window decorations: Muffin never reads a metacity "
+"theme, so the borders of server-side decorated windows stay as it draws "
+"them.  The editor can also write a GTK 3 controls theme with the same "
+"palette; picking it in Cinnamon Settings is the user's action."
+msgstr ""
+"该文件不美化窗口边框：Muffin 从不读取 metacity 主题，因此服务端装饰的窗口边框保持"
+"它绘制的样子。编辑器还可以写入使用同一配色的 GTK 3 控件主题；在 Cinnamon 设置中"
+"选择它由用户完成。"
+
+#. type: SH
+#: man/gridsnap.1:649
 #, no-wrap
 msgid "EXAMPLES"
 msgstr "示例"
 
 #. type: Plain text
-#: man/gridsnap.1:645
+#: man/gridsnap.1:678
 #, no-wrap
 msgid ""
 "gridsnap-tiler list\n"
@@ -1804,13 +1893,13 @@ msgstr ""
 "gridsnap-editor --conf ~/.config/gridsnap/zones.conf\n"
 
 #. type: SH
-#: man/gridsnap.1:646
+#: man/gridsnap.1:679
 #, no-wrap
 msgid "HOTKEYS"
 msgstr "快捷键"
 
 #. type: Plain text
-#: man/gridsnap.1:652
+#: man/gridsnap.1:685
 msgid ""
 "Hotkeys are set in the B<[keys]> section of I<zones.conf> and registered in "
 "Cinnamon by the B<setup-hotkeys> command (or by a button in the editor) as "
@@ -1825,7 +1914,7 @@ msgstr ""
 "运行 B<setup-hotkeys>，否则新的区域名不会与按键关联。"
 
 #. type: Plain text
-#: man/gridsnap.1:658
+#: man/gridsnap.1:691
 msgid ""
 "The shipped I<zones.conf> has four zones and four hotkeys: I<main> — "
 "I<E<lt>SuperE<gt>E<lt>AltE<gt>1>, I<top-right> — "
@@ -1840,7 +1929,7 @@ msgstr ""
 "I<E<lt>SuperE<gt>E<lt>AltE<gt>4>。"
 
 #. type: Plain text
-#: man/gridsnap.1:662
+#: man/gridsnap.1:695
 msgid ""
 "The optional B<[focus]> section gives the key of \"only this zone\" mode "
 "(B<gridsnap-tiler focus>): it is registered under the name \"zone-tiler: "
@@ -1851,7 +1940,7 @@ msgstr ""
 "会把它和区域按键一起移除。"
 
 #. type: Plain text
-#: man/gridsnap.1:667
+#: man/gridsnap.1:700
 msgid ""
 "The optional B<[tabs]> section gives the \"next window of the zone\" key "
 "(B<gridsnap-tiler tabs-next>) under the name \"zone-tiler: tabs-next\". The "
@@ -1863,7 +1952,7 @@ msgstr ""
 "页；守护进程没运行时没有可切换的东西。"
 
 #. type: Plain text
-#: man/gridsnap.1:673
+#: man/gridsnap.1:706
 msgid ""
 "B<[action:E<lt>nameE<gt>]> sections with a non-empty B<key> give action keys "
 "under the name \"zone-tiler: action E<lt>nameE<gt>\": the command is "
@@ -1876,7 +1965,7 @@ msgstr ""
 "按键一起移除。"
 
 #. type: Plain text
-#: man/gridsnap.1:679
+#: man/gridsnap.1:712
 msgid ""
 "Switching a profile with one key is an ordinary Cinnamon custom hotkey that "
 "calls B<gridsnap-tiler profile use E<lt>nameE<gt>>: the project does not "
@@ -1890,19 +1979,19 @@ msgstr ""
 "里的区域按键。"
 
 #. type: SH
-#: man/gridsnap.1:679
+#: man/gridsnap.1:712
 #, no-wrap
 msgid "FILES"
 msgstr "文件"
 
 #. type: TP
-#: man/gridsnap.1:680
+#: man/gridsnap.1:713
 #, no-wrap
 msgid "I<~/.config/gridsnap/zones.conf>"
 msgstr "I<~/.config/gridsnap/zones.conf>"
 
 #. type: Plain text
-#: man/gridsnap.1:685
+#: man/gridsnap.1:718
 msgid ""
 "The active config (honouring I<$XDG_CONFIG_HOME>). If the file does not "
 "exist, I<zones.conf> next to the code (I</usr/lib/gridsnap/zones.conf>) is "
@@ -1912,13 +2001,30 @@ msgstr ""
 "I<zones.conf>（I</usr/lib/gridsnap/zones.conf>）。"
 
 #. type: TP
-#: man/gridsnap.1:685
+#: man/gridsnap.1:718
+#, no-wrap
+msgid "I<~/.config/gridsnap/theme.conf>"
+msgstr "I<~/.config/gridsnap/theme.conf>"
+
+#. type: Plain text
+#: man/gridsnap.1:724
+msgid ""
+"The optional palette of the GridSnap surfaces, in the directory of the "
+"active I<zones.conf>. The editor writes it from the wallpaper and the daemon "
+"keeps it in step while its first line says it was generated; deleting it "
+"returns the built-in colours."
+msgstr ""
+"GridSnap 界面的可选配色，位于活动 I<zones.conf> 所在目录。编辑器根据壁纸写入它，"
+"守护进程在首行声明其已生成时保持其更新；删除后恢复内置颜色。"
+
+#. type: TP
+#: man/gridsnap.1:724
 #, no-wrap
 msgid "I<~/.local/state/gridsnap/history.json>"
 msgstr "I<~/.local/state/gridsnap/history.json>"
 
 #. type: Plain text
-#: man/gridsnap.1:689
+#: man/gridsnap.1:728
 msgid ""
 "The layout history (honouring I<$XDG_STATE_HOME>): JSON, the last 20 "
 "operations, written atomically. Needed by B<undo> in a separate process."
@@ -1927,13 +2033,13 @@ msgstr ""
 "一个进程中的 B<undo> 使用。"
 
 #. type: TP
-#: man/gridsnap.1:689
+#: man/gridsnap.1:728
 #, no-wrap
 msgid "I<$XDG_RUNTIME_DIR/gridsnap/daemon.sock>"
 msgstr "I<$XDG_RUNTIME_DIR/gridsnap/daemon.sock>"
 
 #. type: Plain text
-#: man/gridsnap.1:693
+#: man/gridsnap.1:732
 msgid ""
 "The daemon's UNIX socket (mode 0600, directory 0700). Without "
 "I<$XDG_RUNTIME_DIR> — I</tmp/gridsnap-E<lt>uidE<gt>/daemon.sock>."
@@ -1942,13 +2048,13 @@ msgstr ""
 "为 I</tmp/gridsnap-E<lt>uidE<gt>/daemon.sock>。"
 
 #. type: TP
-#: man/gridsnap.1:693
+#: man/gridsnap.1:732
 #, no-wrap
 msgid "I<~/.config/gridsnap/templates/*.conf>"
 msgstr "I<~/.config/gridsnap/templates/*.conf>"
 
 #. type: Plain text
-#: man/gridsnap.1:697
+#: man/gridsnap.1:736
 msgid ""
 "Layout profiles (honouring I<$XDG_CONFIG_HOME>; with B<--conf> I<PATH> — the "
 "I<templates> directory next to that file)."
@@ -1957,13 +2063,13 @@ msgstr ""
 "I<templates> 目录）。"
 
 #. type: TP
-#: man/gridsnap.1:697
+#: man/gridsnap.1:736
 #, no-wrap
 msgid "I</usr/share/gridsnap/gallery/*.conf>"
 msgstr "I</usr/share/gridsnap/gallery/*.conf>"
 
 #. type: Plain text
-#: man/gridsnap.1:702
+#: man/gridsnap.1:741
 msgid ""
 "Ready-made layouts shipped with the package (in a checkout — I<gallery/> "
 "next to the code). The I<$GRIDSNAP_GALLERY> variable sets a custom "
@@ -1975,13 +2081,13 @@ msgstr ""
 "成；目录本身不会被修改。"
 
 #. type: TP
-#: man/gridsnap.1:702
+#: man/gridsnap.1:741
 #, no-wrap
 msgid "I</usr/lib/gridsnap>"
 msgstr "I</usr/lib/gridsnap>"
 
 #. type: Plain text
-#: man/gridsnap.1:707
+#: man/gridsnap.1:746
 msgid ""
 "The package code: I<zone-tiler.py>, I<zone-daemon.py>, I<zone-editor.py>, "
 "I<zone-picker.py>, I<zone-tabstrip.py>, I<gridsnap-ctl>, I<setup-hotkeys.py> "
@@ -1992,13 +2098,13 @@ msgstr ""
 "模块，还有随包提供的 I<zones.conf>。"
 
 #. type: TP
-#: man/gridsnap.1:707
+#: man/gridsnap.1:746
 #, no-wrap
 msgid "I</usr/bin/gridsnap-tiler>"
 msgstr "I</usr/bin/gridsnap-tiler>"
 
 #. type: Plain text
-#: man/gridsnap.1:712
+#: man/gridsnap.1:751
 msgid ""
 "The command launchers (I<gridsnap-tiler>, I<gridsnap-daemon>, I<gridsnap-"
 "editor>, I<gridsnap-picker>, I<gridsnap-ctl>, I<setup-hotkeys>) — wrappers "
@@ -2009,19 +2115,19 @@ msgstr ""
 "gridsnap> 中代码的包装。"
 
 #. type: SH
-#: man/gridsnap.1:712
+#: man/gridsnap.1:751
 #, no-wrap
 msgid "EXIT STATUS"
 msgstr "退出码"
 
 #. type: TP
-#: man/gridsnap.1:713
+#: man/gridsnap.1:752
 #, no-wrap
 msgid "B<0>"
 msgstr "B<0>"
 
 #. type: Plain text
-#: man/gridsnap.1:717
+#: man/gridsnap.1:756
 msgid ""
 "Success. B<arrange> and B<stack> with no suitable windows and B<undo> with "
 "an empty history are 0 too."
@@ -2029,13 +2135,13 @@ msgstr ""
 "成功。B<arrange> 和 B<stack> 没有合适的窗口、B<undo> 历史为空时也是 0。"
 
 #. type: TP
-#: man/gridsnap.1:717
+#: man/gridsnap.1:756
 #, no-wrap
 msgid "B<1>"
 msgstr "B<1>"
 
 #. type: Plain text
-#: man/gridsnap.1:723
+#: man/gridsnap.1:762
 msgid ""
 "A runtime error: no display or no active window, I<_NET_CLIENT_LIST> not "
 "read, the IPC socket could not be raised (daemon), no connection to the "
@@ -2047,13 +2153,13 @@ msgstr ""
 "出错（B<setup-hotkeys>）。"
 
 #. type: TP
-#: man/gridsnap.1:723
+#: man/gridsnap.1:762
 #, no-wrap
 msgid "B<2>"
 msgstr "B<2>"
 
 #. type: Plain text
-#: man/gridsnap.1:727
+#: man/gridsnap.1:766
 msgid ""
 "An argument error: an unknown command or zone, a bad profile name, a wrong "
 "flag.  It is reported by B<argparse> or by the command itself."
@@ -2062,13 +2168,13 @@ msgstr ""
 "自己报告。"
 
 #. type: TP
-#: man/gridsnap.1:727
+#: man/gridsnap.1:766
 #, no-wrap
 msgid "B<3>"
 msgstr "B<3>"
 
 #. type: Plain text
-#: man/gridsnap.1:733
+#: man/gridsnap.1:772
 msgid ""
 "A config error: the file is missing, there is no zone at all, broken "
 "numbers, fractions outside 0..1, a rule for an unknown zone, a missing or "
@@ -2080,7 +2186,7 @@ msgstr ""
 "B<gridsnap-picker> 在同样情况下以返回码 1 退出。"
 
 #. type: Plain text
-#: man/gridsnap.1:737
+#: man/gridsnap.1:776
 msgid ""
 "B<gridsnap-ctl> has codes 0, 1 and 2; B<gridsnap-daemon> — 0, 1 (socket) and "
 "3 (config); B<gridsnap-editor> and B<gridsnap-picker> — 0 and 1 (plus 2 from "
@@ -2091,13 +2197,13 @@ msgstr ""
 "B<argparse> 的 2）；B<setup-hotkeys> 是 0、1 和 2。"
 
 #. type: SH
-#: man/gridsnap.1:737
+#: man/gridsnap.1:776
 #, no-wrap
 msgid "SEE ALSO"
 msgstr "另见"
 
 #. type: Plain text
-#: man/gridsnap.1:742
+#: man/gridsnap.1:781
 msgid ""
 "B<gridsnap-tiler>(1), B<gridsnap-daemon>(1), B<gridsnap-editor>(1), "
 "B<gridsnap-picker>(1), B<gridsnap-hotcorners>(1), B<gridsnap-ctl>(1), "
@@ -2109,7 +2215,7 @@ msgstr ""
 "B<gsettings>(1)。"
 
 #. type: Plain text
-#: man/gridsnap.1:744
+#: man/gridsnap.1:783
 msgid ""
 "The package documentation is in I</usr/share/doc/gridsnap/> (README, SPEC "
 "and I<docs/>)."
