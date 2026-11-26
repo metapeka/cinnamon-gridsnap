@@ -60,13 +60,21 @@ AREA = (0, 0, 1000, 500)  # the work area of the monitor: screen pixels
 
 
 def gui_available():
-    """Are GTK and cairo available: without them `zone-picker.py` does not import."""
+    """Are GTK and cairo usable: without them `zone-picker.py` does not import.
+
+    Drawing text needs pycairo joined to gi (python3-gi-cairo); without that bridge
+    `PangoCairo.create_layout` raises "could not find foreign type Context", so a bare
+    `import cairo` is not enough.
+    """
     try:
-        import cairo  # noqa: F401
+        import cairo
         import gi
 
         gi.require_version("Gtk", "3.0")
-        from gi.repository import Gtk  # noqa: F401
+        gi.require_version("PangoCairo", "1.0")
+        from gi.repository import Gtk, PangoCairo  # noqa: F401
+
+        PangoCairo.create_layout(cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)))
         return True
     except Exception:
         return False
@@ -138,7 +146,7 @@ class TestZoneAtPoint(unittest.TestCase):
         self.assertEqual(nav.zone_at_point(zones, AREA, (900, 400)), 1)
 
 
-@unittest.skipUnless(HAS_GUI, "нет python3-gi/gir1.2-gtk-3.0/python3-cairo: zone-picker.py не загрузить")
+@unittest.skipUnless(HAS_GUI, "нет python3-gi/gir1.2-gtk-3.0/python3-cairo/python3-gi-cairo: zone-picker.py не загрузить или Pango не рисует")
 class PickerHudArgsCase(unittest.TestCase):
     """Parsing the arguments and the small HUD helpers; no window and no X needed."""
 

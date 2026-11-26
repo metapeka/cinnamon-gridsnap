@@ -12,8 +12,9 @@ Plus the parsing of `--workspace`: it reuses `zone-tiler.workspace_spec`, and th
 test guards exactly that, not a copy of the regexp.
 
 The module needs `gi`/GTK and cairo (it imports them at file level), so in
-CI without `python3-gi`, `gir1.2-gtk-3.0` and `python3-cairo` the test is skipped -
-the workspace grid is checked there by `tests/smoke-picker-workspace.sh`.
+CI without `python3-gi`, `gir1.2-gtk-3.0`, `python3-cairo` and `python3-gi-cairo`
+the test is skipped - the workspace grid is checked there by
+`tests/smoke-picker-workspace.sh`.
 
 Run:
     python3 tests/test_picker_workspace.py
@@ -44,13 +45,21 @@ PICKER = os.path.join(ROOT, "zone-picker.py")
 
 
 def gui_available():
-    """Whether GTK and cairo are there: without them `zone-picker.py` does not import."""
+    """Whether GTK and cairo are usable: without them `zone-picker.py` does not import.
+
+    Drawing text needs pycairo joined to gi (python3-gi-cairo); without that bridge
+    `PangoCairo.create_layout` raises "could not find foreign type Context", so a bare
+    `import cairo` is not enough.
+    """
     try:
-        import cairo  # noqa: F401
+        import cairo
         import gi
 
         gi.require_version("Gtk", "3.0")
-        from gi.repository import Gtk  # noqa: F401
+        gi.require_version("PangoCairo", "1.0")
+        from gi.repository import Gtk, PangoCairo  # noqa: F401
+
+        PangoCairo.create_layout(cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)))
         return True
     except Exception:
         return False
@@ -82,7 +91,7 @@ SCREEN = (
 BIND = "[monitors]\nHDMI-1 = studio\n"
 
 
-@unittest.skipUnless(HAS_GUI, "нет python3-gi/gir1.2-gtk-3.0/python3-cairo: zone-picker.py не загрузить")
+@unittest.skipUnless(HAS_GUI, "нет python3-gi/gir1.2-gtk-3.0/python3-cairo/python3-gi-cairo: zone-picker.py не загрузить или Pango не рисует")
 class PickerWorkspaceCase(unittest.TestCase):
     """The helpers of the picker on temporary configs; X and GTK windows are not needed."""
 
