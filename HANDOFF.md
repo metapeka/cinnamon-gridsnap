@@ -9,7 +9,7 @@ Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave
 
 | What | Value |
 |---|---|
-| Code | `main` = `8b61c61` (theme wave merged); the wallpaper wave lives on `design/wallpaper` (worktree `../gridsnap-wallpaper`) |
+| Code | `main` = `ea2dc1e`: both theme waves merged (palette + wallpaper); 3 commits ahead of `origin/main`, **not pushed** |
 | Version | `0.2.0`, tag `v0.2.0` |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
@@ -72,7 +72,7 @@ Behaviour contracts live in `docs/specs/` (18 files, one per module feature). Ar
 | Debian archive | `.deb` builds, license declared, lintian clean; missing ITP bug, sponsor, review. |
 | Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. |
 | Owner actions after the last wave | Add the applet to the panel; after a Cinnamon restart re-run `python3 setup-hotkeys.py --remove` once (see `docs/HANDOFF-2026-11-22-events.md`). |
-| Design track (43PR palette) | **Two waves done, awaiting merge of the second**: (1) optional `theme.conf`, five presets, zone-hue derivation, the editor's GTK sheet — merged to `main`; (2) **Theme** menu in the editor: palette from the wallpaper (GdkPixbuf sampling, no new dependency) and a generated GTK controls theme. Contract `docs/specs/theme.md`; records `docs/HANDOFF-2026-11-26-design-theme.md` and `docs/HANDOFF-2026-11-26-theme-wallpaper.md`. Window borders are **not** themable (Muffin never reads metacity themes), the QML shell is not portable: Quickshell needs Hyprland/Wayland. |
+| Design track (43PR palette) | **Both waves merged into `main`** (`8b61c61` palette, `ea2dc1e` wallpaper), not pushed. Optional `theme.conf`, five presets, zone-hue derivation, editor GTK sheet; **Theme** menu in the editor: palette from the wallpaper (GdkPixbuf sampling, no new dependency) and a generated GTK controls theme. Contracts `docs/specs/theme.md`; records `docs/HANDOFF-2026-11-26-design-theme.md` and `docs/HANDOFF-2026-11-26-theme-wallpaper.md`. Next: a daemon refresh of a generated `theme.conf` and the man page for `theme.conf`. Window borders are **not** themable (Muffin never reads metacity themes); the QML shell is not portable (Quickshell needs Hyprland/Wayland). |
 
 ## Sharp edges
 
