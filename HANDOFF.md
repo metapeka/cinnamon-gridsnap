@@ -8,7 +8,7 @@ Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave
 
 | What | Value |
 |---|---|
-| Code | `main` = `76b41aa`, in sync with `origin/main` |
+| Code | `main` = `5031f29`, **frozen as the design base** (2026-11-26); 114 commits after `v0.2.0` |
 | Version | `0.2.0`, tag `v0.2.0` |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
@@ -70,6 +70,7 @@ Behaviour contracts live in `docs/specs/` (18 files, one per module feature). Ar
 | Debian archive | `.deb` builds, license declared, lintian clean; missing ITP bug, sponsor, review. |
 | Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. |
 | Owner actions after the last wave | Add the applet to the panel; after a Cinnamon restart re-run `python3 setup-hotkeys.py --remove` once (see `docs/HANDOFF-2026-11-22-events.md`). |
+| Design track (43PR palette) | Branch `design/43pr-theme` in the `../gridsnap-design` worktree. Scope: one optional `theme.conf` next to `zones.conf`, embedded presets transcribed from 43PR/dotfiles (MIT), the HUD, the tab strip and the editor drawn from the same tokens. The QML shell (bar, panels) is **not** ported: Quickshell needs Hyprland/Wayland. Contract: `docs/specs/theme.md` on the branch. |
 
 ## Sharp edges
 
