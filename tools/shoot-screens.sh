@@ -7,9 +7,9 @@
 # away from a current picture.
 #
 # The palette is deliberately *not* the default one: the images show where the colours come from.
-# A wallpaper is drawn in pure Python (a slate gradient with a warm glint, no ImageMagick), sampled
-# by `zone_theme.from_wallpaper` and written as `theme.conf` with the generated marker — the same
-# path the editor's **Theme → From the wallpaper…** action takes.
+# `tools/scene-palette.py` draws a wallpaper, samples it with `zone_theme.from_wallpaper` and writes
+# `theme.conf` with the generated marker — the same path the editor's **Theme → From the
+# wallpaper…** action takes.
 #
 # Both surfaces render offscreen (`--shot`), so no window manager is needed: an own Xvfb display
 # with a fixed screen size (`:91`, 1280×800) gives the shots a stable geometry. `GRIDSNAP_LANG=en`
@@ -140,63 +140,11 @@ fi
 
 say "screenshots: display $DISP, work area ${W}×${H}"
 
-# The wallpaper and the palette it yields: a slate gradient lit by a warm glint on the right.
-# Drawn by hand (a PNG encoder is thirty lines of `zlib` + `struct`) so that the picture is
-# reproducible on a machine without ImageMagick, and so that the palette is derived from an image
-# the repository can describe in one sentence.
-python3 - "$ROOT" "$WORK" "$W" "$H" <<'PY' || die "could not build the wallpaper palette"
-import os
-import struct
-import sys
-import zlib
-
-root, work, width, height = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
-sys.path.insert(0, root)
-import zone_theme  # noqa: E402  (after sys.path: the module lives in the repository root)
-
-DARK = (0x0B, 0x10, 0x20)
-LIGHT = (0x1B, 0x2B, 0x45)
-GLINT = (0xE8, 0x86, 0x3C)
-GLINT_AT = (1010.0, 210.0)
-GLINT_RADIUS = 300.0
-
-rows = []
-for y in range(height):
-    row = bytearray(b"\x00")  # filter type 0: no prediction
-    for x in range(width):
-        t = (x / width) * 0.55 + (y / height) * 0.45
-        pixel = [DARK[i] + (LIGHT[i] - DARK[i]) * t for i in range(3)]
-        dx = (x - GLINT_AT[0]) / GLINT_RADIUS
-        dy = (y - GLINT_AT[1]) / GLINT_RADIUS
-        distance = dx * dx + dy * dy
-        if distance < 1.0:
-            k = (1.0 - distance) ** 2
-            pixel = [pixel[i] + (GLINT[i] - pixel[i]) * k for i in range(3)]
-        row += bytes(min(255, max(0, int(value))) for value in pixel)
-    rows.append(bytes(row))
-
-
-def chunk(tag, data):
-    crc = zlib.crc32(tag + data) & 0xFFFFFFFF
-    return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", crc)
-
-
-image = os.path.join(work, "wallpaper.png")
-with open(image, "wb") as handle:
-    handle.write(
-        b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
-        + chunk(b"IDAT", zlib.compress(b"".join(rows), 9))
-        + chunk(b"IEND", b"")
-    )
-
-theme = zone_theme.from_wallpaper(image)
-zone_theme.write_theme(theme, os.path.join(work, "theme.conf"), source=image)
-print(
-    "  palette: bg %s, card %s, accent %s, %d zone hues"
-    % (theme.colors["bg"], theme.colors["bg_card"], theme.colors["accent"], len(theme.zones))
-)
-PY
+# The wallpaper and the palette it yields, next to the temporary zones.conf so the editor and the
+# picker read it.
+python3 "$ROOT/tools/scene-palette.py" --out "$WORK" --width "$W" --height "$H" \
+    >"$WORK/palette.log" 2>&1 || die "cannot build the wallpaper palette ($(log_tail "$WORK/palette.log"))"
+say "  $(sed -n '1p' "$WORK/palette.log")"
 
 Xvfb "$DISP" -screen 0 "${W}x${H}x24" -nolisten tcp >"$WORK/xvfb.log" 2>&1 &
 XPID=$!

@@ -131,7 +131,10 @@ class ScreenshotsTest(unittest.TestCase):
         # palette would be a regression nobody notices, because the files would simply differ.
         with open(SCRIPT, encoding="utf-8") as handle:
             text = handle.read()
-        self.assertIn("from_wallpaper", text, "the shots no longer sample a wallpaper")
+        self.assertIn(
+            "scene-palette.py", text,
+            "the shots no longer build their palette with tools/scene-palette.py",
+        )
         self.assertIn("GRIDSNAP_LANG=en", text, "the shots are not pinned to the scene language")
 
 

@@ -1,21 +1,21 @@
 # HANDOFF — current state of GridSnap
 
 Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave history lives in
-`docs/HANDOFF-<date>-<slug>.md`; the newest are `docs/HANDOFF-2026-11-26-screenshots.md`,
-`docs/HANDOFF-2026-11-26-docs.md`, `docs/HANDOFF-2026-11-26-gtk-controls.md`,
-`docs/HANDOFF-2026-11-26-man-theme.md`, `docs/HANDOFF-2026-11-26-theme-refresh.md` and
-`docs/HANDOFF-2026-11-26-theme-wallpaper.md` — read
+`docs/HANDOFF-<date>-<slug>.md`; the newest are `docs/HANDOFF-2026-11-26-demo-scene.md`,
+`docs/HANDOFF-2026-11-26-screenshots.md`, `docs/HANDOFF-2026-11-26-docs.md`,
+`docs/HANDOFF-2026-11-26-gtk-controls.md`, `docs/HANDOFF-2026-11-26-man-theme.md`,
+`docs/HANDOFF-2026-11-26-theme-refresh.md` and `docs/HANDOFF-2026-11-26-theme-wallpaper.md` — read
 them only when you need the “why”.
 
 ## Snapshot
 
 | What | Value |
 |---|---|
-| Code | `main` = `7f8201d` (theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`) plus the screenshots wave and their handoff records; ahead of `origin/main`, **not pushed** |
+| Code | `main` = `3d61d20` (theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`) plus the demo-scene wave; ahead of `origin/main`, **not pushed** |
 | Version | `0.2.0`, tag `v0.2.0` |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
-| Tests | `1513` unit tests, `OK` in ~27 s without X (9 skipped once `make man` has run, 15 in a fresh checkout) |
+| Tests | `1520` unit tests, `OK` in ~21 s without X (9 skipped once `make man` has run, 15 in a fresh checkout) |
 | Smoke | `13` scenarios under `tests/smoke*.sh`, each on its own Xvfb display |
 | CI | Green on `main` (run `45097865174`), 5 jobs |
 | Open PRs | None |
@@ -72,9 +72,9 @@ Behaviour contracts live in `docs/specs/` (18 files, one per module feature). Ar
 |---|---|
 | Wayland backend | Open. Cinnamon 6.8 / Mint 23 (~Christmas 2026) makes the Wayland session official. Reconstruction in `docs/HANDOFF-2026-11-22-window-seam.md`: placing windows through muffin still works under nested `muffin --wayland`, but the seam is not finished. |
 | Debian archive | `.deb` builds, license declared, lintian clean; missing ITP bug, sponsor, review. |
-| Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. Done so far: `docs/architecture.md` (English, with a Mermaid module graph), `docs/specs/theme.md`; the site and both translated READMEs carry §3.4 (theme). The rest is still Russian. |
+| Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. Done so far: `docs/architecture.md` (English, with a Mermaid module graph), `docs/specs/theme.md`, `tools/shoot-screens.sh`, `tools/record-demo.sh`; the site and both translated READMEs carry §3.4 (theme). The rest is still Russian. |
 | Owner actions after the last wave | Add the applet to the panel; after a Cinnamon restart re-run `python3 setup-hotkeys.py --remove` once (see `docs/HANDOFF-2026-11-22-events.md`). |
-| Design track (43PR palette) | **Five code waves + a docs wave merged into `main`** (`8b61c61` palette, `ea2dc1e` wallpaper, `32b6aa5` refresh, `60f288d` man page, `575d601` GTK controls, `7f8201d` docs), not pushed. Optional `theme.conf`, five presets, zone-hue derivation, editor GTK sheet; **Theme** menu in the editor: palette from the wallpaper (GdkPixbuf sampling, no new dependency) and a generated GTK controls theme. A generated `theme.conf` follows `picture-uri` through the daemon (5 s poll, marker-only, `--once` excluded); a generated controls theme (`~/.themes/Gridsnap`) follows the palette from the same poll and from the editor's actions. `man gridsnap` documents both with `ru`/`zh_CN`; `docs/architecture.md` is English with a Mermaid module graph, `docs/specs/theme.md` has two Mermaid flows, README ru/zh carry §3.4, the site carries the feature and the spec link, ROADMAP item 5 is closed. Contracts `docs/specs/theme.md`; records `…-design-theme.md`, `…-theme-wallpaper.md`, `…-theme-refresh.md`, `…-man-theme.md`, `…-gtk-controls.md`, `…-docs.md`, `…-screenshots.md`. The README and site images are no longer hand-made: `tools/shoot-screens.sh` re-renders `site/assets/editor.png` and `picker.png` on its own Xvfb `:91` from a wallpaper-sampled palette, `tests/test_screenshots.py` holds the pair (7 tests). Remaining out of scope: GTK 4/libadwaita, the Cinnamon shell theme, metacity borders (Muffin never reads them), Quickshell/QML. |
+| Design track (43PR palette) | **Five code waves + a docs wave merged into `main`** (`8b61c61` palette, `ea2dc1e` wallpaper, `32b6aa5` refresh, `60f288d` man page, `575d601` GTK controls, `7f8201d` docs), not pushed. Optional `theme.conf`, five presets, zone-hue derivation, editor GTK sheet; **Theme** menu in the editor: palette from the wallpaper (GdkPixbuf sampling, no new dependency) and a generated GTK controls theme. A generated `theme.conf` follows `picture-uri` through the daemon (5 s poll, marker-only, `--once` excluded); a generated controls theme (`~/.themes/Gridsnap`) follows the palette from the same poll and from the editor's actions. `man gridsnap` documents both with `ru`/`zh_CN`; `docs/architecture.md` is English with a Mermaid module graph, `docs/specs/theme.md` has two Mermaid flows, README ru/zh carry §3.4, the site carries the feature and the spec link, ROADMAP item 5 is closed. Contracts `docs/specs/theme.md`; records `…-design-theme.md`, `…-theme-wallpaper.md`, `…-theme-refresh.md`, `…-man-theme.md`, `…-gtk-controls.md`, `…-docs.md`, `…-screenshots.md`, `…-demo-scene.md`. The README and site images are no longer hand-made: `tools/shoot-screens.sh` re-renders `site/assets/editor.png` and `picker.png` on its own Xvfb `:91`, `tools/record-demo.sh` re-records `site/assets/demo.gif` on its own Xvfb `:90` with muffin and the daemon; both build the palette with `tools/scene-palette.py`, held by `tests/test_screenshots.py` (7 tests) and `tests/test_demo_gif.py` (14 tests). Remaining out of scope: GTK 4/libadwaita, the Cinnamon shell theme, metacity borders (Muffin never reads them), Quickshell/QML. |
 
 ## Sharp edges
 
@@ -93,5 +93,7 @@ Behaviour contracts live in `docs/specs/` (18 files, one per module feature). Ar
 | Translations and man pages are generated | After changing a source string: `make pot`; after changing a man page: `make man-pot`, then refresh `po/man/ru.po` and `zh_CN.po`. CI fails on a stale template. |
 | Version is duplicated | `VERSION` in `zone-tiler.py`, `zone-daemon.py`, `zone-hotcorners.py`, `zone-tabstrip.py`, `gridsnap-ctl`, PKGBUILD, `man/gridsnap.1`, `debian/changelog` — `make check-version`. |
 | Orca worker base branch | `worker-start --worktree new-child` branches from the project default (`main`), not from the coordinator's branch. Fix the base explicitly or cherry-pick the contract commit. |
-| The README and site images are generated | `site/assets/editor.png` and `picker.png` come from `tools/shoot-screens.sh` (own Xvfb `:91`, wallpaper-sampled palette, English scene). Do not hand-edit or hand-save them: re-run the script, then `env -u DISPLAY python3 -m unittest tests.test_screenshots`. The scene pins the display size, so a shot from another display fails the size assertion instead of silently becoming a different picture. |
+| The README and site images are generated | `site/assets/editor.png` and `picker.png` come from `tools/shoot-screens.sh` (own Xvfb `:91`), `site/assets/demo.gif` from `tools/record-demo.sh` (own Xvfb `:90`, muffin, the daemon, five scene steps). Both build the palette with `tools/scene-palette.py`, so the stills and the recording share one look. Do not hand-edit or hand-save them: re-run the script, then `env -u DISPLAY python3 -m unittest tests.test_screenshots tests.test_demo_gif`. The scene pins the display size, so a shot from another display fails the size assertion instead of silently becoming a different picture. |
+| A scene must pin the wallpaper setting | The daemon refreshes a marked `theme.conf` whose recorded source differs from the live `picture-uri`, so a scene that only writes the file gets the palette of the **owner's** wallpaper on the first 5 s poll. `tools/scene-palette.py --pin-wallpaper` points the setting at the drawn image; the callers do it inside a `GSETTINGS_BACKEND=keyfile` sandbox with a temporary `HOME`, so neither the setting nor `~/.themes/Gridsnap` is touched. |
+| A background job started in `$(…)` is not the job `$!` names | `W1PID=$(open_window …)` runs the function in a subshell; the `xmessage` dies with it and `dash` reports a PID the process never had. `record-demo.sh` hands the PID out through `OPEN_PID` instead, and `tests/test_demo_gif.py` fails if a command substitution comes back. |
 | Watchers | Every spawn gets `tools/worker-watch.sh`; every PR/run gets `tools/ci-watch.sh`. Waiting without one is a process error. |
