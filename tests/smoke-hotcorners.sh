@@ -42,7 +42,6 @@ DISP="${GRIDSNAP_SMOKE_DISPLAY:-:96}"
 ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WATCHER="$ROOT/zone-hotcorners.py"
 TILER="$ROOT/zone-tiler.py"
-CONF="$ROOT/zones.conf"
 
 # Своё состояние (история undo) — во временном каталоге, не в домашнем.
 STATE=$(mktemp -d 2>/dev/null || echo /tmp/gridsnap-state.$$)
@@ -56,6 +55,20 @@ export GSETTINGS_BACKEND=keyfile
 mkdir -p "$XDG_CONFIG_HOME"
 
 LOGDIR=$(mktemp -d 2>/dev/null || echo /tmp)
+# A config of the scenario's own: the root zones.conf is the owner's live layout, and its
+# [workspaces]/[monitors] make the tiler resolve a profile these zone names do not match.
+CONF="$LOGDIR/zones.conf"
+cat >"$CONF" <<'CONF'
+[grid]
+cols = 1.0
+rows = 1.0
+
+[zones]
+main = 0, 0, 0.8358, 1
+top-right = 0.8358, 0, 0.1642, 0.5
+top-far = 0.8358, 0.5, 0.1642, 0.5
+bottom = 0.7129, 0.8068, 0.2871, 0.1932
+CONF
 MUFFIN_LOG="$LOGDIR/gridsnap-smoke-hotcorners-muffin.log"
 WATCHER_LOG="$LOGDIR/gridsnap-smoke-hotcorners-watcher.log"
 # Сокет демона — в своём каталоге: при живом демоне владельца сценарий
