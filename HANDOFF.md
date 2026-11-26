@@ -11,13 +11,13 @@ them only when you need the “why”.
 
 | What | Value |
 |---|---|
-| Code | `main` = `65ad946` (theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`); ahead of `origin/main`, **not pushed** |
-| Version | `0.2.0`, tag `v0.2.0` |
+| Code | `main` = `f674af0` (theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`) — pushed, CI green |
+| Version | `0.3.0`, tag `v0.3.0` + GitHub Release with `gridsnap-0.3.0.tar.gz`; AUR `sha256sums` is the tag archive (`031c2e3…`), which is not the attached tarball: the tag archive is what `source` names |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
 | Tests | `1518` unit tests, `OK` in ~18 s without X (9 skipped once `make man` has run, 15 in a fresh checkout) |
 | Smoke | `13` scenarios under `tests/smoke*.sh`, each on its own Xvfb display |
-| CI | Green on `origin/main` (`5031f29`, run `45744568474`), 5 jobs; the local commits after it have not run CI |
+| CI | Green on `main` (`f674af0`, run `45799262897`), 5 jobs; the site is deployed by `pages.yml` from the same commit (`45800268713`) and lives at `metapeka.github.io/cinnamon-gridsnap` |
 | Open PRs | None |
 | Live install | This checkout **is** the installed copy. The owner's desktop layout lives in `~/.config/gridsnap/zones.conf` (profiles in `~/.config/gridsnap/templates/`), which `zone-tiler.default_conf` finds first; the tracked root `zones.conf` is the shipped starting layout |
 

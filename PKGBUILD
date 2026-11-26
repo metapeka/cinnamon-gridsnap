@@ -19,7 +19,7 @@ depends=('python' 'python-gobject' 'gtk3' 'libx11' 'xorg-xprop' 'xorg-xwininfo')
 makedepends=('gettext' 'po4a')
 optdepends=('python-cairo: перерисовка иконок (make-icon.py)')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('031c2e337c6b2e66a5a116e62450436a40da1936d0a1dcede981c0a477e29521')
 # Сумма архива тега v$pkgver — того, на который ссылается source. При выпуске
 # следующей версии её надо обновить: архив тега на GitHub появляется только
 # после пуша тега, поэтому посчитать заранее нечего — только после релиза:
