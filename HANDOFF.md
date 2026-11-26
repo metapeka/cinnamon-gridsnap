@@ -1,9 +1,10 @@
 # HANDOFF — current state of GridSnap
 
 Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave history lives in
-`docs/HANDOFF-<date>-<slug>.md`; the newest are `docs/HANDOFF-2026-11-26-gtk-controls.md`,
-`docs/HANDOFF-2026-11-26-man-theme.md`, `docs/HANDOFF-2026-11-26-theme-refresh.md` and
-`docs/HANDOFF-2026-11-26-theme-wallpaper.md` — read them only when you need the “why”.
+`docs/HANDOFF-<date>-<slug>.md`; the newest are `docs/HANDOFF-2026-11-26-docs.md`,
+`docs/HANDOFF-2026-11-26-gtk-controls.md`, `docs/HANDOFF-2026-11-26-man-theme.md`,
+`docs/HANDOFF-2026-11-26-theme-refresh.md` and `docs/HANDOFF-2026-11-26-theme-wallpaper.md` — read
+them only when you need the “why”.
 
 ## Snapshot
 
@@ -70,7 +71,7 @@ Behaviour contracts live in `docs/specs/` (18 files, one per module feature). Ar
 |---|---|
 | Wayland backend | Open. Cinnamon 6.8 / Mint 23 (~Christmas 2026) makes the Wayland session official. Reconstruction in `docs/HANDOFF-2026-11-22-window-seam.md`: placing windows through muffin still works under nested `muffin --wayland`, but the seam is not finished. |
 | Debian archive | `.deb` builds, license declared, lintian clean; missing ITP bug, sponsor, review. |
-| Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. |
+| Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. Done so far: `docs/architecture.md` (English, with a Mermaid module graph), `docs/specs/theme.md`; the site and both translated READMEs carry §3.4 (theme). The rest is still Russian. |
 | Owner actions after the last wave | Add the applet to the panel; after a Cinnamon restart re-run `python3 setup-hotkeys.py --remove` once (see `docs/HANDOFF-2026-11-22-events.md`). |
 | Design track (43PR palette) | **Five waves merged into `main`** (`8b61c61` palette, `ea2dc1e` wallpaper, `32b6aa5` refresh, `60f288d` man page, `575d601` GTK controls), not pushed. Optional `theme.conf`, five presets, zone-hue derivation, editor GTK sheet; **Theme** menu in the editor: palette from the wallpaper (GdkPixbuf sampling, no new dependency) and a generated GTK controls theme. A generated `theme.conf` follows `picture-uri` through the daemon (5 s poll, marker-only, `--once` excluded); a generated controls theme (`~/.themes/Gridsnap`) follows the palette from the same poll and from the editor's wallpaper/reload actions (marker-only, written only on a change); `man gridsnap` documents both with `ru`/`zh_CN` translations. Contracts `docs/specs/theme.md`; records `…-design-theme.md`, `…-theme-wallpaper.md`, `…-theme-refresh.md`, `…-man-theme.md`, `…-gtk-controls.md`. Remaining out of scope: GTK 4/libadwaita, the Cinnamon shell theme, metacity borders (Muffin never reads them). |
 

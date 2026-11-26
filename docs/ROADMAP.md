@@ -67,6 +67,13 @@ XI2 raw events, edge-tiling гасится только на время HUD); `m
    смотрит на теги, релиз `v0.2.0` даёт референсный tarball, `lintian` чист (кроме ожидаемого
    `initial-upload-closes-no-bugs`). Остались только внешние шаги — ITP, спонсор, ревью. *(волна 4 + волна 7)*
 
+5. **Theme track — done.** The palette of the reference setup (43PR/dotfiles, MIT) is now GridSnap's
+   own: one optional `theme.conf` beside `zones.conf` feeds the picker, the HUD, the tab strip and
+   the editor; the editor builds it from the wallpaper (GdkPixbuf, no new dependency), the daemon
+   keeps a generated file in step, and a generated GTK controls theme follows the same palette.
+   Not portable and therefore not attempted: the QML shell (Quickshell needs Hyprland/Wayland) and
+   the WM borders (`libmuffin` never reads metacity themes). Contract: `docs/specs/theme.md`.
+
 Гигиена спек закрыта полностью: `zone-ipc`, `gridsnap-profiles`, `gridsnap-applet`, `zone-i18n`,
 `zone_config`, `zone_picker_nav`, `zone-units` и `man-i18n` описаны в `docs/specs/` (есть у
 tiler/daemon/reflow/picker/editor/hotkeys/launcher/actions/tabs). Висячих связей `spec_validate` не

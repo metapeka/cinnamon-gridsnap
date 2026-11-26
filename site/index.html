@@ -31,6 +31,7 @@
 <li><strong>Actions</strong> — a key of your own: built-in ones (minimize the others, show the window of a zone, a terminal in a zone, swap two zones) or your command with the window, zone and frame handed over.</li>
 <li><strong>Several monitors</strong> — every screen has its own zones, a zone is looked up in the profile of the screen the window is on, and other screens are never touched.</li>
 <li><strong>Profiles per screen and per workspace</strong> — “monitor 2 — cinema”, workspace 1 — work: switch the layout with one key.</li>
+<li><strong>Colours from the wallpaper</strong> — one optional <code>theme.conf</code> paints the editor, the picker, the HUD and the tab strip; the editor samples your wallpaper for the palette and can generate matching GTK window controls. Window borders stay as Cinnamon draws them: Muffin does not read border themes.</li>
 </ul>
 </section>
 <section id="screenshots">
@@ -61,7 +62,9 @@ sudo apt install ./dist/gridsnap_&lt;version&gt;_all.deb</code></pre>
 <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.zh.md">简体中文</a>,
 <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.ru.md">Русский</a></li>
 <li>Specifications: <a href="https://github.com/metapeka/cinnamon-gridsnap/tree/main/docs/specs">docs/specs</a> —
-zones and the config, the tiler and focus mode, the daemon and IPC, tabs, actions, hot corners, the picker.</li>
+zones and the config, the tiler and focus mode, the daemon and IPC, tabs, actions, hot corners, the
+picker, the <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/theme.md">palette
+and theme</a>.</li>
 <li>Man pages in the package: <code>man gridsnap</code> (the commands, <code>zones.conf</code>, files, exit codes),
 <code>man gridsnap-tiler</code>, <code>man gridsnap-daemon</code>, <code>man gridsnap-editor</code>,
 <code>man gridsnap-picker</code>, <code>man gridsnap-ctl</code>, <code>man setup-hotkeys</code>.</li>

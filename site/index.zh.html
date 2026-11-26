@@ -31,6 +31,7 @@
 <li><strong>动作</strong>：把自定义命令绑到按键（<code>[action:&lt;名字&gt;]</code>），命令能拿到窗口、区域和像素范围。</li>
 <li><strong>多显示器</strong>：每台屏幕有自己的区域集合和方案（<code>[monitors]</code>），窗口在它所在的那台屏幕上布局。</li>
 <li><strong>方案</strong>：布局按屏幕和按工作桌面保存（<code>[workspaces]</code>），一条命令或一个按键就能切换。</li>
+<li><strong>从壁纸取色</strong>：一个可选的 <code>theme.conf</code> 同时给编辑器、选择器、HUD 和标签条上色；编辑器能采样壁纸生成调色板，并生成配套的 GTK 控件主题。窗口边框保持 Cinnamon 的绘制方式：Muffin 不读取边框主题。</li>
 </ul>
 </section>
 <section id="screenshots">
@@ -76,7 +77,8 @@ tar -xzf gridsnap-&lt;版本&gt;.tar.gz &amp;&amp; cd gridsnap-&lt;版本&gt;
 <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/profiles.md">方案</a>、
 <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/reflow.md">reflow</a>、
 <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/launcher.md">快捷方式</a>、
-<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/applet.md">面板小程序</a>。</li>
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/applet.md">面板小程序</a>、
+<a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/theme.md">主题与调色板</a>。</li>
 <li>man 手册页（软件包安装后可用 <code>man gridsnap</code>）：
 <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/man/gridsnap.1">gridsnap(1)</a>、
 <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/man/gridsnap-tiler.1">gridsnap-tiler(1)</a>、

@@ -1,8 +1,45 @@
 # `theme.conf` — one palette for every surface
 
-Status: implemented on `design/43pr-theme`. The module is `zone_theme.py`; the consumers are
-`zone-picker.py` (overlay and HUD), `zone-hotcorners.py` (through the HUD child), `zone-tabstrip.py`
-and `zone-editor.py`.
+Status: implemented on `main` (waves: palette, wallpaper, refresh, man page, GTK controls). The
+module is `zone_theme.py`; the consumers are `zone-picker.py` (overlay and HUD), `zone-hotcorners.py`
+(through the HUD child), `zone-tabstrip.py`, `zone-editor.py` and `zone-daemon.py` (the refresh loop).
+
+## How a palette reaches a surface
+
+```mermaid
+flowchart LR
+  preset[PRESETS<br/>43pr, nord, tokyo-night,<br/>catppuccin-mocha, graphite] --> theme
+  themeConf[theme.conf<br/>next to zones.conf] --> theme[zone_theme.Theme]
+  image[Wallpaper image] -->|GdkPixbuf 64x64| samples[samples_of]
+  samples -->|weighted clusters| build[theme_from_samples]
+  build --> theme
+  theme --> surfaces[Picker overlay, HUD,<br/>tab strip, editor canvas]
+  theme --> sheet[Editor GTK sheet]
+  theme --> gtk["~/.themes/Gridsnap<br/>(GTK controls)"]
+  daemon[zone-daemon poll] -->|picture-uri every 5 s| image
+  daemon -->|rewrite a marked file| themeConf
+  daemon -->|refresh marked files| gtk
+```
+
+## How the file is resolved
+
+```mermaid
+flowchart TD
+  conf[--conf or the default config] --> path[theme.conf beside it]
+  path -->|absent| defaults[default palette]
+  path -->|present| ini[parse INI]
+  ini -->|preset name| base[PRESETS entry]
+  ini -->|colors| overrides[per-token overrides]
+  base --> merge[pending palette]
+  overrides --> merge
+  merge -->|bad hex, unknown preset,<br/>bad radius or font| keeps[base value kept,<br/>one warning on stderr]
+  merge --> zones{explicit zones?}
+  zones -->|yes| list[up to 16 hues]
+  zones -->|no| derive[derive_zones accent]
+  list --> theme[Theme]
+  derive --> theme
+  keeps --> theme
+```
 
 GridSnap draws four surfaces of its own: the interactive picker overlay, the passive HUD the hot
 corners drive, the tab strip above a zone, and the editor. They used to carry their colours as

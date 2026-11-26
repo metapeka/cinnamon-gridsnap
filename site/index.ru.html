@@ -31,6 +31,7 @@
 <li><strong>Действия</strong> — своя клавиша: встроенные (свернуть остальные, показать окно зоны, терминал в зоне, обмен двух зон) или ваша команда, которой передаются окно, зона и её рамка.</li>
 <li><strong>Несколько мониторов</strong> — у каждого экрана своя сетка, зона ищется в профиле того экрана, где окно, а другие экраны не трогаются.</li>
 <li><strong>Профили на экран и на стол</strong> — «монитор 2 — кино», стол 1 — работа: раскладка переключается одной клавишей.</li>
+<li><strong>Цвета из обоев</strong> — один необязательный <code>theme.conf</code> красит редактор, пикер, HUD и полосу вкладок; редактор сэмплирует обои для палитры и умеет сгенерировать подходящую GTK-тему окон. Рамки окон остаются такими, как их рисует Cinnamon: Muffin не читает темы границ.</li>
 </ul>
 </section>
 <section id="screenshots">
@@ -61,7 +62,8 @@ sudo apt install ./dist/gridsnap_&lt;версия&gt;_all.deb</code></pre>
 <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.zh.md">简体中文</a>,
 <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/README.ru.md">Русский</a></li>
 <li>Спеки: <a href="https://github.com/metapeka/cinnamon-gridsnap/tree/main/docs/specs">docs/specs</a> —
-зоны и конфиг, раскладчик и режим «только эта зона», демон и IPC, вкладки, действия, горячие края, пикер.</li>
+зоны и конфиг, раскладчик и режим «только эта зона», демон и IPC, вкладки, действия, горячие края,
+пикер, <a href="https://github.com/metapeka/cinnamon-gridsnap/blob/main/docs/specs/theme.md">тема и палитра</a>.</li>
 <li>Man-страницы в пакете: <code>man gridsnap</code> (команды, <code>zones.conf</code>, файлы, коды возврата),
 <code>man gridsnap-tiler</code>, <code>man gridsnap-daemon</code>, <code>man gridsnap-editor</code>,
 <code>man gridsnap-picker</code>, <code>man gridsnap-ctl</code>, <code>man setup-hotkeys</code>.</li>
