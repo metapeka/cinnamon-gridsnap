@@ -10,6 +10,8 @@
 
 ![区域编辑器](site/assets/editor.png)
 
+![区域选择浮层](site/assets/picker.png)
+
 ![区域编辑器运行中](site/assets/demo.gif)
 
 <!-- section: languages -->

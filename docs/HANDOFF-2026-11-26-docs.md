@@ -45,6 +45,8 @@ Ran 1506 tests … OK (skipped=9)
 
 ## Next
 
-- Screenshots of the themed surfaces for the site (`site/assets/`) — the editor shot with a
-  wallpaper palette would show the feature better than a bullet.
+- ~~Screenshots of the themed surfaces for the site (`site/assets/`) — the editor shot with a
+  wallpaper palette would show the feature better than a bullet.~~ Done in
+  `docs/HANDOFF-2026-11-26-screenshots.md`: `tools/shoot-screens.sh` renders the editor and the
+  picker from a sampled wallpaper palette, and `tests/test_screenshots.py` holds the pair.
 - The rest of `docs/**` is still Russian; translate it file by file as it is touched.

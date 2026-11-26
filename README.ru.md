@@ -8,6 +8,8 @@
 
 ![Редактор сетки](site/assets/editor.png)
 
+![Оверлей выбора зоны](site/assets/picker.png)
+
 ![Редактор сетки в работе](site/assets/demo.gif)
 
 <!-- section: languages -->

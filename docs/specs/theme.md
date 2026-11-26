@@ -357,6 +357,11 @@ as Muffin draws them; only client-side decorations (the GTK theme above) and the
 * `python3 zone-picker.py --conf <conf> --shot /tmp/picker.png` and
   `python3 zone-editor.py --conf <conf> --shot /tmp/editor.png` render the surfaces without a
   session; a `theme.conf` next to `<conf>` changes the PNG.
+* `tools/shoot-screens.sh` — the same two renders in one command, on its own pinned Xvfb `:91`
+  (1280×800), from a wallpaper sampled by `from_wallpaper` into a generated `theme.conf`; it
+  writes `site/assets/editor.png` and `site/assets/picker.png`. `tests/test_screenshots.py`
+  checks that both files are real PNGs of a readable size, that the three READMEs and the three
+  site pages show them, and that the script is executable and still samples a wallpaper.
 * The editor action is exercised end to end under Xvfb: `Editor(...).on_theme_from_wallpaper()`
   writes `theme.conf`, reloads the palette and repaints; `on_theme_controls()` writes
   `~/.themes/Gridsnap`.

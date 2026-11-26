@@ -8,6 +8,8 @@ Tested on Debian 13, Cinnamon 6.4.10 (Muffin, X11), a 1920×1040 work area.
 
 ![Zone editor](site/assets/editor.png)
 
+![Zone picker overlay](site/assets/picker.png)
+
 ![Zone editor in action](site/assets/demo.gif)
 
 <!-- section: languages -->
