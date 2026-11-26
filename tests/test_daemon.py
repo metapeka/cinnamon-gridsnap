@@ -46,8 +46,10 @@ Running:
     python3 tests/test_daemon.py
 """
 
+import contextlib
 import ctypes
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -3365,6 +3367,107 @@ class TestServeLoop(unittest.TestCase):
         dae.x11 = None
         zd._restore_focus_on_exit(dae)
         self.assertIsNone(dae.focus)
+
+    def test_the_loop_wakes_up_for_the_palette_poll(self):
+        # Without X events the wait is bounded by `theme_interval`, so a wallpaper change is
+        # noticed by a daemon that is otherwise idle.
+        class ThemeStub(StubDaemon):
+            theme_interval = 0.02
+
+            def __init__(self):
+                super().__init__()
+                self.polls = 0
+                self.stop_requested = False
+
+            def poll_theme(self):
+                self.polls += 1
+                self.stop_requested = True
+
+        dae = ThemeStub()
+        fake = FakeX11(fd=self.pipe_fd())
+        zd.serve(dae, x11=fake, read_clients=lambda: [])
+        self.assertEqual(dae.polls, 1)
+        self.assertTrue(fake.closed)
+
+    def test_once_never_polls_the_palette(self):
+        # A probe must not write theme.conf: `--once` keeps the unbounded wait and skips the poll.
+        dae = StubDaemon()
+        dae.theme_interval = 0.02
+        dae.polls = 0
+
+        def poll_theme():
+            dae.polls += 1
+
+        dae.poll_theme = poll_theme
+        fake = FakeX11(fd=self.pipe_fd())
+        zd.serve(dae, x11=fake, once=True, read_clients=lambda: [], once_timeout=0.02)
+        self.assertEqual(dae.polls, 0)
+        self.assertTrue(fake.closed)
+
+
+class TestThemeRefresh(unittest.TestCase):
+    """A generated `theme.conf` follows the wallpaper: the poll, its throttle and the strip."""
+
+    def setUp(self):
+        fd, self.conf = tempfile.mkstemp(suffix=".conf", text=True)
+        os.close(fd)
+        with open(self.conf, "w", encoding="utf-8") as fh:
+            fh.write(ONE_RULE)
+        self.addCleanup(os.unlink, self.conf)
+
+    def daemon(self, **kwargs):
+        return zd.Daemon(self.conf, workarea=lambda: WA, **kwargs)
+
+    def test_no_interval_means_no_poll(self):
+        calls = []
+        d = self.daemon(refresh_theme=lambda: calls.append(1))
+        self.assertIsNone(d.poll_theme(now=100.0))
+        self.assertEqual(calls, [])
+
+    def test_the_poll_is_throttled_by_the_interval(self):
+        calls = []
+
+        def refresh():
+            calls.append(1)
+
+        d = self.daemon(refresh_theme=refresh, theme_interval=5.0)
+        self.assertIsNone(d.poll_theme(now=100.0))
+        self.assertIsNone(d.poll_theme(now=104.9))
+        self.assertEqual(len(calls), 1)
+        d.poll_theme(now=105.0)
+        self.assertEqual(len(calls), 2)
+
+    def test_a_rewrite_restarts_the_tab_strip(self):
+        strip = FakeStrip()
+        strip.payloads.append("{}")  # the process was up, so the restart can be seen
+        d = self.daemon(
+            refresh_theme=lambda: "/tmp/theme.conf",
+            theme_interval=5.0,
+            strip=strip,
+            read_clients=lambda: [],
+            active_window=lambda: None,
+            current_workspace=lambda: 0,
+        )
+        self.assertEqual(d.poll_theme(now=100.0), "/tmp/theme.conf")
+        self.assertEqual(strip.stopped, 1)
+        self.assertEqual(json.loads(strip.payloads[-1]), {"strips": []})
+
+    def test_a_failure_is_logged_once_and_does_not_break_the_loop(self):
+        error = ["first"]
+
+        def refresh():
+            raise ValueError(error[0])
+
+        d = self.daemon(refresh_theme=refresh, theme_interval=5.0, verbose=True)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertIsNone(d.poll_theme(now=100.0))
+            error[0] = "second"
+            self.assertIsNone(d.poll_theme(now=200.0))
+            self.assertIsNone(d.poll_theme(now=300.0))
+        text = out.getvalue()
+        self.assertEqual(text.count("theme.conf was not refreshed: first"), 1)
+        self.assertEqual(text.count("theme.conf was not refreshed: second"), 1)
 
 
 INSTALL_DAEMON = os.path.join(ROOT, "install-daemon.sh")

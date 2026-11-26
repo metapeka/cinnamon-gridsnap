@@ -99,6 +99,12 @@ CURRENT_DESKTOP_ATOM = "_NET_CURRENT_DESKTOP"
 # PropertyChangeMask: PropertyNotify about root properties (including _NET_CLIENT_LIST).
 PROPERTY_CHANGE_MASK = 1 << 22
 
+# How often a generated `theme.conf` is checked against the wallpaper. The daemon's loop is
+# `select()`, not a GLib main loop, so GSettings change signals are not available: the setting is
+# polled instead. A wallpaper change is rare, and the check costs one file read plus one dconf
+# lookup until the palette is out of date.
+THEME_POLL_SECONDS = 5.0
+
 # Timeout for waiting for the single PropertyNotify in `--once` mode.
 ONCE_TIMEOUT = 2.0
 
@@ -122,6 +128,7 @@ tiler = _load_sibling("gridsnap_zone_tiler", "zone-tiler.py")
 zone_reflow = _load_sibling("gridsnap_zone_reflow", "zone_reflow.py")
 zone_ipc = _load_sibling("gridsnap_zone_ipc", "zone_ipc.py")
 zone_tabs = _load_sibling("gridsnap_zone_tabs", "zone_tabs.py")
+import zone_theme  # noqa: E402  (the palette: a generated theme.conf follows the wallpaper)
 
 # `zone_config` is the pure profile core (`[monitors]`, `[workspaces]`,
 # `resolve_profile`). The daemon needs it only when bindings exist, so
@@ -554,6 +561,12 @@ class Daemon:
                    the active tab;
       strip      — the tabs strip process (`TabStripProcess` or a stand-in in
                    tests) or `None` — there is no strip; its failure does not bring the daemon down;
+      refresh_theme — callable() -> the written path or None: rebuilds a generated
+                   `theme.conf` from the wallpaper (by default
+                   `zone_theme.refresh_from_wallpaper` on `conf_path`). Only called when
+                   `theme_interval` is set, and only a file that carries the marker is touched;
+      theme_interval — seconds between `refresh_theme` calls (`None` — off; `main` sets
+                   `THEME_POLL_SECONDS` unless `--once`: a probe must not write the palette);
       verbose    — whether to print what the daemon does.
 
     `windows` is the tracker `window id -> zone name`: it also filters out repeated
@@ -615,6 +628,8 @@ class Daemon:
         strip=None,
         monitor_outputs=None,
         subscribers=None,
+        refresh_theme=None,
+        theme_interval=None,
         verbose=False,
     ):
         self.conf_path = conf_path or tiler.default_conf()
@@ -718,12 +733,64 @@ class Daemon:
         self._workspace_map_cache = None
         # The `quit` command over the socket: the `serve` loop checks the flag and exits.
         self.stop_requested = False
+        # A generated `theme.conf` follows the wallpaper: `poll_theme` calls this from the
+        # `serve` loop every `theme_interval` seconds (None — never) and restarts the tab strip
+        # when the file was rewritten.
+        self.refresh_theme = (
+            refresh_theme
+            if refresh_theme is not None
+            else lambda: zone_theme.refresh_from_wallpaper(self.conf_path)
+        )
+        self.theme_interval = theme_interval
+        self._theme_checked = None
+        self._theme_error = None
 
     # -- helpers
 
     def log(self, message):
         if self.verbose:
             print(message, flush=True)
+
+    def poll_theme(self, now=None):
+        """Rebuild a generated `theme.conf` when the wallpaper behind it changed.
+
+        Called from the `serve` loop; throttled by `theme_interval`, because X events are many
+        while a wallpaper change is rare. Returns the written path or `None`. The tab strip read
+        the palette when it started, so a rewrite restarts it; the picker and the editor read the
+        file themselves. A failure (an unreadable image, a broken GSettings) is logged once per
+        distinct message: a verbose daemon must not repeat it every interval.
+        """
+        if not self.theme_interval:
+            return None
+        now = time.monotonic() if now is None else now
+        if self._theme_checked is not None and now - self._theme_checked < self.theme_interval:
+            return None
+        self._theme_checked = now
+        try:
+            path = self.refresh_theme()
+        except (Exception, SystemExit) as exc:
+            message = _("theme.conf was not refreshed: {exc}").format(exc=exc)
+            if message != self._theme_error:
+                self._theme_error = message
+                self.log(message)
+            return None
+        self._theme_error = None
+        if not path:
+            return None
+        self.log(_("theme.conf rebuilt from the wallpaper: {path}").format(path=path))
+        self._restart_strip_after_theme()
+        return path
+
+    def _restart_strip_after_theme(self):
+        """The tab strip took its colours at start: a rewritten palette needs a new process."""
+        if self.strip is None:
+            return
+        was_running = self.strip.running()
+        self.strip.stop()
+        # The next snapshot has to be written again: the new process has seen nothing yet.
+        self._strips_last = None
+        if was_running:
+            self.sync_strips()
 
     # -- events to the outside
 
@@ -3039,6 +3106,9 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     Subscriber descriptors (`dae.subscribers`) join the same `select`, and
     what they send is parsed by `Subscribers.poll`: that way a dropped subscriber
     is noticed between X events and the daemon forgets it instead of writing into the void.
+    Without `once` the wait is bounded by `dae.theme_interval` (`None` — unbounded, as before), and
+    every pass calls `dae.poll_theme()`: the palette of a generated `theme.conf` follows the
+    wallpaper. `--once` never refreshes the palette — a probe must not write it.
     """
     if x11 is None:
         x11 = tiler.X11()
@@ -3055,6 +3125,8 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
     watch = [fd]
     if ipc is not None:
         watch.append(ipc.fileno())
+    # `once` keeps its short probe wait; otherwise the loop wakes up for the palette check.
+    wait = once_timeout if once else getattr(dae, "theme_interval", None)
     dae.log(
         _("the daemon listens on X11 (root 0x{root:x}, reflow={reflow})").format(
             root=x11.root, reflow=dae.reflow
@@ -3071,10 +3143,8 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
             if subscribers is not None:
                 watch_now.extend(subscribers.filenos())
             if not x11.x.XPending(x11.dpy):
-                ready, _unused, _unused_again = select.select(
-                    watch_now, [], [], once_timeout if once else None
-                )
-                if not ready:
+                ready, _unused, _unused_again = select.select(watch_now, [], [], wait)
+                if not ready and once:
                     break  # once: no event ever arrived
             handled = False
             while x11.x.XPending(x11.dpy):
@@ -3093,6 +3163,11 @@ def serve(dae, x11=None, once=False, read_clients=None, once_timeout=ONCE_TIMEOU
             if subscribers is not None:
                 # A dropped subscriber is not an X event: we notice it here.
                 subscribers.poll()
+            if not once:
+                # Throttled inside: a burst of X events does not read the setting every time.
+                poll_theme = getattr(dae, "poll_theme", None)
+                if poll_theme is not None:
+                    poll_theme()
             if getattr(dae, "stop_requested", False):
                 break
             if once and handled:
@@ -3152,6 +3227,7 @@ def main(argv=None):
         session_id=read_session_id(),
         focus_path=tiler.focus_path(),
         strip=TabStripProcess(conf_path, verbose=args.verbose),
+        theme_interval=None if args.once else THEME_POLL_SECONDS,
         verbose=args.verbose,
     )
     server = None

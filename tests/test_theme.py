@@ -299,6 +299,18 @@ class TestWallpaperImage(unittest.TestCase):
             )
         self.assertEqual(zone_theme.wallpaper_image(descriptor), self.image)
 
+    def test_a_descriptor_with_nested_sizes_resolves_its_first_image(self):
+        # Debian's desktop-base descriptor: the path is the text of a `<size>` child, and the
+        # `<file>` element carries only whitespace. This is what the live Cinnamon setting points at.
+        descriptor = os.path.join(self.dir, "sizes.xml")
+        with open(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(
+                '<background><static><file><size width="1280" height="1024">%s</size>'
+                '<size width="1920" height="1080">/no/such/file.svg</size>'
+                "</file></static></background>" % self.image
+            )
+        self.assertEqual(zone_theme.wallpaper_image(descriptor), self.image)
+
     def test_a_missing_file_gives_nothing(self):
         self.assertIsNone(zone_theme.wallpaper_image(os.path.join(self.dir, "nope.png")))
         self.assertIsNone(zone_theme.wallpaper_image(""))
@@ -420,6 +432,107 @@ class TestWriteTheme(unittest.TestCase):
     def test_no_temporary_file_is_left_behind(self):
         zone_theme.write_theme(self.theme, self.path)
         self.assertFalse(os.path.exists(self.path + ".tmp"))
+
+
+class TestGeneratedSource(unittest.TestCase):
+    """The marker is the only claim on a file: a hand-written palette is never rewritten."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.path = os.path.join(self.dir, "theme.conf")
+        self.theme = zone_theme.Theme(dict(zone_theme.DEFAULT_COLORS), zone_theme.DEFAULT_ZONES)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_a_generated_file_names_its_image(self):
+        zone_theme.write_theme(self.theme, self.path, source="/tmp/paper.png")
+        self.assertEqual(zone_theme.generated_source(self.path), "/tmp/paper.png")
+
+    def test_a_marker_without_a_source_is_still_generated(self):
+        zone_theme.write_theme(self.theme, self.path)
+        self.assertEqual(zone_theme.generated_source(self.path), "")
+
+    def test_a_hand_written_file_is_not_generated(self):
+        with open(self.path, "w", encoding="utf-8") as handle:
+            handle.write("[colors]\naccent = #ff0000\n")
+        self.assertIsNone(zone_theme.generated_source(self.path))
+
+    def test_a_missing_file_is_not_generated(self):
+        self.assertIsNone(zone_theme.generated_source(self.path))
+        self.assertIsNone(zone_theme.generated_source(None))
+
+
+class TestRefreshFromWallpaper(unittest.TestCase):
+    """A generated palette follows the wallpaper; nothing else is ever touched."""
+
+    def setUp(self):
+        if not wallpaper_available():
+            self.skipTest("GdkPixbuf is not available")
+        self.dir = tempfile.mkdtemp()
+        self.path = os.path.join(self.dir, "theme.conf")
+        self.blue = os.path.join(self.dir, "blue.png")
+        self.orange = os.path.join(self.dir, "orange.png")
+        make_wallpaper(self.blue, [(12, 20, 96)] * 64)
+        make_wallpaper(self.orange, [(230, 120, 30)] * 64)
+        self.theme = zone_theme.Theme(dict(zone_theme.DEFAULT_COLORS), zone_theme.DEFAULT_ZONES)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def generated(self, source):
+        return zone_theme.write_theme(self.theme, self.path, source=source)
+
+    def test_a_new_wallpaper_rewrites_the_palette(self):
+        self.generated(self.blue)
+        written = zone_theme.refresh_from_wallpaper(path=self.path, wallpaper=self.orange)
+        self.assertEqual(written, self.path)
+        self.assertEqual(zone_theme.generated_source(self.path), self.orange)
+        self.assertEqual(
+            zone_theme.load(None, path=self.path).colors,
+            zone_theme.from_wallpaper(self.orange).colors,
+        )
+
+    def test_the_same_wallpaper_keeps_the_file(self):
+        self.generated(self.blue)
+        before = os.stat(self.path).st_mtime_ns
+        self.assertIsNone(zone_theme.refresh_from_wallpaper(path=self.path, wallpaper=self.blue))
+        self.assertEqual(os.stat(self.path).st_mtime_ns, before)
+
+    def test_a_file_uri_counts_as_the_same_wallpaper(self):
+        self.generated(self.blue)
+        uri = "file://" + urllib.parse.quote(self.blue)
+        self.assertIsNone(zone_theme.refresh_from_wallpaper(path=self.path, wallpaper=uri))
+
+    def test_a_marker_without_a_source_is_still_refreshed(self):
+        self.generated(None)
+        written = zone_theme.refresh_from_wallpaper(path=self.path, wallpaper=self.orange)
+        self.assertEqual(written, self.path)
+        self.assertEqual(zone_theme.generated_source(self.path), self.orange)
+
+    def test_a_hand_written_file_is_never_rewritten(self):
+        with open(self.path, "w", encoding="utf-8") as handle:
+            handle.write("[colors]\naccent = #ff0000\n")
+        self.assertIsNone(zone_theme.refresh_from_wallpaper(path=self.path, wallpaper=self.orange))
+        with open(self.path, encoding="utf-8") as handle:
+            self.assertIn("accent = #ff0000", handle.read())
+
+    def test_no_theme_file_and_no_wallpaper_write_nothing(self):
+        self.assertIsNone(zone_theme.refresh_from_wallpaper(path=self.path, wallpaper=self.orange))
+        self.assertFalse(os.path.exists(self.path))
+        self.generated(self.blue)
+        before = os.stat(self.path).st_mtime_ns
+        self.assertIsNone(zone_theme.refresh_from_wallpaper(path=self.path, wallpaper=""))
+        self.assertEqual(os.stat(self.path).st_mtime_ns, before)
+
+    def test_an_unreadable_image_keeps_the_old_palette(self):
+        self.generated(self.blue)
+        broken = os.path.join(self.dir, "broken.png")
+        with open(broken, "w", encoding="utf-8") as handle:
+            handle.write("not a png")
+        with self.assertRaises(ValueError):
+            zone_theme.refresh_from_wallpaper(path=self.path, wallpaper=broken)
+        self.assertEqual(zone_theme.generated_source(self.path), self.blue)
 
 
 class TestGtkThemeFiles(unittest.TestCase):

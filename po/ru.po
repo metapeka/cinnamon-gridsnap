@@ -836,6 +836,16 @@ msgstr "полоса вкладок запущена: {script}"
 
 #: zone-daemon.py
 #, python-brace-format
+msgid "theme.conf was not refreshed: {exc}"
+msgstr "theme.conf не обновлён: {exc}"
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "theme.conf rebuilt from the wallpaper: {path}"
+msgstr "theme.conf пересобран по обоям: {path}"
+
+#: zone-daemon.py
+#, python-brace-format
 msgid "failed to broadcast event '{kind}': {exc}"
 msgstr "не удалось разослать событие '{kind}': {exc}"
 

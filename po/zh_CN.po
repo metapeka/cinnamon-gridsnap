@@ -835,6 +835,16 @@ msgstr "标签栏已启动：{script}"
 
 #: zone-daemon.py
 #, python-brace-format
+msgid "theme.conf was not refreshed: {exc}"
+msgstr "theme.conf 未能更新：{exc}"
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "theme.conf rebuilt from the wallpaper: {path}"
+msgstr "已根据壁纸重建 theme.conf：{path}"
+
+#: zone-daemon.py
+#, python-brace-format
 msgid "failed to broadcast event '{kind}': {exc}"
 msgstr "无法广播事件 '{kind}'：{exc}"
 
