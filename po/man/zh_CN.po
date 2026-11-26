@@ -4,7 +4,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap\n"
-"POT-Creation-Date: 2026-11-26 07:25+0300\n"
+"POT-Creation-Date: 2026-11-26 13:03+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: Chinese\n"
@@ -22,14 +22,14 @@ msgstr "GRIDSNAP"
 #. type: TH
 #: man/gridsnap.1:9
 #, no-wrap
-msgid "2026-11-22"
-msgstr "2026-11-22"
+msgid "2026-11-26"
+msgstr "2026-11-26"
 
 #. type: TH
 #: man/gridsnap.1:9
 #, no-wrap
-msgid "gridsnap 0.2.0"
-msgstr "gridsnap 0.2.0"
+msgid "gridsnap 0.3.0"
+msgstr "gridsnap 0.3.0"
 
 #. type: TH
 #: man/gridsnap.1:9
@@ -1364,8 +1364,8 @@ msgstr "B<--version>"
 
 #. type: Plain text
 #: man/gridsnap.1:496
-msgid "Prints I<zone-tiler 0.2.0> and exits."
-msgstr "打印 I<zone-tiler 0.2.0> 并退出。"
+msgid "Prints I<zone-tiler 0.3.0> and exits."
+msgstr "打印 I<zone-tiler 0.3.0> 并退出。"
 
 #. type: Plain text
 #: man/gridsnap.1:499
@@ -1825,9 +1825,10 @@ msgid ""
 "in step with the palette, and picking the theme in Cinnamon Settings is the "
 "user's action."
 msgstr ""
-"该文件不美化窗口边框：Muffin 从不读取 metacity 主题，因此服务端装饰的窗口边框保持"
-"它绘制的样子。编辑器还可以写入使用同一配色的 GTK 3 控件主题；当其文件带有生成标记时，"
-"守护进程会使其与配色保持一致；在 Cinnamon 设置中选择该主题由用户完成。"
+"该文件不美化窗口边框：Muffin 从不读取 metacity 主题，因此服务端装饰的窗口边框"
+"保持它绘制的样子。编辑器还可以写入使用同一配色的 GTK 3 控件主题；当其文件带有"
+"生成标记时，守护进程会使其与配色保持一致；在 Cinnamon 设置中选择该主题由用户"
+"完成。"
 
 #. type: SH
 #: man/gridsnap.1:650
@@ -2034,8 +2035,8 @@ msgid ""
 "files carry the generated marker; it must be selected in Cinnamon Settings, "
 "Themes, Controls."
 msgstr ""
-"编辑器写入的 GTK 3 控件主题（“主题”菜单中的“窗口控件…”）。当其文件带有生成标记时，"
-"守护进程按当前配色刷新它；需要在 Cinnamon 设置 → 主题 → 控件中选择。"
+"编辑器写入的 GTK 3 控件主题（“主题”菜单中的“窗口控件…”）。当其文件带有生成标"
+"记时，守护进程按当前配色刷新它；需要在 Cinnamon 设置 → 主题 → 控件中选择。"
 
 #. type: TP
 #: man/gridsnap.1:731

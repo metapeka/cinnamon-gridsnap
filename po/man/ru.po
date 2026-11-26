@@ -4,7 +4,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap\n"
-"POT-Creation-Date: 2026-11-26 07:25+0300\n"
+"POT-Creation-Date: 2026-11-26 13:03+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: прежний язык исходника\n"
 "Language-Team: Russian\n"
@@ -22,14 +22,14 @@ msgstr "GRIDSNAP"
 #. type: TH
 #: man/gridsnap.1:9
 #, no-wrap
-msgid "2026-11-22"
-msgstr "2026-11-22"
+msgid "2026-11-26"
+msgstr "2026-11-26"
 
 #. type: TH
 #: man/gridsnap.1:9
 #, no-wrap
-msgid "gridsnap 0.2.0"
-msgstr "gridsnap 0.2.0"
+msgid "gridsnap 0.3.0"
+msgstr "gridsnap 0.3.0"
 
 #. type: TH
 #: man/gridsnap.1:9
@@ -1430,8 +1430,8 @@ msgstr "B<--version>"
 
 #. type: Plain text
 #: man/gridsnap.1:496
-msgid "Prints I<zone-tiler 0.2.0> and exits."
-msgstr "Печатает I<zone-tiler 0.2.0> и выходит."
+msgid "Prints I<zone-tiler 0.3.0> and exits."
+msgstr "Печатает I<zone-tiler 0.3.0> и выходит."
 
 #. type: Plain text
 #: man/gridsnap.1:499

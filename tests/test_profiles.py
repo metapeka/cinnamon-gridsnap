@@ -313,6 +313,7 @@ class TestHeadless(unittest.TestCase):
     def run_python(self, code=None, *args, **kwargs):
         env = dict(os.environ)
         env.pop("DISPLAY", None)
+        env.update(kwargs.pop("env", None) or {})
         cmd = [sys.executable]
         if code is not None:
             cmd += ["-c", code]
@@ -326,7 +327,13 @@ class TestHeadless(unittest.TestCase):
         )
 
     def test_zone_config_imports_without_display(self):
-        r = self.run_python("import zone_config; print(len(zone_config.list_profiles()))")
+        # `list_profiles()` without `--conf` reads `$XDG_CONFIG_HOME/gridsnap/templates`, so the
+        # test owns that directory: on a machine with saved profiles the answer is not zero.
+        with tempfile.TemporaryDirectory() as tmp:
+            r = self.run_python(
+                "import zone_config; print(len(zone_config.list_profiles()))",
+                env={"XDG_CONFIG_HOME": tmp},
+            )
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip(), "0")
 

@@ -246,33 +246,21 @@ def current_workspace_or_first():
     return 0 if x_alive() else None
 
 
-def window_on_other_desktop(win):
-    """The window is on another desktop — that is not the same as "minimised".
-
-    Measurement (``docs/RESEARCH-wayland-recon.md``): in a Wayland session of Cinnamon a
-    window that has moved to another desktop gets `WM_STATE=Iconic`, although the user did not
-    minimise it, and one `_NET_ACTIVE_WINDOW` does not bring it back — the desktop has to be
-    switched first. ``window_iconic`` answers "minimised" in this situation, while this
-    question is "just on another desktop".
-
-    ``None`` — the desktop of the window or the active desktop cannot be read, or the window
-    is "sticky" (``_NET_WM_DESKTOP = 0xFFFFFFFF``: it is on all desktops).
-    """
-    desk = window_workspace(win)
-    if desk is None or desk >= 0xFFFFFFF0:
-        return None
-    current = current_workspace()
-    if current is None:
-        return None
-    return desk != current
-
-
 def window_iconic(win):
     """Whether the window is minimised now — `WM_STATE: Iconic` or `_NET_WM_STATE_HIDDEN`.
 
     muffin sets both marks on `WM_CHANGE_STATE` (verified by smoke on
     Cinnamon/muffin), so the real EWMH/ICCCM mark is read, not a
     guess from the geometry. If the property cannot be read, the window counts as visible.
+
+    ``Iconic`` means two different things: the user minimised the window, **or** the window
+    sits on a desktop that is not active. Measured on X11 as well as under the nested
+    Wayland session (``docs/RESEARCH-wayland-recon.md``): ``xdotool set_desktop_for_window``
+    turns ``WM_STATE`` into ``Iconic`` and switching to that desktop turns it back. One
+    ``_NET_ACTIVE_WINDOW`` does not bring such a window back, the desktop has to be switched
+    first. Callers that must tell the two apart switch the desktop themselves —
+    ``zone-tiler._focus_restore`` groups the windows by desktop for exactly that reason —
+    rather than asking a second question of every window.
     """
     try:
         txt = subprocess.check_output(

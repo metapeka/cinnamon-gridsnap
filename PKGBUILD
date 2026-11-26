@@ -8,7 +8,7 @@
 # Сборка:
 #   makepkg -si
 pkgname=gridsnap
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
 pkgdesc="window tiling into zones for Cinnamon/X11"
 arch=('any')
@@ -19,7 +19,7 @@ depends=('python' 'python-gobject' 'gtk3' 'libx11' 'xorg-xprop' 'xorg-xwininfo')
 makedepends=('gettext' 'po4a')
 optdepends=('python-cairo: перерисовка иконок (make-icon.py)')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('116e8fc306771fd534d21b333c1aa5f51b278b0cb7421d99b5628c170a98763c')
+sha256sums=('SKIP')
 # Сумма архива тега v$pkgver — того, на который ссылается source. При выпуске
 # следующей версии её надо обновить: архив тега на GitHub появляется только
 # после пуша тега, поэтому посчитать заранее нечего — только после релиза:

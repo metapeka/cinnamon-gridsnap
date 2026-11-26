@@ -62,7 +62,7 @@ from zone_i18n import _  # noqa: E402  (same place: interface strings and their 
 # The call comes before the first `load_gtk()`: after GDK initialisation the backend cannot be switched.
 window_backend.prefer_x11_gdk()
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 EXIT_OK = 0
 EXIT_FAIL = 1

@@ -740,5 +740,33 @@ class GalleryDirTest(unittest.TestCase):
             self.assertTrue(layout["description"].strip(), gid)
 
 
+class ShippedConfigTest(unittest.TestCase):
+    """The `zones.conf` at the root is shipped: `make deb`, `install.sh`, `PKGBUILD`, `debian/install`.
+
+    The owner's live layout is `~/.config/gridsnap/zones.conf` — that file is found first by
+    `zone-tiler.default_conf`, and the copy next to the code is only the starting layout for a
+    new installation. Twice the live layout was committed here by accident (26.11: `[workspaces]
+    1 = ws1`, where `ws1.conf` lives in `templates/`, which is gitignored), and it reached every
+    new user as a grid of someone else's desktop pointing at a profile that is not in the package.
+
+    Therefore: the shipped file is a plain zone set. Bindings to profiles (`[workspaces]`,
+    `[monitors]`) are the user's business — the shipped profiles live in `gallery/`, and only
+    `profile from-gallery` puts one into `templates/`.
+    """
+
+    def setUp(self):
+        self.path = os.path.join(ROOT, "zones.conf")
+
+    def test_shipped_file_has_zones(self):
+        zones = zc.load_zones(self.path)
+        self.assertGreaterEqual(len(zones), 2, "the shipped zones.conf has no zones")
+
+    def test_shipped_file_binds_no_profiles(self):
+        # `templates/` is gitignored and is not in any package: a binding into it is dead on
+        # every machine except the owner's.
+        self.assertEqual(zc.load_workspace_map(self.path), {})
+        self.assertEqual(zc.load_monitor_map(self.path), {})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -46,7 +46,7 @@ EXIT_OK = 0
 EXIT_FAIL = 1
 EXIT_USAGE = 2
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 # How long to wait for the daemon's answer, in seconds.
 TIMEOUT = 5.0

@@ -1,3 +1,23 @@
+gridsnap (0.3.0-1) unstable; urgency=medium
+
+  * Give every surface one optional palette: `theme.conf` next to `zones.conf`
+    feeds the picker, the HUD, the tab strip and the zone editor, with five
+    presets and a zone hue per zone.
+  * Build that palette from the desktop wallpaper (GdkPixbuf sampling, no new
+    dependency) from the editor's Theme menu; the daemon follows `picture-uri`
+    and keeps a generated `theme.conf` in step.
+  * Generate a GTK controls theme from the same palette and refresh it from the
+    daemon's poll and from the editor, so running GTK applications match the
+    grid.
+  * Document `theme.conf` and both generated files in `man gridsnap`, with the
+    Russian and Chinese catalogs updated.
+  * Render the README and site images from a script, so the stills and the
+    demonstration always show the current palette.
+  * Fix the owner's live layout leaking into the shipped `zones.conf`, and give
+    the arrange smoke scenario its own config.
+
+ -- metapeka <188594035+metapeka@users.noreply.github.com>  Thu, 26 Nov 2026 13:00:00 +0300
+
 gridsnap (0.2.0-1) unstable; urgency=medium
 
   * Localize the user interface into English and Chinese (gettext catalogs

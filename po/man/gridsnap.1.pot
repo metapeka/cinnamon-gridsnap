@@ -7,7 +7,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2026-11-26 07:25+0300\n"
+"POT-Creation-Date: 2026-11-26 13:03+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -25,13 +25,13 @@ msgstr ""
 #. type: TH
 #: man/gridsnap.1:9
 #, no-wrap
-msgid "2026-11-22"
+msgid "2026-11-26"
 msgstr ""
 
 #. type: TH
 #: man/gridsnap.1:9
 #, no-wrap
-msgid "gridsnap 0.2.0"
+msgid "gridsnap 0.3.0"
 msgstr ""
 
 #. type: TH
@@ -1116,7 +1116,7 @@ msgstr ""
 
 #. type: Plain text
 #: man/gridsnap.1:496
-msgid "Prints I<zone-tiler 0.2.0> and exits."
+msgid "Prints I<zone-tiler 0.3.0> and exits."
 msgstr ""
 
 #. type: Plain text

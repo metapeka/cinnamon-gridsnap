@@ -78,7 +78,7 @@ from typing import cast
 from zone_i18n import _
 import window_backend  # the window layer: xprop/xwininfo/libX11 in one place
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 

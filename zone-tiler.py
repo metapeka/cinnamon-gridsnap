@@ -133,7 +133,7 @@ from zone_i18n import _  # interface strings; without a catalog — the source t
 import window_backend  # window layer: xprop/xwininfo/xrandr and libX11 — in one place
 import zone_units  # converting GTK logical pixels to physical X ones — in one place
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 # CLI return codes: 0 — success, 1 — runtime error, 2 — argument error,
 # 3 — config error (argparse itself reports argument errors with code 2).
@@ -658,11 +658,6 @@ def current_workspace_or_first():
     if desk is not None:
         return desk
     return 0 if window_backend.x_alive() else None
-
-
-def window_on_other_desktop(win):
-    """A window on another desktop is not the same as minimised; see `window_backend`."""
-    return window_backend.window_on_other_desktop(win)
 
 
 def window_workspace_for_zones(win):
@@ -2511,7 +2506,7 @@ def _focus_dry_run(grid, args, state):
         )
     candidates = focus_candidates(
         focus_entries(read_client_list() or [], monitors()), window,
-        current_workspace(), wa,
+        current_workspace_or_first(), wa,
     )
     todo = [
         win
@@ -2549,7 +2544,9 @@ def _focus_enter(grid, args):
                 file=sys.stderr,
             )
         return
-    workspace = current_workspace()
+    # `current_workspace_or_first`, not `current_workspace`: in a Wayland session Cinnamon has no
+    # `_NET_CURRENT_DESKTOP` until the first desktop switch, and a refusal here broke the mode.
+    workspace = current_workspace_or_first()
     if workspace is None:
         fail(_("zone-tiler: failed to determine the active workspace"), EXIT_FAIL)
     monitors_ = monitors()

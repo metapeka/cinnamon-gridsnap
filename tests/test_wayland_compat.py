@@ -2,8 +2,11 @@
 """Tests for the Wayland compatibility of the window layer.
 
 They check what was measured in ``docs/RESEARCH-wayland-recon.md``: in a Wayland session
-Cinnamon does not publish `_NET_CURRENT_DESKTOP` before the first desktop switch, and a window
-on another desktop is indistinguishable from a minimized one. No X server is needed: `xprop` is replaced.
+Cinnamon does not publish `_NET_CURRENT_DESKTOP` before the first desktop switch, and GTK would
+pick the Wayland backend unless the window layer asks for X11. A window on another desktop also
+carries `WM_STATE=Iconic` — the callers that must tell it from a minimised one switch the desktop
+themselves, so the window layer keeps a single question (`window_iconic`). No X server is needed:
+`xprop` is replaced.
 """
 
 import os
@@ -17,8 +20,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import window_backend as wb  # noqa: E402
 
 CURRENT = "_NET_CURRENT_DESKTOP"
-ACTIVE = "_NET_ACTIVE_WINDOW"
-DESKTOP = "_NET_WM_DESKTOP"
 
 
 def xprop(answers=None, unavailable=False):
@@ -96,38 +97,6 @@ class TestCurrentWorkspaceOrFirst(unittest.TestCase):
         with mock.patch.object(wb.subprocess, "check_output", answers):
             self.assertEqual(wb.current_workspace_or_first(), 0)
         self.assertEqual(len(calls), 2, calls)
-
-
-class TestWindowOnOtherDesktop(unittest.TestCase):
-    def test_true_when_desktops_differ(self):
-        with mock.patch.object(
-            wb.subprocess,
-            "check_output",
-            xprop({DESKTOP: f"{DESKTOP}(CARDINAL) = 1\n", CURRENT: f"{CURRENT}(CARDINAL) = 0\n"}),
-        ):
-            self.assertTrue(wb.window_on_other_desktop(0x400003))
-
-    def test_false_when_desktops_match(self):
-        with mock.patch.object(
-            wb.subprocess,
-            "check_output",
-            xprop({DESKTOP: f"{DESKTOP}(CARDINAL) = 0\n", CURRENT: f"{CURRENT}(CARDINAL) = 0\n"}),
-        ):
-            self.assertFalse(wb.window_on_other_desktop(0x400003))
-
-    def test_sticky_window_is_on_every_desktop(self):
-        with mock.patch.object(
-            wb.subprocess,
-            "check_output",
-            xprop({DESKTOP: f"{DESKTOP}(CARDINAL) = 4294967295\n", CURRENT: f"{CURRENT}(CARDINAL) = 1\n"}),
-        ):
-            self.assertIsNone(wb.window_on_other_desktop(0x400003))
-
-    def test_unknown_current_desktop_is_not_a_guess(self):
-        with mock.patch.object(
-            wb.subprocess, "check_output", xprop({DESKTOP: f"{DESKTOP}(CARDINAL) = 3\n"})
-        ):
-            self.assertIsNone(wb.window_on_other_desktop(0x400003))
 
 
 class TestPreferX11Gdk(unittest.TestCase):

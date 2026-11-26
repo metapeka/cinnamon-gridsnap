@@ -24,7 +24,6 @@ unset WAYLAND_DISPLAY 2>/dev/null || true
 DISP=":98"
 ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 TILER="$ROOT/zone-tiler.py"
-CONF="$ROOT/zones.conf"
 
 # Своё состояние (история undo) — во временном каталоге, не в домашнем.
 STATE=$(mktemp -d 2>/dev/null || echo /tmp/gridsnap-state.$$)
@@ -33,6 +32,21 @@ export XDG_STATE_HOME="$STATE"
 unset XDG_CONFIG_HOME 2>/dev/null || true
 
 LOGDIR=$(mktemp -d 2>/dev/null || echo /tmp)
+# Свой конфиг: корневой zones.conf — раскладка владельца, и её [workspaces]/[monitors]
+# уводят `arrange` в профиль, а окна сценария ждут зоны этого файла. Четыре зоны —
+# три окна сценария плюс запас, чтобы порядок зон не был предельным случаем.
+CONF="$LOGDIR/zones.conf"
+cat >"$CONF" <<'CONF'
+[grid]
+cols = 1.0
+rows = 1.0
+
+[zones]
+main = 0, 0, 0.8358, 1
+top-right = 0.8358, 0, 0.1642, 0.5
+top-far = 0.8358, 0.5, 0.1642, 0.5
+bottom = 0.7129, 0.8068, 0.2871, 0.1932
+CONF
 MUFFIN_LOG="$LOGDIR/gridsnap-smoke-arrange-muffin.log"
 # Сокет демона — в своём каталоге: при живом демоне владельца `arrange`
 # делегирует ему, и сценарий разбирал бы поведение чужого процесса.
