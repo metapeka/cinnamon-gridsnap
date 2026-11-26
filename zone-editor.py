@@ -667,8 +667,22 @@ class Editor(Gtk.Window):
             provider.load_from_data(css)
         self.canvas.queue_draw()
 
+    def follow_controls_theme(self):
+        """A generated controls theme follows the palette; a hand-written one is never touched.
+
+        The daemon does the same on its poll, but the editor may run without it, and a user who
+        just picked **From the wallpaper…** or **Reload theme.conf** expects the files to match
+        what is in `theme.conf`.
+        """
+        try:
+            return zone_theme.refresh_gtk_theme(self.conf_path, theme=self.theme)
+        except (OSError, ValueError) as exc:
+            self.set_status(_("controls theme not refreshed: {}").format(exc))
+            return None
+
     def on_theme_reload(self):
         self.reload_theme()
+        self.follow_controls_theme()
         self.set_status(
             _("theme reloaded: {}").format(self.theme.path or _("default palette"))
         )
@@ -686,10 +700,11 @@ class Editor(Gtk.Window):
         target = zone_theme.theme_path(self.conf_path)
         zone_theme.write_theme(theme, target, source=image)
         self.reload_theme()
+        self.follow_controls_theme()
         self.set_status(_("theme written: {}").format(target))
 
     def on_theme_controls(self):
-        directory = os.path.join(os.path.expanduser("~"), ".themes", "Gridsnap")
+        directory = os.path.expanduser(zone_theme.GTK_THEME_DIR)
         zone_theme.write_gtk_theme(directory, self.theme)
         self.set_status(
             _("controls theme written: {} (Cinnamon Settings, Themes, Controls)").format(directory)

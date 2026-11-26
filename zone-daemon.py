@@ -565,6 +565,10 @@ class Daemon:
                    `theme.conf` from the wallpaper (by default
                    `zone_theme.refresh_from_wallpaper` on `conf_path`). Only called when
                    `theme_interval` is set, and only a file that carries the marker is touched;
+      refresh_controls — callable() -> the rewritten directory or None: brings a generated GTK
+                   controls theme in step with the current palette (`main` passes
+                   `zone_theme.refresh_gtk_theme`; `None` — off, which is what tests want: the
+                   default directory lives in the user's home);
       theme_interval — seconds between `refresh_theme` calls (`None` — off; `main` sets
                    `THEME_POLL_SECONDS` unless `--once`: a probe must not write the palette);
       verbose    — whether to print what the daemon does.
@@ -629,6 +633,7 @@ class Daemon:
         monitor_outputs=None,
         subscribers=None,
         refresh_theme=None,
+        refresh_controls=None,
         theme_interval=None,
         verbose=False,
     ):
@@ -741,9 +746,12 @@ class Daemon:
             if refresh_theme is not None
             else lambda: zone_theme.refresh_from_wallpaper(self.conf_path)
         )
+        # The generated GTK controls theme is refreshed only when `main` wires it: a plain
+        # Daemon (tests, utility runs) must never rewrite `~/.themes/Gridsnap`.
+        self.refresh_controls = refresh_controls
         self.theme_interval = theme_interval
         self._theme_checked = None
-        self._theme_error = None
+        self._theme_errors = {}
 
     # -- helpers
 
@@ -752,13 +760,17 @@ class Daemon:
             print(message, flush=True)
 
     def poll_theme(self, now=None):
-        """Rebuild a generated `theme.conf` when the wallpaper behind it changed.
+        """Keep a generated `theme.conf` and a generated GTK controls theme in step.
 
         Called from the `serve` loop; throttled by `theme_interval`, because X events are many
-        while a wallpaper change is rare. Returns the written path or `None`. The tab strip read
-        the palette when it started, so a rewrite restarts it; the picker and the editor read the
-        file themselves. A failure (an unreadable image, a broken GSettings) is logged once per
-        distinct message: a verbose daemon must not repeat it every interval.
+        while a palette change is rare. Returns the written `theme.conf` path or `None`.
+
+        The order matters: the palette is rebuilt first, then the controls theme reads the same
+        `theme.conf`, so both carry one look. A rewrite of `theme.conf` restarts the tab strip (it
+        took its colours at start); the picker and the editor read the file themselves, and GTK
+        applications that are already running keep the old controls sheet until they restart.
+        A failure is logged once per distinct message: a verbose daemon must not repeat it every
+        interval.
         """
         if not self.theme_interval:
             return None
@@ -766,20 +778,52 @@ class Daemon:
         if self._theme_checked is not None and now - self._theme_checked < self.theme_interval:
             return None
         self._theme_checked = now
+        written = self._refresh_theme_file()
+        if self.refresh_controls is not None:
+            self._refresh_controls_theme()
+        if not written:
+            return None
+        self._restart_strip_after_theme()
+        return written
+
+    def _refresh_theme_file(self):
+        """`refresh_theme` with the once-per-message log; returns the written path or None."""
         try:
             path = self.refresh_theme()
         except (Exception, SystemExit) as exc:
-            message = _("theme.conf was not refreshed: {exc}").format(exc=exc)
-            if message != self._theme_error:
-                self._theme_error = message
-                self.log(message)
+            self._warn_theme(
+                "theme.conf", _("theme.conf was not refreshed: {exc}").format(exc=exc)
+            )
             return None
-        self._theme_error = None
-        if not path:
-            return None
-        self.log(_("theme.conf rebuilt from the wallpaper: {path}").format(path=path))
-        self._restart_strip_after_theme()
+        self._theme_errors.pop("theme.conf", None)
+        if path:
+            self.log(
+                _("theme.conf rebuilt from the wallpaper: {path}").format(path=path)
+            )
         return path
+
+    def _refresh_controls_theme(self):
+        """`refresh_controls` with the same log discipline; returns the rewritten directory."""
+        try:
+            directory = self.refresh_controls()
+        except (Exception, SystemExit) as exc:
+            self._warn_theme(
+                "controls",
+                _("controls theme was not refreshed: {exc}").format(exc=exc),
+            )
+            return None
+        self._theme_errors.pop("controls", None)
+        if directory:
+            self.log(
+                _("controls theme rebuilt from the palette: {path}").format(path=directory)
+            )
+        return directory
+
+    def _warn_theme(self, key, message):
+        if self._theme_errors.get(key) == message:
+            return
+        self._theme_errors[key] = message
+        self.log(message)
 
     def _restart_strip_after_theme(self):
         """The tab strip took its colours at start: a rewritten palette needs a new process."""
@@ -3227,6 +3271,7 @@ def main(argv=None):
         session_id=read_session_id(),
         focus_path=tiler.focus_path(),
         strip=TabStripProcess(conf_path, verbose=args.verbose),
+        refresh_controls=lambda: zone_theme.refresh_gtk_theme(conf_path),
         theme_interval=None if args.once else THEME_POLL_SECONDS,
         verbose=args.verbose,
     )

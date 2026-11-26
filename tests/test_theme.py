@@ -538,22 +538,132 @@ class TestRefreshFromWallpaper(unittest.TestCase):
 class TestGtkThemeFiles(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
+        self.directory = os.path.join(self.dir, "Gridsnap")
+        self.theme = zone_theme.Theme(
+            dict(zone_theme.DEFAULT_COLORS), zone_theme.DEFAULT_ZONES, name="mine"
+        )
 
     def tearDown(self):
         shutil.rmtree(self.dir, ignore_errors=True)
 
-    def test_the_theme_is_adwaita_dark_plus_the_palette(self):
-        theme = zone_theme.Theme(dict(zone_theme.DEFAULT_COLORS), zone_theme.DEFAULT_ZONES)
-        index, css = zone_theme.write_gtk_theme(os.path.join(self.dir, "Gridsnap"), theme)
-        self.assertTrue(os.path.exists(index))
-        with open(css, encoding="utf-8") as handle:
-            text = handle.read()
-        self.assertIn("gtk-contained-dark.css", text)
-        self.assertIn(theme.colors["bg"], text)
-        self.assertIn(theme.colors["accent"], text)
-        self.assertIn("decoration, window.csd", text)
+    def files(self):
+        index = os.path.join(self.directory, "index.theme")
+        css = os.path.join(self.directory, "gtk-3.0", "gtk.css")
         with open(index, encoding="utf-8") as handle:
-            self.assertIn("Name=Gridsnap", handle.read())
+            index_text = handle.read()
+        with open(css, encoding="utf-8") as handle:
+            css_text = handle.read()
+        return index_text, css_text
+
+    def test_the_theme_is_adwaita_dark_plus_the_palette(self):
+        index, css = zone_theme.write_gtk_theme(self.directory, self.theme)
+        self.assertEqual(index, os.path.join(self.directory, "index.theme"))
+        css_text = self.files()[1]
+        self.assertIn("gtk-contained-dark.css", css_text)
+        self.assertIn(self.theme.colors["bg"], css_text)
+        self.assertIn(self.theme.colors["accent"], css_text)
+        self.assertIn("decoration, window.csd", css_text)
+
+    def test_the_files_are_marked_as_generated(self):
+        zone_theme.write_gtk_theme(self.directory, self.theme)
+        index_text, css_text = self.files()
+        self.assertTrue(index_text.startswith(zone_theme.GTK_MARK))
+        self.assertTrue(css_text.startswith(zone_theme.GTK_CSS_MARK))
+        self.assertIn("Name=Gridsnap", index_text)
+        self.assertIn("Comment=Gridsnap controls (mine)", index_text)
+        self.assertTrue(zone_theme.generated_gtk_theme(self.directory))
+
+
+class TestGeneratedGtkTheme(unittest.TestCase):
+    """Only a controls theme GridSnap wrote is ever refreshed."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.directory = os.path.join(self.dir, "Gridsnap")
+        self.theme = zone_theme.Theme(
+            dict(zone_theme.DEFAULT_COLORS), zone_theme.DEFAULT_ZONES, name="mine"
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def write_index(self, text):
+        os.makedirs(self.directory, exist_ok=True)
+        path = os.path.join(self.directory, "index.theme")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+
+    def test_a_marked_theme_is_generated(self):
+        zone_theme.write_gtk_theme(self.directory, self.theme)
+        self.assertTrue(zone_theme.generated_gtk_theme(self.directory))
+
+    def test_the_legacy_unmarked_theme_is_adopted(self):
+        # The first version wrote no marker; its exact Name+Comment pair is the claim.
+        self.write_index(
+            "[Desktop Entry]\nType=X-GNOME-Metatheme\nName=Gridsnap\n"
+            "Comment=Gridsnap controls (default)\nEncoding=UTF-8\n"
+        )
+        self.assertTrue(zone_theme.generated_gtk_theme(self.directory))
+
+    def test_a_user_theme_is_not_generated(self):
+        self.write_index("[Desktop Entry]\nType=X-GNOME-Metatheme\nName=Mine\n")
+        self.assertFalse(zone_theme.generated_gtk_theme(self.directory))
+
+    def test_a_name_without_the_comment_is_not_generated(self):
+        self.write_index("[Desktop Entry]\nName=Gridsnap\n")
+        self.assertFalse(zone_theme.generated_gtk_theme(self.directory))
+
+    def test_an_absent_theme_is_not_generated(self):
+        self.assertFalse(zone_theme.generated_gtk_theme(self.directory))
+
+    def test_a_new_palette_rewrites_the_files(self):
+        zone_theme.write_gtk_theme(self.directory, self.theme)
+        other = zone_theme.Theme(
+            {**zone_theme.DEFAULT_COLORS, "bg": "#000000"},
+            zone_theme.DEFAULT_ZONES,
+            name="other",
+        )
+        written = zone_theme.refresh_gtk_theme(directory=self.directory, theme=other)
+        self.assertEqual(written, self.directory)
+        with open(os.path.join(self.directory, "gtk-3.0", "gtk.css"), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("#000000", text)
+        self.assertIn('"other"', text)
+
+    def test_the_same_palette_keeps_the_files(self):
+        zone_theme.write_gtk_theme(self.directory, self.theme)
+        index = os.path.join(self.directory, "index.theme")
+        css = os.path.join(self.directory, "gtk-3.0", "gtk.css")
+        before = (os.stat(index).st_mtime_ns, os.stat(css).st_mtime_ns)
+        self.assertIsNone(
+            zone_theme.refresh_gtk_theme(directory=self.directory, theme=self.theme)
+        )
+        self.assertEqual((os.stat(index).st_mtime_ns, os.stat(css).st_mtime_ns), before)
+
+    def test_a_user_theme_is_never_rewritten(self):
+        self.write_index("[Desktop Entry]\nType=X-GNOME-Metatheme\nName=Mine\n")
+        self.assertIsNone(
+            zone_theme.refresh_gtk_theme(directory=self.directory, theme=self.theme)
+        )
+        with open(os.path.join(self.directory, "index.theme"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "[Desktop Entry]\nType=X-GNOME-Metatheme\nName=Mine\n")
+
+    def test_the_palette_comes_from_theme_conf(self):
+        # No explicit theme: the file next to the config is what the surfaces see.
+        conf = os.path.join(self.dir, "zones.conf")
+        with open(conf, "w", encoding="utf-8") as handle:
+            handle.write("[zones]\nmain = 0, 0, 1, 1\n")
+        zone_theme.write_theme(self.theme, zone_theme.theme_path(conf))
+        zone_theme.write_gtk_theme(self.directory, self.theme)
+        other = zone_theme.Theme(
+            {**zone_theme.DEFAULT_COLORS, "accent": "#00ff00"},
+            zone_theme.DEFAULT_ZONES,
+            name="other",
+        )
+        zone_theme.write_theme(other, zone_theme.theme_path(conf))
+        self.assertEqual(zone_theme.refresh_gtk_theme(conf, self.directory), self.directory)
+        with open(os.path.join(self.directory, "gtk-3.0", "gtk.css"), encoding="utf-8") as handle:
+            self.assertIn("#00ff00", handle.read())
 
 
 if __name__ == "__main__":

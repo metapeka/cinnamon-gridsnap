@@ -846,6 +846,16 @@ msgstr "theme.conf пересобран по обоям: {path}"
 
 #: zone-daemon.py
 #, python-brace-format
+msgid "controls theme was not refreshed: {exc}"
+msgstr "тема элементов управления не обновлена: {exc}"
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "controls theme rebuilt from the palette: {path}"
+msgstr "тема элементов управления пересобрана по палитре: {path}"
+
+#: zone-daemon.py
+#, python-brace-format
 msgid "failed to broadcast event '{kind}': {exc}"
 msgstr "не удалось разослать событие '{kind}': {exc}"
 
@@ -2762,6 +2772,10 @@ msgstr "не удалось прочитать обои: {}"
 #: zone-editor.py
 msgid "theme written: {}"
 msgstr "тема записана: {}"
+
+#: zone-editor.py
+msgid "controls theme not refreshed: {}"
+msgstr "тема элементов управления не обновлена: {}"
 
 #: zone-editor.py
 msgid "controls theme written: {} (Cinnamon Settings, Themes, Controls)"

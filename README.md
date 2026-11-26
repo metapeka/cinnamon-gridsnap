@@ -340,7 +340,12 @@ The editor's **Theme** menu does the two things that are worth automating:
   file on its next launch.
 - **Window controls…** — writes a GTK 3 controls theme (`~/.themes/Gridsnap`) with the same
   palette, so the headerbars and buttons of GTK applications match the grid. It must be picked in
-  *Cinnamon Settings → Themes → Controls*; nothing is switched silently.
+  *Cinnamon Settings → Themes → Controls*; nothing is switched silently. Once written, the files
+  follow the palette by themselves: they start with a generated marker, and the daemon (or the
+  editor, when it changes `theme.conf`) rewrites them when the palette changes. Delete the
+  directory or the marker lines to take them back — nothing else at that path is ever touched.
+  Applications that are already running keep the old sheet until they restart; GTK 4/libadwaita is
+  not covered.
 
 Window borders (the decorations of server-side decorated windows) cannot be themed on Cinnamon
 6.4: `libmuffin` never opens `metacity-1/`, and a deliberately red metacity theme changes nothing.

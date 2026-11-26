@@ -644,8 +644,9 @@ refresh.
 .PP
 The file does not theme window decorations: Muffin never reads a metacity
 theme, so the borders of server\-side decorated windows stay as it draws them.
-The editor can also write a GTK 3 controls theme with the same palette; picking
-it in Cinnamon Settings is the user's action.
+The editor can also write a GTK 3 controls theme with the same palette; while
+its files carry the generated marker, the daemon keeps them in step with the
+palette, and picking the theme in Cinnamon Settings is the user's action.
 .SH EXAMPLES
 .nf
 gridsnap\-tiler list
@@ -721,6 +722,12 @@ The optional palette of the GridSnap surfaces, in the directory of the active
 \fIzones.conf\fP. The editor writes it from the wallpaper and the daemon keeps
 it in step while its first line says it was generated; deleting it returns the
 built\-in colours.
+.TP
+\fI~/.themes/Gridsnap\fP
+The GTK 3 controls theme the editor writes (\fBWindow controls…\fP in the
+\fBTheme\fP menu). The daemon refreshes it from the current palette while its
+files carry the generated marker; it must be selected in Cinnamon Settings,
+Themes, Controls.
 .TP
 \fI~/.local/state/gridsnap/history.json\fP
 The layout history (honouring \fI$XDG_STATE_HOME\fP): JSON, the last 20

@@ -3452,6 +3452,90 @@ class TestThemeRefresh(unittest.TestCase):
         self.assertEqual(strip.stopped, 1)
         self.assertEqual(json.loads(strip.payloads[-1]), {"strips": []})
 
+    def test_the_palette_is_written_before_the_controls_theme(self):
+        # The controls theme reads theme.conf: one tick must see the new palette, not the old.
+        order = []
+        d = self.daemon(
+            refresh_theme=lambda: order.append("theme"),
+            refresh_controls=lambda: order.append("controls"),
+            theme_interval=5.0,
+        )
+        d.poll_theme(now=100.0)
+        self.assertEqual(order, ["theme", "controls"])
+
+    def test_the_controls_theme_is_refreshed_and_logged(self):
+        calls = []
+
+        def refresh_controls():
+            calls.append(1)
+            return "/tmp/Gridsnap"
+
+        d = self.daemon(
+            refresh_theme=lambda: None,
+            refresh_controls=refresh_controls,
+            theme_interval=5.0,
+            verbose=True,
+        )
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertIsNone(d.poll_theme(now=100.0))
+        self.assertEqual(len(calls), 1)
+        self.assertIn("controls theme rebuilt from the palette: /tmp/Gridsnap", out.getvalue())
+        self.assertNotIn("theme.conf rebuilt", out.getvalue())
+
+    def test_a_controls_rewrite_does_not_restart_the_strip(self):
+        # Only the palette of GridSnap's own surfaces needs a new strip process; GTK apps take
+        # the controls theme on restart.
+        strip = FakeStrip()
+        strip.payloads.append("{}")
+        d = self.daemon(
+            refresh_theme=lambda: None,
+            refresh_controls=lambda: "/tmp/Gridsnap",
+            theme_interval=5.0,
+            strip=strip,
+        )
+        d.poll_theme(now=100.0)
+        self.assertEqual(strip.stopped, 0)
+
+    def test_a_controls_failure_is_logged_once(self):
+        error = ["first"]
+
+        def refresh_controls():
+            raise OSError(error[0])
+
+        d = self.daemon(
+            refresh_theme=lambda: None,
+            refresh_controls=refresh_controls,
+            theme_interval=5.0,
+            verbose=True,
+        )
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            d.poll_theme(now=100.0)
+            error[0] = "second"
+            d.poll_theme(now=200.0)
+            d.poll_theme(now=300.0)
+        text = out.getvalue()
+        self.assertEqual(text.count("controls theme was not refreshed: first"), 1)
+        self.assertEqual(text.count("controls theme was not refreshed: second"), 1)
+
+    def test_a_failure_of_one_theme_does_not_hide_the_other(self):
+        def broken_theme():
+            raise ValueError("no wallpaper")
+
+        d = self.daemon(
+            refresh_theme=broken_theme,
+            refresh_controls=lambda: "/tmp/Gridsnap",
+            theme_interval=5.0,
+            verbose=True,
+        )
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            d.poll_theme(now=100.0)
+        text = out.getvalue()
+        self.assertIn("theme.conf was not refreshed: no wallpaper", text)
+        self.assertIn("controls theme rebuilt from the palette: /tmp/Gridsnap", text)
+
     def test_a_failure_is_logged_once_and_does_not_break_the_loop(self):
         error = ["first"]
 

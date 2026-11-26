@@ -840,6 +840,16 @@ msgstr "theme.conf 未能更新：{exc}"
 
 #: zone-daemon.py
 #, python-brace-format
+msgid "controls theme was not refreshed: {exc}"
+msgstr "控件主题未能更新：{exc}"
+
+#: zone-daemon.py
+#, python-brace-format
+msgid "controls theme rebuilt from the palette: {path}"
+msgstr "已根据配色重建控件主题：{path}"
+
+#: zone-daemon.py
+#, python-brace-format
 msgid "theme.conf rebuilt from the wallpaper: {path}"
 msgstr "已根据壁纸重建 theme.conf：{path}"
 
@@ -2761,6 +2771,10 @@ msgstr "无法读取壁纸：{}"
 #: zone-editor.py
 msgid "theme written: {}"
 msgstr "主题已写入：{}"
+
+#: zone-editor.py
+msgid "controls theme not refreshed: {}"
+msgstr "控件主题未能更新：{}"
 
 #: zone-editor.py
 msgid "controls theme written: {} (Cinnamon Settings, Themes, Controls)"
