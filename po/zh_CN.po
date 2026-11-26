@@ -2699,3 +2699,59 @@ msgstr "{}：{} 超出 {}..{} 范围，保留默认值"
 #: zone_theme.py
 msgid "font: \"{}\" is not a family name, the default is kept"
 msgstr "font：“{}”不是字体族名称，保留默认值"
+
+#: zone_theme.py
+msgid "GdkPixbuf is not available: {}"
+msgstr "GdkPixbuf 不可用：{}"
+
+#: zone_theme.py
+msgid "cannot read the image: {}"
+msgstr "无法读取图像：{}"
+
+#: zone_theme.py
+msgid "the wallpaper has no readable colours"
+msgstr "壁纸中没有可读取的颜色"
+
+#: zone-editor.py
+msgid "Colours: theme.conf next to zones.conf"
+msgstr "颜色：zones.conf 旁边的 theme.conf"
+
+#: zone-editor.py
+msgid "Theme"
+msgstr "主题"
+
+#: zone-editor.py
+msgid "From the wallpaper…"
+msgstr "从壁纸生成…"
+
+#: zone-editor.py
+msgid "Window controls…"
+msgstr "窗口控件…"
+
+#: zone-editor.py
+msgid "Reload theme.conf"
+msgstr "重新读取 theme.conf"
+
+#: zone-editor.py
+msgid "theme reloaded: {}"
+msgstr "主题已重新读取：{}"
+
+#: zone-editor.py
+msgid "default palette"
+msgstr "默认调色板"
+
+#: zone-editor.py
+msgid "no wallpaper found in the desktop settings"
+msgstr "桌面设置中没有找到壁纸"
+
+#: zone-editor.py
+msgid "cannot read the wallpaper: {}"
+msgstr "无法读取壁纸：{}"
+
+#: zone-editor.py
+msgid "theme written: {}"
+msgstr "主题已写入：{}"
+
+#: zone-editor.py
+msgid "controls theme written: {} (Cinnamon Settings, Themes, Controls)"
+msgstr "控件主题已写入：{}（Cinnamon 设置 → 主题 → 控件）"

@@ -14,7 +14,10 @@ Three things are checked:
   radius and a file that is not INI at all keep the base and print one warning. The tools that
   draw have to survive a typo in a colour.
 
-Everything here is pure: no X, no GTK, no display.
+The generated files are checked here too: the wallpaper resolver (a file, a `file://` URI, a GNOME
+background descriptor), the palette sampled from an image made in the test, `theme.conf` written
+and read back, and the GTK controls theme (the file GTK will actually load). The sampling needs
+GdkPixbuf, so those tests skip where `gi` is absent; everything else is pure: no X, no display.
 
 Running:
     python3 tests/test_theme.py
@@ -28,6 +31,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import urllib.parse
 
 try:
     import i18n_env  # noqa: F401  (the tests run in the source language)
@@ -227,6 +231,216 @@ class TestGtkSheet(unittest.TestCase):
         self.assertEqual(len(checked), 1)
         self.assertIn("background-color: #ffffff", checked[0])
         self.assertIn("color: #000000", checked[0])
+
+
+def make_wallpaper(path, blocks, width=64, height=64):
+    """Write a PNG of vertical colour blocks: ``blocks`` is one ``(r, g, b)`` per column."""
+    import gi
+
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf, GLib
+
+    stride = width * 3
+    data = bytearray(stride * height)
+    for row in range(height):
+        for column in range(width):
+            red, green, blue = blocks[column]
+            index = row * stride + column * 3
+            data[index : index + 3] = bytes((red, green, blue))
+    pixbuf = GdkPixbuf.Pixbuf.new_from_bytes(
+        GLib.Bytes.new(bytes(data)),
+        GdkPixbuf.Colorspace.RGB,
+        False,
+        8,
+        width,
+        height,
+        stride,
+    )
+    pixbuf.savev(path, "png", [], [])
+
+
+def wallpaper_available():
+    try:
+        import gi
+
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import GdkPixbuf  # noqa: F401
+    except (ImportError, ValueError):
+        return False
+    return True
+
+
+class TestWallpaperImage(unittest.TestCase):
+    """Resolving the setting into a file: a path, a `file://` URI, a GNOME descriptor, nothing."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.image = os.path.join(self.dir, "paper.png")
+        with open(self.image, "wb") as handle:
+            handle.write(b"not really a png")  # the resolver only checks that it exists
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_a_plain_path_is_returned(self):
+        self.assertEqual(zone_theme.wallpaper_image(self.image), self.image)
+
+    def test_a_file_uri_is_decoded(self):
+        uri = "file://" + urllib.parse.quote(self.image)
+        self.assertEqual(zone_theme.wallpaper_image(uri), self.image)
+
+    def test_a_gnome_descriptor_resolves_to_its_first_existing_file(self):
+        descriptor = os.path.join(self.dir, "gnome-background.xml")
+        with open(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(
+                "<background><static><file>%s</file></static>"
+                "<transition><file>/no/such/file.png</file></transition></background>"
+                % self.image
+            )
+        self.assertEqual(zone_theme.wallpaper_image(descriptor), self.image)
+
+    def test_a_missing_file_gives_nothing(self):
+        self.assertIsNone(zone_theme.wallpaper_image(os.path.join(self.dir, "nope.png")))
+        self.assertIsNone(zone_theme.wallpaper_image(""))
+
+    def test_a_descriptor_without_existing_files_gives_nothing(self):
+        descriptor = os.path.join(self.dir, "empty.xml")
+        with open(descriptor, "w", encoding="utf-8") as handle:
+            handle.write("<background><file>/no/such/file.png</file></background>")
+        self.assertIsNone(zone_theme.wallpaper_image(descriptor))
+
+
+class TestWallpaperPalette(unittest.TestCase):
+    def setUp(self):
+        if not wallpaper_available():
+            self.skipTest("GdkPixbuf is not available")
+        self.dir = tempfile.mkdtemp()
+        self.image = os.path.join(self.dir, "sunset.png")
+        make_wallpaper(
+            self.image,
+            [(12, 20, 48)] * 40 + [(230, 120, 30)] * 12 + [(30, 120, 80)] * 12,
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_samples_are_weighted_and_deterministic(self):
+        first = zone_theme.samples_of(self.image)
+        self.assertEqual(first, zone_theme.samples_of(self.image))
+        self.assertEqual(len(first), 3)
+        self.assertEqual(sum(weight for _colour, weight in first), 64 * 64)
+        self.assertGreater(first[0][1], first[1][1])
+
+    def test_the_palette_is_a_dark_chrome_with_a_vivid_accent(self):
+        theme = zone_theme.from_wallpaper(self.image)
+        for token in zone_theme.COLOR_TOKENS:
+            self.assertRegex(theme.colors[token], r"^#[0-9a-f]{6}$", token)
+        ladder = [
+            zone_theme.luminance(theme.colors[token])
+            for token in ("bg", "bg_panel", "bg_card", "bg_hover")
+        ]
+        self.assertEqual(ladder, sorted(ladder), ladder)
+        self.assertLess(ladder[0], 0.05)
+        self.assertGreater(zone_theme.luminance(theme.colors["fg"]), 0.75)
+        red, _green, blue = zone_theme.rgb(theme.colors["accent"])
+        self.assertGreater(red, blue)  # the orange block is the accent, not the blue field
+
+    def test_the_name_comes_from_the_file(self):
+        self.assertEqual(zone_theme.from_wallpaper(self.image).name, "wallpaper-sunset")
+
+    def test_zones_are_derived_from_the_accent(self):
+        theme = zone_theme.from_wallpaper(self.image)
+        self.assertEqual(len(theme.zones), 8)
+        self.assertEqual(len(set(theme.zones)), 8)
+        self.assertEqual(theme.zones, zone_theme.derive_zones(theme.colors["accent"]))
+
+    def test_a_monochrome_image_still_gives_a_readable_grid(self):
+        grey = os.path.join(self.dir, "grey.png")
+        make_wallpaper(grey, [(200, 200, 200)] * 64)
+        theme = zone_theme.from_wallpaper(grey)
+        self.assertEqual(len(set(theme.zones)), 8)
+
+    def test_an_unreadable_file_raises_value_error(self):
+        broken = os.path.join(self.dir, "broken.png")
+        with open(broken, "w", encoding="utf-8") as handle:
+            handle.write("not a png")
+        with self.assertRaises(ValueError):
+            zone_theme.from_wallpaper(broken)
+
+
+class TestSamplesToTheme(unittest.TestCase):
+    """The pure part of the bridge: samples in, a consistent palette out."""
+
+    def test_empty_samples_raise(self):
+        with self.assertRaises(ValueError):
+            zone_theme.theme_from_samples([])
+        with self.assertRaises(ValueError):
+            zone_theme.theme_from_samples([((0.1, 0.1, 0.1), 0)])
+
+    def test_the_ramp_follows_the_dominant_colour_and_the_accent_the_vivid_one(self):
+        theme = zone_theme.theme_from_samples(
+            [((0.05, 0.08, 0.19), 1000), ((0.9, 0.47, 0.12), 100)]
+        )
+        red, _green, blue = zone_theme.rgb(theme.colors["bg"])
+        self.assertGreater(blue, red)  # the blue field is the chrome
+        red, _green, blue = zone_theme.rgb(theme.colors["accent"])
+        self.assertGreater(red, blue)  # the orange cluster is the accent
+        self.assertEqual(theme.name, "wallpaper")
+
+
+class TestWriteTheme(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.path = os.path.join(self.dir, "theme.conf")
+        self.theme = zone_theme.Theme(
+            dict(zone_theme.DEFAULT_COLORS),
+            zone_theme.DEFAULT_ZONES,
+            radius=7,
+            font="Mono",
+            name="mine",
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_the_file_reads_back_as_the_same_theme(self):
+        zone_theme.write_theme(self.theme, self.path, source="/tmp/paper.png")
+        back = zone_theme.load(None, path=self.path)
+        self.assertEqual(back.colors, self.theme.colors)
+        self.assertEqual(back.zones, self.theme.zones)
+        self.assertEqual((back.radius, back.font, back.name), (7, "Mono", "mine"))
+
+    def test_the_file_is_marked_as_generated(self):
+        zone_theme.write_theme(self.theme, self.path, source="/tmp/paper.png")
+        with open(self.path, encoding="utf-8") as handle:
+            first = handle.readline()
+        self.assertTrue(first.startswith(zone_theme.GENERATED_MARK))
+        self.assertIn("/tmp/paper.png", first)
+
+    def test_no_temporary_file_is_left_behind(self):
+        zone_theme.write_theme(self.theme, self.path)
+        self.assertFalse(os.path.exists(self.path + ".tmp"))
+
+
+class TestGtkThemeFiles(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_the_theme_is_adwaita_dark_plus_the_palette(self):
+        theme = zone_theme.Theme(dict(zone_theme.DEFAULT_COLORS), zone_theme.DEFAULT_ZONES)
+        index, css = zone_theme.write_gtk_theme(os.path.join(self.dir, "Gridsnap"), theme)
+        self.assertTrue(os.path.exists(index))
+        with open(css, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("gtk-contained-dark.css", text)
+        self.assertIn(theme.colors["bg"], text)
+        self.assertIn(theme.colors["accent"], text)
+        self.assertIn("decoration, window.csd", text)
+        with open(index, encoding="utf-8") as handle:
+            self.assertIn("Name=Gridsnap", handle.read())
 
 
 if __name__ == "__main__":

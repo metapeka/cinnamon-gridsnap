@@ -413,7 +413,10 @@ class Editor(Gtk.Window):
         super().__init__(title=_("Gridsnap - window grid"))
         self.conf_path = conf_path
         self.theme = theme if theme is not None else zone_theme.load(conf_path)
-        apply_theme(self, self.theme)
+        self._providers = []
+        provider = apply_theme(self, self.theme)
+        if provider is not None:
+            self._providers.append(provider)
         self.set_icon_name("gridsnap")
         # Monitors are keyed by output names: the name addresses the zone set `[zones:<output>]`.
         self.outputs = zt.monitor_outputs()
@@ -544,6 +547,28 @@ class Editor(Gtk.Window):
         gal_item = Gtk.ToolItem()
         gal_item.add(gal_btn)
         bar.insert(gal_item, -1)
+        # Themes are one menu, not three buttons: they are all "make the editor follow a palette".
+        theme_btn = Gtk.MenuButton()
+        theme_btn.set_tooltip_text(_("Colours: theme.conf next to zones.conf"))
+        theme_btn.set_label(_("Theme"))
+        theme_pop = Gtk.Popover()
+        theme_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        theme_box.set_border_width(8)
+        for label, callback in (
+            (_("From the wallpaper…"), self.on_theme_from_wallpaper),
+            (_("Window controls…"), self.on_theme_controls),
+            (_("Reload theme.conf"), self.on_theme_reload),
+        ):
+            item_button = Gtk.ModelButton()
+            item_button.set_label(label)
+            item_button.connect("clicked", lambda _w, f=callback: f())
+            theme_box.pack_start(item_button, False, False, 0)
+        theme_pop.add(theme_box)
+        theme_box.show_all()
+        theme_btn.set_popover(theme_pop)
+        theme_item = Gtk.ToolItem()
+        theme_item.add(theme_btn)
+        bar.insert(theme_item, -1)
         root.pack_start(bar, False, False, 0)
 
         body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -631,6 +656,44 @@ class Editor(Gtk.Window):
         if self.message:
             parts.append(self.message)
         self.status.set_text(" · ".join(parts))
+
+    # ---- theme
+
+    def reload_theme(self):
+        """Re-read theme.conf and repaint the editor without a restart."""
+        self.theme = zone_theme.load(self.conf_path)
+        css = self.theme.gtk_css().encode("utf-8")
+        for provider in self._providers:
+            provider.load_from_data(css)
+        self.canvas.queue_draw()
+
+    def on_theme_reload(self):
+        self.reload_theme()
+        self.set_status(
+            _("theme reloaded: {}").format(self.theme.path or _("default palette"))
+        )
+
+    def on_theme_from_wallpaper(self):
+        image = zone_theme.wallpaper_image()
+        if not image:
+            self.set_status(_("no wallpaper found in the desktop settings"))
+            return
+        try:
+            theme = zone_theme.from_wallpaper(image)
+        except ValueError as exc:
+            self.set_status(_("cannot read the wallpaper: {}").format(exc))
+            return
+        target = zone_theme.theme_path(self.conf_path)
+        zone_theme.write_theme(theme, target, source=image)
+        self.reload_theme()
+        self.set_status(_("theme written: {}").format(target))
+
+    def on_theme_controls(self):
+        directory = os.path.join(os.path.expanduser("~"), ".themes", "Gridsnap")
+        zone_theme.write_gtk_theme(directory, self.theme)
+        self.set_status(
+            _("controls theme written: {} (Cinnamon Settings, Themes, Controls)").format(directory)
+        )
 
     def workspace_hint(self):
         """The note about the active workspace: which profile it uses.
@@ -1509,13 +1572,17 @@ def apply_theme(window, theme):
     A provider attached to a widget's style context styles that widget only, so the real window
     takes the sheet on its screen (all descendants follow). The `--shot` path moves the contents
     into a `Gtk.OffscreenWindow`, which is not on any screen — there the sheet goes on every
-    widget of the tree (see :func:`apply_theme_tree`).
+    widget of the tree (see :func:`apply_theme_tree`). The returned provider is kept by the
+    editor, so a new palette is applied by reloading it instead of stacking a second one.
     """
+    provider = theme_provider(theme)
     screen = window.get_screen()
-    if screen is not None:
-        Gtk.StyleContext.add_provider_for_screen(
-            screen, theme_provider(theme), Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
+    if screen is None:
+        return None
+    Gtk.StyleContext.add_provider_for_screen(
+        screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
+    return provider
 
 
 def apply_theme_tree(root, theme):

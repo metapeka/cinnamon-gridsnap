@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.2.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-26 06:13+0300\n"
+"POT-Creation-Date: 2026-11-26 07:00+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1419,6 +1419,26 @@ msgid "Ready-made layouts: zones, hotkeys and application rules"
 msgstr ""
 
 #: zone-editor.py
+msgid "Colours: theme.conf next to zones.conf"
+msgstr ""
+
+#: zone-editor.py
+msgid "Theme"
+msgstr ""
+
+#: zone-editor.py
+msgid "From the wallpaper…"
+msgstr ""
+
+#: zone-editor.py
+msgid "Window controls…"
+msgstr ""
+
+#: zone-editor.py
+msgid "Reload theme.conf"
+msgstr ""
+
+#: zone-editor.py
 msgid "Monitor"
 msgstr ""
 
@@ -1440,6 +1460,30 @@ msgstr ""
 
 #: zone-editor.py
 msgid "{} - not on screen"
+msgstr ""
+
+#: zone-editor.py
+msgid "theme reloaded: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "default palette"
+msgstr ""
+
+#: zone-editor.py
+msgid "no wallpaper found in the desktop settings"
+msgstr ""
+
+#: zone-editor.py
+msgid "cannot read the wallpaper: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "theme written: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "controls theme written: {} (Cinnamon Settings, Themes, Controls)"
 msgstr ""
 
 #: zone-editor.py
@@ -2611,6 +2655,18 @@ msgstr ""
 
 #: zone_theme.py
 msgid "font: \"{}\" is not a family name, the default is kept"
+msgstr ""
+
+#: zone_theme.py
+msgid "GdkPixbuf is not available: {}"
+msgstr ""
+
+#: zone_theme.py
+msgid "cannot read the image: {}"
+msgstr ""
+
+#: zone_theme.py
+msgid "the wallpaper has no readable colours"
 msgstr ""
 
 #: gridsnap-ctl

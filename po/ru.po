@@ -2700,3 +2700,59 @@ msgstr "{}: {} вне диапазона {}..{}, значение по умол�
 #: zone_theme.py
 msgid "font: \"{}\" is not a family name, the default is kept"
 msgstr "font: «{}» — не имя семейства, значение по умолчанию сохранено"
+
+#: zone_theme.py
+msgid "GdkPixbuf is not available: {}"
+msgstr "GdkPixbuf недоступен: {}"
+
+#: zone_theme.py
+msgid "cannot read the image: {}"
+msgstr "не удалось прочитать изображение: {}"
+
+#: zone_theme.py
+msgid "the wallpaper has no readable colours"
+msgstr "в обоях нет читаемых цветов"
+
+#: zone-editor.py
+msgid "Colours: theme.conf next to zones.conf"
+msgstr "Цвета: theme.conf рядом с zones.conf"
+
+#: zone-editor.py
+msgid "Theme"
+msgstr "Тема"
+
+#: zone-editor.py
+msgid "From the wallpaper…"
+msgstr "Из обоев…"
+
+#: zone-editor.py
+msgid "Window controls…"
+msgstr "Оформление окон…"
+
+#: zone-editor.py
+msgid "Reload theme.conf"
+msgstr "Перечитать theme.conf"
+
+#: zone-editor.py
+msgid "theme reloaded: {}"
+msgstr "тема перечитана: {}"
+
+#: zone-editor.py
+msgid "default palette"
+msgstr "палитра по умолчанию"
+
+#: zone-editor.py
+msgid "no wallpaper found in the desktop settings"
+msgstr "обои не найдены в настройках рабочего стола"
+
+#: zone-editor.py
+msgid "cannot read the wallpaper: {}"
+msgstr "не удалось прочитать обои: {}"
+
+#: zone-editor.py
+msgid "theme written: {}"
+msgstr "тема записана: {}"
+
+#: zone-editor.py
+msgid "controls theme written: {} (Cinnamon Settings, Themes, Controls)"
+msgstr "тема оформления записана: {} (Параметры Cinnamon → Темы → Элементы управления)"
