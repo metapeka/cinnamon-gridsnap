@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.2.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-26 07:25+0300\n"
+"POT-Creation-Date: 2026-11-26 07:28+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -838,12 +838,12 @@ msgstr ""
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "theme.conf rebuilt from the wallpaper: {path}"
+msgid "theme.conf was not refreshed: {exc}"
 msgstr ""
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "theme.conf was not refreshed: {exc}"
+msgid "theme.conf rebuilt from the wallpaper: {path}"
 msgstr ""
 
 #: zone-daemon.py
