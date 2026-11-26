@@ -48,9 +48,22 @@ DISP=":97"
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TILER="$ROOT/zone-tiler.py"
 PICKER="$ROOT/zone-picker.py"
-CONF="$ROOT/zones.conf"
 
 LOGDIR=$(mktemp -d 2>/dev/null || echo /tmp)
+# A config of the scenario's own: the root zones.conf is the owner's live layout, and its
+# [workspaces]/[monitors] make the tiler resolve a profile the expectations below do not read.
+CONF="$LOGDIR/zones.conf"
+cat >"$CONF" <<'CONF'
+[grid]
+cols = 1.0
+rows = 1.0
+
+[zones]
+main = 0, 0, 0.8358, 1
+top-right = 0.8358, 0, 0.1642, 0.5
+top-far = 0.8358, 0.5, 0.1642, 0.5
+bottom = 0.7129, 0.8068, 0.2871, 0.1932
+CONF
 MUFFIN_LOG="$LOGDIR/gridsnap-dpi-muffin.log"
 export XDG_STATE_HOME="$LOGDIR/state"
 # Сокет демона — в своём каталоге: при живом демоне владельца сценарий
