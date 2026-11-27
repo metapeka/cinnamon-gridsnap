@@ -20,19 +20,19 @@ its own, a Windows port and browser automation are out of scope (`SPEC.md`, `doc
 
 | What | Value |
 |---|---|
-| Code | `main` = `8339094` (Show the layout menus as pictures, not names — the wave record is `docs/HANDOFF-2026-11-28-layout-menus.md`), then `38aa2de` (the tutorial draft and the deferred scope) and `34551a2` (the editor wave record); before them `60c1087` Merge #54: the gallery cards translated through the catalogs, work `a81889c`, and `4dc7b16` Merge #53: the editor's neutral chrome and one header, work `119791f`; before the editor waves `fafac1d` — the HANDOFF section rename for the OAW quality gate; the theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`; the AUR checksum pin `a3de4c2`) — local, not pushed |
+| Code | `main` = `f2cc24f` (Record the layout menus in the handoff — the wave record is `docs/HANDOFF-2026-11-28-layout-menus.md`), over `8339094` (Show the layout menus as pictures, not names), `38aa2de` (the tutorial draft and the deferred scope) and `34551a2` (the editor wave record); before them `60c1087` Merge #54: the gallery cards translated through the catalogs, work `a81889c`, and `4dc7b16` Merge #53: the editor's neutral chrome and one header, work `119791f`; before the editor waves `fafac1d` — the HANDOFF section rename for the OAW quality gate; the theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`; the AUR checksum pin `a3de4c2`) — pushed, `origin/main` = `main` |
 | Version | `0.3.0`, tag `v0.3.0` + GitHub Release with `gridsnap-0.3.0.tar.gz`; AUR `sha256sums` is the tag archive (`031c2e3…`), which is not the attached tarball: the tag archive is what `source` names |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
 | Tests | `1536` unit tests, `OK` in ~18 s without X (9 skipped once `make man` has run, 15 in a fresh checkout) |
 | Smoke | `13` scenarios under `tests/smoke*.sh`, each on its own Xvfb display |
-| CI | Green on `main` at `38aa2de` (run `45996085385`), 5 jobs; the layout-menus commits are local until the push; `pages.yml` fires only on `site/**` changes and last deployed from `f674af0` (run `45800268713`), so the site lives at `metapeka.github.io/cinnamon-gridsnap` from that commit |
+| CI | Green on `main` at `f2cc24f` (run `46084884631`, 114 s), 5 jobs; the layout-menus wave is pushed, so `origin/main` = `main`; `pages.yml` fires only on `site/**` changes and last deployed from `4dc7b16` (run `45990574013`), so the site lives at `metapeka.github.io/cinnamon-gridsnap` from that commit |
 | Open PRs | None |
 | Live install | This checkout **is** the installed copy. The owner's desktop layout lives in `~/.config/gridsnap/zones.conf` (profiles in `~/.config/gridsnap/templates/`), which `zone-tiler.default_conf` finds first; the tracked root `zones.conf` is the shipped starting layout |
 
 ### The tree
 
-Working tree clean. The layout menus — thumbnails in Templates and Profiles, the grouped “…” menu,
+Working tree clean apart from this record. The layout menus — thumbnails in Templates and Profiles, the grouped “…” menu,
 the gallery shapes and the “Monitor's own set” way back — are in `main` on top of the editor rework
 and the translated gallery cards; the wave record is `docs/HANDOFF-2026-11-28-layout-menus.md`.
 
@@ -90,7 +90,6 @@ Behaviour contracts live in `docs/specs/` (19 files, one per module feature). Ar
 
 | Item | State |
 |---|---|
-| Push the layout-menus wave | Local `main` is ahead of `origin/main`: the code commit `8339094` and this record. CI has not run on them yet. |
 | Wayland backend | Open. Cinnamon 6.8 / Mint 23 (~Christmas 2026) makes the Wayland session official. Reconstruction in `docs/HANDOFF-2026-11-22-window-seam.md`: placing windows through muffin still works under nested `muffin --wayland`, but the seam is not finished. |
 | Debian archive | `.deb` builds, license declared, lintian clean; missing ITP bug, sponsor, review. |
 | Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. Done so far: `docs/architecture.md` (English, with a Mermaid module graph), `docs/specs/theme.md`, `tools/shoot-screens.sh`, `tools/record-demo.sh`; the site and both translated READMEs carry §3.4 (theme). The rest is still Russian. |
