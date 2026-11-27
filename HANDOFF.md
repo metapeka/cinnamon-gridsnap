@@ -7,21 +7,27 @@ Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave
 `docs/HANDOFF-2026-11-26-theme-refresh.md` and `docs/HANDOFF-2026-11-26-theme-wallpaper.md` — read
 them only when you need the “why”.
 
-## Snapshot
+## Goal and scope
+
+GridSnap gives Cinnamon/X11 user-drawn window zones — arbitrary rectangles, one key or a picker per
+zone, windows placed through EWMH on top of muffin. Scope is the product only: a compositor or WM of
+its own, a Windows port and browser automation are out of scope (`SPEC.md`, `docs/product.md`).
+
+## State (snapshot)
 
 | What | Value |
 |---|---|
-| Code | `main` = `f674af0` (theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`) — pushed, CI green |
+| Code | `main` = `76f88e7` (theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`; then the AUR checksum pin `a3de4c2` and the docs wave `76f88e7` — `docs/product.md`, `docs/platforms.md`, `docs/tutorial.md`) — pushed, CI green |
 | Version | `0.3.0`, tag `v0.3.0` + GitHub Release with `gridsnap-0.3.0.tar.gz`; AUR `sha256sums` is the tag archive (`031c2e3…`), which is not the attached tarball: the tag archive is what `source` names |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
 | Tests | `1518` unit tests, `OK` in ~18 s without X (9 skipped once `make man` has run, 15 in a fresh checkout) |
 | Smoke | `13` scenarios under `tests/smoke*.sh`, each on its own Xvfb display |
-| CI | Green on `main` (`f674af0`, run `45799262897`), 5 jobs; the site is deployed by `pages.yml` from the same commit (`45800268713`) and lives at `metapeka.github.io/cinnamon-gridsnap` |
+| CI | Green on `main` (`76f88e7`, run `45979020675`), 5 jobs; `pages.yml` fires only on `site/**` changes and last deployed from `f674af0` (run `45800268713`), so the site lives at `metapeka.github.io/cinnamon-gridsnap` from that commit |
 | Open PRs | None |
 | Live install | This checkout **is** the installed copy. The owner's desktop layout lives in `~/.config/gridsnap/zones.conf` (profiles in `~/.config/gridsnap/templates/`), which `zone-tiler.default_conf` finds first; the tracked root `zones.conf` is the shipped starting layout |
 
-## Gates
+## Checks (gates)
 
 | Gate | Command | What it proves |
 |---|---|---|
@@ -42,7 +48,7 @@ the real gates are `make lint`, `make test` and the smokes.
 Rules: `env -u DISPLAY` always for units — with a live display some tests reach into the owner's session.
 Smoke scripts raise their own `:89`–`:99`, so they are safe on a live desktop, but never point one at `:0`.
 
-## Map
+## Files (map)
 
 | Module | Lines | Role |
 |---|---|---|
@@ -66,7 +72,7 @@ Smoke scripts raise their own `:89`–`:99`, so they are safe on a live desktop,
 Behaviour contracts live in `docs/specs/` (19 files, one per module feature). Architecture overview:
 `docs/architecture.md`. Product scope and non-goals: `SPEC.md`. Plan: `docs/ROADMAP.md`.
 
-## Open work
+## Next (open work)
 
 | Item | State |
 |---|---|
@@ -76,7 +82,7 @@ Behaviour contracts live in `docs/specs/` (19 files, one per module feature). Ar
 | Owner actions after the last wave | Add the applet to the panel; after a Cinnamon restart re-run `python3 setup-hotkeys.py --remove` once (see `docs/HANDOFF-2026-11-22-events.md`). |
 | Design track (43PR palette) | **Five code waves + a docs wave merged into `main`** (`8b61c61` palette, `ea2dc1e` wallpaper, `32b6aa5` refresh, `60f288d` man page, `575d601` GTK controls, `7f8201d` docs), not pushed. Optional `theme.conf`, five presets, zone-hue derivation, editor GTK sheet; **Theme** menu in the editor: palette from the wallpaper (GdkPixbuf sampling, no new dependency) and a generated GTK controls theme. A generated `theme.conf` follows `picture-uri` through the daemon (5 s poll, marker-only, `--once` excluded); a generated controls theme (`~/.themes/Gridsnap`) follows the palette from the same poll and from the editor's actions. `man gridsnap` documents both with `ru`/`zh_CN`; `docs/architecture.md` is English with a Mermaid module graph, `docs/specs/theme.md` has two Mermaid flows, README ru/zh carry §3.4, the site carries the feature and the spec link, ROADMAP item 5 is closed. Contracts `docs/specs/theme.md`; records `…-design-theme.md`, `…-theme-wallpaper.md`, `…-theme-refresh.md`, `…-man-theme.md`, `…-gtk-controls.md`, `…-docs.md`, `…-screenshots.md`, `…-demo-scene.md`. The README and site images are no longer hand-made: `tools/shoot-screens.sh` re-renders `site/assets/editor.png` and `picker.png` on its own Xvfb `:91`, `tools/record-demo.sh` re-records `site/assets/demo.gif` on its own Xvfb `:90` with muffin and the daemon; both build the palette with `tools/scene-palette.py`, held by `tests/test_screenshots.py` (7 tests) and `tests/test_demo_gif.py` (14 tests). Remaining out of scope: GTK 4/libadwaita, the Cinnamon shell theme, metacity borders (Muffin never reads them), Quickshell/QML. |
 
-## Sharp edges
+## Decisions (sharp edges)
 
 | Trap | What to do |
 |---|---|
