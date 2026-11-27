@@ -304,3 +304,9 @@ nor X. `zone_config.py` is the pure layer between the editor/picker and the tile
 - A Cinnamon shell theme (panel, menu, notifications) and Quickshell/QML widgets: Muffin does not read
   Metacity theme files at all (`meta_theme_new` is an ABI stub), and Quickshell needs Wayland with
   `wlr-layer-shell` and Hyprland's IPC. What is reachable is the GTK controls theme and the palette.
+
+## See also
+
+- `docs/product.md` — why the product exists, what each wave delivered, what is still open.
+- `docs/platforms.md` — Cinnamon X11 / Cinnamon Wayland / Hyprland matrix, measured versus estimated.
+- `docs/tutorial.md` — the tutorial outline: chapters, checkpoints, screenshot inventory.
