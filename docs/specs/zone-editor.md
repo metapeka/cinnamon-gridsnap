@@ -2,67 +2,90 @@
 id: zone-editor
 type: module-design
 status: active
-title: "Модуль: визуальный редактор zone-editor"
+title: "Module: the visual editor zone-editor"
 parent: gridsnap-architecture
 depends-on: [zone-tiler]
 ---
 
-_Черновик по `importing-a-codebase`: восстановлено из кода, владельцем не сверено._
+_Draft from `importing-a-codebase`: restored from the code, not yet reviewed by the owner._
 
-## Ответственность
+## Responsibility
 
-`zone-editor.py` — GTK-3 редактор сетки: показать рабочую область в масштабе и дать нарисовать зоны
-мышью, назначить имя и сочетание, сохранить `zones.conf` и запустить раскладку либо регистрацию сочетаний.
+`zone-editor.py` is the GTK 3 grid editor: it shows the work area at scale, lets the user draw
+zones with the mouse, name them and bind keys, saves `zones.conf`, and launches the tiler or the
+hotkey registration.
 
-## Возможности
+## Capabilities
 
-- рабочая область монитора рисуется в масштабе, зоны — в натуральных долях; холст и подпись «≈ … px»
-  считаются в **физических** пикселях X (`workarea` из `zt.monitor_outputs()`), а рисует GTK в
-  логических — доли безразмерны, поэтому картинка и числа верны и на масштабе >1 (см. `zone-units`);
-- **набор зон на монитор**: комбо показывает имена выходов (`eDP-1`, `HDMI-1`), при переключении на холст
-  грузится набор этого монитора — свой `[zones:<выход>]`, а если его нет, копия общего `[zones]`; строка
-  статуса говорит, что показано («свой набор `[zones:HDMI-1]`» / «наследует `[zones]`»). Монитор, которого
-  сейчас нет в системе, виден в комбо с пометкой «нет на экране» и не удаляется;
-- кнопки «применить на мониторе» в панели целей укладывают активное окно в зону нужного экрана через
-  `apply --monitor <имя выхода>` (сначала сохраняют несохранённые правки);
-- перетаскивание зоны и изменение размера за край/угол, курсор показывает сторону;
-- прилипание в пределах `SNAP_PX = 9` px к краям экрана, к краям соседних зон и к линиям
-  `0, 1/4, 1/3, 1/2, 2/3, 3/4, 1`;
-- минимальный размер зоны — `MIN_SIZE = 0.05` доли; зоны не выходят за 0..1;
-- вся чистая геометрия — масштаб, перевод долей в пиксели, прилипание, перетаскивание/resize,
-  границы и попадание курсора — живёт в `zone_geom.py` без GTK и X; `Canvas` только делегирует ей;
-- двойной клик по пустому месту — новая зона; `Delete`/`Backspace` — удалить; стрелки — сдвиг,
-  `Ctrl`+стрелки — размер, колесо — ширина;
-- шаблоны: 2 колонки, 1+2, 2×2, 3 колонки, главное + стек, чистый лист (с готовыми `Super+Alt+N`);
-- кнопка «Профили столов…»: по строке на каждый стол Cinnamon (`_NET_NUMBER_OF_DESKTOPS`, без X — 4), в
-  каждой — профиль или «общий набор»; пишется только секция `[workspaces]` (`zone_config.save_workspace_map`),
-  после записи она перечитывается в «чужие» секции, чтобы следующий `Ctrl+S` её не откатил; отсутствующий на
-  диске профиль показывается предупреждением, но сопоставление не удаляется;
-- меню «Профили»: список сохранённых профилей, «Сохранить текущую раскладку как профиль…» и удаление;
-  выбор профиля грузит его зоны, правила и клавиши в холст как черновик (сохраняется обычным `Ctrl+S`);
-- имя зоны санируется (`[^0-9A-Za-zА-Яа-я_.-]+ → '-'`) и должно остаться уникальным;
-- сохранение (`Ctrl+S` или кнопка) пишет канонический `zones.conf` с заголовком-комментарием;
-  чужие секции (`[rules]`, `[daemon]` и прочие) переносятся **дословно** — с комментариями и регистром
-  ключей (`[rules]` до `[keys]`, `[daemon]` и остальные — после);
-- если правило `[rules]` ссылается на отсутствующую зону, файл **не сохраняется**, а причина
-  показывается в строке статуса;
-- кнопка «сочетания клавиш» сохраняет файл и запускает `setup-hotkeys.py`;
-- кнопка «▶» сохраняет файл и запускает `zone-tiler.py apply <зона> --verify`;
-- `--shot FILE.png` — снимок интерфейса в offscreen без показа окна.
+- The monitor's work area is drawn at scale, zones in natural fractions; the canvas and the "px"
+  line are computed in **physical** X pixels (`workarea` from `zt.monitor_outputs()`), while GTK
+  draws in logical ones — fractions are dimensionless, so the picture and the numbers stay right
+  above scale 1 (see `zone-units`).
+- **One zone set per monitor**, selected by the chip in the header (`eDP-1`, `HDMI-1`): switching
+  it loads that monitor's set — its own `[zones:<output>]` or a copy of the shared `[zones]`. The
+  chip's tooltip says what is shown ("own `[zones:HDMI-1]` set" / "inherits `[zones]`") and, when
+  the active workspace has a profile, which one. A monitor that is not connected is listed as
+  "not on screen" and is never deleted.
+- The header keeps the common path: the monitor chip, **Templates**, **Profiles**, a filled
+  **Save** (insensitive while nothing is dirty) and a **…** menu. Save is also `Ctrl+S`.
+- The **…** menu holds everything else: **From the gallery…**; the **Theme** group (**From the
+  wallpaper…**, **Window controls…**, **Reload theme.conf**); **Place the window on another
+  monitor…** (monitor → zone, through `apply --monitor <output>`, after saving unsaved edits);
+  **Workspace profiles…**; **Monitor profiles…**; **Apply hotkeys in Cinnamon**; **Place the active
+  window into the selected zone**; and **Clear all…**, which asks for confirmation first.
+- Dragging a zone and resizing it by an edge or corner; the cursor names the side.
+- Snapping within `SNAP_PX = 9` px to the screen edges, to neighbouring zones and to the lines
+  `0, 1/4, 1/3, 1/2, 2/3, 3/4, 1`.
+- The smallest zone is `MIN_SIZE = 0.05`; zones stay inside 0..1.
+- All pure geometry — scale, fractions ↔ pixels, snapping, drag/resize, bounds and hit testing —
+  lives in `zone_geom.py` without GTK or X; `Canvas` only delegates to it.
+- Double click on empty space adds a zone; `Delete`/`Backspace` removes it; the arrows move it,
+  `Ctrl`+arrows resize it, the wheel changes its width.
+- Templates: 2 columns, 1+2, 2×2, 3 columns, main + stack, blank slate (with ready
+  `Super+Alt+N`).
+- **The zone list** in the sidebar is the selection surface: an identity dot (`zones[i]`), the
+  name and its key. The canvas stays neutral — zones are `fg` at 0.04 with a `border` outline, the
+  selected one is `accent` (0.10 fill, 1.8 px outline) — so the colour identifies a zone in the
+  list and in the picker, not on every pixel of the grid.
+- **The inspector** under the list appears while a zone is selected: Name, Keys and one muted
+  geometry line — `49 % × 100 % · 935 × 1040 px`. With nothing selected it is replaced by a hint.
+- The **Workspace profiles…** dialog: one row per Cinnamon workspace (`_NET_NUMBER_OF_DESKTOPS`,
+  4 without X), each a profile or "shared set"; only `[workspaces]` is written
+  (`zone_config.save_workspace_map`) and re-read into the foreign sections so the next `Ctrl+S`
+  does not roll it back; a profile missing on disk is shown as a warning, the mapping is not
+  deleted.
+- The **Profiles** menu: the saved profiles, "Save the current layout as a profile…" and deletion;
+  choosing a profile loads its zones, rules and keys into the canvas as a draft (saved with the
+  usual `Ctrl+S`).
+- A zone name is sanitized (`[^0-9A-Za-zА-Яа-я_.-]+ → '-'`) and must stay unique.
+- Saving (`Ctrl+S`, the button or the menu) writes the canonical `zones.conf` with a header
+  comment; foreign sections (`[rules]`, `[daemon]`, …) are carried over **verbatim**, with their
+  comments and key case (`[rules]` before `[keys]`, `[daemon]` and the rest after).
+- If a `[rules]` rule points at a missing zone, the file is **not saved** and the reason appears
+  in the status bar.
+- **Apply hotkeys in Cinnamon** saves the file and runs `setup-hotkeys.py`; **Place the active
+  window into the selected zone** saves and runs `zone-tiler.py apply <zone> --verify`.
+- The status bar is one line: the last event, or whose set is on the canvas. The long workspace
+  note lives in the monitor chip's tooltip instead of the status prose.
+- `--shot FILE.png` — an offscreen snapshot of the interface without showing the window.
 
-## Границы
+## Bounds
 
-- Только UI: раскладку и регистрацию сочетаний редактор не реализует, а делегирует процессам
-  `zone-tiler.py` / `setup-hotkeys.py` и импорту модуля раскладчика (`Grid`, `monitors`, `fractions`).
-- Работает с одним активным `zones.conf`; профили — через `zone_config` (каталог, чтение/запись): редактор
-  грузит выбранный профиль в холст черновиком, но сам профили не хранит. Привязки «профиль → монитор» нет:
-  профиль хранит наборы всех мониторов, но раскладывать разные профили по разным экранам редактор не умеет.
-- Что писать при сохранении, решает чистая функция `zone_geom.save_plan`: секция `[zones:<выход>]`
-  пишется, если набор монитора отличается от общего или его правили явно; секция, где набор совпал с
-  общим и правок не было, удаляется — но только у монитора, который сейчас на экране. Отключённый выход не
-  удаляется никогда. Зоны с уже встречавшимся именем теряют привязку клавиши: `[keys]` одна на файл.
-- Клавиша `[keys]` одна на файл, поэтому `zone_config.save_zone_sets` пишет все наборы одним проходом и не
-  дублирует имена в `[keys]` (повтор имени ломал чтение: `ConfigParser` падает на повторной опции).
-- Геометрию не дублирует: расчёты — в чистом `zone_geom.py`, покрытом юнит-тестами без X
-  (`tests/test_zone_geom.py`).
-- Требует GTK 3 и доступный дисплей; для проверок без показа окна есть `--shot`.
+- UI only: the editor does not lay out windows or register keys itself — it delegates to
+  `zone-tiler.py` / `setup-hotkeys.py` and to the imported tiler module (`Grid`, `monitors`,
+  `fractions`).
+- It works on one active `zones.conf`; profiles go through `zone_config` (directory, read/write):
+  the editor loads the chosen profile into the canvas as a draft but does not store profiles
+  itself. There is no "profile → monitor" binding here: a profile holds the sets of all monitors,
+  but the editor does not lay different profiles on different screens.
+- What to write on save is decided by the pure function `zone_geom.save_plan`: a
+  `[zones:<output>]` section is written when the monitor's set differs from the shared one or was
+  edited explicitly; a section whose set matches the shared one with no edits is removed — but
+  only for a monitor that is on screen. A disconnected output is never removed. Zones that repeat
+  a name lose their key binding: `[keys]` is one per file.
+- The `[keys]` section is one per file, so `zone_config.save_zone_sets` writes all sets in one pass
+  and does not duplicate names in `[keys]` (a repeated name broke reading: `ConfigParser` raises on
+  a repeated option).
+- Geometry is not duplicated: the maths lives in the pure `zone_geom.py`, covered by unit tests
+  without X (`tests/test_zone_geom.py`).
+- Requires GTK 3 and a display; `--shot` exists for an offscreen check.

@@ -195,20 +195,23 @@ path.
 
 | Action | How |
 |---|---|
-| select a zone | click a zone or a row in the list on the right |
+| select a zone | click a zone on the canvas or a row in the list |
 | move | drag a zone with the mouse |
 | resize | drag an edge or a corner (the cursor changes) |
-| new zone | double-click on empty space, the “+” button |
-| delete | `Delete` or the “−” button |
-| duplicate / clear all | buttons on the toolbar |
+| new zone | double-click on empty space, or the “+” above the list |
+| delete | `Delete` |
+| duplicate / clear all | the “…” menu; “Clear all…” asks for confirmation |
 | templates | the “Templates” button: 2 columns, 1+2, 2×2, 3 columns, main + stack, blank canvas |
+| gallery | the “…” menu → “From the gallery…” |
 | your own profiles | the “Profiles” button: load a profile onto the canvas, “Save the current layout as a profile…”, delete |
+| which monitor | the chip in the header: own set, inherited, or “not on screen” |
 | fine adjustment | arrows — move, `Ctrl`+arrows — resize, wheel — width |
 | snapping | to the screen edges, to the edges of neighbouring zones and to the 1/4, 1/3, 1/2, 2/3, 3/4 lines |
-| zone name and key | the “Name” and “Keys” fields in the panel on the right |
-| save | the “Save” button or `Ctrl+S` |
-| apply keys | the “keybindings” button → updates the Cinnamon hotkeys |
-| test | the “▶” button — places the active window into the selected zone |
+| zone name and key | the “Name” and “Keys” fields in the sidebar |
+| save | the filled “Save” button (disabled until something changes) or `Ctrl+S` |
+| apply keys | the “…” menu → “Apply hotkeys in Cinnamon” |
+| test | the “…” menu → “Place the active window into the selected zone” |
+| theme | the “…” menu: From the wallpaper…, Window controls…, Reload theme.conf |
 
 Sizes are stored as fractions of the work area, so the grid does not break when the resolution
 changes and it takes the taskbar into account.

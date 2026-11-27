@@ -89,31 +89,34 @@ accent   = #ffffff
 border   = #151515
 danger   = #ff003c
 ok       = #00ff9c
-zones    = #5c9eeb, #6bc794, #eba85c, #cc80d9, #6bccd9, #eb8585, #b8c266, #9e9eeb
+zones    = #0a84ff, #30d158, #5e5ce6, #ff9f0a, #ff375f, #bf5af2, #ff453a, #64d2ff
 ```
 
 ## Tokens
 
 | Token | Meaning | Default |
 |---|---|---|
-| `bg` | behind everything: the overlay backdrop, the GTK window | `#12141a` |
-| `bg_panel` | a panel surface: the tab strip, the editor canvas, the toolbar | `#1c1f24` |
-| `bg_card` | a raised surface: a tab, the editor "screen", a button, an entry | `#2b2e36` |
-| `bg_hover` | hovered or active: the active tab, a hovered button | `#525c70` |
-| `fg` | main text and the work-area frame | `#ffffff` |
-| `fg_muted` | captions, `.dim-label`, inactive tab titles | `#c7ccd6` |
-| `accent` | the selected zone, the active tab stripe, a checked button | `#ffb554` |
-| `border` | frames and separators of the GTK parts | `#525c70` |
-| `danger` | reserved for destructive actions | `#eb8585` |
-| `ok` | reserved for confirmations | `#6bc794` |
+| `bg` | behind everything: the overlay backdrop, the GTK window | `#1c1c1e` |
+| `bg_panel` | a panel surface: the tab strip, the editor canvas, the header | `#232325` |
+| `bg_card` | a raised surface: a tab, the editor "screen", a button, an entry | `#2c2c2e` |
+| `bg_hover` | hovered or active: the active tab, a hovered button | `#3a3a3c` |
+| `fg` | main text and the work-area frame | `#f2f2f7` |
+| `fg_muted` | captions, `.dim-label`, inactive tab titles | `#a1a1a6` |
+| `accent` | the selected zone, the active tab stripe, a checked or suggested button | `#0b74e0` |
+| `border` | frames and separators of the GTK parts | `#545456` |
+| `danger` | reserved for destructive actions | `#ff453a` |
+| `ok` | reserved for confirmations | `#30d158` |
 | `zones` | up to 16 zone hues, comma-separated; derived from `accent` when absent | the eight hues below |
 | `radius` | zone corner radius in px (picker and editor) | `10` |
 | `font` | Pango family for labels and tab titles | `Sans` |
 
-The default zone hues are `#5c9eeb`, `#6bc794`, `#eba85c`, `#cc80d9`, `#6bccd9`, `#eb8585`,
-`#b8c266`, `#9e9eeb` — the picker palette that predates the theme. Every default is the exact
-colour the old constants produced (`(0.36, 0.62, 0.92)` is `#5c9eeb`), so an installation without
-`theme.conf` does not change its look.
+The default palette is neutral on purpose: grey steps for surfaces, one blue accent, and the eight
+zone hues as **identity dots** (the list, the picker, the HUD) rather than as the fill of the whole
+canvas. Measured against `bg`: `fg` 15.3:1, `fg_muted` 6.6:1, `accent` 3.7:1 (white on the accent
+4.6:1 — AA for the 11 px labels), `danger` 5.0:1, `ok` 8.4:1. The zone hues are `#0a84ff`,
+`#30d158`, `#5e5ce6`, `#ff9f0a`, `#ff375f`, `#bf5af2`, `#ff453a`, `#64d2ff`; the worst of them
+reads 3.36:1 on `bg`, the 3:1 floor for non-text graphics. An installation without `theme.conf`
+gets exactly this.
 
 ## Presets
 
@@ -144,8 +147,10 @@ grid:
 * an accent with HSL saturation below 0.15 (the monochrome presets: `43pr` has a white accent,
   `graphite` a grey one) is replaced by hue 210°, because eight identical greys would make the grid
   unreadable;
-* the ring is eight steps of 45°, at fixed lightness 0.62 and saturation 0.45 — a theme changes the
-  hues and the chrome, not the contrast of a caption on a zone.
+* the ring is eight steps of 45°, at fixed lightness 0.56 and saturation 0.58. A theme changes the
+  hues and the chrome, not the contrast of a caption on a zone; the hues are identity dots and the
+  picker's fills, not the canvas — the editor paints zones neutral and marks the selection with the
+  accent.
 
 ## Validation: a broken theme never breaks the desktop
 
@@ -177,10 +182,12 @@ so the tools that draw never exit because of the theme.
 | tab strip background / tab / active tab | `bg_panel` / `bg_card` / `bg_hover` |
 | tab strip captions / accent stripe | `fg_muted` and `fg` / `accent` |
 | tab strip titles | `font` at size 8 |
-| editor canvas / "screen" | `bg_panel` / `bg_card` |
-| editor zones and selection | `zones[i]` (fill 0.30, outline 0.85) / `accent` |
-| editor guides, frame, legend | `fg` at 0.05 / 0.35 / 0.45 |
-| editor labels | `font` at 11 bold and 8; legend at 9 |
+| editor canvas / "screen" | `bg` / `bg_panel`, outlined with `border` |
+| editor zones | neutral: `fg` 0.04 fill with a `border` 0.9 outline |
+| editor selection | `accent` (0.10 fill, 1.8 px outline) |
+| editor guides, frame, legend | `fg` 0.05 / `border` 0.9 / `fg_muted` |
+| editor labels | `font` at 11 bold (name) and 9 (key); legend at 9 |
+| editor zone list | dot `zones[i]`, name `fg`, key `fg_muted` |
 | editor GTK chrome | the sheet below |
 
 `zone-hotcorners.py` needs no change: it runs `zone-picker.py --hud --conf ...`, so the HUD picks
@@ -192,17 +199,29 @@ the theme up from the same path as the overlay.
 `GTK_STYLE_PROVIDER_PRIORITY_APPLICATION`:
 
 * `window, window.background, .background` — `bg` / `fg`;
-* `.toolbar, toolbar, .primary-toolbar, headerbar, .titlebar, .menubar, menubar, notebook,
-  notebook > header` — `bg_panel`, no background image;
-* `list, row, .view, treeview, scrolledwindow, viewport, viewport.frame` — `bg_panel`, no background
-  image;
-* `button` — `bg_card` with a `border` frame; `button.flat, button.image-button` — transparent
-  (toolbar icons keep the toolbar surface); `:hover` — `bg_hover`; `:checked, :active` — `accent`
-  with black or white text, whichever reads on it (relative luminance, threshold 0.35);
-* `entry, spinbutton` and `textview, textview text` — `bg_card` / `fg` with no background image;
+* `.editor-header, .status-bar, .toolbar, toolbar, .primary-toolbar, headerbar, .titlebar,
+  .menubar, menubar, notebook, notebook > header` — `bg_panel`, no background image; the header
+  takes a `border` bottom edge and the status bar a top edge, so content sits under one material
+  step;
+* `list, row, .view, treeview, scrolledwindow, viewport, viewport.frame` — `bg_panel`; `list row`
+  gets a 6 px radius and padding, `:hover` — `bg_hover`;
+* `button` — `bg_card`, a `border` frame, radius 7, padding 4×10, min height 24;
+  `button.flat, button.image-button` — transparent; `:hover` and `:active` — `bg_hover`;
+  `:checked` — `accent` with black or white text, whichever reads on it (relative luminance,
+  threshold 0.18 — the luminance where white and black ratios meet, so 11–13 px labels stay at
+  AA on any accent); `.suggested-action` — `accent` fill (the Save button);
+  `.destructive-action` — `danger` fill (Clear all…);
+* `entry, spinbutton, combobox button` — `bg_card` / `fg` / a `border` frame, radius 6; `:focus` —
+  the frame turns `accent`;
+* `textview, textview text` — `bg_card` / `fg`;
 * `row:selected, list row:selected, .view:selected, *:selected` — `accent` with the contrasting text;
+  a `.dim-label` inside a selected row takes the same colour (at 0.85 opacity), so the key hint in
+  the zone list does not turn grey-on-blue;
+* `popover, popover.background, menu, .menu` — `bg_panel`, a `border` frame, radius 10;
+  `menuitem, modelbutton` — padding 6×10 and radius 6, `:hover` — `bg_hover`;
 * `tooltip` — `bg_card` / `fg` / `border`;
-* `frame, frame > border, separator, menubar > menuitem` — `border`;
+* `frame, frame > border, separator, menubar > menuitem` — `border`; `separator` is a 1 px
+  `border` line;
 * `.dim-label` — `fg_muted`.
 
 Every selector clears `background-image` where the theme paints a gradient: a background colour
@@ -239,12 +258,12 @@ CLI surface changes.
   fully transparent pixels; `samples_of` bins it at four bits per channel (≤4096 buckets), averages
   each bucket and returns the twelve heaviest, with their pixel counts. Deterministic: the same
   file gives the same palette.
-* **Building the palette.** `theme_from_samples` takes the hue of the **dominant** cluster for the
-  surface ramp (`bg` 0.05, `bg_panel` 0.09, `bg_card` 0.13, `bg_hover` 0.22 in HLS lightness, at
-  ≤0.30 saturation), the most vivid cluster with lightness 0.18..0.85 as the accent (falling back
-  to the lightest colour of a monochrome image), `fg` at lightness 0.93 and `fg_muted` at 0.68 in
-  the accent hue, `border` at 0.28, and the zone hues from :func:`derive_zones`. `danger` and `ok`
-  stay the default: they are signals, not decoration.
+* **Building the palette.** `theme_from_samples` keeps the chrome neutral (`DEFAULT_COLORS`): the
+  wallpaper chooses the **accent** — the most vivid cluster with lightness 0.18..0.85, falling back
+  to the lightest colour of a monochrome image — and the zone hues follow from it through
+  :func:`derive_zones`. Tinting the surfaces with the dominant colour was dropped on purpose: a
+  sampled photo has no scheme of its own, and the violet cast it left on borders and fills read as a
+  broken palette. `danger` and `ok` stay the default: they are signals, not decoration.
 * **Writing.** `write_theme` writes `theme.conf` next to the config atomically, with the first line
   `# Generated by gridsnap from <image>; delete this file to return to the default palette.` The
   marker is the undo and the daemon's claim on the file (`generated_source` parses it). The editor

@@ -74,33 +74,36 @@ COLOR_TOKENS = (
     "ok",
 )
 
-# The default palette reproduces what the surfaces drew before the theme existed: #12141a is the
-# overlay backdrop, #1c1f24 the editor canvas, #2b2e36 the editor "screen", #525c70 the active tab.
-# The tab strip now shares bg_panel/bg_card with the editor, so its strip and tab are one step
-# darker than they were (#21242b and #333842) — the only visible difference of an absent theme.
+# A neutral chrome and one accent: surfaces are grey steps, so colour on screen belongs to the
+# accent and to the zone dots. Measured on `bg`: fg 15.3:1, muted 6.6:1, accent 3.7:1 (white on
+# the accent 4.6:1 — AA for the 11 px labels), danger 5.0:1, ok 8.4:1.
+# The old palette reproduced the pre-theme surfaces (#12141a canvas, #1c1f24 panel, violet-cast
+# borders); a wallpaper tint on every surface read as a broken palette and is gone.
 DEFAULT_COLORS = {
-    "bg": "#12141a",
-    "bg_panel": "#1c1f24",
-    "bg_card": "#2b2e36",
-    "bg_hover": "#525c70",
-    "fg": "#ffffff",
-    "fg_muted": "#c7ccd6",
-    "accent": "#ffb554",
-    "border": "#525c70",
-    "danger": "#eb8585",
-    "ok": "#6bc794",
+    "bg": "#1c1c1e",
+    "bg_panel": "#232325",
+    "bg_card": "#2c2c2e",
+    "bg_hover": "#3a3a3c",
+    "fg": "#f2f2f7",
+    "fg_muted": "#a1a1a6",
+    "accent": "#0b74e0",
+    "border": "#545456",
+    "danger": "#ff453a",
+    "ok": "#30d158",
 }
 
-# The picker palette: eight hues that stay apart from each other on a dark backdrop.
+# The picker palette: eight hues that stay apart from each other on a dark backdrop and read as
+# identity dots in the zone list. They are system hues, not a pastel ring: a fill at 0.20 alpha
+# keeps them distinguishable without painting the grid in candy colours.
 DEFAULT_ZONES = (
-    "#5c9eeb",
-    "#6bc794",
-    "#eba85c",
-    "#cc80d9",
-    "#6bccd9",
-    "#eb8585",
-    "#b8c266",
-    "#9e9eeb",
+    "#0a84ff",
+    "#30d158",
+    "#5e5ce6",
+    "#ff9f0a",
+    "#ff375f",
+    "#bf5af2",
+    "#ff453a",
+    "#64d2ff",
 )
 
 DEFAULT_RADIUS = 10
@@ -112,9 +115,11 @@ MAX_ZONES = 16
 MAX_RADIUS = 64
 
 # Autolightness of a derived zone: mid tones that read on every dark theme, and that keep the
-# caption (white, 0.94 alpha) legible on the fill (the same hue at 0.20 alpha).
-DERIVED_LIGHTNESS = 0.62
-DERIVED_SATURATION = 0.45
+# caption (white, 0.94 alpha) legible on the fill (the same hue at 0.20 alpha). With the neutral
+# chrome the ring is a little darker and more saturated than the old pastel one: the hues are
+# identity dots and picker fills, not the colour of the whole canvas.
+DERIVED_LIGHTNESS = 0.56
+DERIVED_SATURATION = 0.58
 # The hue a monochrome accent is replaced with: eight identical greys would make the grid
 # unreadable, and a monochrome accent is exactly what the 43PR presets carry.
 MONOCHROME_HUE = 210 / 360.0
@@ -212,8 +217,14 @@ def luminance(value):
 
 
 def contrast_text(value):
-    """Black or white — whichever reads on top of ``value``."""
-    return "#000000" if luminance(value) > 0.35 else "#ffffff"
+    """Black or white — whichever reads better on top of ``value``.
+
+    The crossover is the luminance where the two ratios meet (``(L + 0.05) ** 2 == 0.0525``,
+    ``L ≈ 0.179``); the threshold is 0.18 so the default blue ``#0b74e0`` (4.58:1 either way)
+    keeps white. The old fixed 0.35 picked white on orange and light blue, where white reads at
+    ~3.4:1 — under AA for the 11–13 px labels a selection row carries.
+    """
+    return "#000000" if luminance(value) > 0.18 else "#ffffff"
 
 
 def derive_zones(accent, count=len(DEFAULT_ZONES)):
@@ -283,25 +294,39 @@ class Theme:
         """
         colors = self.colors
         on_accent = contrast_text(colors["accent"])
+        on_danger = contrast_text(colors["danger"])
         rules = (
             (
                 "window, window.background, .background",
                 f"background-color: {colors['bg']}; color: {colors['fg']};",
             ),
+            # Chrome and sidebars are one material step above the window; content sits under it.
             (
-                ".toolbar, toolbar, .primary-toolbar, headerbar, .titlebar, .menubar, menubar,"
-                " notebook, notebook > header",
+                ".editor-header, .status-bar, .toolbar, toolbar, .primary-toolbar, headerbar,"
+                " .titlebar, .menubar, menubar, notebook, notebook > header",
                 "background-color: %s; background-image: none; color: %s;"
                 % (colors["bg_panel"], colors["fg"]),
+            ),
+            (
+                ".editor-header",
+                "border-bottom: 1px solid %s; padding: 8px 10px;" % colors["border"],
+            ),
+            (
+                ".status-bar",
+                "border-top: 1px solid %s; padding: 6px 12px;" % colors["border"],
             ),
             (
                 "list, row, .view, treeview, scrolledwindow, viewport, viewport.frame",
                 "background-color: %s; background-image: none; color: %s;"
                 % (colors["bg_panel"], colors["fg"]),
             ),
+            ("list row", "padding: 6px 8px; border-radius: 6px;"),
+            ("list row:hover", f"background-color: {colors['bg_hover']};"),
             (
                 "button",
-                "background-image: none; background-color: %s; border-color: %s; color: %s;"
+                "background-image: none; background-color: %s;"
+                " border: 1px solid %s; border-radius: 7px; padding: 4px 10px;"
+                " min-height: 24px; color: %s;"
                 % (colors["bg_card"], colors["border"], colors["fg"]),
             ),
             (
@@ -309,16 +334,29 @@ class Theme:
                 "background-color: transparent; border-color: transparent;",
             ),
             ("button:hover", f"background-color: {colors['bg_hover']};"),
+            ("button:active", f"background-color: {colors['bg_hover']};"),
             (
-                "button:checked, button:active",
+                "button:checked",
                 "background-color: %s; color: %s; background-image: none;"
                 % (colors["accent"], on_accent),
             ),
             (
-                "entry, spinbutton",
-                "background-image: none; background-color: %s; color: %s; border-color: %s;"
+                "button.suggested-action, .suggested-action",
+                "background-color: %s; color: %s; border-color: %s;"
+                % (colors["accent"], on_accent, colors["accent"]),
+            ),
+            (
+                "button.destructive-action, .destructive-action",
+                "background-color: %s; color: %s; border-color: %s;"
+                % (colors["danger"], on_danger, colors["danger"]),
+            ),
+            (
+                "entry, spinbutton, combobox button",
+                "background-image: none; background-color: %s; color: %s;"
+                " border: 1px solid %s; border-radius: 6px; padding: 4px 8px;"
                 % (colors["bg_card"], colors["fg"], colors["border"]),
             ),
+            ("entry:focus, spinbutton:focus", f"border-color: {colors['accent']};"),
             (
                 "textview, textview text",
                 f"background-color: {colors['bg_card']}; color: {colors['fg']};",
@@ -328,11 +366,29 @@ class Theme:
                 f"background-color: {colors['accent']}; color: {on_accent};",
             ),
             (
+                "row:selected .dim-label, list row:selected .dim-label,"
+                " .view:selected .dim-label, *:selected .dim-label",
+                f"color: {on_accent}; opacity: 0.85;",
+            ),
+            (
+                "popover, popover.background, menu, .menu",
+                "background-color: %s; border: 1px solid %s;"
+                " border-radius: 10px; padding: 4px;"
+                % (colors["bg_panel"], colors["border"]),
+            ),
+            ("menuitem, modelbutton", "padding: 6px 10px; border-radius: 6px;"),
+            ("menuitem:hover, modelbutton:hover", f"background-color: {colors['bg_hover']};"),
+            (
                 "tooltip",
-                "background-color: %s; color: %s; border-color: %s;"
+                "background-color: %s; color: %s; border: 1px solid %s;"
+                " border-radius: 6px;"
                 % (colors["bg_card"], colors["fg"], colors["border"]),
             ),
-            ("frame, frame > border, separator, menubar > menuitem", f"border-color: {colors['border']};"),
+            (
+                "frame, frame > border, separator, menubar > menuitem",
+                f"border-color: {colors['border']};",
+            ),
+            ("separator", f"background-color: {colors['border']}; min-height: 1px;"),
             (".dim-label", f"color: {colors['fg_muted']};"),
         )
         return "\n".join(f"{selector} {{ {body} }}" for selector, body in rules) + "\n"
@@ -605,42 +661,23 @@ def from_wallpaper(path, buckets=MAX_SAMPLES):
 def theme_from_samples(samples, name="wallpaper"):
     """A :class:`Theme` from ``((r, g, b), weight)`` samples in 0..1.
 
-    The surface ramp takes its hue from the dominant colour of the image at fixed lightness steps,
-    so the chrome keeps the same contrast whatever the wallpaper; the accent is the most vivid
-    cluster with a usable lightness, and the zone hues come from it as usual. ``danger`` and ``ok``
-    stay the default: they are signals, not decoration, and an image has no opinion about them.
+    The wallpaper chooses the **accent** and, through it, the zone hues; the chrome stays the
+    neutral ramp of :data:`DEFAULT_COLORS`. A sampled photo has no scheme of its own, and tinting
+    every surface with its dominant colour is what made the generated palettes read as broken
+    (a violet cast on borders, muddy fills). ``danger`` and ``ok`` stay the default too: they are
+    signals, not decoration, and an image has no opinion about them.
     """
     total = sum(weight for _colour, weight in samples if weight > 0)
     if not samples or total <= 0:
         raise ValueError(_("the wallpaper has no readable colours"))
-    dominant = samples[0][0]
-    hue, _lightness, saturation = colorsys.rgb_to_hls(*dominant)
-    if saturation < 0.08:
-        # A grey photo would give a grey chrome; the average is no better, but it is at least
-        # the colour the eye calls "the" colour of the picture.
-        mean = tuple(
-            sum(colour[index] * weight for colour, weight in samples) / total for index in range(3)
-        )
-        hue, _lightness, saturation = colorsys.rgb_to_hls(*mean)
     accent = _accent_colour(samples, total)
     accent_hue, accent_lightness, accent_saturation = colorsys.rgb_to_hls(*accent)
-    base_saturation = min(0.30, max(0.08, saturation))
-    colours = {
-        "bg": _hls(hue, 0.05, base_saturation),
-        "bg_panel": _hls(hue, 0.09, base_saturation),
-        "bg_card": _hls(hue, 0.13, base_saturation),
-        "bg_hover": _hls(hue, 0.22, max(base_saturation, 0.14)),
-        "fg": _hls(accent_hue, 0.93, 0.06),
-        "fg_muted": _hls(accent_hue, 0.68, 0.10),
-        "accent": _hls(
-            accent_hue,
-            min(0.66, max(0.48, accent_lightness)),
-            min(0.80, max(0.45, accent_saturation)),
-        ),
-        "border": _hls(hue, 0.28, max(0.10, base_saturation)),
-        "danger": DEFAULT_COLORS["danger"],
-        "ok": DEFAULT_COLORS["ok"],
-    }
+    colours = dict(DEFAULT_COLORS)
+    colours["accent"] = _hls(
+        accent_hue,
+        min(0.66, max(0.48, accent_lightness)),
+        min(0.80, max(0.45, accent_saturation)),
+    )
     return Theme(colours, derive_zones(colours["accent"]), name=name)
 
 
