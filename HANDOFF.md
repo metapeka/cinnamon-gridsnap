@@ -1,7 +1,9 @@
 # HANDOFF — current state of GridSnap
 
 Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave history lives in
-`docs/HANDOFF-<date>-<slug>.md`; the newest are `docs/HANDOFF-2026-11-26-demo-scene.md`,
+`docs/HANDOFF-<date>-<slug>.md`; the newest is `docs/HANDOFF-2026-11-27-editor-rework.md` — the
+editor's neutral chrome plus the translated gallery cards (#53, #54) — before it
+`docs/HANDOFF-2026-11-26-demo-scene.md`,
 `docs/HANDOFF-2026-11-26-screenshots.md`, `docs/HANDOFF-2026-11-26-docs.md`,
 `docs/HANDOFF-2026-11-26-gtk-controls.md`, `docs/HANDOFF-2026-11-26-man-theme.md`,
 `docs/HANDOFF-2026-11-26-theme-refresh.md` and `docs/HANDOFF-2026-11-26-theme-wallpaper.md` — read
@@ -17,7 +19,7 @@ its own, a Windows port and browser automation are out of scope (`SPEC.md`, `doc
 
 | What | Value |
 |---|---|
-| Code | `main` = `fafac1d` (renamed the HANDOFF sections for the OAW quality gate; before it `76f88e7` — `docs/product.md`, `docs/platforms.md`, `docs/tutorial.md`; the theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`; the AUR checksum pin `a3de4c2`) — pushed, CI green |
+| Code | `main` = `60c1087` (Merge #54: the gallery cards translated through the catalogs, work `a81889c`; before it `4dc7b16` Merge #53: the editor's neutral chrome and one header, work `119791f`; before the editor waves `fafac1d` — the HANDOFF section rename for the OAW quality gate; the theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`; the AUR checksum pin `a3de4c2`) — pushed, CI green |
 | Version | `0.3.0`, tag `v0.3.0` + GitHub Release with `gridsnap-0.3.0.tar.gz`; AUR `sha256sums` is the tag archive (`031c2e3…`), which is not the attached tarball: the tag archive is what `source` names |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
@@ -27,45 +29,15 @@ its own, a Windows port and browser automation are out of scope (`SPEC.md`, `doc
 | Open PRs | None |
 | Live install | This checkout **is** the installed copy. The owner's desktop layout lives in `~/.config/gridsnap/zones.conf` (profiles in `~/.config/gridsnap/templates/`), which `zone-tiler.default_conf` finds first; the tracked root `zones.conf` is the shipped starting layout |
 
-### Uncommitted work in the tree (15 files, 2026-11-27)
+### The tree
 
-The **neutral-palette + header/sidebar rework** of the editor: the owner rejected the
-wallpaper-tinted chrome and the twelve-control toolbar. Gates are green (`make check` — 1518 tests,
-`OK`, 9 skipped; `make lint`; `make check-i18n`; `tests.test_screenshots test_demo_gif
-test_docs_languages test_site_pages` — 30 `OK`), the stills and the demo were re-rendered by the
-scripts. **Not committed, no PR, nothing pushed.** These 15 files are the rework; `HANDOFF.md`
-itself is the sixteenth modified file — this very handoff — and `.omp-handoff-request.json` is a
-local, git-excluded request (`.git/info/exclude`), not part of the product.
+Working tree clean. The editor's neutral chrome (#53) and the translated gallery cards (#54) are in
+`main`; the wave record is `docs/HANDOFF-2026-11-27-editor-rework.md`.
 
-- `zone-editor.py` (1743 lines) — header (title, monitor chip, Templates, Profiles, filled Save
-  that is insensitive while nothing changed, and a “…” menu: gallery, theme group, place on another
-  monitor, workspace/monitor profiles, hotkeys, place the active window, Clear all… with a
-  confirmation); one sidebar (zone list with an identity dot, name and key, plus the inspector and a
-  one-line geometry `N % × M % · X × Y px`); one-line status (the workspace note moved to the chip's
-  tooltip); neutral canvas (`fg` 4 % fill, `border` outline, selection `accent` 10 % + 1.8 px);
-  zone labels are name + key only; the empty-inspector hint is `set_no_show_all`-guarded so
-  `show_all()` cannot resurrect it.
-- `zone_theme.py` (909 lines) — neutral `DEFAULT_COLORS` (measured: fg 15.3:1, muted 6.6:1, accent
-  3.7:1, white on accent 4.58:1), system `DEFAULT_ZONES` as identity hues, wallpaper palettes keep
-  the neutral chrome and take only the accent, the GTK sheet grew header/status/row/suggested/
-  destructive/entry-focus/popover rules, `contrast_text` threshold `0.18`, `.dim-label` inside a
-  selected row follows the selection colour.
-- `tests/test_theme.py` — contracts updated: neutral defaults, neutral wallpaper chrome, the
-  samples-to-theme accent rule.
-- `docs/specs/theme.md` — tokens, zone-hue derivation 0.56/0.58, the editor's landing table, the
-  sheet contract, the wallpaper bridge, the contrast threshold.
-- `docs/specs/zone-editor.md` — translated to English and rewritten for the new UI.
-- `po/gridsnap.pot`, `po/ru.po`, `po/zh_CN.po`, `po/gridsnap@metapeka/gridsnap@metapeka.pot` — nine
-  new strings plus `Layout` translated into `ru`/`zh_CN`, fuzzy matches cleared.
-- `README.md`, `README.ru.md`, `README.zh.md` — §3.2 re-mapped to the new controls (chip, “…” menu,
-  sidebar inspector, no more “−”/“▶” buttons).
-- `site/assets/editor.png`, `site/assets/picker.png`, `site/assets/demo.gif` — re-rendered by
-  `tools/shoot-screens.sh` and `tools/record-demo.sh` (neutral chrome, the scene's orange accent).
-
-Live side, outside git: `~/.config/gridsnap/theme.conf` was regenerated as a marked neutral file
-(`bg #1c1c1e`, `panel #232325`, accent `#3793be` from the wallpaper); the daemon was restarted on
-the new code — pid `1064788`, registered as the `gridsnap-daemon` service, `0.3.0`, reading
-`~/.config/gridsnap/zones.conf` (`gridsnap-ctl status` / `reload` confirmed).
+Live side, outside git: `~/.config/gridsnap/theme.conf` is a marked neutral file (`bg #1c1c1e`,
+`panel #232325`, accent `#3793be` from the wallpaper); the daemon runs `0.3.0` on the merged code —
+pid `1064788`, registered as the `gridsnap-daemon` service, reading `~/.config/gridsnap/zones.conf`
+(`gridsnap-ctl status` / `reload` confirmed).
 
 ## Checks (gates)
 
@@ -94,7 +66,7 @@ Smoke scripts raise their own `:89`–`:99`, so they are safe on a live desktop,
 |---|---|---|
 | `zone-tiler.py` | 4077 | the core: config → zone model → EWMH placement; `list/apply/arrange/stack/undo/focus/profile/tabs-next/action` |
 | `zone-daemon.py` | 3300 | optional long-lived daemon: `[rules]` auto-placement, reflow, tabs, IPC server, event subscriptions, the wallpaper poll and the controls-theme follow |
-| `zone_config.py` | 2202 | pure `zones.conf` model: load/save canonically, per-monitor and per-workspace sets, profiles; no GTK |
+| `zone_config.py` | 2239 | pure `zones.conf` model: load/save canonically, per-monitor and per-workspace sets, profiles; no GTK |
 | `zone-editor.py` | 1743 | GTK zone editor: header (monitor chip, Templates, Profiles, Save, “…” menu), zone list + inspector sidebar, canvas, gallery, profile menus, hotkey registration, **Theme** menu (wallpaper palette, controls theme, reload) |
 | `zone-hotcorners.py` | 1186 | drag watcher over XInput2 raw events → HUD → place on drop |
 | `zone-picker.py` | 1003 | overlay zone picker / `--hud` passive grid |
@@ -116,7 +88,6 @@ Behaviour contracts live in `docs/specs/` (19 files, one per module feature). Ar
 
 | Item | State |
 |---|---|
-| Editor UI rework (uncommitted) | **Done, gates green, sitting in the tree** (15 files, list above in State). Next: commit it and open a PR (watch CI with `tools/ci-watch.sh`); then the last known UI gap — gallery data (`gallery/*.conf` `title`/`description`) is still Russian inside the English dialog, route it through `po` or ship English source values; if the palette changes again, re-run `tools/shoot-screens.sh` and `tools/record-demo.sh`, then `tests.test_screenshots tests.test_demo_gif`. |
 | Wayland backend | Open. Cinnamon 6.8 / Mint 23 (~Christmas 2026) makes the Wayland session official. Reconstruction in `docs/HANDOFF-2026-11-22-window-seam.md`: placing windows through muffin still works under nested `muffin --wayland`, but the seam is not finished. |
 | Debian archive | `.deb` builds, license declared, lintian clean; missing ITP bug, sponsor, review. |
 | Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. Done so far: `docs/architecture.md` (English, with a Mermaid module graph), `docs/specs/theme.md`, `tools/shoot-screens.sh`, `tools/record-demo.sh`; the site and both translated READMEs carry §3.4 (theme). The rest is still Russian. |
@@ -128,6 +99,7 @@ Behaviour contracts live in `docs/specs/` (19 files, one per module feature). Ar
 | Trap | What to do |
 |---|---|
 | The editor's colour is identity, not decoration | The chrome is zinc-neutral (`bg #1c1c1e`, `panel #232325`, `card #2c2c2e`, `border #545456`) with one accent; a zone hue appears only as the list dot and in the picker/HUD, while the canvas paints zones `fg` 4 % and the selection `accent` 10 % + 1.8 px. A wallpaper palette keeps the neutral chrome and takes only the accent — the violet cast on every surface was the rejected look (`docs/specs/theme.md`). Text on an accent uses `contrast_text` threshold `0.18` (where white and black ratios meet, so the default blue keeps white at 4.58:1); a `.dim-label` inside a selected row must take the selection colour, or the key hint turns grey-on-blue. |
+| Gallery card text is data, not a literal | `gallery/*.conf` carries the English source (`title`, `description`); `gallery_layouts()` and `load_gallery_layout()` translate it through the catalog, and the menu sorts by the **source** title. `make pot` gets the cards from `tools/gallery-pot.py` and merges them with `msgcat`, so editing a card changes the `msgid`: run `make pot`, `msgmerge` both catalogs, translate the new entry. `make check-i18n` catches a stale template, `tests/test_i18n_catalogs.py` a missing `msgstr`, and `profile gallery` runs under `en`/`ru` there. The empty title never reaches gettext — the empty `msgid` is the catalog header. |
 | The root `zones.conf` is the **shipped** layout, not the live one | The owner's desktop layout lives in `~/.config/gridsnap/zones.conf` (found first by `zone-tiler.default_conf`); the tracked file is only the starting layout for a new installation, and it ships through `Makefile`, `install.sh`, `PKGBUILD` and `debian/install`. Twice the live layout reached the tracked file by accident; the last time (`2c6a247`, dropped before push) it carried `[workspaces] 1 = ws1`, and `ws1.conf` lives in `templates/`, which is gitignored and shipped nowhere. `tests/test_zone_config.py::ShippedConfigTest` now refuses any `[workspaces]`/`[monitors]` binding in the shipped file. |
 | Every smoke writes its own config | `smoke-arrange.sh` was the last scenario reading the root `zones.conf`; a `[workspaces]` entry in the live layout made the tiler resolve a profile the scenario's expectations did not read, and the smoke failed on a clean tree. All 13 scenarios now write a config into their own temp directory (`smoke.sh` still reads the root file by design — it is the only scenario that checks the shipped default layout, and it passes `--conf`-less on purpose). |
 | `theme.conf` follows the resolved `zones.conf` | Resolved here to `~/.config/gridsnap/zones.conf`, so `~/.config/gridsnap/theme.conf` is the owner's live palette — never commit one. The editor's wallpaper action writes exactly that file (with a `# Generated by gridsnap …` first line); tests and smokes keep their themes in temp directories. The daemon rewrites a file only while that marker is its first line and only when `picture-uri` resolves to a different image; deleting the file or removing the line returns the palette to the user. |
