@@ -6,6 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-27 14:17+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -35,8 +36,12 @@ msgid "zone-tiler: section [{section}] has no zones"
 msgstr "zone-tiler: 段 [{section}] 里没有任何区域"
 
 #: zone-tiler.py
-msgid "zone-tiler: only [zones:<output>] sections exist, but the required [zones] is missing; [zones] defines the default zone set"
-msgstr "zone-tiler: 只有 [zones:<输出>] 段，缺少必需的 [zones]；[zones] 给出默认的区域集合"
+msgid ""
+"zone-tiler: only [zones:<output>] sections exist, but the required [zones] "
+"is missing; [zones] defines the default zone set"
+msgstr ""
+"zone-tiler: 只有 [zones:<输出>] 段，缺少必需的 [zones]；[zones] 给出默认的区"
+"域集合"
 
 #: zone-tiler.py
 msgid "zone-tiler: no zones in section [zones] of zones.conf"
@@ -49,7 +54,8 @@ msgstr "zone-tiler: 规则 '{selector}' 引用了未知区域 '{zone}'"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: zone '{zone}' is in neither monitor set '{monitor}' nor [zones]"
+msgid ""
+"zone-tiler: zone '{zone}' is in neither monitor set '{monitor}' nor [zones]"
 msgstr "zone-tiler: 显示器 '{monitor}' 的集合和 [zones] 里都没有区域 '{zone}'"
 
 #: zone-tiler.py
@@ -72,7 +78,9 @@ msgstr "zone-tiler: 区域 '{name}' 应写成 'c0:c1, r0:r1' 或 'x,y,w,h'"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: zone '{name}' goes beyond the grid ({ncols} columns, {nrows} rows)"
+msgid ""
+"zone-tiler: zone '{name}' goes beyond the grid ({ncols} columns, {nrows} "
+"rows)"
 msgstr "zone-tiler: 区域 '{name}' 超出网格（{ncols} 列、{nrows} 行）"
 
 #: zone-tiler.py
@@ -82,37 +90,60 @@ msgstr "zone-tiler: 区域 '{name}' 超出屏幕范围（比例 0..1）"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: failed to read the frame of window 0x{window:x}: {error} - using the first monitor"
-msgstr "zone-tiler: 无法读取窗口 0x{window:x} 的边框：{error} — 改用第一台显示器"
+msgid ""
+"zone-tiler: failed to read the frame of window 0x{window:x}: {error} - using "
+"the first monitor"
+msgstr ""
+"zone-tiler: 无法读取窗口 0x{window:x} 的边框：{error} — 改用第一台显示器"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "invalid workspace '{text}': a workspace number (0, 1, ...), {current} or {conf} is required"
+msgid ""
+"invalid workspace '{text}': a workspace number (0, 1, ...), {current} or "
+"{conf} is required"
 msgstr "错误的工作桌面 '{text}'：需要桌面编号（0、1、…）、{current} 或 {conf}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: profile \"{profile}\" is not on disk: monitor {output} is laid out without it: using the workspace set or the default one"
-msgstr "zone-tiler: 磁盘上没有方案「{profile}」：显示器 {output} 不带它布局：改用桌面方案或公共集合"
+msgid ""
+"zone-tiler: profile \"{profile}\" is not on disk: monitor {output} is laid "
+"out without it: using the workspace set or the default one"
+msgstr ""
+"zone-tiler: 磁盘上没有方案「{profile}」：显示器 {output} 不带它布局：改用桌面"
+"方案或公共集合"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: profile \"{profile}\" is not on disk: the window's monitor is laid out without it: using the workspace set or the default one"
-msgstr "zone-tiler: 磁盘上没有方案「{profile}」：窗口所在显示器不带它布局：改用桌面方案或公共集合"
+msgid ""
+"zone-tiler: profile \"{profile}\" is not on disk: the window's monitor is "
+"laid out without it: using the workspace set or the default one"
+msgstr ""
+"zone-tiler: 磁盘上没有方案「{profile}」：窗口所在显示器不带它布局：改用桌面方"
+"案或公共集合"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: no zone '{zone}' in the grid of monitor {output} (profile \"{profile}\"). Known: {known}"
-msgstr "zone-tiler: 显示器 {output} 的网格（方案「{profile}」）里没有区域 '{zone}'。已有：{known}"
+msgid ""
+"zone-tiler: no zone '{zone}' in the grid of monitor {output} (profile "
+"\"{profile}\"). Known: {known}"
+msgstr ""
+"zone-tiler: 显示器 {output} 的网格（方案「{profile}」）里没有区域 '{zone}'。"
+"已有：{known}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: no zone '{zone}' in the grid of workspace {workspace} (profile \"{profile}\"). Known: {known}"
-msgstr "zone-tiler: 桌面 {workspace} 的网格（方案「{profile}」）里没有区域 '{zone}'。已有：{known}"
+msgid ""
+"zone-tiler: no zone '{zone}' in the grid of workspace {workspace} (profile "
+"\"{profile}\"). Known: {known}"
+msgstr ""
+"zone-tiler: 桌面 {workspace} 的网格（方案「{profile}」）里没有区域 '{zone}'。"
+"已有：{known}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: no zone '{zone}' in the grid of profile \"{profile}\". Known: {known}"
+msgid ""
+"zone-tiler: no zone '{zone}' in the grid of profile \"{profile}\". Known: "
+"{known}"
 msgstr "zone-tiler: 方案「{profile}」的网格里没有区域 '{zone}'。已有：{known}"
 
 #: zone-tiler.py
@@ -167,8 +198,12 @@ msgstr "显示器 {index} 的工作区：{x},{y} {w}x{h}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "monitor {index} work area: {x},{y} {w}x{h}  (output {output})  (profile \"{profile}\")"
-msgstr "显示器 {index} 的工作区：{x},{y} {w}x{h}  （输出 {output}）  （方案「{profile}」）"
+msgid ""
+"monitor {index} work area: {x},{y} {w}x{h}  (output {output})  (profile "
+"\"{profile}\")"
+msgstr ""
+"显示器 {index} 的工作区：{x},{y} {w}x{h}  （输出 {output}）  （方案"
+"「{profile}」）"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -207,13 +242,19 @@ msgstr "{zone}：x={x} y={y} {w}x{h}（显示器 {index}：{output}）"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: window 0x{window:x} is excluded ([ignore]/utility window type) - not moving it"
+msgid ""
+"zone-tiler: window 0x{window:x} is excluded ([ignore]/utility window type) - "
+"not moving it"
 msgstr "zone-tiler: 窗口 0x{window:x} 属于例外（[ignore]/工具类窗口）— 不移动"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: the daemon did not answer within {timeout:g} s - not switching the mode (a running daemon cannot be bypassed from outside)"
-msgstr "zone-tiler: 守护进程在 {timeout:g} 秒内没有回应 — 不切换模式（运行中的守护进程无法从外部绕过）"
+msgid ""
+"zone-tiler: the daemon did not answer within {timeout:g} s - not switching "
+"the mode (a running daemon cannot be bypassed from outside)"
+msgstr ""
+"zone-tiler: 守护进程在 {timeout:g} 秒内没有回应 — 不切换模式（运行中的守护进"
+"程无法从外部绕过）"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -221,8 +262,12 @@ msgid "zone-tiler: the daemon gave an unclear answer: {error}"
 msgstr "zone-tiler: 守护进程的回应无法理解：{error}"
 
 #: zone-tiler.py
-msgid "zone-tiler: the daemon is not running - it switches tabs in a zone (start gridsnap-daemon)"
-msgstr "zone-tiler: 守护进程没有运行 — 区域内的标签页由它切换（请启动 gridsnap-daemon）"
+msgid ""
+"zone-tiler: the daemon is not running - it switches tabs in a zone (start "
+"gridsnap-daemon)"
+msgstr ""
+"zone-tiler: 守护进程没有运行 — 区域内的标签页由它切换（请启动 gridsnap-"
+"daemon）"
 
 #: zone-tiler.py zone-tabstrip.py
 msgid "reason not given"
@@ -234,7 +279,9 @@ msgid "zone-tiler: the daemon refused: {reason}"
 msgstr "zone-tiler: 守护进程拒绝：{reason}"
 
 #: zone-tiler.py
-msgid "zone-tiler: nothing to switch - the zone of the active window has a single window"
+msgid ""
+"zone-tiler: nothing to switch - the zone of the active window has a single "
+"window"
 msgstr "zone-tiler: 没有可切换的窗口 — 活动窗口所在区域只有一个窗口"
 
 #: zone-tiler.py
@@ -243,7 +290,9 @@ msgid "zone-tiler: next window of the zone - {window}"
 msgstr "zone-tiler: 区域的下一个窗口 — {window}"
 
 #: zone-tiler.py
-msgid "zone-tiler: action - specify an action name, for example: zone-tiler.py action mirror"
+msgid ""
+"zone-tiler: action - specify an action name, for example: zone-tiler.py "
+"action mirror"
 msgstr "zone-tiler: action — 请指定操作名，例如：zone-tiler.py action mirror"
 
 #: zone-tiler.py
@@ -279,8 +328,11 @@ msgstr "未知"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "action '{name}' ({run}): {window} -> {where} (monitor {screen}, workspace {desk})"
-msgstr "操作 '{name}'（{run}）：{window} -> {where}（显示器 {screen}，桌面 {desk}）"
+msgid ""
+"action '{name}' ({run}): {window} -> {where} (monitor {screen}, workspace "
+"{desk})"
+msgstr ""
+"操作 '{name}'（{run}）：{window} -> {where}（显示器 {screen}，桌面 {desk}）"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -304,13 +356,21 @@ msgstr "zone-tiler: 操作 '{name}' 已启动：{command}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "plan: window {window} -> zone '{zone}', the other windows of the workspace and monitor are minimized (a second press brings them back)"
-msgstr "计划：窗口 {window} -> 区域 '{zone}'，桌面和显示器上的其余窗口已最小化（再按一次可还原）"
+msgid ""
+"plan: window {window} -> zone '{zone}', the other windows of the workspace "
+"and monitor are minimized (a second press brings them back)"
+msgstr ""
+"计划：窗口 {window} -> 区域 '{zone}'，桌面和显示器上的其余窗口已最小化（再按"
+"一次可还原）"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "plan: window {window} -> stays in place, the other windows of the workspace and monitor are minimized (a second press brings them back)"
-msgstr "计划：窗口 {window} -> 留在原处，桌面和显示器上的其余窗口已最小化（再按一次可还原）"
+msgid ""
+"plan: window {window} -> stays in place, the other windows of the workspace "
+"and monitor are minimized (a second press brings them back)"
+msgstr ""
+"计划：窗口 {window} -> 留在原处，桌面和显示器上的其余窗口已最小化（再按一次可"
+"还原）"
 
 #: zone-tiler.py
 msgid "the window is outside zones - nothing to show"
@@ -347,13 +407,22 @@ msgstr "区域 '{zone}' 和 '{partner}' 都是空的 — 没有可交换的内�
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "plan: swap zones '{zone}' and '{partner}' ({axis}): {here} -> '{partner}', {there} -> '{zone}'; frames x={hx} y={hy} {hw}x{hh} and x={tx} y={ty} {tw}x{th}"
-msgstr "计划：交换区域 '{zone}' 和 '{partner}'（{axis}）：{here} -> '{partner}'，{there} -> '{zone}'；边框 x={hx} y={hy} {hw}x{hh} 和 x={tx} y={ty} {tw}x{th}"
+msgid ""
+"plan: swap zones '{zone}' and '{partner}' ({axis}): {here} -> '{partner}', "
+"{there} -> '{zone}'; frames x={hx} y={hy} {hw}x{hh} and x={tx} y={ty} {tw}"
+"x{th}"
+msgstr ""
+"计划：交换区域 '{zone}' 和 '{partner}'（{axis}）：{here} -> '{partner}'，"
+"{there} -> '{zone}'；边框 x={hx} y={hy} {hw}x{hh} 和 x={tx} y={ty} {tw}x{th}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: windows of zones '{zone}' and '{partner}' swapped (windows in zones: {here} and {there})"
-msgstr "zone-tiler: 区域 '{zone}' 和 '{partner}' 的窗口已交换（区域内的窗口数：{here} 和 {there}）"
+msgid ""
+"zone-tiler: windows of zones '{zone}' and '{partner}' swapped (windows in "
+"zones: {here} and {there})"
+msgstr ""
+"zone-tiler: 区域 '{zone}' 和 '{partner}' 的窗口已交换（区域内的窗口数："
+"{here} 和 {there}）"
 
 #: zone-tiler.py
 msgid "empty zone"
@@ -366,13 +435,20 @@ msgstr "zone-tiler: 操作 '{name}' 没有区域 — 请在 [action:{name}] 里�
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "plan: run {argv} and put its window in zone '{zone}': x={x} y={y} {w}x{h} (windows in the zone: {count} + 1)"
-msgstr "计划：运行 {argv} 并把它的窗口放进区域 '{zone}'：x={x} y={y} {w}x{h}（区域内的窗口：{count} + 1）"
+msgid ""
+"plan: run {argv} and put its window in zone '{zone}': x={x} y={y} {w}x{h} "
+"(windows in the zone: {count} + 1)"
+msgstr ""
+"计划：运行 {argv} 并把它的窗口放进区域 '{zone}'：x={x} y={y} {w}x{h}（区域内"
+"的窗口：{count} + 1）"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: the terminal in zone '{zone}' did not appear within {seconds:g} s - window not found"
-msgstr "zone-tiler: 区域 '{zone}' 里的终端在 {seconds:g} 秒内没有出现 — 没有找到窗口"
+msgid ""
+"zone-tiler: the terminal in zone '{zone}' did not appear within {seconds:g} "
+"s - window not found"
+msgstr ""
+"zone-tiler: 区域 '{zone}' 里的终端在 {seconds:g} 秒内没有出现 — 没有找到窗口"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -381,8 +457,11 @@ msgstr "zone-tiler: 区域 '{zone}' 里的终端：窗口 0x{window:x}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: failed to unminimize {count} windows - the mode record is kept, repeat focus --off"
-msgstr "zone-tiler: {count} 个窗口无法还原 — 模式记录已保存，请重复 focus --off"
+msgid ""
+"zone-tiler: failed to unminimize {count} windows - the mode record is kept, "
+"repeat focus --off"
+msgstr ""
+"zone-tiler: {count} 个窗口无法还原 — 模式记录已保存，请重复 focus --off"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -400,8 +479,12 @@ msgstr "「只留这个区域」模式已关闭：已还原的窗口 — {count}
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "focus mode: held by the daemon (zone '{zone}', target {window}, minimized {count}) - would turn off"
-msgstr "「只留这个区域」：由守护进程保持（区域 '{zone}'，目标 {window}，已最小化 {count}）— 会关闭"
+msgid ""
+"focus mode: held by the daemon (zone '{zone}', target {window}, minimized "
+"{count}) - would turn off"
+msgstr ""
+"「只留这个区域」：由守护进程保持（区域 '{zone}'，目标 {window}，已最小化 "
+"{count}）— 会关闭"
 
 #: zone-tiler.py zone-daemon.py
 msgid "without a zone"
@@ -419,18 +502,28 @@ msgstr "zone-tiler: 无法确定窗口 0x{window:x} 的显示器"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "focus mode: window 0x{window:x} -> zone '{zone}' x={x} y={y} {w}x{h}, windows to minimize - {count}"
-msgstr "「只留这个区域」：窗口 0x{window:x} -> 区域 '{zone}' x={x} y={y} {w}x{h}，会最小化的窗口 — {count}"
+msgid ""
+"focus mode: window 0x{window:x} -> zone '{zone}' x={x} y={y} {w}x{h}, "
+"windows to minimize - {count}"
+msgstr ""
+"「只留这个区域」：窗口 0x{window:x} -> 区域 '{zone}' x={x} y={y} {w}x{h}，会"
+"最小化的窗口 — {count}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "focus mode: window 0x{window:x} -> stays in place, windows to minimize - {count}"
-msgstr "「只留这个区域」：窗口 0x{window:x} -> 留在原处，会最小化的窗口 — {count}"
+msgid ""
+"focus mode: window 0x{window:x} -> stays in place, windows to minimize - "
+"{count}"
+msgstr ""
+"「只留这个区域」：窗口 0x{window:x} -> 留在原处，会最小化的窗口 — {count}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: window 0x{window:x} is excluded ([ignore]/utility window type) - not enabling the mode"
-msgstr "zone-tiler: 窗口 0x{window:x} 属于例外（[ignore]/工具类窗口）— 不开启模式"
+msgid ""
+"zone-tiler: window 0x{window:x} is excluded ([ignore]/utility window type) - "
+"not enabling the mode"
+msgstr ""
+"zone-tiler: 窗口 0x{window:x} 属于例外（[ignore]/工具类窗口）— 不开启模式"
 
 #: zone-tiler.py
 msgid "zone-tiler: failed to determine the active workspace"
@@ -443,8 +536,11 @@ msgstr "zone-tiler: 无法写入模式状态：{error}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "focus mode: window 0x{window:x} -> zone '{zone}', windows minimized - {count}"
-msgstr "「只留这个区域」：窗口 0x{window:x} -> 区域 '{zone}'，已最小化的窗口 — {count}"
+msgid ""
+"focus mode: window 0x{window:x} -> zone '{zone}', windows minimized - {count}"
+msgstr ""
+"「只留这个区域」：窗口 0x{window:x} -> 区域 '{zone}'，已最小化的窗口 — "
+"{count}"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -458,8 +554,10 @@ msgstr "zone-tiler: 无法重写模式记录：{error}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "focus mode: window {window} -> zone '{zone}', windows minimized - {count}"
-msgstr "「只留这个区域」：窗口 {window} -> 区域 '{zone}'，已最小化的窗口 — {count}"
+msgid ""
+"focus mode: window {window} -> zone '{zone}', windows minimized - {count}"
+msgstr ""
+"「只留这个区域」：窗口 {window} -> 区域 '{zone}'，已最小化的窗口 — {count}"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -478,13 +576,19 @@ msgstr "zone-tiler: 显示器 {index}（{output}）没有任何区域"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: zone '{zone}' has no neighbour to the {direction} - not moving the window"
+msgid ""
+"zone-tiler: zone '{zone}' has no neighbour to the {direction} - not moving "
+"the window"
 msgstr "zone-tiler: 区域 '{zone}' 没有 {direction} 方向的邻居 — 不移动窗口"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "window 0x{window:x}: zone '{here}' -> '{zone}': x={x} y={y} {w}x{h} (monitor {index}: {output})"
-msgstr "窗口 0x{window:x}：区域 '{here}' -> '{zone}'：x={x} y={y} {w}x{h}（显示器 {index}：{output}）"
+msgid ""
+"window 0x{window:x}: zone '{here}' -> '{zone}': x={x} y={y} {w}x{h} (monitor "
+"{index}: {output})"
+msgstr ""
+"窗口 0x{window:x}：区域 '{here}' -> '{zone}'：x={x} y={y} {w}x{h}（显示器 "
+"{index}：{output}）"
 
 #: zone-tiler.py
 msgid "the daemon rejected arrange"
@@ -496,7 +600,8 @@ msgid "window {window}: the daemon did not move it ({error})"
 msgstr "窗口 {window}：守护进程没有重新摆放它（{error}）"
 
 #: zone-tiler.py
-msgid "zone-tiler: failed to read _NET_CLIENT_LIST (DISPLAY and xprop are required)"
+msgid ""
+"zone-tiler: failed to read _NET_CLIENT_LIST (DISPLAY and xprop are required)"
 msgstr "zone-tiler: 无法读取 _NET_CLIENT_LIST（需要 DISPLAY 和 xprop）"
 
 #: zone-tiler.py
@@ -518,8 +623,12 @@ msgstr "zone-tiler: 没有可做成标签页的窗口"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "window 0x{window:x} -> zone '{zone}' (tab {tab} of {total}): x={x} y={y} {w}x{h}"
-msgstr "窗口 0x{window:x} -> 区域 '{zone}'（标签页 {tab}/{total}）：x={x} y={y} {w}x{h}"
+msgid ""
+"window 0x{window:x} -> zone '{zone}' (tab {tab} of {total}): x={x} y={y} {w}"
+"x{h}"
+msgstr ""
+"窗口 0x{window:x} -> 区域 '{zone}'（标签页 {tab}/{total}）：x={x} y={y} {w}"
+"x{h}"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -567,8 +676,11 @@ msgstr "zone-tiler: 已还原窗口：{restored}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: in [keys] zone '{zone}' is missing from [zones] and [zones:<output>]"
-msgstr "zone-tiler: [keys] 里的区域 '{zone}' 在 [zones] 和 [zones:<输出>] 里都没有"
+msgid ""
+"zone-tiler: in [keys] zone '{zone}' is missing from [zones] and [zones:"
+"<output>]"
+msgstr ""
+"zone-tiler: [keys] 里的区域 '{zone}' 在 [zones] 和 [zones:<输出>] 里都没有"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -605,22 +717,44 @@ msgstr "zone-tiler: 方案「{profile}」已导入：{path}（{zones} 个区域�
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone key \"{zone}\": \"{first_key}\" (profile \"{first_profile}\", monitor {first_output}) kept instead of \"{key}\" (profile \"{profile}\", monitor {output}) - the first one wins"
-msgstr "区域「{zone}」的按键：「{first_key}」（方案「{first_profile}」，显示器 {first_output}）取代「{key}」（方案「{profile}」，显示器 {output}）— 保留第一个"
+msgid ""
+"zone key \"{zone}\": \"{first_key}\" (profile \"{first_profile}\", monitor "
+"{first_output}) kept instead of \"{key}\" (profile \"{profile}\", monitor "
+"{output}) - the first one wins"
+msgstr ""
+"区域「{zone}」的按键：「{first_key}」（方案「{first_profile}」，显示器 "
+"{first_output}）取代「{key}」（方案「{profile}」，显示器 {output}）— 保留第一"
+"个"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "rule for \"{selector}\": zone \"{first_zone}\" (profile \"{first_profile}\", monitor {first_output}) kept instead of \"{zone}\" (profile \"{profile}\", monitor {output}) - the first one wins"
-msgstr "「{selector}」的规则：区域「{first_zone}」（方案「{first_profile}」，显示器 {first_output}）取代「{zone}」（方案「{profile}」，显示器 {output}）— 保留第一个"
+msgid ""
+"rule for \"{selector}\": zone \"{first_zone}\" (profile \"{first_profile}\", "
+"monitor {first_output}) kept instead of \"{zone}\" (profile \"{profile}\", "
+"monitor {output}) - the first one wins"
+msgstr ""
+"「{selector}」的规则：区域「{first_zone}」（方案「{first_profile}」，显示器 "
+"{first_output}）取代「{zone}」（方案「{profile}」，显示器 {output}）— 保留第"
+"一个"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "exclusion \"{selector}\": note \"{first_note}\" (profile \"{first_profile}\", monitor {first_output}) kept instead of \"{note}\" (profile \"{profile}\", monitor {output}) - the first one wins"
-msgstr "例外「{selector}」：备注「{first_note}」（方案「{first_profile}」，显示器 {first_output}）取代「{note}」（方案「{profile}」，显示器 {output}）— 保留第一个"
+msgid ""
+"exclusion \"{selector}\": note \"{first_note}\" (profile \"{first_profile}"
+"\", monitor {first_output}) kept instead of \"{note}\" (profile \"{profile}"
+"\", monitor {output}) - the first one wins"
+msgstr ""
+"例外「{selector}」：备注「{first_note}」（方案「{first_profile}」，显示器 "
+"{first_output}）取代「{note}」（方案「{profile}」，显示器 {output}）— 保留第"
+"一个"
 
 #: zone-tiler.py
-msgid "zone-tiler: profile use-monitors takes no profile name: monitors and profiles are set by the [monitors] section"
-msgstr "zone-tiler: profile use-monitors 不接受方案名：显示器和方案由 [monitors] 段给出"
+msgid ""
+"zone-tiler: profile use-monitors takes no profile name: monitors and "
+"profiles are set by the [monitors] section"
+msgstr ""
+"zone-tiler: profile use-monitors 不接受方案名：显示器和方案由 [monitors] 段给"
+"出"
 
 #: zone-tiler.py
 msgid "zone-tiler: [monitors] has no monitors - not changing the active config"
@@ -628,16 +762,23 @@ msgstr "zone-tiler: [monitors] 里没有任何显示器 — 不改活动配置"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: profile \"{profile}\" is not on disk: monitor {output} skipped, the [monitors] line stays and will work once the profile is back"
-msgstr "zone-tiler: 磁盘上没有方案「{profile}」：显示器 {output} 已跳过，[monitors] 里的行会保留，方案恢复后即生效"
+msgid ""
+"zone-tiler: profile \"{profile}\" is not on disk: monitor {output} skipped, "
+"the [monitors] line stays and will work once the profile is back"
+msgstr ""
+"zone-tiler: 磁盘上没有方案「{profile}」：显示器 {output} 已跳过，[monitors] "
+"里的行会保留，方案恢复后即生效"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: profile \"{profile}\" has no zones: monitor {output} skipped"
+msgid ""
+"zone-tiler: profile \"{profile}\" has no zones: monitor {output} skipped"
 msgstr "zone-tiler: 方案「{profile}」里没有任何区域：显示器 {output} 已跳过"
 
 #: zone-tiler.py
-msgid "zone-tiler: no monitor from [monitors] found its profile - not changing the active config"
+msgid ""
+"zone-tiler: no monitor from [monitors] found its profile - not changing the "
+"active config"
 msgstr "zone-tiler: [monitors] 里没有任何显示器找到自己的方案 — 不改活动配置"
 
 #: zone-tiler.py
@@ -647,8 +788,12 @@ msgstr "zone-tiler: 已覆盖：{message}"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: rule \"{selector} = {zone}\" skipped: zone '{zone}' is not in the resulting set - otherwise the config would become invalid"
-msgstr "zone-tiler: 规则「{selector} = {zone}」已跳过：最终集合里没有区域 '{zone}' — 否则配置会变得不合法"
+msgid ""
+"zone-tiler: rule \"{selector} = {zone}\" skipped: zone '{zone}' is not in "
+"the resulting set - otherwise the config would become invalid"
+msgstr ""
+"zone-tiler: 规则「{selector} = {zone}」已跳过：最终集合里没有区域 '{zone}' — "
+"否则配置会变得不合法"
 
 #: zone-tiler.py
 #, python-brace-format
@@ -657,8 +802,11 @@ msgstr "zone-tiler: 显示器 {output} — 方案「{profile}」：{zones} 个�
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: active config updated: monitors {screens}, rules {rules}, exclusions {ignore}"
-msgstr "zone-tiler: 活动配置已更新：显示器 {screens}、规则 {rules}、例外 {ignore}"
+msgid ""
+"zone-tiler: active config updated: monitors {screens}, rules {rules}, "
+"exclusions {ignore}"
+msgstr ""
+"zone-tiler: 活动配置已更新：显示器 {screens}、规则 {rules}、例外 {ignore}"
 
 #: zone-tiler.py
 msgid "zone-tiler: the layout gallery is empty"
@@ -670,7 +818,8 @@ msgid "{id}\t{title}\tzones: {count}\t{description}"
 msgstr "{id}\t{title}\t区域：{count}\t{description}"
 
 #: zone-tiler.py
-msgid "zone-tiler: profile from-gallery - name the layout id (see profile gallery)"
+msgid ""
+"zone-tiler: profile from-gallery - name the layout id (see profile gallery)"
 msgstr "zone-tiler: profile from-gallery — 请给出布局 id（见 profile gallery）"
 
 #: zone-tiler.py
@@ -684,8 +833,14 @@ msgid "apply it with: zone-tiler.py profile use {name}"
 msgstr "应用：zone-tiler.py profile use {name}"
 
 #: zone-tiler.py
-msgid "zone-tiler: profile - name an action: list | show <name> | save <name> | use <name> | use-monitors | rm <name> | export <name> [file | --json] | import <file> [--name <name>] | gallery | from-gallery <id> [--name <name>]"
-msgstr "zone-tiler: profile — 请给出动作：list | show <名称> | save <名称> | use <名称> | use-monitors | rm <名称> | export <名称> [文件 | --json] | import <文件> [--name <名称>] | gallery | from-gallery <id> [--name <名称>]"
+msgid ""
+"zone-tiler: profile - name an action: list | show <name> | save <name> | use "
+"<name> | use-monitors | rm <name> | export <name> [file | --json] | import "
+"<file> [--name <name>] | gallery | from-gallery <id> [--name <name>]"
+msgstr ""
+"zone-tiler: profile — 请给出动作：list | show <名称> | save <名称> | use <名"
+"称> | use-monitors | rm <名称> | export <名称> [文件 | --json] | import <文件"
+"> [--name <名称>] | gallery | from-gallery <id> [--name <名称>]"
 
 #: zone-tiler.py
 msgid "; the profile name is set by --name"
@@ -693,8 +848,12 @@ msgstr "；方案名称由 --name 指定"
 
 #: zone-tiler.py
 #, python-brace-format
-msgid "zone-tiler: profile {action} - extra word '{extra}': the action takes no such argument{hint}"
-msgstr "zone-tiler: profile {action} —— 多余的词「{extra}」：该操作没有这么多参数{hint}"
+msgid ""
+"zone-tiler: profile {action} - extra word '{extra}': the action takes no "
+"such argument{hint}"
+msgstr ""
+"zone-tiler: profile {action} —— 多余的词「{extra}」：该操作没有这么多参数"
+"{hint}"
 
 #: zone-tiler.py
 msgid "JSON profile file"
@@ -729,12 +888,30 @@ msgid "Window layout across grid zones (Cinnamon/X11)"
 msgstr "按网格区域平铺窗口（Cinnamon/X11）"
 
 #: zone-tiler.py
-msgid "Examples: zone-tiler.py arrange --by order; zone-tiler.py stack main; zone-tiler.py tabs-next; zone-tiler.py undo --all; zone-tiler.py action mirror; zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
-msgstr "示例：zone-tiler.py arrange --by order; zone-tiler.py stack main; zone-tiler.py tabs-next; zone-tiler.py undo --all; zone-tiler.py action mirror; zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
+msgid ""
+"Examples: zone-tiler.py arrange --by order; zone-tiler.py stack main; zone-"
+"tiler.py tabs-next; zone-tiler.py undo --all; zone-tiler.py action mirror; "
+"zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
+msgstr ""
+"示例：zone-tiler.py arrange --by order; zone-tiler.py stack main; zone-"
+"tiler.py tabs-next; zone-tiler.py undo --all; zone-tiler.py action mirror; "
+"zone-tiler.py profile use work; zone-tiler.py profile use-monitors"
 
 #: zone-tiler.py
-msgid "list/apply/keys - as before; move - throw the window into the neighbouring zone; focus - focus mode (window into a zone, the rest minimized; repeat to leave); action - run an action from [action:<name>] (built-in or a custom command); arrange - lay windows out across zones; stack - gather windows into a zone as tabs; tabs-next - raise the next tab of the zone ([tabs] key); undo - restore frames from history; profile - your own layout profiles (zones + rules + keys)"
-msgstr "list/apply/keys — 和以前一样；move — 把窗口挪到相邻区域；focus — 「只留这个区域」模式（窗口进区域，其余最小化；再按一次退出）；action — 执行 [action:<名称>] 里的操作（内置的或自己的命令）；arrange — 把窗口分配到各区域；stack — 把区域内的窗口收成标签页；tabs-next — 升起区域的下一个标签页（[tabs] 键）；undo — 从历史还原边框；profile — 自己的布局方案（区域 + 规则 + 按键）"
+msgid ""
+"list/apply/keys - as before; move - throw the window into the neighbouring "
+"zone; focus - focus mode (window into a zone, the rest minimized; repeat to "
+"leave); action - run an action from [action:<name>] (built-in or a custom "
+"command); arrange - lay windows out across zones; stack - gather windows "
+"into a zone as tabs; tabs-next - raise the next tab of the zone ([tabs] "
+"key); undo - restore frames from history; profile - your own layout profiles "
+"(zones + rules + keys)"
+msgstr ""
+"list/apply/keys — 和以前一样；move — 把窗口挪到相邻区域；focus — 「只留这个区"
+"域」模式（窗口进区域，其余最小化；再按一次退出）；action — 执行 [action:<名称"
+">] 里的操作（内置的或自己的命令）；arrange — 把窗口分配到各区域；stack — 把区"
+"域内的窗口收成标签页；tabs-next — 升起区域的下一个标签页（[tabs] 键）；undo "
+"— 从历史还原边框；profile — 自己的布局方案（区域 + 规则 + 按键）"
 
 #: zone-tiler.py
 msgid "zone name for apply/stack, direction for move, or a profile action"
@@ -749,19 +926,30 @@ msgid "profile export: file for JSON (without it and without --json - stdout)"
 msgstr "profile export：JSON 的目标文件（都不给且没有 --json — 输出到 stdout）"
 
 #: zone-tiler.py
-msgid "monitor for list/apply/stack/move: output name (HDMI-1) or index (without the flag - the window's monitor for apply/stack/move, the first one for list)"
-msgstr "list/apply/stack/move 的显示器：输出名（HDMI-1）或编号（不带标志 — apply/stack/move 用窗口所在显示器，list 用第一台）"
+msgid ""
+"monitor for list/apply/stack/move: output name (HDMI-1) or index (without "
+"the flag - the window's monitor for apply/stack/move, the first one for list)"
+msgstr ""
+"list/apply/stack/move 的显示器：输出名（HDMI-1）或编号（不带标志 — apply/"
+"stack/move 用窗口所在显示器，list 用第一台）"
 
 #: zone-tiler.py
-msgid "workspace for list/apply/move/arrange/stack: number (EWMH, zero-based), current (the active workspace's grid - default) or conf (always the zones.conf grid, without workspace profiles)"
-msgstr "list/apply/move/arrange/stack 的工作桌面：编号（EWMH，从零开始）、current（活动桌面的网格 — 默认）或 conf（始终用 zones.conf 的网格，不带桌面方案）"
+msgid ""
+"workspace for list/apply/move/arrange/stack: number (EWMH, zero-based), "
+"current (the active workspace's grid - default) or conf (always the "
+"zones.conf grid, without workspace profiles)"
+msgstr ""
+"list/apply/move/arrange/stack 的工作桌面：编号（EWMH，从零开始）、current（活"
+"动桌面的网格 — 默认）或 conf（始终用 zones.conf 的网格，不带桌面方案）"
 
 #: zone-tiler.py
 msgid "window id (the active one by default)"
 msgstr "窗口 id（默认活动窗口）"
 
 #: zone-tiler.py
-msgid "arrange: window selection - rules and the rest (auto), rules only, or by order"
+msgid ""
+"arrange: window selection - rules and the rest (auto), rules only, or by "
+"order"
 msgstr "arrange：窗口的选择 — 规则加其余（auto）、只按规则，或按顺序"
 
 #: zone-tiler.py
@@ -773,19 +961,24 @@ msgid "profile use/use-monitors: do not register hotkeys after activation"
 msgstr "profile use/use-monitors：激活后不注册快捷键"
 
 #: zone-tiler.py
-msgid "profile export/gallery: print JSON (export - to stdout instead of a file)"
-msgstr "profile export/gallery：输出 JSON（export 输出到标准输出，而不是写文件）"
+msgid ""
+"profile export/gallery: print JSON (export - to stdout instead of a file)"
+msgstr ""
+"profile export/gallery：输出 JSON（export 输出到标准输出，而不是写文件）"
 
 #: zone-tiler.py
 msgid "NAME"
 msgstr "名称"
 
 #: zone-tiler.py
-msgid "profile import/from-gallery: profile name (import defaults to the JSON one)"
+msgid ""
+"profile import/from-gallery: profile name (import defaults to the JSON one)"
 msgstr "profile import/from-gallery：方案名称（import 默认取自 JSON）"
 
 #: zone-tiler.py
-msgid "only compute the frame (for profile use-monitors - show the config), changing nothing"
+msgid ""
+"only compute the frame (for profile use-monitors - show the config), "
+"changing nothing"
 msgstr "只计算边框（profile use-monitors 时 — 显示配置），什么都不改"
 
 #: zone-tiler.py
@@ -793,7 +986,8 @@ msgid "focus: explicitly leave focus mode (unminimize what the mode minimized)"
 msgstr "focus：显式退出「只留这个区域」模式（还原被该模式最小化的窗口）"
 
 #: zone-tiler.py
-msgid "keys: shortcuts for moving to the neighbouring zone from the [move] section"
+msgid ""
+"keys: shortcuts for moving to the neighbouring zone from the [move] section"
 msgstr "keys：[move] 段里移动到相邻区域的快捷键"
 
 #: zone-tiler.py
@@ -801,8 +995,12 @@ msgid "re-read the real geometry"
 msgstr "重新读取实际几何"
 
 #: zone-tiler.py
-msgid "--offset removed: windows of one zone are no longer cascaded, they sit as tabs on a shared frame (switching - tabs-next)"
-msgstr "--offset 已移除：同一区域的窗口不再级联错位，而是作为标签页站在同一范围内（切换 — tabs-next）"
+msgid ""
+"--offset removed: windows of one zone are no longer cascaded, they sit as "
+"tabs on a shared frame (switching - tabs-next)"
+msgstr ""
+"--offset 已移除：同一区域的窗口不再级联错位，而是作为标签页站在同一范围内（切"
+"换 — tabs-next）"
 
 #: zone-tiler.py
 msgid "zone-tiler: specify a zone, for example: zone-tiler.py apply left"
@@ -840,6 +1038,11 @@ msgstr "theme.conf 未能更新：{exc}"
 
 #: zone-daemon.py
 #, python-brace-format
+msgid "theme.conf rebuilt from the wallpaper: {path}"
+msgstr "已根据壁纸重建 theme.conf：{path}"
+
+#: zone-daemon.py
+#, python-brace-format
 msgid "controls theme was not refreshed: {exc}"
 msgstr "控件主题未能更新：{exc}"
 
@@ -847,11 +1050,6 @@ msgstr "控件主题未能更新：{exc}"
 #, python-brace-format
 msgid "controls theme rebuilt from the palette: {path}"
 msgstr "已根据配色重建控件主题：{path}"
-
-#: zone-daemon.py
-#, python-brace-format
-msgid "theme.conf rebuilt from the wallpaper: {path}"
-msgstr "已根据壁纸重建 theme.conf：{path}"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -870,7 +1068,9 @@ msgstr "无法确定窗口 0x{win:x} 的桌面：{exc}"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "failed to take the profile grid ({desk}, monitor {output}): {exc} - using the default set"
+msgid ""
+"failed to take the profile grid ({desk}, monitor {output}): {exc} - using "
+"the default set"
 msgstr "无法取得方案的网格（{desk}，显示器 {output}）：{exc} — 改用公共集合"
 
 #: zone-daemon.py
@@ -885,12 +1085,15 @@ msgstr "桌面 {desk}"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "bad profile name \"{name}\" ({where}): {exc} - falling back to the next level"
+msgid ""
+"bad profile name \"{name}\" ({where}): {exc} - falling back to the next level"
 msgstr "方案名「{name}」不合法（{where}）：{exc} — 改用下一级"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "profile \"{name}\" ({where}) is not on disk: {path} - falling back to the next level"
+msgid ""
+"profile \"{name}\" ({where}) is not on disk: {path} - falling back to the "
+"next level"
 msgstr "磁盘上没有方案「{name}」（{where}）：{path} — 改用下一级"
 
 #: zone-daemon.py
@@ -959,7 +1162,8 @@ msgstr "无法读取 0x{win:x} 的元数据：{exc}"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "window 0x{win:x} is not in its zone '{zone}' - laying it out by the rule"
+msgid ""
+"window 0x{win:x} is not in its zone '{zone}' - laying it out by the rule"
 msgstr "窗口 0x{win:x} 不在自己的区域 '{zone}' 里 — 按规则摆放"
 
 #: zone-daemon.py
@@ -1066,7 +1270,9 @@ msgstr "无法读取窗口 0x{window:x}：{exc}"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "window 0x{window:x} is excluded ([ignore]/utility window type) - not moving it"
+msgid ""
+"window 0x{window:x} is excluded ([ignore]/utility window type) - not moving "
+"it"
 msgstr "窗口 0x{window:x} 属于例外（[ignore]/工具类窗口）— 不移动"
 
 #: zone-daemon.py
@@ -1173,7 +1379,9 @@ msgstr "「只留这个区域」模式已关闭（区域 '{zone}'）：已还原
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "{count} mode windows could not be unminimized, but there is no state file - unminimize them manually"
+msgid ""
+"{count} mode windows could not be unminimized, but there is no state file - "
+"unminimize them manually"
 msgstr "有 {count} 个模式的窗口无法还原，但状态文件不存在 — 请手动还原"
 
 #: zone-daemon.py
@@ -1183,22 +1391,36 @@ msgstr "无法保存模式的剩余部分：{exc}"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "{count} mode windows stayed minimized - record in {path}: unminimize with focus --off"
-msgstr "有 {count} 个模式的窗口仍处于最小化 — 记录在 {path}：用 focus --off 还原"
+msgid ""
+"{count} mode windows stayed minimized - record in {path}: unminimize with "
+"focus --off"
+msgstr ""
+"有 {count} 个模式的窗口仍处于最小化 — 记录在 {path}：用 focus --off 还原"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "window 0x{window:x} is excluded ([ignore]/utility window type) - not enabling focus mode"
-msgstr "窗口 0x{window:x} 属于例外（[ignore]/工具类窗口）— 不开启「只留这个区域」模式"
+msgid ""
+"window 0x{window:x} is excluded ([ignore]/utility window type) - not "
+"enabling focus mode"
+msgstr ""
+"窗口 0x{window:x} 属于例外（[ignore]/工具类窗口）— 不开启「只留这个区域」模式"
 
 #: zone-daemon.py
-msgid "the active workspace is not read - not enabling focus mode: minimizing windows of other workspaces blindly is worse than not enabling it"
-msgstr "活动桌面没有读到 — 不开启「只留这个区域」模式：盲目最小化别的桌面的窗口比不开启更糟"
+msgid ""
+"the active workspace is not read - not enabling focus mode: minimizing "
+"windows of other workspaces blindly is worse than not enabling it"
+msgstr ""
+"活动桌面没有读到 — 不开启「只留这个区域」模式：盲目最小化别的桌面的窗口比不开"
+"启更糟"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "failed to determine the monitor of window 0x{window:x} - not enabling focus mode: its area depends on the target's monitor"
-msgstr "无法确定窗口 0x{window:x} 的显示器 — 不开启「只留这个区域」模式：它的范围取决于目标窗口的显示器"
+msgid ""
+"failed to determine the monitor of window 0x{window:x} - not enabling focus "
+"mode: its area depends on the target's monitor"
+msgstr ""
+"无法确定窗口 0x{window:x} 的显示器 — 不开启「只留这个区域」模式：它的范围取决"
+"于目标窗口的显示器"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1236,13 +1458,18 @@ msgstr "「只留这个区域」模式在桌面 {desk} 上 — 让它留在原�
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "window 0x{win:x} is excluded ([ignore]/utility window type) - leaving it alone"
+msgid ""
+"window 0x{win:x} is excluded ([ignore]/utility window type) - leaving it "
+"alone"
 msgstr "窗口 0x{win:x} 属于例外（[ignore]/工具类窗口）— 不动"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "no zone '{zone}' in the set (workspace {desk}, monitor {output}) - not placing window 0x{win:x}"
-msgstr "集合里没有区域 '{zone}'（桌面 {desk}，显示器 {output}）— 不摆放窗口 0x{win:x}"
+msgid ""
+"no zone '{zone}' in the set (workspace {desk}, monitor {output}) - not "
+"placing window 0x{win:x}"
+msgstr ""
+"集合里没有区域 '{zone}'（桌面 {desk}，显示器 {output}）— 不摆放窗口 0x{win:x}"
 
 #: zone-daemon.py
 #, python-brace-format
@@ -1261,7 +1488,8 @@ msgstr "窗口 0x{win:x} 离开了区域 '{zone}'"
 
 #: zone-daemon.py
 #, python-brace-format
-msgid "workspace {desk} is not visible (currently {current}) - not doing reflow"
+msgid ""
+"workspace {desk} is not visible (currently {current}) - not doing reflow"
 msgstr "桌面 {desk} 不可见（当前 {current}）— 不做 reflow"
 
 #: zone-daemon.py
@@ -1359,49 +1587,41 @@ msgstr "空白画布"
 
 #: zone-editor.py
 #, python-brace-format
-msgid "not saving: rules from [rules] refer to missing zones - {shown} and {rest} more. Restore the zones or fix [rules] in zones.conf."
-msgstr "不保存：[rules] 里的规则引用了不存在的区域 — {shown} 以及另外 {rest} 个。请恢复这些区域，或修改 zones.conf 里的 [rules]。"
+msgid ""
+"not saving: rules from [rules] refer to missing zones - {shown} and {rest} "
+"more. Restore the zones or fix [rules] in zones.conf."
+msgstr ""
+"不保存：[rules] 里的规则引用了不存在的区域 — {shown} 以及另外 {rest} 个。请恢"
+"复这些区域，或修改 zones.conf 里的 [rules]。"
 
 #: zone-editor.py
 #, python-brace-format
-msgid "not saving: rules from [rules] refer to missing zones - {shown}. Restore the zones or fix [rules] in zones.conf."
-msgstr "不保存：[rules] 里的规则引用了不存在的区域 — {shown}。请恢复这些区域，或修改 zones.conf 里的 [rules]。"
+msgid ""
+"not saving: rules from [rules] refer to missing zones - {shown}. Restore the "
+"zones or fix [rules] in zones.conf."
+msgstr ""
+"不保存：[rules] 里的规则引用了不存在的区域 — {shown}。请恢复这些区域，或修改 "
+"zones.conf 里的 [rules]。"
 
 #: zone-editor.py
-msgid "work area {}×{} px · drag a zone with the mouse, drag the edge for size, double click for a new zone"
-msgstr "工作区 {}×{} px · 用鼠标拖动区域，拖边缘改变大小，双击新建区域"
+msgid "Drag a zone · resize from an edge · double-click to add"
+msgstr "拖动区域 · 拖动边缘调整大小 · 双击新增"
 
 #: zone-editor.py
 msgid "Gridsnap - window grid"
 msgstr "Gridsnap — 窗口网格"
 
 #: zone-editor.py
-msgid "Add zone"
-msgstr "添加区域"
+msgid "Layout"
+msgstr "布局"
 
 #: zone-editor.py
-msgid "Delete zone (Delete)"
-msgstr "删除区域（Delete）"
+msgid "{} - not on screen"
+msgstr "{} — 不在屏幕上"
 
 #: zone-editor.py
-msgid "Duplicate zone"
-msgstr "复制区域"
-
-#: zone-editor.py
-msgid "Clear all"
-msgstr "清空全部"
-
-#: zone-editor.py
-msgid "Save to zones.conf (Ctrl+S)"
-msgstr "保存到 zones.conf（Ctrl+S）"
-
-#: zone-editor.py
-msgid "Apply hotkeys in Cinnamon"
-msgstr "在 Cinnamon 中应用快捷键"
-
-#: zone-editor.py
-msgid "Place the active window into the selected zone"
-msgstr "把活动窗口放进选中的区域"
+msgid "The monitor whose set is on the canvas"
+msgstr "画布上显示其集合的显示器"
 
 #: zone-editor.py
 msgid "Layout templates"
@@ -1412,14 +1632,6 @@ msgid "Templates"
 msgstr "模板"
 
 #: zone-editor.py
-msgid "Place the active window into a zone on another monitor"
-msgstr "把活动窗口放到另一台显示器的区域"
-
-#: zone-editor.py
-msgid "To monitor…"
-msgstr "到显示器…"
-
-#: zone-editor.py
 msgid "Layout profiles (zones + rules + keys)"
 msgstr "布局方案（区域 + 规则 + 按键）"
 
@@ -1428,20 +1640,76 @@ msgid "Profiles"
 msgstr "方案"
 
 #: zone-editor.py
+msgid "Save"
+msgstr "保存"
+
+#: zone-editor.py
+msgid "Save to zones.conf (Ctrl+S)"
+msgstr "保存到 zones.conf（Ctrl+S）"
+
+#: zone-editor.py
+msgid "More: gallery, theme, hotkeys, placement, clear"
+msgstr "更多：布局库、主题、快捷键、放置、清空"
+
+#: zone-editor.py
 msgid "From the gallery…"
 msgstr "从模板库…"
 
 #: zone-editor.py
-msgid "Ready-made layouts: zones, hotkeys and application rules"
-msgstr "现成布局：区域、快捷键和应用规则"
+msgid "Theme"
+msgstr "主题"
 
 #: zone-editor.py
-msgid "Monitor"
-msgstr "显示器"
+msgid "From the wallpaper…"
+msgstr "从壁纸生成…"
+
+#: zone-editor.py
+msgid "Window controls…"
+msgstr "窗口控件…"
+
+#: zone-editor.py
+msgid "Reload theme.conf"
+msgstr "重新读取 theme.conf"
+
+#: zone-editor.py
+msgid "Place the window on another monitor…"
+msgstr "把窗口放到另一台显示器…"
+
+#: zone-editor.py
+msgid "Workspace profiles…"
+msgstr "桌面方案…"
+
+#: zone-editor.py
+msgid "Monitor profiles…"
+msgstr "显示器方案…"
+
+#: zone-editor.py
+msgid "Apply hotkeys in Cinnamon"
+msgstr "在 Cinnamon 中应用快捷键"
+
+#: zone-editor.py
+msgid "Place the active window into the selected zone"
+msgstr "把活动窗口放进选中的区域"
+
+#: zone-editor.py
+msgid "Clear all…"
+msgstr "清空全部…"
+
+#: zone-editor.py
+msgid "Clear all zones?"
+msgstr "清空所有区域？"
+
+#: zone-editor.py
+msgid "The set on the canvas becomes empty until you save another layout."
+msgstr "保存另一套布局之前，画布上的集合将为空。"
 
 #: zone-editor.py
 msgid "Zones"
 msgstr "区域"
+
+#: zone-editor.py
+msgid "Add zone"
+msgstr "添加区域"
 
 #: zone-editor.py
 msgid "Selected zone"
@@ -1456,15 +1724,45 @@ msgid "Keys"
 msgstr "按键"
 
 #: zone-editor.py
-msgid "{} - not on screen"
-msgstr "{} — 不在屏幕上"
+msgid ""
+"Select a zone in the list to edit it, or double-click the canvas to add one."
+msgstr "在列表中选择区域进行编辑，或双击画布新增一个。"
+
+#: zone-editor.py
+msgid "controls theme not refreshed: {}"
+msgstr "控件主题未能更新：{}"
+
+#: zone-editor.py
+msgid "theme reloaded: {}"
+msgstr "主题已重新读取：{}"
+
+#: zone-editor.py
+msgid "default palette"
+msgstr "默认调色板"
+
+#: zone-editor.py
+msgid "no wallpaper found in the desktop settings"
+msgstr "桌面设置中没有找到壁纸"
+
+#: zone-editor.py
+msgid "cannot read the wallpaper: {}"
+msgstr "无法读取壁纸：{}"
+
+#: zone-editor.py
+msgid "theme written: {}"
+msgstr "主题已写入：{}"
+
+#: zone-editor.py
+msgid "controls theme written: {} (Cinnamon Settings, Themes, Controls)"
+msgstr "控件主题已写入：{}（Cinnamon 设置 → 主题 → 控件）"
 
 #: zone-editor.py
 msgid " (no profile file - the workspace is laid out by the default set)"
 msgstr "（方案文件不存在 — 桌面按公共集合布局）"
 
 #: zone-editor.py
-msgid "workspace {} uses profile \"{}\"{}; the editor edits the shared zones.conf"
+msgid ""
+"workspace {} uses profile \"{}\"{}; the editor edits the shared zones.conf"
 msgstr "桌面 {} 使用方案「{}」{}；编辑器修改的是公共 zones.conf"
 
 #: zone-editor.py
@@ -1472,16 +1770,12 @@ msgid "no set selected"
 msgstr "未选择集合"
 
 #: zone-editor.py
+msgid "{} % × {} % · {} × {} px"
+msgstr "{} % × {} % · {} × {} 像素"
+
+#: zone-editor.py
 msgid "template \"{}\": {} zones (don't forget to save)"
 msgstr "模板「{}」：{} 个区域（别忘了保存）"
-
-#: zone-editor.py
-msgid "Workspace profiles…"
-msgstr "桌面方案…"
-
-#: zone-editor.py
-msgid "Monitor profiles…"
-msgstr "显示器方案…"
 
 #: zone-editor.py
 msgid "Save the current layout as a profile…"
@@ -1512,8 +1806,12 @@ msgid "Add to profiles"
 msgstr "添加到方案"
 
 #: zone-editor.py
-msgid "A ready-made layout is zones, hotkeys and application rules. Choosing it creates a profile; from then on you edit the profile as your own."
-msgstr "现成布局包含区域、快捷键和应用规则。选择后会据此创建方案，之后即可像自己的方案一样编辑。"
+msgid ""
+"A ready-made layout is zones, hotkeys and application rules. Choosing it "
+"creates a profile; from then on you edit the profile as your own."
+msgstr ""
+"现成布局包含区域、快捷键和应用规则。选择后会据此创建方案，之后即可像自己的方"
+"案一样编辑。"
 
 #: zone-editor.py
 msgid "{} — {} zones"
@@ -1556,10 +1854,6 @@ msgid "Load the layout \"{}\" into the canvas?"
 msgstr "将布局「{}」加载到画布？"
 
 #: zone-editor.py
-msgid "Save"
-msgstr "保存"
-
-#: zone-editor.py
 msgid "Delete"
 msgstr "删除"
 
@@ -1600,7 +1894,9 @@ msgid "Workspace profiles"
 msgstr "桌面方案"
 
 #: zone-editor.py
-msgid "A profile gives a workspace its zone grid; \"default set\" - a workspace without a profile."
+msgid ""
+"A profile gives a workspace its zone grid; \"default set\" - a workspace "
+"without a profile."
 msgstr "方案给桌面指定它的区域网格；「公共集合」— 不带方案的桌面。"
 
 #: zone-editor.py
@@ -1628,8 +1924,12 @@ msgid "Monitor profiles"
 msgstr "显示器方案"
 
 #: zone-editor.py
-msgid "A profile gives a monitor its zone grid; \"default set\" - a monitor without a binding. The topmost monitor settles a dispute if profiles differ."
-msgstr "方案给显示器指定它的区域网格；「公共集合」— 没有绑定的显示器。如果各方案给出不同的内容，由最上面的显示器决定。"
+msgid ""
+"A profile gives a monitor its zone grid; \"default set\" - a monitor without "
+"a binding. The topmost monitor settles a dispute if profiles differ."
+msgstr ""
+"方案给显示器指定它的区域网格；「公共集合」— 没有绑定的显示器。如果各方案给出"
+"不同的内容，由最上面的显示器决定。"
 
 #: zone-editor.py
 msgid "monitor profiles not saved: {}"
@@ -1656,16 +1956,23 @@ msgid "profile \"{}\" deleted"
 msgstr "方案「{}」已删除"
 
 #: zone-editor.py
-msgid "the default set [zones] has no zones - add a zone on a monitor that inherits it (or in its sections)"
-msgstr "公共集合 [zones] 里没有区域 — 请在一台继承它的显示器上添加区域（或在它的段里）"
+msgid ""
+"the default set [zones] has no zones - add a zone on a monitor that inherits "
+"it (or in its sections)"
+msgstr ""
+"公共集合 [zones] 里没有区域 — 请在一台继承它的显示器上添加区域（或在它的段"
+"里）"
 
 #: zone-editor.py
 msgid "write error: {}"
 msgstr "写入错误：{}"
 
 #: zone-editor.py
-msgid "saved: {} - [zones]: {} zones, own sets: {}. Hotkeys are applied with the \"hotkeys\" button."
-msgstr "已保存：{} — [zones]：{} 个区域，自有集合：{}。按键用「快捷键」按钮应用。"
+msgid ""
+"saved: {} - [zones]: {} zones, own sets: {}. Hotkeys are applied with the "
+"\"hotkeys\" button."
+msgstr ""
+"已保存：{} — [zones]：{} 个区域，自有集合：{}。按键用「快捷键」按钮应用。"
 
 #: zone-editor.py
 msgid "shortcuts: {}"
@@ -1729,22 +2036,31 @@ msgstr "zone-tiler: 集合里没有区域 '{zone}'"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: in [{section}] workspace number must be an integer from 1, not '{number}'"
-msgstr "zone_config: 段 [{section}] 里的桌面编号必须是从 1 开始的整数，而不是 '{number}'"
+msgid ""
+"zone_config: in [{section}] workspace number must be an integer from 1, not "
+"'{number}'"
+msgstr ""
+"zone_config: 段 [{section}] 里的桌面编号必须是从 1 开始的整数，而不是 "
+"'{number}'"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: in [{section}] workspace {number} has an empty profile name"
+msgid ""
+"zone_config: in [{section}] workspace {number} has an empty profile name"
 msgstr "zone_config: 段 [{section}] 里桌面 {number} 的方案名为空"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: in [{section}] unknown direction '{direction}': available {directions}"
-msgstr "zone_config: 段 [{section}] 里有未知方向 '{direction}'：可用 {directions}"
+msgid ""
+"zone_config: in [{section}] unknown direction '{direction}': available "
+"{directions}"
+msgstr ""
+"zone_config: 段 [{section}] 里有未知方向 '{direction}'：可用 {directions}"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: in [{section}] direction '{direction}' has an empty shortcut"
+msgid ""
+"zone_config: in [{section}] direction '{direction}' has an empty shortcut"
 msgstr "zone_config: 段 [{section}] 里方向 '{direction}' 的快捷键为空"
 
 #: zone_config.py
@@ -1764,23 +2080,39 @@ msgstr "zone_config: 段 [{section}] 里有未知键 '{field}'：可用 {fields}
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: in [{section}] height must be an integer number of pixels greater than zero, not '{text}'"
-msgstr "zone_config: 段 [{section}] 的 height 必须是大于零的整数像素，而不是 '{text}'"
+msgid ""
+"zone_config: in [{section}] height must be an integer number of pixels "
+"greater than zero, not '{text}'"
+msgstr ""
+"zone_config: 段 [{section}] 的 height 必须是大于零的整数像素，而不是 '{text}'"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: action '{name}' is defined twice: [{first}] and [{second}] - action names are compared case-insensitively"
-msgstr "zone_config: 操作 '{name}' 定义了两次：[{first}] 和 [{second}] — 操作名比较时不区分大小写"
+msgid ""
+"zone_config: action '{name}' is defined twice: [{first}] and [{second}] - "
+"action names are compared case-insensitively"
+msgstr ""
+"zone_config: 操作 '{name}' 定义了两次：[{first}] 和 [{second}] — 操作名比较时"
+"不区分大小写"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: empty action name in section [{section}]: write [action:<name>], for example [action:term-main]"
-msgstr "zone_config: 段 [{section}] 里的操作名为空：请写 [action:<名称>]，例如 [action:term-main]"
+msgid ""
+"zone_config: empty action name in section [{section}]: write [action:"
+"<name>], for example [action:term-main]"
+msgstr ""
+"zone_config: 段 [{section}] 里的操作名为空：请写 [action:<名称>]，例如 "
+"[action:term-main]"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: action name '{name}' in section [{section}]: only lowercase Latin letters, digits, dash and underscore are allowed - the name ends up in the key's command line"
-msgstr "zone_config: 段 [{section}] 里的操作名 '{name}'：可用小写拉丁字母、数字、连字符和下划线 — 名字会进入按键的命令行"
+msgid ""
+"zone_config: action name '{name}' in section [{section}]: only lowercase "
+"Latin letters, digits, dash and underscore are allowed - the name ends up in "
+"the key's command line"
+msgstr ""
+"zone_config: 段 [{section}] 里的操作名 '{name}'：可用小写拉丁字母、数字、连字"
+"符和下划线 — 名字会进入按键的命令行"
 
 #: zone_config.py
 #, python-brace-format
@@ -1789,8 +2121,12 @@ msgstr "zone_config: 段 [{section}] 里有未知字段 '{field}'：可用 {fiel
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: in [{section}] required field run is empty: builtin:<name> or an external command is required"
-msgstr "zone_config: 段 [{section}] 里必需的 run 字段为空：需要 builtin:<名称> 或外部命令"
+msgid ""
+"zone_config: in [{section}] required field run is empty: builtin:<name> or "
+"an external command is required"
+msgstr ""
+"zone_config: 段 [{section}] 里必需的 run 字段为空：需要 builtin:<名称> 或外部"
+"命令"
 
 #: zone_config.py
 #, python-brace-format
@@ -1804,23 +2140,36 @@ msgstr "zone_config: 段 [{section}] 里 {field} 的值为空"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: in [{section}] the command field exists only for builtin:{builtin}, but run = '{run}'"
-msgstr "zone_config: 段 [{section}] 里 command 字段只属于 builtin:{builtin}，而 run = '{run}'"
+msgid ""
+"zone_config: in [{section}] the command field exists only for builtin:"
+"{builtin}, but run = '{run}'"
+msgstr ""
+"zone_config: 段 [{section}] 里 command 字段只属于 builtin:{builtin}，而 run "
+"= '{run}'"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: in [{section}] empty command value: what to launch the terminal with"
+msgid ""
+"zone_config: in [{section}] empty command value: what to launch the terminal "
+"with"
 msgstr "zone_config: 段 [{section}] 里 command 的值为空：用什么启动终端"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: in [{section}] the axis field exists only for builtin:{builtin}, but run = '{run}'"
-msgstr "zone_config: 段 [{section}] 里 axis 字段只属于 builtin:{builtin}，而 run = '{run}'"
+msgid ""
+"zone_config: in [{section}] the axis field exists only for builtin:"
+"{builtin}, but run = '{run}'"
+msgstr ""
+"zone_config: 段 [{section}] 里 axis 字段只属于 builtin:{builtin}，而 run = "
+"'{run}'"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: in [{section}] unknown mirror axis axis = '{axis}': available {axes}"
-msgstr "zone_config: 段 [{section}] 里有未知的镜像轴 axis = '{axis}'：可用 {axes}"
+msgid ""
+"zone_config: in [{section}] unknown mirror axis axis = '{axis}': available "
+"{axes}"
+msgstr ""
+"zone_config: 段 [{section}] 里有未知的镜像轴 axis = '{axis}'：可用 {axes}"
 
 #: zone_config.py
 msgid "workspace number must be an integer: {value!r}"
@@ -1860,18 +2209,26 @@ msgstr "磁盘上没有方案「{profile}」：绑定暂时不生效"
 
 #: zone_config.py
 #, python-brace-format
-msgid "output {output} is currently {note}: the binding does not apply until the monitor is connected"
+msgid ""
+"output {output} is currently {note}: the binding does not apply until the "
+"monitor is connected"
 msgstr "输出 {output} 现在是 {note}：显示器接上之前绑定不生效"
 
 #: zone_config.py
 #, python-brace-format
-msgid "profile \"{profile}\" is not on disk: workspace {number} is laid out by the default set for now"
+msgid ""
+"profile \"{profile}\" is not on disk: workspace {number} is laid out by the "
+"default set for now"
 msgstr "磁盘上没有方案「{profile}」：桌面 {number} 暂时按公共集合布局"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: empty monitor name in section [{section}]: write [zones:<output name>], for example [zones:HDMI-1]"
-msgstr "zone_config: 段 [{section}] 里的显示器名为空：请写 [zones:<输出名>]，例如 [zones:HDMI-1]"
+msgid ""
+"zone_config: empty monitor name in section [{section}]: write [zones:<output "
+"name>], for example [zones:HDMI-1]"
+msgstr ""
+"zone_config: 段 [{section}] 里的显示器名为空：请写 [zones:<输出名>]，例如 "
+"[zones:HDMI-1]"
 
 #: zone_config.py
 #, python-brace-format
@@ -1895,8 +2252,12 @@ msgstr "zone_config: 段 [{name}] 出现了两次：请只保留一个"
 
 #: zone_config.py
 #, python-brace-format
-msgid "zone_config: sections [{first}] and [{second}] differ only in case: a merged section would no longer be readable — keep only one"
-msgstr "zone_config: 段 [{first}] 和 [{second}] 只有大小写不同：合并后的段将无法读取——请只保留一个"
+msgid ""
+"zone_config: sections [{first}] and [{second}] differ only in case: a merged "
+"section would no longer be readable — keep only one"
+msgstr ""
+"zone_config: 段 [{first}] 和 [{second}] 只有大小写不同：合并后的段将无法读取"
+"——请只保留一个"
 
 #: zone_config.py
 msgid "bad profile name: {name!r}"
@@ -2008,7 +2369,8 @@ msgid "bad profile name: specify --name, the name {name!r} in JSON will not do"
 msgstr "方案名不合法：请指定 --name，JSON 里的名字 {name!r} 不可用"
 
 #: zone_config.py
-msgid "in JSON profile monitors must be an object {output: {zone: [x, y, w, h]}}"
+msgid ""
+"in JSON profile monitors must be an object {output: {zone: [x, y, w, h]}}"
 msgstr "JSON 方案里 monitors 必须是对象 {输出: {区域: [x, y, w, h]}}"
 
 #: zone_config.py
@@ -2121,7 +2483,9 @@ msgid "zone-picker: no active window"
 msgstr "zone-picker: 没有活动窗口"
 
 #: zone-picker.py
-msgid "zone-picker: window 0x{:x} is excluded ([ignore]/utility window type) - not moving it"
+msgid ""
+"zone-picker: window 0x{:x} is excluded ([ignore]/utility window type) - not "
+"moving it"
 msgstr "zone-picker: 窗口 0x{:x} 属于例外（[ignore]/工具类窗口）— 不移动"
 
 #: zone-picker.py
@@ -2185,8 +2549,13 @@ msgid "initial selection by zone name"
 msgstr "按区域名给出初始选择"
 
 #: zone-picker.py
-msgid "workspace for the grid: number (EWMH, zero-based), current (the active workspace's grid - default) or conf (always zones.conf, without workspace profiles)"
-msgstr "网格的工作桌面：编号（EWMH，从零开始）、current（活动桌面的网格 — 默认）或 conf（始终用 zones.conf，不带桌面方案）"
+msgid ""
+"workspace for the grid: number (EWMH, zero-based), current (the active "
+"workspace's grid - default) or conf (always zones.conf, without workspace "
+"profiles)"
+msgstr ""
+"网格的工作桌面：编号（EWMH，从零开始）、current（活动桌面的网格 — 默认）或 "
+"conf（始终用 zones.conf，不带桌面方案）"
 
 #: zone-picker.py
 msgid "verify the window frame after placing"
@@ -2197,7 +2566,9 @@ msgid "do not print the placement line"
 msgstr "不打印放入窗口的那一行"
 
 #: zone-picker.py
-msgid "passive grid with the zone under the pointer highlighted (for dragging: no focus or input)"
+msgid ""
+"passive grid with the zone under the pointer highlighted (for dragging: no "
+"focus or input)"
 msgstr "被动网格：高亮指针下的区域（用于拖拽：不取焦点和输入）"
 
 #: zone-picker.py
@@ -2205,7 +2576,9 @@ msgid "--hud: highlight point in screen coordinates (one frame and exit)"
 msgstr "--hud：高亮的点在屏幕坐标里的位置（渲染一帧后退出）"
 
 #: zone-picker.py
-msgid "--hud: read \"X Y\" points from stdin and redraw the highlight (EOF/SIGTERM - exit)"
+msgid ""
+"--hud: read \"X Y\" points from stdin and redraw the highlight (EOF/SIGTERM "
+"- exit)"
 msgstr "--hud：从 stdin 读「X Y」点并重绘高亮（EOF/SIGTERM — 退出）"
 
 #: zone-picker.py
@@ -2217,7 +2590,9 @@ msgid "zone-picker: --hud is incompatible with {}: the HUD only draws the grid"
 msgstr "zone-picker: --hud 与 {} 不兼容：HUD 只画网格"
 
 #: zone-picker.py
-msgid "zone-picker: --at and --follow are mutually exclusive: --at - one frame, --follow - a stream"
+msgid ""
+"zone-picker: --at and --follow are mutually exclusive: --at - one frame, --"
+"follow - a stream"
 msgstr "zone-picker: --at 和 --follow 互斥：--at — 一帧，--follow — 流"
 
 #: zone-picker.py
@@ -2225,7 +2600,9 @@ msgid "zone-picker: --hud needs a point source: --at X,Y or --follow"
 msgstr "zone-picker: --hud 需要点的来源：--at X,Y 或 --follow"
 
 #: zone-picker.py
-msgid "zone-picker: --shot does not work with --follow: a snapshot is one frame (--at)"
+msgid ""
+"zone-picker: --shot does not work with --follow: a snapshot is one frame (--"
+"at)"
 msgstr "zone-picker: --shot 不能和 --follow 一起用：快照是一帧（--at）"
 
 #: zone-picker.py
@@ -2357,7 +2734,8 @@ msgstr "无法解析操作的命令：{error}"
 
 #: zone_actions.py
 #, python-brace-format
-msgid "unknown substitution '{{{name}}}' in the action command: available {known}"
+msgid ""
+"unknown substitution '{{{name}}}' in the action command: available {known}"
 msgstr "操作的命令里有未知占位符 '{{{name}}}'：可用 {known}"
 
 #: zone_actions.py
@@ -2375,8 +2753,12 @@ msgid "zone-tiler.py could not be loaded"
 msgstr "无法加载 zone-tiler.py"
 
 #: zone-tabstrip.py
-msgid "zone-tabstrip: GTK 3 for python3 is required (python3-gi and gir1.2-gtk-3.0) - without it the tab bar cannot be drawn: {}"
-msgstr "zone-tabstrip: 需要 python3 的 GTK 3（python3-gi 和 gir1.2-gtk-3.0）— 没有它画不出标签栏：{}"
+msgid ""
+"zone-tabstrip: GTK 3 for python3 is required (python3-gi and gir1.2-gtk-3.0) "
+"- without it the tab bar cannot be drawn: {}"
+msgstr ""
+"zone-tabstrip: 需要 python3 的 GTK 3（python3-gi 和 gir1.2-gtk-3.0）— 没有它"
+"画不出标签栏：{}"
 
 #: zone-tabstrip.py
 msgid "the daemon does not answer: {}"
@@ -2407,8 +2789,12 @@ msgid "Tab bar over a zone (Cinnamon/X11)"
 msgstr "区域上的标签栏（Cinnamon/X11）"
 
 #: zone-tabstrip.py
-msgid "path to zones.conf: this is how the daemon starts the bar; the bar itself does not read the config - frames and captions come in the snapshot"
-msgstr "zones.conf 的路径：守护进程就是这样启动标签栏的；标签栏本身不读配置 — 边框和标题随快照传来"
+msgid ""
+"path to zones.conf: this is how the daemon starts the bar; the bar itself "
+"does not read the config - frames and captions come in the snapshot"
+msgstr ""
+"zones.conf 的路径：守护进程就是这样启动标签栏的；标签栏本身不读配置 — 边框和"
+"标题随快照传来"
 
 #: zone-tabstrip.py
 msgid "daemon socket path (the same as gridsnap-ctl uses by default)"
@@ -2459,7 +2845,9 @@ msgid "zone-hotcorners: zone grid not read, dragging abandoned"
 msgstr "zone-hotcorners: 区域网格没有读到，放弃拖拽"
 
 #: zone-hotcorners.py
-msgid "window 0x{:x} is excluded ([ignore]/utility window type) - not tracking the drag"
+msgid ""
+"window 0x{:x} is excluded ([ignore]/utility window type) - not tracking the "
+"drag"
 msgstr "窗口 0x{:x} 属于例外（[ignore]/工具类窗口）— 不跟踪拖拽"
 
 #: zone-hotcorners.py
@@ -2479,8 +2867,12 @@ msgid "released in {} - off the zones, not moving the window"
 msgstr "在 {} 处松开 — 不在区域内，不移动窗口"
 
 #: zone-hotcorners.py
-msgid "window 0x{:x} -> zone '{}': x={} y={} {}x{} (monitor {}: {}) - dry-run, not moving the window"
-msgstr "窗口 0x{:x} -> 区域 '{}'：x={} y={} {}x{}（显示器 {}：{}）— dry-run，不移动窗口"
+msgid ""
+"window 0x{:x} -> zone '{}': x={} y={} {}x{} (monitor {}: {}) - dry-run, not "
+"moving the window"
+msgstr ""
+"窗口 0x{:x} -> 区域 '{}'：x={} y={} {}x{}（显示器 {}：{}）— dry-run，不移动窗"
+"口"
 
 #: zone-hotcorners.py
 msgid "window 0x{:x} -> zone '{}': x={} y={} {}x{}"
@@ -2523,15 +2915,26 @@ msgid "failed to connect to the X server (DISPLAY)"
 msgstr "无法连接 X 服务器（DISPLAY）"
 
 #: zone-hotcorners.py
-msgid "Dragging a window by its title bar places it into a GridSnap zone (Cinnamon/X11)"
+msgid ""
+"Dragging a window by its title bar places it into a GridSnap zone (Cinnamon/"
+"X11)"
 msgstr "按住标题栏拖动窗口，把它放进 GridSnap 区域（Cinnamon/X11）"
 
 #: zone-hotcorners.py
-msgid "The watcher listens to XInput2 raw events on the root (it makes no grabs), drives the zone-picker --hud HUD and places the active window into the zone under the release point. If XI2 is unavailable - XQueryPointer polling at ~30 Hz."
-msgstr "监听器在 root 上接收 XInput2 原始事件（不做 grab），驱动 zone-picker --hud 的 HUD，并把活动窗口放进松开点下的区域。如果 XI2 不可用 — 以约 30 Hz 轮询 XQueryPointer。"
+msgid ""
+"The watcher listens to XInput2 raw events on the root (it makes no grabs), "
+"drives the zone-picker --hud HUD and places the active window into the zone "
+"under the release point. If XI2 is unavailable - XQueryPointer polling at "
+"~30 Hz."
+msgstr ""
+"监听器在 root 上接收 XInput2 原始事件（不做 grab），驱动 zone-picker --hud "
+"的 HUD，并把活动窗口放进松开点下的区域。如果 XI2 不可用 — 以约 30 Hz 轮询 "
+"XQueryPointer。"
 
 #: zone-hotcorners.py
-msgid "do not move the window and do not change settings - only print what it would do"
+msgid ""
+"do not move the window and do not change settings - only print what it would "
+"do"
 msgstr "不移动窗口、不改设置 — 只打印会做什么"
 
 #: zone-hotcorners.py
@@ -2556,8 +2959,15 @@ msgstr "zone-hotcorners: {}；配置 {}"
 
 #: setup-hotkeys.py
 #, python-brace-format
-msgid "setup-hotkeys: warning: {binding} for move {direction} matches muffin's native {prefix}{direction} - one of the two handlers will fire on this key. I am not disabling the native shortcut: set your own in [move] or turn off push-tile in Cinnamon settings"
-msgstr "setup-hotkeys: 注意：move {direction} 的 {binding} 与 muffin 自带的 {prefix}{direction} 相同 — 这个键上两个处理程序只会生效一个。自带快捷键不禁用：请在 [move] 里另给一个，或在 Cinnamon 设置里关掉 push-tile"
+msgid ""
+"setup-hotkeys: warning: {binding} for move {direction} matches muffin's "
+"native {prefix}{direction} - one of the two handlers will fire on this key. "
+"I am not disabling the native shortcut: set your own in [move] or turn off "
+"push-tile in Cinnamon settings"
+msgstr ""
+"setup-hotkeys: 注意：move {direction} 的 {binding} 与 muffin 自带的 {prefix}"
+"{direction} 相同 — 这个键上两个处理程序只会生效一个。自带快捷键不禁用：请在 "
+"[move] 里另给一个，或在 Cinnamon 设置里关掉 push-tile"
 
 #: setup-hotkeys.py
 msgid "Zone hotkeys for Cinnamon"
@@ -2577,8 +2987,11 @@ msgstr "zones.conf 的路径（默认 — 与 zone-tiler.py 相同）"
 
 #: setup-hotkeys.py
 #, python-brace-format
-msgid "setup-hotkeys: these shortcuts could not be removed: {ids} — remove them by hand in Cinnamon's keyboard settings"
-msgstr "setup-hotkeys：无法移除这些快捷键：{ids} — 请在 Cinnamon 键盘设置里手动删除"
+msgid ""
+"setup-hotkeys: these shortcuts could not be removed: {ids} — remove them by "
+"hand in Cinnamon's keyboard settings"
+msgstr ""
+"setup-hotkeys：无法移除这些快捷键：{ids} — 请在 Cinnamon 键盘设置里手动删除"
 
 #: setup-hotkeys.py
 msgid "setup-hotkeys: zone-tiler shortcuts removed"
@@ -2593,96 +3006,6 @@ msgstr "setup-hotkeys: 已安装快捷键：{count}"
 #, python-brace-format
 msgid "Gridsnap icons: {sizes}"
 msgstr "Gridsnap 图标：{sizes}"
-
-#: gridsnap-ctl
-#, python-brace-format
-msgid "gridsnap-ctl: the daemon rejected the subscription: {error}"
-msgstr "gridsnap-ctl：守护进程拒绝了订阅：{error}"
-
-#: gridsnap-ctl
-msgid "command rejected"
-msgstr "命令被拒绝"
-
-#: gridsnap-ctl
-#, python-brace-format
-msgid "gridsnap-ctl: subscribed ({groups}) — Ctrl-C to stop"
-msgstr "gridsnap-ctl：已订阅（{groups}）— 按 Ctrl-C 退出"
-
-#: gridsnap-ctl
-#, python-brace-format
-msgid "gridsnap-ctl: the daemon gave an unclear answer: {error}"
-msgstr "gridsnap-ctl: 守护进程的回应无法理解：{error}"
-
-#: gridsnap-ctl
-#, python-brace-format
-msgid "gridsnap-ctl: no connection to the daemon over socket {path} ({error}). Is zone-daemon.py running?"
-msgstr "gridsnap-ctl: 无法通过套接字 {path} 连接守护进程（{error}）。zone-daemon.py 在运行吗？"
-
-#: gridsnap-ctl
-msgid "gridsnap-ctl: specify a zone for apply, for example: apply main"
-msgstr "gridsnap-ctl: apply 需要指定区域，例如：apply main"
-
-#: gridsnap-ctl
-msgid "gridsnap-ctl: focus takes no --monitor: the mode uses the target window's monitor"
-msgstr "gridsnap-ctl: focus 没有 --monitor：模式使用目标窗口所在显示器"
-
-#: gridsnap-ctl
-msgid "gridsnap-ctl: focus takes either a zone or --off, not both"
-msgstr "gridsnap-ctl: focus 要么给区域，要么给 --off，不能两个都要"
-
-#: gridsnap-ctl
-#, python-brace-format
-msgid "gridsnap-ctl: command {command} has no zone/window/monitor"
-msgstr "gridsnap-ctl: 命令 {command} 没有区域/窗口/显示器"
-
-#: gridsnap-ctl
-msgid "Control the GridSnap daemon over a local IPC socket"
-msgstr "通过本地 IPC 套接字控制 GridSnap 守护进程"
-
-#: gridsnap-ctl
-msgid "Examples: gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ctl focus main; gridsnap-ctl focus --off; gridsnap-ctl quit"
-msgstr "示例：gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ctl focus main; gridsnap-ctl focus --off; gridsnap-ctl quit"
-
-#: gridsnap-ctl
-msgid "status — state; apply — place the window in a zone; focus — \"this zone only\" mode; reload — re-read the config; quit — exit; watch — listen to events"
-msgstr "status — 状态；apply — 把窗口放进区域；focus — 「只留这个区域」模式；reload — 重新读取配置；quit — 退出；watch — 监听事件"
-
-#: gridsnap-ctl
-msgid "zone name for apply and focus (optional for focus)"
-msgstr "apply 和 focus 的区域名（focus 时可省略）"
-
-#: gridsnap-ctl
-msgid "window id for apply and focus (the active window by default)"
-msgstr "apply 和 focus 的窗口 id（默认活动窗口）"
-
-#: gridsnap-ctl
-msgid "monitor index for apply"
-msgstr "apply 的显示器编号"
-
-#: gridsnap-ctl
-msgid "focus: leave focus mode"
-msgstr "focus：退出「只留这个区域」模式"
-
-#: gridsnap-ctl
-msgid "UNIX socket path ($XDG_RUNTIME_DIR/gridsnap/daemon.sock by default)"
-msgstr "UNIX 套接字路径（默认 $XDG_RUNTIME_DIR/gridsnap/daemon.sock）"
-
-#: gridsnap-ctl
-msgid "print the answer on one line"
-msgstr "用一行打印回应"
-
-#: gridsnap-ctl
-msgid "print nothing on success"
-msgstr "成功时不打印任何内容"
-
-#: gridsnap-ctl
-msgid "gridsnap-ctl: watch takes no zone/window/monitor"
-msgstr "gridsnap-ctl：watch 没有区域/窗口/显示器"
-
-#: gridsnap-ctl
-#, python-brace-format
-msgid "gridsnap-ctl: {error}"
-msgstr "gridsnap-ctl：{error}"
 
 #: zone_theme.py
 msgid "zone-theme: {}"
@@ -2732,50 +3055,107 @@ msgstr "无法读取图像：{}"
 msgid "the wallpaper has no readable colours"
 msgstr "壁纸中没有可读取的颜色"
 
-#: zone-editor.py
-msgid "Colours: theme.conf next to zones.conf"
-msgstr "颜色：zones.conf 旁边的 theme.conf"
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: the daemon rejected the subscription: {error}"
+msgstr "gridsnap-ctl：守护进程拒绝了订阅：{error}"
 
-#: zone-editor.py
-msgid "Theme"
-msgstr "主题"
+#: gridsnap-ctl
+msgid "command rejected"
+msgstr "命令被拒绝"
 
-#: zone-editor.py
-msgid "From the wallpaper…"
-msgstr "从壁纸生成…"
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: subscribed ({groups}) — Ctrl-C to stop"
+msgstr "gridsnap-ctl：已订阅（{groups}）— 按 Ctrl-C 退出"
 
-#: zone-editor.py
-msgid "Window controls…"
-msgstr "窗口控件…"
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: the daemon gave an unclear answer: {error}"
+msgstr "gridsnap-ctl: 守护进程的回应无法理解：{error}"
 
-#: zone-editor.py
-msgid "Reload theme.conf"
-msgstr "重新读取 theme.conf"
+#: gridsnap-ctl
+#, python-brace-format
+msgid ""
+"gridsnap-ctl: no connection to the daemon over socket {path} ({error}). Is "
+"zone-daemon.py running?"
+msgstr ""
+"gridsnap-ctl: 无法通过套接字 {path} 连接守护进程（{error}）。zone-daemon.py "
+"在运行吗？"
 
-#: zone-editor.py
-msgid "theme reloaded: {}"
-msgstr "主题已重新读取：{}"
+#: gridsnap-ctl
+msgid "gridsnap-ctl: specify a zone for apply, for example: apply main"
+msgstr "gridsnap-ctl: apply 需要指定区域，例如：apply main"
 
-#: zone-editor.py
-msgid "default palette"
-msgstr "默认调色板"
+#: gridsnap-ctl
+msgid ""
+"gridsnap-ctl: focus takes no --monitor: the mode uses the target window's "
+"monitor"
+msgstr "gridsnap-ctl: focus 没有 --monitor：模式使用目标窗口所在显示器"
 
-#: zone-editor.py
-msgid "no wallpaper found in the desktop settings"
-msgstr "桌面设置中没有找到壁纸"
+#: gridsnap-ctl
+msgid "gridsnap-ctl: focus takes either a zone or --off, not both"
+msgstr "gridsnap-ctl: focus 要么给区域，要么给 --off，不能两个都要"
 
-#: zone-editor.py
-msgid "cannot read the wallpaper: {}"
-msgstr "无法读取壁纸：{}"
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: command {command} has no zone/window/monitor"
+msgstr "gridsnap-ctl: 命令 {command} 没有区域/窗口/显示器"
 
-#: zone-editor.py
-msgid "theme written: {}"
-msgstr "主题已写入：{}"
+#: gridsnap-ctl
+msgid "Control the GridSnap daemon over a local IPC socket"
+msgstr "通过本地 IPC 套接字控制 GridSnap 守护进程"
 
-#: zone-editor.py
-msgid "controls theme not refreshed: {}"
-msgstr "控件主题未能更新：{}"
+#: gridsnap-ctl
+msgid ""
+"Examples: gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ctl focus "
+"main; gridsnap-ctl focus --off; gridsnap-ctl quit"
+msgstr ""
+"示例：gridsnap-ctl status; gridsnap-ctl apply main; gridsnap-ctl focus main; "
+"gridsnap-ctl focus --off; gridsnap-ctl quit"
 
-#: zone-editor.py
-msgid "controls theme written: {} (Cinnamon Settings, Themes, Controls)"
-msgstr "控件主题已写入：{}（Cinnamon 设置 → 主题 → 控件）"
+#: gridsnap-ctl
+msgid ""
+"status — state; apply — place the window in a zone; focus — \"this zone "
+"only\" mode; reload — re-read the config; quit — exit; watch — listen to "
+"events"
+msgstr ""
+"status — 状态；apply — 把窗口放进区域；focus — 「只留这个区域」模式；reload "
+"— 重新读取配置；quit — 退出；watch — 监听事件"
+
+#: gridsnap-ctl
+msgid "zone name for apply and focus (optional for focus)"
+msgstr "apply 和 focus 的区域名（focus 时可省略）"
+
+#: gridsnap-ctl
+msgid "window id for apply and focus (the active window by default)"
+msgstr "apply 和 focus 的窗口 id（默认活动窗口）"
+
+#: gridsnap-ctl
+msgid "monitor index for apply"
+msgstr "apply 的显示器编号"
+
+#: gridsnap-ctl
+msgid "focus: leave focus mode"
+msgstr "focus：退出「只留这个区域」模式"
+
+#: gridsnap-ctl
+msgid "UNIX socket path ($XDG_RUNTIME_DIR/gridsnap/daemon.sock by default)"
+msgstr "UNIX 套接字路径（默认 $XDG_RUNTIME_DIR/gridsnap/daemon.sock）"
+
+#: gridsnap-ctl
+msgid "print the answer on one line"
+msgstr "用一行打印回应"
+
+#: gridsnap-ctl
+msgid "print nothing on success"
+msgstr "成功时不打印任何内容"
+
+#: gridsnap-ctl
+msgid "gridsnap-ctl: watch takes no zone/window/monitor"
+msgstr "gridsnap-ctl：watch 没有区域/窗口/显示器"
+
+#: gridsnap-ctl
+#, python-brace-format
+msgid "gridsnap-ctl: {error}"
+msgstr "gridsnap-ctl：{error}"

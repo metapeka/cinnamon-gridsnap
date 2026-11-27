@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-26 07:28+0300\n"
+"POT-Creation-Date: 2026-11-27 14:17+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1371,7 +1371,7 @@ msgid "not saving: rules from [rules] refer to missing zones - {shown}. Restore 
 msgstr ""
 
 #: zone-editor.py
-msgid "work area {}×{} px · drag a zone with the mouse, drag the edge for size, double click for a new zone"
+msgid "Drag a zone · resize from an edge · double-click to add"
 msgstr ""
 
 #: zone-editor.py
@@ -1379,31 +1379,15 @@ msgid "Gridsnap - window grid"
 msgstr ""
 
 #: zone-editor.py
-msgid "Add zone"
+msgid "Layout"
 msgstr ""
 
 #: zone-editor.py
-msgid "Delete zone (Delete)"
+msgid "{} - not on screen"
 msgstr ""
 
 #: zone-editor.py
-msgid "Duplicate zone"
-msgstr ""
-
-#: zone-editor.py
-msgid "Clear all"
-msgstr ""
-
-#: zone-editor.py
-msgid "Save to zones.conf (Ctrl+S)"
-msgstr ""
-
-#: zone-editor.py
-msgid "Apply hotkeys in Cinnamon"
-msgstr ""
-
-#: zone-editor.py
-msgid "Place the active window into the selected zone"
+msgid "The monitor whose set is on the canvas"
 msgstr ""
 
 #: zone-editor.py
@@ -1415,14 +1399,6 @@ msgid "Templates"
 msgstr ""
 
 #: zone-editor.py
-msgid "Place the active window into a zone on another monitor"
-msgstr ""
-
-#: zone-editor.py
-msgid "To monitor…"
-msgstr ""
-
-#: zone-editor.py
 msgid "Layout profiles (zones + rules + keys)"
 msgstr ""
 
@@ -1431,15 +1407,19 @@ msgid "Profiles"
 msgstr ""
 
 #: zone-editor.py
+msgid "Save"
+msgstr ""
+
+#: zone-editor.py
+msgid "Save to zones.conf (Ctrl+S)"
+msgstr ""
+
+#: zone-editor.py
+msgid "More: gallery, theme, hotkeys, placement, clear"
+msgstr ""
+
+#: zone-editor.py
 msgid "From the gallery…"
-msgstr ""
-
-#: zone-editor.py
-msgid "Ready-made layouts: zones, hotkeys and application rules"
-msgstr ""
-
-#: zone-editor.py
-msgid "Colours: theme.conf next to zones.conf"
 msgstr ""
 
 #: zone-editor.py
@@ -1459,11 +1439,43 @@ msgid "Reload theme.conf"
 msgstr ""
 
 #: zone-editor.py
-msgid "Monitor"
+msgid "Place the window on another monitor…"
+msgstr ""
+
+#: zone-editor.py
+msgid "Workspace profiles…"
+msgstr ""
+
+#: zone-editor.py
+msgid "Monitor profiles…"
+msgstr ""
+
+#: zone-editor.py
+msgid "Apply hotkeys in Cinnamon"
+msgstr ""
+
+#: zone-editor.py
+msgid "Place the active window into the selected zone"
+msgstr ""
+
+#: zone-editor.py
+msgid "Clear all…"
+msgstr ""
+
+#: zone-editor.py
+msgid "Clear all zones?"
+msgstr ""
+
+#: zone-editor.py
+msgid "The set on the canvas becomes empty until you save another layout."
 msgstr ""
 
 #: zone-editor.py
 msgid "Zones"
+msgstr ""
+
+#: zone-editor.py
+msgid "Add zone"
 msgstr ""
 
 #: zone-editor.py
@@ -1479,7 +1491,7 @@ msgid "Keys"
 msgstr ""
 
 #: zone-editor.py
-msgid "{} - not on screen"
+msgid "Select a zone in the list to edit it, or double-click the canvas to add one."
 msgstr ""
 
 #: zone-editor.py
@@ -1523,15 +1535,11 @@ msgid "no set selected"
 msgstr ""
 
 #: zone-editor.py
+msgid "{} % × {} % · {} × {} px"
+msgstr ""
+
+#: zone-editor.py
 msgid "template \"{}\": {} zones (don't forget to save)"
-msgstr ""
-
-#: zone-editor.py
-msgid "Workspace profiles…"
-msgstr ""
-
-#: zone-editor.py
-msgid "Monitor profiles…"
 msgstr ""
 
 #: zone-editor.py
@@ -1604,10 +1612,6 @@ msgstr ""
 
 #: zone-editor.py
 msgid "Load the layout \"{}\" into the canvas?"
-msgstr ""
-
-#: zone-editor.py
-msgid "Save"
 msgstr ""
 
 #: zone-editor.py

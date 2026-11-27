@@ -194,14 +194,17 @@ class Canvas(Gtk.DrawingArea):
 
     def on_draw(self, widget, cr):
         theme = self.editor.theme
-        cr.set_source_rgb(*theme.rgb("bg_panel"))
+        cr.set_source_rgb(*theme.rgb("bg"))
         cr.paint()
 
         sx, sy, sw, sh = self.screen_rect()
-        # "screen"
+        # "screen": one material step above the window, outlined instead of filled in a hue
         rounded_path(cr, sx - 6, sy - 6, sw + 12, sh + 12, theme.radius)
-        cr.set_source_rgb(*theme.rgb("bg_card"))
-        cr.fill()
+        cr.set_source_rgb(*theme.rgb("bg_panel"))
+        cr.fill_preserve()
+        cr.set_line_width(1)
+        cr.set_source_rgba(*theme.rgb("border"), 0.9)
+        cr.stroke()
 
         # guide lines
         cr.set_line_width(1)
@@ -214,17 +217,25 @@ class Canvas(Gtk.DrawingArea):
             cr.stroke()
 
         zones = self.editor.zones
+        selected = self.editor.selected
         # large zones are drawn first, small ones on top — so the labels are not lost
         order = sorted(range(len(zones)), key=lambda i: zones[i].w * zones[i].h, reverse=True)
         for i in order:
             z = zones[i]
             x, y, w, h = self.to_px(z)
-            col = theme.zone_rgb(i)
+            if i == selected:
+                fill = (*theme.rgb("accent"), 0.10)
+                stroke = (*theme.rgb("accent"), 1.0)
+                width = 1.8
+            else:
+                fill = (*theme.rgb("fg"), 0.04)
+                stroke = (*theme.rgb("border"), 0.9)
+                width = 1.0
             rounded_path(cr, x + 1.5, y + 1.5, max(1, w - 3), max(1, h - 3), max(0, theme.radius - 2))
-            cr.set_source_rgba(col[0], col[1], col[2], 0.30)
+            cr.set_source_rgba(*fill)
             cr.fill_preserve()
-            cr.set_line_width(1.2)
-            cr.set_source_rgba(col[0], col[1], col[2], 0.85)
+            cr.set_line_width(width)
+            cr.set_source_rgba(*stroke)
             cr.stroke()
             cr.save()
             cr.rectangle(x + 2, y + 2, max(1, w - 4), max(1, h - 4))
@@ -232,26 +243,16 @@ class Canvas(Gtk.DrawingArea):
             self.draw_label(cr, z, x, y, w, h)
             cr.restore()
 
-        if self.editor.selected is not None and self.editor.selected < len(zones):
-            z = zones[self.editor.selected]
-            x, y, w, h = self.to_px(z)
-            rounded_path(cr, x + 1.5, y + 1.5, max(1, w - 3), max(1, h - 3), max(0, theme.radius - 2))
-            cr.set_line_width(2.4)
-            cr.set_source_rgba(*theme.rgb("accent"), 1)
-            cr.stroke()
-
         # the work area frame
-        cr.set_line_width(1.6)
-        cr.set_source_rgba(*theme.rgb("fg"), 0.35)
+        cr.set_line_width(1.4)
+        cr.set_source_rgba(*theme.rgb("border"), 0.9)
         cr.rectangle(sx, sy, sw, sh)
         cr.stroke()
 
-        # legend
-        cr.set_source_rgba(*theme.rgb("fg"), 0.45)
+        # legend: one short line; the monitor and its size live in the header chip
+        cr.set_source_rgba(*theme.rgb("fg_muted"), 1)
         lay = widget.create_pango_layout(
-            _(
-                "work area {}×{} px · drag a zone with the mouse, drag the edge for size, double click for a new zone"
-            ).format(self.editor.workarea()[2], self.editor.workarea()[3])
+            _("Drag a zone · resize from an edge · double-click to add")
         )
         lay.set_font_description(Pango.FontDescription(theme.font_desc(9)))
         cr.move_to(sx, sy + sh + 8)
@@ -272,16 +273,13 @@ class Canvas(Gtk.DrawingArea):
         cr.move_to(x + pad, y + pad - 2)
         PangoCairo.show_layout(cr, layout)
 
-        if h > 46:
-            sub = f"{z.w:.0%} × {z.h:.0%}"
-            if z.binding:
-                sub += f" · {z.binding}"
+        if h > 46 and z.binding:
             layout2 = self.create_pango_layout("")
             layout2.set_width(int(inner * Pango.SCALE))
             layout2.set_ellipsize(Pango.EllipsizeMode.END)
-            layout2.set_font_description(Pango.FontDescription(theme.font_desc(8)))
-            layout2.set_text(sub, -1)
-            cr.set_source_rgba(*theme.rgb("fg"), 0.62)
+            layout2.set_font_description(Pango.FontDescription(theme.font_desc(9)))
+            layout2.set_text(z.binding, -1)
+            cr.set_source_rgba(*theme.rgb("fg_muted"), 1)
             cr.move_to(x + pad, y + pad + 16)
             PangoCairo.show_layout(cr, layout2)
 
@@ -466,116 +464,16 @@ class Editor(Gtk.Window):
     # ---- layout
 
     def build_ui(self):
-        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(root)
+        root.pack_start(self.build_header(), False, False, 0)
 
-        bar = Gtk.Toolbar()
-        bar.set_style(Gtk.ToolbarStyle.ICONS)
-        defs = [
-            ("list-add-symbolic", _("Add zone"), self.on_add),
-            ("list-remove-symbolic", _("Delete zone (Delete)"), self.on_remove),
-            ("edit-copy-symbolic", _("Duplicate zone"), self.on_duplicate),
-            ("edit-clear-all-symbolic", _("Clear all"), self.on_clear),
-            ("document-save-symbolic", _("Save to zones.conf (Ctrl+S)"), self.on_save),
-            (
-                "emblem-synchronizing-symbolic",
-                _("Apply hotkeys in Cinnamon"),
-                self.on_hotkeys,
-            ),
-            (
-                "media-playback-start-symbolic",
-                _("Place the active window into the selected zone"),
-                self.on_test,
-            ),
-        ]
-        for icon, tip, cb in defs:
-            btn = Gtk.ToolButton()
-            btn.set_icon_name(icon)
-            btn.set_tooltip_text(tip)
-            btn.connect("clicked", lambda _b, f=cb: f())
-            bar.insert(btn, -1)
-        bar.insert(Gtk.SeparatorToolItem(), -1)
-        self.tpl_btn = Gtk.MenuButton()
-        self.tpl_btn.set_tooltip_text(_("Layout templates"))
-        self.tpl_btn.set_label(_("Templates"))
-        pop = Gtk.Popover()
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        box.set_border_width(8)
-        for name, zones in templates().items():
-            b = Gtk.ModelButton()
-            b.set_label(name)
-            b.connect("clicked", lambda _w, t=zones, n=name: self.apply_template(t, n))
-            box.pack_start(b, False, False, 0)
-        pop.add(box)
-        box.show_all()
-        self.tpl_btn.set_popover(pop)
-        item = Gtk.ToolItem()
-        item.add(self.tpl_btn)
-        bar.insert(item, -1)
-        self.target_btn = Gtk.MenuButton()
-        self.target_btn.set_tooltip_text(_("Place the active window into a zone on another monitor"))
-        self.target_btn.set_label(_("To monitor…"))
-        self.target_pop = Gtk.Popover()
-        self.target_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        self.target_box.set_border_width(8)
-        self.target_pop.add(self.target_box)
-        self.target_btn.set_popover(self.target_pop)
-        self.target_btn.connect("clicked", lambda _b: self.rebuild_target_menu())
-        titem = Gtk.ToolItem()
-        titem.add(self.target_btn)
-        bar.insert(titem, -1)
-        self.prof_btn = Gtk.MenuButton()
-        self.prof_btn.set_tooltip_text(_("Layout profiles (zones + rules + keys)"))
-        self.prof_btn.set_label(_("Profiles"))
-        self.prof_pop = Gtk.Popover()
-        self.prof_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        self.prof_box.set_border_width(8)
-        self.prof_pop.add(self.prof_box)
-        self.prof_btn.set_popover(self.prof_pop)
-        self.prof_btn.connect("clicked", lambda _b: self.rebuild_profiles_menu())
-        pitem = Gtk.ToolItem()
-        pitem.add(self.prof_btn)
-        bar.insert(pitem, -1)
-        # "Next to the profiles": the gallery is the same choice of a ready-made layout, but from
-        # the shipped catalog rather than from the saved ones. A separate button, not a menu item:
-        # to someone without profiles of their own the "Profiles" menu has nothing to say yet.
-        gal_btn = Gtk.Button(label=_("From the gallery…"))
-        gal_btn.set_tooltip_text(
-            _("Ready-made layouts: zones, hotkeys and application rules")
-        )
-        gal_btn.connect("clicked", lambda _b: self.gallery_dialog())
-        gal_item = Gtk.ToolItem()
-        gal_item.add(gal_btn)
-        bar.insert(gal_item, -1)
-        # Themes are one menu, not three buttons: they are all "make the editor follow a palette".
-        theme_btn = Gtk.MenuButton()
-        theme_btn.set_tooltip_text(_("Colours: theme.conf next to zones.conf"))
-        theme_btn.set_label(_("Theme"))
-        theme_pop = Gtk.Popover()
-        theme_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        theme_box.set_border_width(8)
-        for label, callback in (
-            (_("From the wallpaper…"), self.on_theme_from_wallpaper),
-            (_("Window controls…"), self.on_theme_controls),
-            (_("Reload theme.conf"), self.on_theme_reload),
-        ):
-            item_button = Gtk.ModelButton()
-            item_button.set_label(label)
-            item_button.connect("clicked", lambda _w, f=callback: f())
-            theme_box.pack_start(item_button, False, False, 0)
-        theme_pop.add(theme_box)
-        theme_box.show_all()
-        theme_btn.set_popover(theme_pop)
-        theme_item = Gtk.ToolItem()
-        theme_item.add(theme_btn)
-        bar.insert(theme_item, -1)
-        root.pack_start(bar, False, False, 0)
-
-        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        body.set_border_width(12)
         root.pack_start(body, True, True, 0)
 
-        frame = Gtk.Frame(label=_("Monitor"))
-        frame.set_shadow_type(Gtk.ShadowType.IN)
+        frame = Gtk.Frame()
+        frame.set_shadow_type(Gtk.ShadowType.NONE)
         self.canvas = Canvas(self)
         self.canvas.connect("button-press-event", self.canvas.on_button_press)
         self.canvas.connect("button-release-event", self.canvas.on_button_release)
@@ -585,36 +483,24 @@ class Editor(Gtk.Window):
         frame.add(self.canvas)
         body.pack_start(frame, True, True, 0)
 
-        side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        side.set_size_request(300, -1)
-        body.pack_start(side, False, False, 0)
+        body.pack_start(self.build_sidebar(), False, False, 0)
+        root.pack_start(self.build_status_bar(), False, False, 0)
 
-        side.pack_start(Gtk.Label(label=_("Zones"), xalign=0), False, False, 0)
-        scroller = Gtk.ScrolledWindow()
-        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroller.set_min_content_height(220)
-        self.listbox = Gtk.ListBox()
-        self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self.listbox.connect("row-selected", self.on_row_selected)
-        scroller.add(self.listbox)
-        side.pack_start(scroller, True, True, 0)
+    def build_header(self):
+        """One row: what the canvas shows, the two frequent menus, Save and everything else.
 
-        props = Gtk.Frame(label=_("Selected zone"))
-        pbox = Gtk.Grid(row_spacing=6, column_spacing=8, border_width=8)
-        props.add(pbox)
+        The old toolbar carried twelve controls in a row — seven icon buttons, one of them
+        destructive, plus five text menus; a person had to read all of them to find Save. The
+        common path stays on top (monitor, templates, profiles, a filled Save) and the rest moves
+        one level down into "…".
+        """
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        bar.get_style_context().add_class("editor-header")
 
-        pbox.attach(Gtk.Label(label=_("Name"), xalign=0), 0, 0, 1, 1)
-        self.name_entry = Gtk.Entry()
-        self.name_entry.connect("changed", self.on_name_changed)
-        pbox.attach(self.name_entry, 1, 0, 1, 1)
+        title = Gtk.Label(label=_("Layout"), xalign=0)
+        title.get_style_context().add_class("editor-heading")
+        bar.pack_start(title, False, False, 0)
 
-        pbox.attach(Gtk.Label(label=_("Keys"), xalign=0), 0, 1, 1, 1)
-        self.key_entry = Gtk.Entry()
-        self.key_entry.set_placeholder_text("<Super><Alt>5")
-        self.key_entry.connect("changed", self.on_key_changed)
-        pbox.attach(self.key_entry, 1, 1, 1, 1)
-
-        pbox.attach(Gtk.Label(label=_("Monitor"), xalign=0), 0, 2, 1, 1)
         self.mon_combo = Gtk.ComboBoxText()
         for name, rect in self.combo_entries:
             if rect is None:
@@ -624,16 +510,193 @@ class Editor(Gtk.Window):
             else:
                 self.mon_combo.append_text(f"{name} — {rect[2]}×{rect[3]}")
         self.mon_combo.set_active(0 if self.combo_entries else -1)
+        self.mon_combo.set_tooltip_text(_("The monitor whose set is on the canvas"))
         self.mon_combo.connect("changed", self.on_monitor_changed)
-        pbox.attach(self.mon_combo, 1, 2, 1, 1)
+        bar.pack_start(self.mon_combo, False, False, 0)
+        bar.pack_start(Gtk.Box(), True, True, 0)
 
+        self.tpl_btn = Gtk.MenuButton()
+        self.tpl_btn.set_tooltip_text(_("Layout templates"))
+        self.tpl_btn.set_label(_("Templates"))
+        tpl_pop = Gtk.Popover()
+        tpl_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        tpl_box.set_border_width(6)
+        for name, zones in templates().items():
+            b = Gtk.ModelButton()
+            b.set_label(name)
+            b.connect("clicked", lambda _w, t=zones, n=name: self.apply_template(t, n))
+            tpl_box.pack_start(b, False, False, 0)
+        tpl_pop.add(tpl_box)
+        tpl_box.show_all()
+        self.tpl_btn.set_popover(tpl_pop)
+        bar.pack_start(self.tpl_btn, False, False, 0)
+
+        self.prof_btn = Gtk.MenuButton()
+        self.prof_btn.set_tooltip_text(_("Layout profiles (zones + rules + keys)"))
+        self.prof_btn.set_label(_("Profiles"))
+        self.prof_pop = Gtk.Popover()
+        self.prof_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.prof_box.set_border_width(6)
+        self.prof_pop.add(self.prof_box)
+        self.prof_btn.set_popover(self.prof_pop)
+        self.prof_btn.connect("clicked", lambda _b: self.rebuild_profiles_menu())
+        bar.pack_start(self.prof_btn, False, False, 0)
+
+        self.save_btn = Gtk.Button(label=_("Save"))
+        self.save_btn.set_tooltip_text(_("Save to zones.conf (Ctrl+S)"))
+        self.save_btn.get_style_context().add_class("suggested-action")
+        self.save_btn.connect("clicked", lambda _b: self.on_save())
+        self.save_btn.set_sensitive(False)
+        bar.pack_start(self.save_btn, False, False, 0)
+
+        bar.pack_start(self.build_more_menu(), False, False, 0)
+        return bar
+
+    def build_more_menu(self):
+        """Everything off the common path: gallery, theme, hotkeys, placement, clearing."""
+        self.more_btn = Gtk.MenuButton()
+        self.more_btn.set_label("⋯")
+        self.more_btn.set_tooltip_text(_("More: gallery, theme, hotkeys, placement, clear"))
+        self.more_pop = Gtk.Popover()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        box.set_border_width(6)
+        self.more_pop.add(box)
+        self.more_btn.set_popover(self.more_pop)
+
+        def item(label, callback, style_class=None):
+            b = Gtk.ModelButton()
+            b.set_label(label)
+            if style_class:
+                b.get_style_context().add_class(style_class)
+            b.connect("clicked", lambda _w, f=callback: self._run_from_menu(f))
+            box.pack_start(b, False, False, 0)
+            return b
+
+        def heading(text):
+            label = Gtk.Label(label=text, xalign=0)
+            label.get_style_context().add_class("dim-label")
+            label.set_margin_top(6)
+            label.set_margin_start(8)
+            box.pack_start(label, False, False, 0)
+
+        item(_("From the gallery…"), self.gallery_dialog)
+        heading(_("Theme"))
+        item(_("From the wallpaper…"), self.on_theme_from_wallpaper)
+        item(_("Window controls…"), self.on_theme_controls)
+        item(_("Reload theme.conf"), self.on_theme_reload)
+        box.pack_start(Gtk.Separator(), False, False, 4)
+        item(_("Place the window on another monitor…"), self.open_target_menu)
+        item(_("Workspace profiles…"), self.workspace_profiles_dialog)
+        item(_("Monitor profiles…"), self.monitor_profiles_dialog)
+        box.pack_start(Gtk.Separator(), False, False, 4)
+        item(_("Apply hotkeys in Cinnamon"), self.on_hotkeys)
+        item(_("Place the active window into the selected zone"), self.on_test)
+        box.pack_start(Gtk.Separator(), False, False, 4)
+        item(_("Clear all…"), self.on_clear_confirmed, "destructive-action")
+
+        self.target_pop = Gtk.Popover()
+        self.target_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.target_box.set_border_width(6)
+        self.target_pop.add(self.target_box)
+
+        box.show_all()
+        return self.more_btn
+
+    def _run_from_menu(self, callback):
+        self.more_pop.popdown()
+        callback()
+
+    def open_target_menu(self):
+        """The second-level "on another monitor" choice: monitor → the zones of its set."""
+        self.rebuild_target_menu()
+        self.target_pop.set_relative_to(self.more_btn)
+        self.target_pop.show_all()
+        self.target_pop.popup()
+
+    def on_clear_confirmed(self):
+        dlg = Gtk.MessageDialog(
+            transient_for=self,
+            modal=True,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text=_("Clear all zones?"),
+        )
+        dlg.format_secondary_text(
+            _("The set on the canvas becomes empty until you save another layout.")
+        )
+        answer = dlg.run()
+        dlg.destroy()
+        if answer == Gtk.ResponseType.YES:
+            self.on_clear()
+
+    def build_sidebar(self):
+        side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        side.set_size_request(300, -1)
+
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        label = Gtk.Label(label=_("Zones"), xalign=0)
+        label.get_style_context().add_class("sidebar-heading")
+        head.pack_start(label, False, False, 0)
+        head.pack_start(Gtk.Box(), True, True, 0)
+        add = Gtk.Button()
+        add.set_image(Gtk.Image.new_from_icon_name("list-add-symbolic", Gtk.IconSize.BUTTON))
+        add.set_tooltip_text(_("Add zone"))
+        add.get_style_context().add_class("flat")
+        add.connect("clicked", lambda _b: self.on_add())
+        head.pack_end(add, False, False, 0)
+        side.pack_start(head, False, False, 0)
+
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_min_content_height(200)
+        self.listbox = Gtk.ListBox()
+        self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.listbox.connect("row-selected", self.on_row_selected)
+        scroller.add(self.listbox)
+        side.pack_start(scroller, True, True, 0)
+
+        self.inspector = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        heading = Gtk.Label(label=_("Selected zone"), xalign=0)
+        heading.get_style_context().add_class("sidebar-heading")
+        self.inspector.pack_start(heading, False, False, 0)
+        grid = Gtk.Grid(row_spacing=8, column_spacing=8)
+        grid.attach(Gtk.Label(label=_("Name"), xalign=0), 0, 0, 1, 1)
+        self.name_entry = Gtk.Entry()
+        self.name_entry.connect("changed", self.on_name_changed)
+        grid.attach(self.name_entry, 1, 0, 1, 1)
+        grid.attach(Gtk.Label(label=_("Keys"), xalign=0), 0, 1, 1, 1)
+        self.key_entry = Gtk.Entry()
+        self.key_entry.set_placeholder_text("<Super><Alt>5")
+        self.key_entry.connect("changed", self.on_key_changed)
+        grid.attach(self.key_entry, 1, 1, 1, 1)
         self.geom_label = Gtk.Label(xalign=0)
-        pbox.attach(self.geom_label, 0, 3, 2, 1)
-        side.pack_start(props, False, False, 0)
+        self.geom_label.get_style_context().add_class("dim-label")
+        self.geom_label.set_line_wrap(True)
+        grid.attach(self.geom_label, 0, 2, 2, 1)
+        self.inspector.pack_start(grid, False, False, 0)
+        side.pack_start(self.inspector, False, False, 0)
 
+        self.empty_hint = Gtk.Label(
+            label=_("Select a zone in the list to edit it, or double-click the canvas to add one."),
+            xalign=0,
+        )
+        self.empty_hint.set_line_wrap(True)
+        self.empty_hint.get_style_context().add_class("dim-label")
+        # `show_all()` runs after construction and would show it unconditionally; visibility here
+        # follows the selection (refresh_panel), not the tree walk.
+        self.empty_hint.set_no_show_all(True)
+        side.pack_start(self.empty_hint, False, False, 0)
+        return side
+
+    def build_status_bar(self):
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        bar.get_style_context().add_class("status-bar")
         self.status = Gtk.Label(xalign=0)
         self.status.get_style_context().add_class("dim-label")
-        root.pack_start(self.status, False, False, 0)
+        self.status.set_ellipsize(Pango.EllipsizeMode.END)
+        bar.pack_start(self.status, True, True, 0)
+        return bar
+
 
     # ---- state
 
@@ -650,12 +713,20 @@ class Editor(Gtk.Window):
         self.update_status()
 
     def update_status(self):
-        parts = [self.set_hint()]
-        if getattr(self, "workspace_note", ""):
-            parts.append(self.workspace_note)
-        if self.message:
-            parts.append(self.message)
-        self.status.set_text(" · ".join(parts))
+        """One line: the last event, or whose set is on the canvas.
+
+        The workspace note is no longer prose in the status bar: it is the tooltip of the monitor
+        chip, where the question "which set am I looking at" actually originates.
+        """
+        if getattr(self, "status", None) is None:
+            return
+        self.status.set_text(self.message or self.set_hint())
+        chip = getattr(self, "mon_combo", None)
+        if chip is not None:
+            note = getattr(self, "workspace_note", "")
+            chip.set_tooltip_text(
+                note or _("The monitor whose set is on the canvas")
+            )
 
     # ---- theme
 
@@ -775,6 +846,9 @@ class Editor(Gtk.Window):
             # monitor gets a section of its own, [zones:<output>].
             self.edited.add(self.current_monitor)
         self.set_title(("● " if val else "") + _("Gridsnap - window grid"))
+        save = getattr(self, "save_btn", None)
+        if save is not None:
+            save.set_sensitive(val)
         self.update_status()
 
     def show_monitor(self, name):
@@ -847,18 +921,20 @@ class Editor(Gtk.Window):
             self.listbox.remove(row)
         for i, z in enumerate(self.zones):
             row = Gtk.ListBoxRow()
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-            box.set_border_width(4)
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            box.set_border_width(2)
+            # The zone colour is identity here (and in the picker); the canvas stays neutral.
             swatch = Gtk.DrawingArea()
             swatch.set_size_request(10, 10)
+            swatch.set_valign(Gtk.Align.CENTER)
             col = self.theme.zone_rgb(i)
             swatch.connect("draw", self._draw_swatch, col)
             name = Gtk.Label(label=z.name, xalign=0)
-            size = Gtk.Label(label=f"{z.w:.0%}×{z.h:.0%}")
-            size.get_style_context().add_class("dim-label")
+            key = Gtk.Label(label=z.binding or "", xalign=1)
+            key.get_style_context().add_class("dim-label")
             box.pack_start(swatch, False, False, 0)
             box.pack_start(name, True, True, 0)
-            box.pack_end(size, False, False, 0)
+            box.pack_end(key, False, False, 0)
             row.add(box)
             row.show_all()
             self.listbox.add(row)
@@ -878,6 +954,12 @@ class Editor(Gtk.Window):
             self.name_entry.set_sensitive(False)
             self.key_entry.set_sensitive(False)
             self.geom_label.set_text("—")
+        inspector = getattr(self, "inspector", None)
+        if inspector is not None:
+            inspector.set_visible(self.selected is not None)
+        hint = getattr(self, "empty_hint", None)
+        if hint is not None:
+            hint.set_visible(self.selected is None)
         self._loading = False
 
     def update_geom_label(self):
@@ -885,10 +967,14 @@ class Editor(Gtk.Window):
             self.geom_label.set_text("—")
             return
         z = self.zones[self.selected]
-        _, _, ww, wh = self.workarea()
+        _x, _y, ww, wh = self.workarea()
         self.geom_label.set_text(
-            f"x={z.x:.3f} y={z.y:.3f}  {z.w:.3f}×{z.h:.3f}\n"
-            f"≈ {round(ww * z.x)},{round(wh * z.y)} {round(ww * z.w)}×{round(wh * z.h)} px"
+            _("{} % × {} % · {} × {} px").format(
+                round(z.w * 100),
+                round(z.h * 100),
+                round(ww * z.w),
+                round(wh * z.h),
+            )
         )
 
     @staticmethod

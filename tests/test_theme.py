@@ -55,13 +55,14 @@ def warnings():
 
 
 class TestDefaults(unittest.TestCase):
-    def test_default_palette_is_the_old_look(self):
-        # The promise of "no theme.conf - nothing changes": these are the exact colours the
-        # picker backdrop, the accent and the first zone palette entry had as floats.
+    def test_default_palette_is_the_neutral_ramp(self):
+        # An installation without `theme.conf` gets the neutral palette: grey surfaces, one
+        # accent, the zone hues as identity dots. These are the exact floats the surfaces draw
+        # with, so a change to the defaults is a deliberate design change, not a drift.
         theme = zone_theme.default_theme()
-        self.assertEqual(theme.rgb("bg"), (0x12 / 255, 0x14 / 255, 0x1A / 255))
-        self.assertEqual(theme.rgb("accent"), (0xFF / 255, 0xB5 / 255, 0x54 / 255))
-        self.assertEqual(theme.zone_rgb(0), (0x5C / 255, 0x9E / 255, 0xEB / 255))
+        self.assertEqual(theme.rgb("bg"), (0x1C / 255, 0x1C / 255, 0x1E / 255))
+        self.assertEqual(theme.rgb("accent"), (0x0B / 255, 0x74 / 255, 0xE0 / 255))
+        self.assertEqual(theme.zone_rgb(0), (0x0A / 255, 0x84 / 255, 0xFF / 255))
         self.assertEqual(theme.font_desc(11, bold=True), "Sans Bold 11")
         self.assertEqual(theme.radius, 10)
 
@@ -343,7 +344,7 @@ class TestWallpaperPalette(unittest.TestCase):
         self.assertEqual(sum(weight for _colour, weight in first), 64 * 64)
         self.assertGreater(first[0][1], first[1][1])
 
-    def test_the_palette_is_a_dark_chrome_with_a_vivid_accent(self):
+    def test_the_palette_is_a_dark_neutral_chrome_with_a_vivid_accent(self):
         theme = zone_theme.from_wallpaper(self.image)
         for token in zone_theme.COLOR_TOKENS:
             self.assertRegex(theme.colors[token], r"^#[0-9a-f]{6}$", token)
@@ -354,6 +355,11 @@ class TestWallpaperPalette(unittest.TestCase):
         self.assertEqual(ladder, sorted(ladder), ladder)
         self.assertLess(ladder[0], 0.05)
         self.assertGreater(zone_theme.luminance(theme.colors["fg"]), 0.75)
+        # The chrome is neutral by design: a photo chooses the accent, not the surfaces. The
+        # dominant blue field used to tint every surface, and that is what read as a broken
+        # palette (violet borders, muddy fills).
+        for token in ("bg", "bg_panel", "bg_card", "bg_hover", "border"):
+            self.assertEqual(theme.colors[token], zone_theme.DEFAULT_COLORS[token], token)
         red, _green, blue = zone_theme.rgb(theme.colors["accent"])
         self.assertGreater(red, blue)  # the orange block is the accent, not the blue field
 
@@ -389,12 +395,15 @@ class TestSamplesToTheme(unittest.TestCase):
         with self.assertRaises(ValueError):
             zone_theme.theme_from_samples([((0.1, 0.1, 0.1), 0)])
 
-    def test_the_ramp_follows_the_dominant_colour_and_the_accent_the_vivid_one(self):
+    def test_the_chrome_stays_neutral_and_the_vivid_cluster_is_the_accent(self):
         theme = zone_theme.theme_from_samples(
             [((0.05, 0.08, 0.19), 1000), ((0.9, 0.47, 0.12), 100)]
         )
-        red, _green, blue = zone_theme.rgb(theme.colors["bg"])
-        self.assertGreater(blue, red)  # the blue field is the chrome
+        # The blue field does not tint the chrome any more: the surfaces are the neutral ramp,
+        # and only the accent (and the zone hues derived from it) carry the photo's colour.
+        self.assertEqual(theme.colors["bg"], zone_theme.DEFAULT_COLORS["bg"])
+        self.assertEqual(theme.colors["bg_panel"], zone_theme.DEFAULT_COLORS["bg_panel"])
+        self.assertEqual(theme.colors["border"], zone_theme.DEFAULT_COLORS["border"])
         red, _green, blue = zone_theme.rgb(theme.colors["accent"])
         self.assertGreater(red, blue)  # the orange cluster is the accent
         self.assertEqual(theme.name, "wallpaper")
