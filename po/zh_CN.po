@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-27 14:17+0300\n"
+"POT-Creation-Date: 2026-11-27 14:26+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -3159,3 +3159,84 @@ msgstr "gridsnap-ctl：watch 没有区域/窗口/显示器"
 #, python-brace-format
 msgid "gridsnap-ctl: {error}"
 msgstr "gridsnap-ctl：{error}"
+
+#: gallery/cinema.conf
+msgid "Cinema"
+msgstr "影院"
+
+#: gallery/cinema.conf
+msgid ""
+"One zone over the whole work area and a rule for players (mpv, VLC, "
+"Celluloid): the video fills the screen without a taskbar."
+msgstr "一个占据整个工作区的区域，外加播放器规则（mpv、VLC、Celluloid）：视频铺满屏幕，不显示任务栏。"
+
+#: gallery/dev.conf
+msgid "Development"
+msgstr "开发"
+
+#: gallery/dev.conf
+msgid ""
+"The terminal on the left, the editor top right, the documentation bottom "
+"right. Rules put terminals left, code editors on top, the browser and the "
+"reference below."
+msgstr "左侧终端，右上编辑器，右下文档。规则把终端放在左侧，代码编辑器放在上方，浏览器和参考文档放在下方。"
+
+#: gallery/grid-2x2.conf
+msgid "2×2 grid"
+msgstr "2×2 网格"
+
+#: gallery/grid-2x2.conf
+msgid "Four equal windows: for keeping several documents in sight at once."
+msgstr "四个等大的窗口：需要同时看住好几份文档时用。"
+
+#: gallery/main-stack.conf
+msgid "Main + stack"
+msgstr "主窗口 + 堆叠"
+
+#: gallery/main-stack.conf
+msgid ""
+"A large window on the left and three stacked on the right: for working with "
+"one document and a reference beside it."
+msgstr "左侧一个大窗口，右侧三个堆叠窗口：一边处理文档，一边查看参考资料。"
+
+#: gallery/stream.conf
+msgid "Stream"
+msgstr "直播"
+
+#: gallery/stream.conf
+msgid ""
+"The game or scene on the left, the chat top right, your own stream bottom "
+"right. Rules put OBS into the scene, Discord and Telegram into the chat, the "
+"browser into the monitor."
+msgstr "左侧游戏或场景，右上聊天，右下自己的直播。规则把 OBS 放进场景，Discord 和 Telegram 放进聊天，浏览器放进监视器。"
+
+#: gallery/three-columns.conf
+msgid "Three columns"
+msgstr "三栏"
+
+#: gallery/three-columns.conf
+msgid "Three equal columns: the source, the edit and the result side by side."
+msgstr "三个等宽的栏：源文件、编辑和结果并排。"
+
+#: gallery/two-columns.conf
+msgid "Two columns"
+msgstr "两栏"
+
+#: gallery/two-columns.conf
+msgid ""
+"Two equal full-height columns: the main document on the left, the second one "
+"on the right."
+msgstr "两个等高的整列：左侧主文档，右侧第二个文档。"
+
+#: gallery/work.conf
+msgid "Work"
+msgstr "工作"
+
+#: gallery/work.conf
+msgid ""
+"Mail and chat on the left, the editor in the centre, the terminal below, "
+"notes on the right. Rules put Firefox into the editor, Thunderbird and "
+"Telegram by the mail, terminals at the bottom."
+msgstr ""
+"左侧邮件和聊天，中间编辑器，下方终端，右侧笔记。规则把 Firefox 放进编辑器，Thunderbird 和 Telegram "
+"放在邮件旁，终端放到底部。"

@@ -1742,10 +1742,12 @@ def _gallery_conf(path):
 
 
 def _gallery_meta(cp, layout_id):
-    """``(title, description, order)`` from the ``[gallery]`` section.
+    """``(title, description, order)`` from the ``[gallery]`` section, untranslated.
 
-    No title — the id is taken: a layout without a card still has to be visible in
-    the menu, otherwise a file put there by hand would silently disappear.
+    The card text stays as the file words it: it is catalog data, not a `_()` literal
+    in the code (see :func:`gallery_sources`); :func:`gallery_layouts` translates it
+    for the interface. An empty title is returned as an empty string — the caller
+    decides what stands in its place.
     """
     title = ""
     description = ""
@@ -1763,7 +1765,18 @@ def _gallery_meta(cp, layout_id):
                         "layout \"{id}\": order in [gallery] must be a number, not {value!r}"
                     ).format(id=layout_id, value=raw)
                 ) from None
-    return (title or layout_id), description, order
+    return title, description, order
+
+
+def _gallery_text(text):
+    """A card title or description in the interface language; an empty string stays empty.
+
+    The words come from the layout files, so the template gets them through
+    ``tools/gallery-pot.py`` rather than from a `_()` literal; a card that is not in
+    the catalogue keeps its source text. The empty string must not reach gettext:
+    in a catalog the empty ``msgid`` is the header, and its translation is the header.
+    """
+    return _(text) if text else ""
 
 
 def _gallery_zone_names(cp):
@@ -1778,25 +1791,49 @@ def gallery_layouts():
 
     ``zones`` are the zone names in file order: that is enough both for the menu and
     for the CLI to show “zones: N”; the geometry is given by
-    :func:`load_gallery_layout`. The order is by ``order`` from ``[gallery]``, then by
-    title: the classics above the scenarios, and an equal ``order`` ignores the directory order.
+    :func:`load_gallery_layout`. The title and the description are in the interface
+    language (see :func:`_gallery_text`). The order is by ``order`` from ``[gallery]``,
+    then by the source title: the classics above the scenarios, an equal ``order``
+    ignores the directory order, and the menu does not reshuffle with the language.
     """
     directory = gallery_dir()
     items = []
+    sources = {}
     for gid in gallery_ids():
         cp = _gallery_conf(os.path.join(directory, gid + PROFILE_EXT))
         title, description, order = _gallery_meta(cp, gid)
+        sources[gid] = title
         items.append(
             {
                 "id": gid,
-                "title": title,
-                "description": description,
+                "title": _gallery_text(title) or gid,
+                "description": _gallery_text(description),
                 "zones": _gallery_zone_names(cp),
                 "order": order,
             }
         )
-    items.sort(key=lambda item: (item["order"], item["title"].casefold(), item["id"]))
+    items.sort(
+        key=lambda item: (item["order"], sources[item["id"]].casefold(), item["id"])
+    )
     return items
+
+
+def gallery_sources():
+    """The ``[gallery]`` cards as the files word them: ``[{"id", "title", "description"}]``.
+
+    Untranslated on purpose: the card text is catalog data, not a `_()` literal in the
+    code — ``GRIDSNAP_GALLERY`` may point at layouts of one's own, and a shipped card
+    is a line of a ``.conf``. ``make pot`` takes these words through
+    ``tools/gallery-pot.py``, while :func:`gallery_layouts` asks the catalogue for the
+    interface language at read time.
+    """
+    directory = gallery_dir()
+    cards = []
+    for gid in gallery_ids():
+        cp = _gallery_conf(os.path.join(directory, gid + PROFILE_EXT))
+        title, description, _order = _gallery_meta(cp, gid)
+        cards.append({"id": gid, "title": title, "description": description})
+    return cards
 
 
 def load_gallery_layout(gid):
@@ -1830,8 +1867,8 @@ def load_gallery_layout(gid):
                 keys[zone.name] = binding
     return {
         "id": layout_id,
-        "title": title,
-        "description": description,
+        "title": _gallery_text(title) or layout_id,
+        "description": _gallery_text(description),
         "order": order,
         "zones": default or [],
         "monitors": monitors,

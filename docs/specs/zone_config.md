@@ -77,7 +77,10 @@ GTK, ни X, поэтому конфиг-слой проверяется обы�
   рядом с кодом → `<префикс>/share/gridsnap/gallery`), `gallery_ids()`/`gallery_layouts()` (карточки:
   id, название, описание, зоны, `order`), `load_gallery_layout(id)` (раскладка целиком), 
   `install_gallery_layout(id, name, force, conf)` (копия в профиль). Секция `[gallery]` есть только
-  в файле галереи и в профиль не переносится; ошибки — `GalleryError`.
+  в файле галереи и в профиль не переносится; ошибки — `GalleryError`. Карточки — данные, а не
+  литералы: `gallery_sources()` отдаёт их дословно, `gallery_layouts()`/`load_gallery_layout()`
+  переводят текст через каталог (`make pot` собирает строки через `tools/gallery-pot.py`), сортировка
+  при равном `order` — по исходному названию, чтобы меню не переезжало со сменой языка.
 - `resolve_profile(monitor_map, workspace_map, output, workspace_code)` — единственное место, где
   решается, чей профиль применить: **экран важнее стола**.
 - `monitor_dialog_rows` / `workspace_dialog_rows` — строки для меню редактора («нет на экране»,
