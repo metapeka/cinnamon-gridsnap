@@ -1,9 +1,10 @@
 # HANDOFF — current state of GridSnap
 
 Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave history lives in
-`docs/HANDOFF-<date>-<slug>.md`; the newest is `docs/HANDOFF-2026-11-27-editor-rework.md` — the
-editor's neutral chrome plus the translated gallery cards (#53, #54) — before it
-`docs/HANDOFF-2026-11-26-demo-scene.md`,
+`docs/HANDOFF-<date>-<slug>.md`; the newest is `docs/HANDOFF-2026-11-28-layout-menus.md` — the
+layout menus as pictures, the grouped “…” menu and the way back from a draft — before it
+`docs/HANDOFF-2026-11-27-editor-rework.md` (the editor's neutral chrome plus the translated gallery
+cards, #53 and #54), then `docs/HANDOFF-2026-11-26-demo-scene.md`,
 `docs/HANDOFF-2026-11-26-screenshots.md`, `docs/HANDOFF-2026-11-26-docs.md`,
 `docs/HANDOFF-2026-11-26-gtk-controls.md`, `docs/HANDOFF-2026-11-26-man-theme.md`,
 `docs/HANDOFF-2026-11-26-theme-refresh.md` and `docs/HANDOFF-2026-11-26-theme-wallpaper.md` — read
@@ -19,20 +20,21 @@ its own, a Windows port and browser automation are out of scope (`SPEC.md`, `doc
 
 | What | Value |
 |---|---|
-| Code | `main` = `60c1087` (Merge #54: the gallery cards translated through the catalogs, work `a81889c`; before it `4dc7b16` Merge #53: the editor's neutral chrome and one header, work `119791f`; before the editor waves `fafac1d` — the HANDOFF section rename for the OAW quality gate; the theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`; the AUR checksum pin `a3de4c2`) — pushed, CI green |
+| Code | `main` = `8339094` (Show the layout menus as pictures, not names — the wave record is `docs/HANDOFF-2026-11-28-layout-menus.md`), then `38aa2de` (the tutorial draft and the deferred scope) and `34551a2` (the editor wave record); before them `60c1087` Merge #54: the gallery cards translated through the catalogs, work `a81889c`, and `4dc7b16` Merge #53: the editor's neutral chrome and one header, work `119791f`; before the editor waves `fafac1d` — the HANDOFF section rename for the OAW quality gate; the theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`; the AUR checksum pin `a3de4c2`) — local, not pushed |
 | Version | `0.3.0`, tag `v0.3.0` + GitHub Release with `gridsnap-0.3.0.tar.gz`; AUR `sha256sums` is the tag archive (`031c2e3…`), which is not the attached tarball: the tag archive is what `source` names |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
-| Tests | `1518` unit tests, `OK` in ~18 s without X (9 skipped once `make man` has run, 15 in a fresh checkout) |
+| Tests | `1536` unit tests, `OK` in ~18 s without X (9 skipped once `make man` has run, 15 in a fresh checkout) |
 | Smoke | `13` scenarios under `tests/smoke*.sh`, each on its own Xvfb display |
-| CI | Green on `main` (`fafac1d`, run `45981678719`), 5 jobs; `pages.yml` fires only on `site/**` changes and last deployed from `f674af0` (run `45800268713`), so the site lives at `metapeka.github.io/cinnamon-gridsnap` from that commit |
+| CI | Green on `main` at `38aa2de` (run `45996085385`), 5 jobs; the layout-menus commits are local until the push; `pages.yml` fires only on `site/**` changes and last deployed from `f674af0` (run `45800268713`), so the site lives at `metapeka.github.io/cinnamon-gridsnap` from that commit |
 | Open PRs | None |
 | Live install | This checkout **is** the installed copy. The owner's desktop layout lives in `~/.config/gridsnap/zones.conf` (profiles in `~/.config/gridsnap/templates/`), which `zone-tiler.default_conf` finds first; the tracked root `zones.conf` is the shipped starting layout |
 
 ### The tree
 
-Working tree clean. The editor's neutral chrome (#53) and the translated gallery cards (#54) are in
-`main`; the wave record is `docs/HANDOFF-2026-11-27-editor-rework.md`.
+Working tree clean. The layout menus — thumbnails in Templates and Profiles, the grouped “…” menu,
+the gallery shapes and the “Monitor's own set” way back — are in `main` on top of the editor rework
+and the translated gallery cards; the wave record is `docs/HANDOFF-2026-11-28-layout-menus.md`.
 
 Live side, outside git: `~/.config/gridsnap/theme.conf` is a marked neutral file (`bg #1c1c1e`,
 `panel #232325`, accent `#3793be` from the wallpaper); the daemon runs `0.3.0` on the merged code —
@@ -66,8 +68,8 @@ Smoke scripts raise their own `:89`–`:99`, so they are safe on a live desktop,
 |---|---|---|
 | `zone-tiler.py` | 4077 | the core: config → zone model → EWMH placement; `list/apply/arrange/stack/undo/focus/profile/tabs-next/action` |
 | `zone-daemon.py` | 3300 | optional long-lived daemon: `[rules]` auto-placement, reflow, tabs, IPC server, event subscriptions, the wallpaper poll and the controls-theme follow |
-| `zone_config.py` | 2239 | pure `zones.conf` model: load/save canonically, per-monitor and per-workspace sets, profiles; no GTK |
-| `zone-editor.py` | 1743 | GTK zone editor: header (monitor chip, Templates, Profiles, Save, “…” menu), zone list + inspector sidebar, canvas, gallery, profile menus, hotkey registration, **Theme** menu (wallpaper palette, controls theme, reload) |
+| `zone_config.py` | 2293 | pure `zones.conf` model: load/save canonically, per-monitor and per-workspace sets, profiles, `profiles_overview` for the Profiles menu; no GTK |
+| `zone-editor.py` | 2014 | GTK zone editor: header (monitor chip, Templates tiles, Profiles rows with thumbnails, Save, grouped “…” menu), zone list + inspector sidebar, canvas, gallery with shapes, the “Monitor's own set” row, hotkey registration, **Theme** menu (wallpaper palette, controls theme, reload) |
 | `zone-hotcorners.py` | 1186 | drag watcher over XInput2 raw events → HUD → place on drop |
 | `zone-picker.py` | 1003 | overlay zone picker / `--hud` passive grid |
 | `window_backend.py` | 740 | the single seam to the window system (X11/EWMH today; Wayland later) |
@@ -76,10 +78,10 @@ Smoke scripts raise their own `:89`–`:99`, so they are safe on a live desktop,
 | `setup-hotkeys.py` | 376 | `gsettings` registration of Cinnamon custom keybindings |
 | `zone_actions.py` | 348 | `[action:<name>]`: built-ins and external commands with `GRIDSNAP_*` |
 | `zone_i18n.py` | 333 | gettext wrapper: source `en`, catalogs `ru`, `zh_CN` |
-| `zone_theme.py` | 909 | one palette for the picker, the HUD, the tab strip and the editor: optional `theme.conf` next to `zones.conf`, five presets, a neutral chrome with one accent (a wallpaper chooses only the accent), zone-hue derivation as identity dots, the editor's GTK sheet, wallpaper sampling (GdkPixbuf), the generated GTK controls theme and its refresh (daemon poll and editor actions) |
+| `zone_theme.py` | 949 | one palette for the picker, the HUD, the tab strip and the editor: optional `theme.conf` next to `zones.conf`, five presets, a neutral chrome with one accent (a wallpaper chooses only the accent), zone-hue derivation as identity dots, the editor's GTK sheet (tiles, rows, the current mark), wallpaper sampling (GdkPixbuf), the generated GTK controls theme and its refresh (daemon poll and editor actions) |
 | `zone_geom.py` | 333 | fractions ↔ pixels, frame extents, snapping helpers |
 | `gridsnap-ctl` | 289 | CLI client for the daemon (also `watch`, `status`, `reload`) |
-| `zone_tabs.py`, `zone_tabstrip_nav.py`, `zone_picker_nav.py`, `zone_units.py`, `zone_reflow.py`, `make-icon.py` | 88–225 each | pure helpers: tab layout, keyboard nav, unit parsing, reflow, icons |
+| `zone_menu.py`, `zone_tabs.py`, `zone_tabstrip_nav.py`, `zone_picker_nav.py`, `zone_units.py`, `zone_reflow.py`, `make-icon.py` | 66–225 each | pure helpers: menu thumbnails and compact number ranges, tab layout, keyboard nav, unit parsing, reflow, icons |
 
 Behaviour contracts live in `docs/specs/` (19 files, one per module feature). Architecture overview:
 `docs/architecture.md`. Product scope and non-goals: `SPEC.md`. Plan: `docs/ROADMAP.md`.
@@ -88,6 +90,7 @@ Behaviour contracts live in `docs/specs/` (19 files, one per module feature). Ar
 
 | Item | State |
 |---|---|
+| Push the layout-menus wave | Local `main` is ahead of `origin/main`: the code commit `8339094` and this record. CI has not run on them yet. |
 | Wayland backend | Open. Cinnamon 6.8 / Mint 23 (~Christmas 2026) makes the Wayland session official. Reconstruction in `docs/HANDOFF-2026-11-22-window-seam.md`: placing windows through muffin still works under nested `muffin --wayland`, but the seam is not finished. |
 | Debian archive | `.deb` builds, license declared, lintian clean; missing ITP bug, sponsor, review. |
 | Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. Done so far: `docs/architecture.md` (English, with a Mermaid module graph), `docs/specs/theme.md`, `tools/shoot-screens.sh`, `tools/record-demo.sh`; the site and both translated READMEs carry §3.4 (theme). The rest is still Russian. |
@@ -118,4 +121,8 @@ Behaviour contracts live in `docs/specs/` (19 files, one per module feature). Ar
 | The README and site images are generated | `site/assets/editor.png` and `picker.png` come from `tools/shoot-screens.sh` (own Xvfb `:91`), `site/assets/demo.gif` from `tools/record-demo.sh` (own Xvfb `:90`, muffin, the daemon, five scene steps). Both build the palette with `tools/scene-palette.py`, so the stills and the recording share one look. Do not hand-edit or hand-save them: re-run the script, then `env -u DISPLAY python3 -m unittest tests.test_screenshots tests.test_demo_gif`. The scene pins the display size, so a shot from another display fails the size assertion instead of silently becoming a different picture. |
 | A scene must pin the wallpaper setting | The daemon refreshes a marked `theme.conf` whose recorded source differs from the live `picture-uri`, so a scene that only writes the file gets the palette of the **owner's** wallpaper on the first 5 s poll. `tools/scene-palette.py --pin-wallpaper` points the setting at the drawn image; the callers do it inside a `GSETTINGS_BACKEND=keyfile` sandbox with a temporary `HOME`, so neither the setting nor `~/.themes/Gridsnap` is touched. |
 | A background job started in `$(…)` is not the job `$!` names | `W1PID=$(open_window …)` runs the function in a subshell; the `xmessage` dies with it and `dash` reports a PID the process never had. `record-demo.sh` hands the PID out through `OPEN_PID` instead, and `tests/test_demo_gif.py` fails if a command substitution comes back. |
+| The layout menus are pictures of the data, not icons | `zone_menu.thumb_rects` draws from the same zone fractions `templates()` and the profile files carry; a hand-drawn icon would be a second truth and the first edited template would leave it stale. The rows come from `zone_config.profiles_overview` — the editor never opens a profile file itself. |
+| The loaded draft is marked until the first edit | `self.profile_source` is set in `load_profile` after `set_dirty(True)` (which clears it) and dropped by the next edit or monitor switch: a changed draft is nobody's profile. `Monitor's own set` is the only way back and drops that monitor's unsaved edits. |
+| A menu row is a flat button with an explicit class | `ModelButton` centres its label and cannot hold a two-line box, so `.menu-row`/`.layout-row` are plain buttons. The danger row needs `button.menu-row.destructive-action` **after** `.menu-row` in the sheet, otherwise the later transparent rule wipes the danger colour — the first screenshot showed a black-on-dark row. |
+| `[monitors]` names come back lowercase | `ConfigParser` lowercases option names, so `profiles_overview` returns `hdmi-1`; the editor restores the real spelling from `combo_entries` by `casefold`, and a profile bound to an absent output keeps the file's lowercase form instead of a guessed one. |
 | Watchers | Every spawn gets `tools/worker-watch.sh`; every PR/run gets `tools/ci-watch.sh`. Waiting without one is a process error. |
