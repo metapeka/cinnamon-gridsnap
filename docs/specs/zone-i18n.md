@@ -90,6 +90,24 @@ locale.
 A name trap: in a function where `_` is already taken by a throwaway variable (`for _ in ...`), `_`
 becomes local and `_(...)` fails with `UnboundLocalError` — rename the throwaway variable.
 
+## The gallery cards — catalog data, not literals
+
+The `[gallery]` section of `gallery/*.conf` carries a title and a description per ready-made layout.
+Those words are data rather than code: `GRIDSNAP_GALLERY` may point at a catalogue of one's own, and a
+layout is a `.conf` a user copies and edits. `xgettext` sees only literals, so the template gets them
+another way: `zone_config.gallery_sources()` words the cards, `tools/gallery-pot.py` writes them as
+`.po` entries tagged `#: gallery/<id>.conf`, and `make pot` merges that fragment into `po/gridsnap.pot`
+with `msgcat`. At read time `gallery_layouts()` and `load_gallery_layout()` put every card through
+`_()`; a missing entry leaves the English source. The `msgid` is the source text, so editing a card
+changes its key: `make pot`, then `msgmerge` the catalogs.
+
+The menu order uses the **source** title for equal `order` values, not the translated one, so the
+gallery does not reshuffle with the interface language. The empty title is never passed to gettext —
+in a catalog the empty `msgid` is the header. `tests/test_i18n_wrapped.py` does not look at the `.conf`
+files (they are not code); the chain is held by `make check-i18n` (the template really carries the
+cards) and `tests/test_i18n_catalogs.py` (every entry is translated, and `profile gallery` speaks the
+chosen language).
+
 ## The Cinnamon applet — a domain of its own
 
 The applet is not Python but an xlet: it gets its translation through the standard
@@ -105,7 +123,8 @@ would break in Russian and Chinese.
 
 ## Building and installing
 
-- `make pot` — rebuild both `.pot` files from the code (`xgettext --keyword=_`); `make mo` — build the
+- `make pot` — rebuild both `.pot` files from the code (`xgettext --keyword=_`) and from the gallery cards
+  (`tools/gallery-pot.py`, merged with `msgcat`); `make mo` — build the
   four `.mo` files through `msgfmt --check`; `make check-i18n` — both of those plus comparing the
   templates with the code by `msgid` set and checking that there is no `en` catalog. `check-i18n` runs
   in CI.

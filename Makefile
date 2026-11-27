@@ -137,11 +137,17 @@ version:
 # `make pot` — обновить шаблоны из кода. Отдельный домен апплета: xlet'ы берут
 # перевод через `Gettext.bindtextdomain(uuid, ...)`, поэтому у него своё имя и
 # свой `.mo`. Строки достаёт `xgettext` (`--keyword=_`), а не человек: забытая
-# обёртка видна тестом `tests/test_i18n_wrapped.py`.
+# обёртка видна тестом `tests/test_i18n_wrapped.py`. Строки галереи — не литералы:
+# `tools/gallery-pot.py` читает карточки `gallery/*.conf`, и `msgcat` сливает их
+# с шаблоном кода. `msgcat` сортирует записи по `msgid` — так шаблон и читается.
 pot:
 	@mkdir -p "$(POT_DIR)" "$(POT_DIR)/$(APPLET_NAME)"
-	xgettext --language=Python $(XGETTEXT_FLAGS) \
-		--output=$(POT_DIR)/$(PKG).pot $(POT_FILES)
+	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+		xgettext --language=Python $(XGETTEXT_FLAGS) \
+			--output="$$tmp/$(PKG).pot" $(POT_FILES) && \
+		$(PYTHON) tools/gallery-pot.py > "$$tmp/gallery.pot" && \
+		msgcat --use-first --no-wrap --output-file="$(POT_DIR)/$(PKG).pot" \
+			"$$tmp/$(PKG).pot" "$$tmp/gallery.pot"
 	xgettext --language=JavaScript $(XGETTEXT_FLAGS) \
 		--output=$(POT_DIR)/$(APPLET_NAME)/$(APPLET_NAME).pot $(APPLET_SRC)
 	@echo "обновлены $(POT_DIR)/$(PKG).pot и $(POT_DIR)/$(APPLET_NAME)/$(APPLET_NAME).pot"

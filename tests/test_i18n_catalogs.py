@@ -44,6 +44,7 @@ CYRILLIC = re.compile(r"[\u0400-\u04ff]")
 # keybinding installer need no GTK at all.
 ENGLISH_COMMANDS = (
     ["zone-tiler.py", "--help"],
+    ["zone-tiler.py", "profile", "gallery"],
     ["zone-daemon.py", "--help"],
     ["setup-hotkeys.py", "--help"],
     ["gridsnap-ctl", "--help"],

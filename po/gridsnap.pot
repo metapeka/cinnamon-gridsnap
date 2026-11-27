@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-27 14:17+0300\n"
+"POT-Creation-Date: 2026-11-27 14:26+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2785,4 +2785,68 @@ msgstr ""
 #: gridsnap-ctl
 #, python-brace-format
 msgid "gridsnap-ctl: {error}"
+msgstr ""
+
+#: gallery/cinema.conf
+msgid "Cinema"
+msgstr ""
+
+#: gallery/cinema.conf
+msgid "One zone over the whole work area and a rule for players (mpv, VLC, Celluloid): the video fills the screen without a taskbar."
+msgstr ""
+
+#: gallery/dev.conf
+msgid "Development"
+msgstr ""
+
+#: gallery/dev.conf
+msgid "The terminal on the left, the editor top right, the documentation bottom right. Rules put terminals left, code editors on top, the browser and the reference below."
+msgstr ""
+
+#: gallery/grid-2x2.conf
+msgid "2×2 grid"
+msgstr ""
+
+#: gallery/grid-2x2.conf
+msgid "Four equal windows: for keeping several documents in sight at once."
+msgstr ""
+
+#: gallery/main-stack.conf
+msgid "Main + stack"
+msgstr ""
+
+#: gallery/main-stack.conf
+msgid "A large window on the left and three stacked on the right: for working with one document and a reference beside it."
+msgstr ""
+
+#: gallery/stream.conf
+msgid "Stream"
+msgstr ""
+
+#: gallery/stream.conf
+msgid "The game or scene on the left, the chat top right, your own stream bottom right. Rules put OBS into the scene, Discord and Telegram into the chat, the browser into the monitor."
+msgstr ""
+
+#: gallery/three-columns.conf
+msgid "Three columns"
+msgstr ""
+
+#: gallery/three-columns.conf
+msgid "Three equal columns: the source, the edit and the result side by side."
+msgstr ""
+
+#: gallery/two-columns.conf
+msgid "Two columns"
+msgstr ""
+
+#: gallery/two-columns.conf
+msgid "Two equal full-height columns: the main document on the left, the second one on the right."
+msgstr ""
+
+#: gallery/work.conf
+msgid "Work"
+msgstr ""
+
+#: gallery/work.conf
+msgid "Mail and chat on the left, the editor in the centre, the terminal below, notes on the right. Rules put Firefox into the editor, Thunderbird and Telegram by the mail, terminals at the bottom."
 msgstr ""
