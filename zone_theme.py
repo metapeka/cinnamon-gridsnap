@@ -206,6 +206,18 @@ def hex_of(colour):
     )
 
 
+def css_rgba(value, alpha=1.0):
+    """``#RRGGBB`` → ``rgba(55, 147, 190, 0.12)``: an alpha tint the GTK 3 sheet can paint.
+
+    GTK 3 has no `color-mix`, and its ``rgba()`` takes 0–255 components while the tokens
+    are hex — the conversion lives next to :func:`rgb`, not inside the sheet string.
+    """
+    red, green, blue = rgb(value)
+    return "rgba({}, {}, {}, {})".format(
+        round(red * 255), round(green * 255), round(blue * 255), alpha
+    )
+
+
 def luminance(value):
     """Relative luminance of ``#RRGGBB`` (WCAG 2.x): what decides the text colour on an accent."""
     channels = []
@@ -369,6 +381,34 @@ class Theme:
                 "row:selected .dim-label, list row:selected .dim-label,"
                 " .view:selected .dim-label, *:selected .dim-label",
                 f"color: {on_accent}; opacity: 0.85;",
+            ),
+            (
+                "button.layout-tile, button.layout-row, button.menu-row",
+                "background-color: transparent; border-color: transparent; padding: 6px;",
+            ),
+            (
+                "button.layout-tile:hover, button.layout-row:hover, button.menu-row:hover",
+                f"background-color: {colors['bg_hover']};",
+            ),
+            (
+                "button.layout-row.current",
+                "background-color: %s; border-color: transparent;"
+                % css_rgba(colors["accent"], 0.12),
+            ),
+            (
+                "button.layout-row.current:hover",
+                "background-color: %s;"
+                % css_rgba(colors["accent"], 0.18),
+            ),
+            (".layout-current-mark", f"color: {colors['accent']}; font-weight: bold;"),
+            (
+                "button.menu-row.destructive-action",
+                "background-color: transparent; color: %s; border-color: transparent;"
+                % colors["danger"],
+            ),
+            (
+                "button.menu-row.destructive-action:hover",
+                "background-color: %s;" % css_rgba(colors["danger"], 0.14),
             ),
             (
                 "popover, popover.background, menu, .menu",

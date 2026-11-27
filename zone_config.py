@@ -1560,6 +1560,60 @@ def read_profile(name, conf_path=None):
     return zones, rules, ignore
 
 
+def profiles_overview(conf_path=None):
+    """The Profiles menu in one pass: the shape, the counts and the bindings of every profile.
+
+    Returns one dictionary per saved profile, in the order of :func:`list_profiles`::
+
+        {"name", "zones", "monitors", "total", "rules", "workspaces", "outputs", "broken"}
+
+    ``zones`` is the default set with its geometry (what the thumbnail paints),
+    ``monitors`` counts the ``[zones:<output>]`` sets, ``total`` counts every zone of the
+    profile, ``rules`` counts the ``[rules]`` pairs, not the lines of the section. The
+    bindings come from ``[workspaces]``/``[monitors]`` of this ``zones.conf``: a profile
+    does not carry them, and a renamed or deleted profile leaves a stale name there —
+    that is what the menu has to show, not hide.
+
+    A profile whose file cannot be read is kept as ``broken``: the menu still offers the
+    others, and the reader of the file is told by the editor's own message, not by a
+    silent hole in the list.
+    """
+    try:
+        workspaces = load_workspace_map(conf_path)
+    except (SystemExit, ValueError, OSError):
+        workspaces = {}
+    try:
+        outputs = load_monitor_map(conf_path)
+    except (SystemExit, ValueError, OSError):
+        outputs = {}
+    rows = []
+    for name in list_profiles(conf_path):
+        row = {
+            "name": name,
+            "zones": [],
+            "monitors": 0,
+            "total": 0,
+            "rules": 0,
+            "workspaces": [],
+            "outputs": [],
+            "broken": False,
+        }
+        try:
+            zones, rules, monitor_sets, _ignore = read_profile_sets(name, conf_path)
+        except (SystemExit, ValueError, OSError):
+            row["broken"] = True
+            rows.append(row)
+            continue
+        row["zones"] = zones
+        row["monitors"] = len(monitor_sets)
+        row["total"] = len(zones) + sum(len(body) for body in monitor_sets.values())
+        row["rules"] = len(_rule_pairs(rules))
+        row["workspaces"] = sorted(n for n, profile in workspaces.items() if profile == name)
+        row["outputs"] = sorted(o for o, profile in outputs.items() if profile == name)
+        rows.append(row)
+    return rows
+
+
 def save_profile(name, zones, rules=None, conf_path=None, monitor_sets=None, ignore=None):
     """Write a profile: ``[zones]``, ``[zones:*]``, ``[rules]``, ``[ignore]``, ``[keys]``.
 

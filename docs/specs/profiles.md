@@ -33,6 +33,7 @@ _Описано вместе с реализацией (волна 3); влад�
 |---|---|
 | `profile_text(name, conf)` | содержимое файла дословно (для `profile show`); нет файла — `FileNotFoundError` |
 | `read_profile(name, conf)` | `(зоны, строки [rules], строки [ignore])`; у зон восстановлены привязки клавиш из `[keys]`; все наборы отдаёт `read_profile_sets` (4-ка: зоны, rules, monitors, ignore) |
+| `profiles_overview(conf)` | строки меню **Profiles**: на профиль — зоны дефолтного набора (для миниатюры), число наборов мониторов, всего зон, число пар `[rules]`, привязки из `[workspaces]`/`[monitors]`, флаг `broken` для нечитаемого файла; порядок — как у `list_profiles` |
 | `save_profile(name, zones, rules, conf, ignore=…)` | пишет `[zones]` в каноническом формате зоны (`z.fmt()`), `[rules]` и `[ignore]` только если они есть, `[keys]` только для зон с непустой привязкой; каталог создаётся; пустой набор зон — `ValueError` («сохранять нечего»); возвращает путь |
 | `remove_profile(name, conf)` | удаляет файл; нет файла — `FileNotFoundError` |
 | `apply_profile(name, conf)` | активирует: зоны, правила и исключения профиля + все прочие секции активного конфига как есть; возвращает зоны профиля |

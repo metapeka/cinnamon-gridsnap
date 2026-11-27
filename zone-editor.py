@@ -35,6 +35,7 @@ gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gdk, Gtk, Pango, PangoCairo  # noqa: E402  # type: ignore
 
 import zone_geom as geom  # noqa: E402
+import zone_menu  # noqa: E402  (the thumbnails and the counts of the layout menus)
 import zone_theme  # noqa: E402  (one palette for every surface: theme.conf next to zones.conf)
 from zone_config import (  # noqa: E402
     GalleryError,
@@ -48,12 +49,15 @@ from zone_config import (  # noqa: E402
     install_gallery_layout,
     list_profiles,
     load_extra_sections,
+    load_gallery_layout,
     load_monitor_map,
     load_workspace_map,
     load_zone_sets,
+    load_zones,
     missing_rule_targets,
     monitor_dialog_rows,
     profile_path,
+    profiles_overview,
     read_profile,
     remove_profile,
     sanitize_name,
@@ -76,6 +80,13 @@ HOTKEYS = os.path.join(HERE, "setup-hotkeys.py")
 
 
 CONF = zt.default_conf()
+
+# Thumbnails of the layout menus, in logical pixels: a template tile, a profile row, a
+# gallery card. The picture is the shape of the set, so the sizes only have to stay
+# readable — the geometry itself comes from `zone_menu.thumb_rects`.
+TEMPLATE_THUMB = (104, 60)
+PROFILE_THUMB = (76, 42)
+GALLERY_THUMB = (96, 54)
 
 
 def desktops_count():
@@ -154,6 +165,15 @@ def rounded_path(cr, x, y, w, h, r):
     cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
     cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
     cr.close_path()
+
+
+def small_attrs(points=9, bold=False):
+    """Pango attributes for the line under a name: one step below the body text."""
+    attrs = Pango.AttrList()
+    if bold:
+        attrs.insert(Pango.attr_weight_new(Pango.Weight.BOLD))
+    attrs.insert(Pango.attr_size_new(int(points * Pango.SCALE)))
+    return attrs
 
 
 class Canvas(Gtk.DrawingArea):
@@ -445,6 +465,9 @@ class Editor(Gtk.Window):
         self.extra_sections = load_extra_sections(conf_path)
         self.selected = None
         self.dirty = False
+        # The profile the canvas was loaded from, if any: the mark in the Profiles menu.
+        # Cleared by the first edit — a changed draft is nobody's profile any more.
+        self.profile_source = None
         self.message = ""
         self._loading = False
         self.set_default_size(1120, 700)
@@ -486,6 +509,197 @@ class Editor(Gtk.Window):
         body.pack_start(self.build_sidebar(), False, False, 0)
         root.pack_start(self.build_status_bar(), False, False, 0)
 
+    # ---- layout widgets: the thumbnails and the rows of the Templates/Profiles menus
+
+    def _thumb(self, zones, size):
+        """A layout thumbnail: the set's rectangles drawn in a small box, from the theme tokens."""
+        width, height = size
+        area = Gtk.DrawingArea()
+        area.set_size_request(width, height)
+        area.connect("draw", self._draw_thumb, zones)
+        return area
+
+    def _draw_thumb(self, widget, cr, zones):
+        """The frame plus the zone rectangles; an empty set is a dashed frame ("blank slate")."""
+        a = widget.get_allocation()
+        width, height = a.width, a.height
+        theme = self.theme
+        rounded_path(cr, 0.5, 0.5, max(1, width - 1), max(1, height - 1), 5)
+        cr.set_line_width(1)
+        if not zones:
+            # An empty solid box would read as one zone; the dashed frame says "nothing here".
+            cr.set_dash([4, 3])
+            cr.set_source_rgba(*theme.rgba("fg_muted", 0.7))
+            cr.stroke()
+            cr.set_dash([])
+            return False
+        cr.set_source_rgba(*theme.rgba("border", 0.9))
+        cr.stroke()
+        for x, y, w, h in zone_menu.thumb_rects(zones, width, height):
+            rounded_path(cr, x, y, w, h, 2)
+            cr.set_source_rgba(*theme.rgba("fg", 0.10))
+            cr.fill_preserve()
+            cr.set_line_width(1)
+            cr.set_source_rgba(*theme.rgba("fg", 0.35))
+            cr.stroke()
+        return False
+
+    def _from_popover(self, popover, callback):
+        """Close the menu before the action changes the canvas behind it."""
+        if popover is not None:
+            popover.popdown()
+        callback()
+
+    def _tile(self, title, zones, callback):
+        """One template: the picture and its name, a flat button for the 2-column grid."""
+        button = Gtk.Button()
+        button.get_style_context().add_class("layout-tile")
+        button.set_relief(Gtk.ReliefStyle.NONE)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.pack_start(self._thumb(zones, TEMPLATE_THUMB), False, False, 0)
+        box.pack_start(Gtk.Label(label=title), False, False, 0)
+        button.add(box)
+        button.connect(
+            "clicked",
+            lambda _w: self._from_popover(getattr(self, "tpl_pop", None), callback),
+        )
+        return button
+
+    def _layout_row(self, zones, title, meta, callback, active=False):
+        """One profile: a thumbnail, the name, the counts and the "on the canvas" mark.
+
+        ``meta`` is a list of lines: the counts and the bindings are split so neither is
+        clipped by the width of a popover, and a profile without bindings keeps one line.
+        """
+        button = Gtk.Button()
+        context = button.get_style_context()
+        context.add_class("layout-row")
+        if active:
+            context.add_class("current")
+        button.set_relief(Gtk.ReliefStyle.NONE)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        box.pack_start(self._thumb(zones, PROFILE_THUMB), False, False, 0)
+        text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        name = Gtk.Label(label=title, xalign=0)
+        name.set_attributes(small_attrs(10, bold=True))
+        name.set_ellipsize(Pango.EllipsizeMode.END)
+        name.set_max_width_chars(26)
+        text.pack_start(name, False, False, 0)
+        for line in meta:
+            if not line:
+                continue
+            note = Gtk.Label(label=line, xalign=0)
+            note.set_attributes(small_attrs())
+            note.set_ellipsize(Pango.EllipsizeMode.END)
+            note.set_max_width_chars(46)
+            note.get_style_context().add_class("dim-label")
+            text.pack_start(note, False, False, 0)
+        box.pack_start(text, True, True, 0)
+        if active:
+            mark = Gtk.Label(label="✓")
+            mark.get_style_context().add_class("layout-current-mark")
+            box.pack_end(mark, False, False, 0)
+        button.add(box)
+        button.connect(
+            "clicked",
+            lambda _w: self._from_popover(getattr(self, "prof_pop", None), callback),
+        )
+        return button
+
+    def _menu_item(self, label, callback, style_class=None, icon=None):
+        """One popover row: flat, left-aligned, with an optional leading icon."""
+        button = Gtk.Button()
+        button.set_relief(Gtk.ReliefStyle.NONE)
+        button.get_style_context().add_class("menu-row")
+        if style_class:
+            button.get_style_context().add_class(style_class)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        if icon is not None:
+            box.pack_start(
+                Gtk.Image.new_from_icon_name(icon, Gtk.IconSize.BUTTON), False, False, 0
+            )
+        box.pack_start(Gtk.Label(label=label, xalign=0), True, True, 0)
+        button.add(box)
+        button.connect("clicked", lambda _w: callback())
+        return button
+
+    def _profile_meta(self, row):
+        """The counts under a profile name: one line of totals, one of bindings.
+
+        Split rather than truncated: "Workspaces: 1–2" is the reason a profile exists, and
+        a clipped ellipsis there costs more than the second line.
+        """
+        lines = [_("Zones: {}").format(row["total"])]
+        if row["monitors"]:
+            lines[0] += " · " + _("Monitor sets: {}").format(row["monitors"])
+        bindings = []
+        if row["rules"]:
+            bindings.append(_("Rules: {}").format(row["rules"]))
+        workspaces = zone_menu.compact_ranges(row["workspaces"])
+        if workspaces:
+            bindings.append(_("Workspaces: {}").format(workspaces))
+        if row["outputs"]:
+            # `[monitors]` comes back lowercased (ConfigParser), the chip names are the real
+            # outputs: show the spelling the person sees in the monitor list.
+            known = {name.casefold(): name for name, _rect in self.combo_entries}
+            names = [known.get(output.casefold(), output) for output in row["outputs"]]
+            bindings.append(_("Monitors: {}").format(", ".join(names)))
+        if bindings:
+            lines.append(" · ".join(bindings))
+        return lines
+
+    def _own_set_row(self):
+        """The first row of Profiles: the file's own set for this monitor — the way back."""
+        name = self.current_monitor
+        if name is None:
+            return None
+        try:
+            zones = load_zones(self.conf_path, monitor=name)
+        except (SystemExit, ValueError, OSError):
+            zones = []
+        meta = [_("Zones: {}").format(len(zones)) + " · " + name]
+        return self._layout_row(
+            zones,
+            _("Monitor's own set"),
+            meta,
+            self.revert_to_file,
+            active=self.profile_source is None,
+        )
+
+    def revert_to_file(self):
+        """Put the file's own set of this monitor back on the canvas.
+
+        The way out of a profile draft: the zones, the rules and the exclusions come from
+        `zones.conf` again. Unsaved edits of this monitor are dropped — that is what the
+        "own set" means, and Save would otherwise write the profile back.
+        """
+        name = self.current_monitor
+        before = geom.zone_set_signature(self.zones)
+        try:
+            zones = load_zones(self.conf_path, monitor=name)
+            extra = load_extra_sections(self.conf_path, sections=["rules", "ignore"])
+        except (SystemExit, ValueError, OSError) as exc:
+            self.set_status(_("own set not read: {}").format(exc))
+            return
+        self.set_zones([z.copy() for z in zones])
+        self.edited.discard(name)
+        self._set_extra("rules", extra.get("rules"))
+        self._set_extra("ignore", extra.get("ignore"))
+        self.selected = 0 if self.zones else None
+        self.select(self.selected)
+        if before != geom.zone_set_signature(self.zones):
+            self.set_dirty(True)
+        self.profile_source = None
+        self.canvas.queue_draw()
+        self.set_status(_("monitor's own set: {} zones").format(len(self.zones)))
+
+    def _set_extra(self, section, lines):
+        """Replace one carried-over section: lines present — keep them, nothing — drop it."""
+        if lines:
+            self.extra_sections[section] = lines
+        else:
+            self.extra_sections.pop(section, None)
+
     def build_header(self):
         """One row: what the canvas shows, the two frequent menus, Save and everything else.
 
@@ -519,15 +733,21 @@ class Editor(Gtk.Window):
         self.tpl_btn.set_tooltip_text(_("Layout templates"))
         self.tpl_btn.set_label(_("Templates"))
         tpl_pop = Gtk.Popover()
-        tpl_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        tpl_box.set_border_width(6)
-        for name, zones in templates().items():
-            b = Gtk.ModelButton()
-            b.set_label(name)
-            b.connect("clicked", lambda _w, t=zones, n=name: self.apply_template(t, n))
-            tpl_box.pack_start(b, False, False, 0)
-        tpl_pop.add(tpl_box)
-        tpl_box.show_all()
+        self.tpl_pop = tpl_pop
+        # Two columns of tiles: a template is a picture, so its name is the caption, not the item.
+        tpl_grid = Gtk.Grid(row_spacing=2, column_spacing=2)
+        tpl_grid.set_border_width(6)
+        tpl_grid.set_column_homogeneous(True)
+        for index, (name, zones) in enumerate(templates().items()):
+            tpl_grid.attach(
+                self._tile(name, zones, lambda n=name, t=zones: self.apply_template(t, n)),
+                index % 2,
+                index // 2,
+                1,
+                1,
+            )
+        tpl_pop.add(tpl_grid)
+        tpl_grid.show_all()
         self.tpl_btn.set_popover(tpl_pop)
         bar.pack_start(self.tpl_btn, False, False, 0)
 
@@ -553,24 +773,28 @@ class Editor(Gtk.Window):
         return bar
 
     def build_more_menu(self):
-        """Everything off the common path: gallery, theme, hotkeys, placement, clearing."""
+        """Everything off the common path, grouped by what it does, the destructive item apart."""
         self.more_btn = Gtk.MenuButton()
         self.more_btn.set_label("⋯")
-        self.more_btn.set_tooltip_text(_("More: gallery, theme, hotkeys, placement, clear"))
+        self.more_btn.set_tooltip_text(
+            _("More: gallery, theme, placement, bindings, clear")
+        )
         self.more_pop = Gtk.Popover()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         box.set_border_width(6)
         self.more_pop.add(box)
         self.more_btn.set_popover(self.more_pop)
 
-        def item(label, callback, style_class=None):
-            b = Gtk.ModelButton()
-            b.set_label(label)
-            if style_class:
-                b.get_style_context().add_class(style_class)
-            b.connect("clicked", lambda _w, f=callback: self._run_from_menu(f))
-            box.pack_start(b, False, False, 0)
-            return b
+        def item(label, callback, style_class=None, icon=None):
+            """One row of the menu; the popover closes before the callback runs."""
+            row = self._menu_item(
+                label,
+                lambda f=callback: self._run_from_menu(f),
+                style_class,
+                icon,
+            )
+            box.pack_start(row, False, False, 0)
+            return row
 
         def heading(text):
             label = Gtk.Label(label=text, xalign=0)
@@ -585,14 +809,24 @@ class Editor(Gtk.Window):
         item(_("Window controls…"), self.on_theme_controls)
         item(_("Reload theme.conf"), self.on_theme_reload)
         box.pack_start(Gtk.Separator(), False, False, 4)
+        heading(_("Placement"))
         item(_("Place the window on another monitor…"), self.open_target_menu)
+        item(_("Place the active window into the selected zone"), self.on_test)
+        heading(_("Bindings"))
         item(_("Workspace profiles…"), self.workspace_profiles_dialog)
         item(_("Monitor profiles…"), self.monitor_profiles_dialog)
-        box.pack_start(Gtk.Separator(), False, False, 4)
         item(_("Apply hotkeys in Cinnamon"), self.on_hotkeys)
-        item(_("Place the active window into the selected zone"), self.on_test)
-        box.pack_start(Gtk.Separator(), False, False, 4)
-        item(_("Clear all…"), self.on_clear_confirmed, "destructive-action")
+        # The one irreversible row: its own gap and a warning icon, never under the pointer
+        # that was aiming at the last harmless item.
+        gap = Gtk.Separator()
+        gap.set_margin_top(8)
+        box.pack_start(gap, False, False, 0)
+        item(
+            _("Clear all…"),
+            self.on_clear_confirmed,
+            "destructive-action",
+            icon="dialog-warning-symbolic",
+        )
 
         self.target_pop = Gtk.Popover()
         self.target_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -839,6 +1073,7 @@ class Editor(Gtk.Window):
     def set_dirty(self, val):
         self.dirty = val
         if val:
+            self.profile_source = None
             # Any edit cancels the previous "saved…" in the status.
             self.message = ""
         if val and self.current_monitor is not None and self.current_monitor != self.default_monitor:
@@ -864,6 +1099,7 @@ class Editor(Gtk.Window):
             zones, _own = geom.set_for_monitor(name, self.sets, self.default_zones)
             self.zones = self.sets[name] = zones
         self.current_monitor = name
+        self.profile_source = None
         self.monitor_index = index
         self.selected = 0 if self.zones else None
         self.message = ""
@@ -1105,37 +1341,70 @@ class Editor(Gtk.Window):
     # ---- profiles
 
     def rebuild_profiles_menu(self):
-        """Rebuild the "Profiles" menu: the list of saved ones plus saving and deleting."""
+        """Rebuild the "Profiles" menu: the file's own set, the saved profiles, then the actions.
+
+        Every profile row is a picture plus the counts under its name: the geometry is the
+        default set of the profile, the counts come from :func:`zone_config.profiles_overview`
+        (all sets, the ``[rules]`` pairs and the ``[workspaces]``/``[monitors]`` bindings).
+        """
         for child in self.prof_box.get_children():
             self.prof_box.remove(child)
-        names = list_profiles(self.conf_path)
-        for name in names:
-            b = Gtk.ModelButton()
-            b.set_label(name)
-            b.connect("clicked", lambda _w, n=name: self.load_profile(n))
-            self.prof_box.pack_start(b, False, False, 0)
-        if names:
-            self.prof_box.pack_start(Gtk.Separator(), False, False, 2)
-        desks_btn = Gtk.ModelButton()
-        desks_btn.set_label(_("Workspace profiles…"))
-        desks_btn.connect("clicked", lambda _w: self.workspace_profiles_dialog())
-        self.prof_box.pack_start(desks_btn, False, False, 0)
-        screens_btn = Gtk.ModelButton()
-        screens_btn.set_label(_("Monitor profiles…"))
-        screens_btn.connect("clicked", lambda _w: self.monitor_profiles_dialog())
-        self.prof_box.pack_start(screens_btn, False, False, 0)
-        save_btn = Gtk.ModelButton()
-        save_btn.set_label(_("Save the current layout as a profile…"))
-        save_btn.connect("clicked", lambda _w: self.save_profile_dialog())
-        self.prof_box.pack_start(save_btn, False, False, 0)
-        if names:
-            rm_btn = Gtk.ModelButton()
-            rm_btn.set_label(_("Delete profile…"))
-            rm_btn.connect("clicked", lambda _w: self.remove_profile_dialog())
-            self.prof_box.pack_start(rm_btn, False, False, 0)
+        own = self._own_set_row()
+        if own is not None:
+            self.prof_box.pack_start(own, False, False, 0)
+        for row in profiles_overview(self.conf_path):
+            if row["broken"]:
+                broken = Gtk.Label(
+                    label=_("{} — the file cannot be read").format(row["name"]), xalign=0
+                )
+                broken.get_style_context().add_class("dim-label")
+                broken.set_margin_top(4)
+                broken.set_margin_start(8)
+                self.prof_box.pack_start(broken, False, False, 0)
+                continue
+            self.prof_box.pack_start(
+                self._layout_row(
+                    row["zones"],
+                    row["name"],
+                    self._profile_meta(row),
+                    lambda n=row["name"]: self.load_profile(n),
+                    active=row["name"] == self.profile_source,
+                ),
+                False,
+                False,
+                0,
+            )
+        self.prof_box.pack_start(Gtk.Separator(), False, False, 2)
+
+        def action(label, callback):
+            """A row that puts the popover away before the dialog it opens comes up."""
+
+            def run():
+                self.prof_pop.popdown()
+                callback()
+
+            self.prof_box.pack_start(self._menu_item(label, run), False, False, 0)
+
+        action(_("Workspace profiles…"), self.workspace_profiles_dialog)
+        action(_("Monitor profiles…"), self.monitor_profiles_dialog)
+        action(_("Save the current layout as a profile…"), self.save_profile_dialog)
+        action(_("Delete profile…"), self.remove_profile_dialog)
         self.prof_box.show_all()
 
     # ---- the gallery of ready-made layouts
+
+    def _gallery_zones(self, gid):
+        """The shape a gallery card draws: its default set, or the first non-empty monitor set."""
+        try:
+            layout = load_gallery_layout(gid)
+        except (GalleryError, SystemExit, ValueError, OSError):
+            return []
+        if layout["zones"]:
+            return layout["zones"]
+        for zones in layout["monitors"].values():
+            if zones:
+                return zones
+        return []
 
     def gallery_dialog(self):
         """The "Layout gallery" dialog: a ready-made scenario → a profile → the canvas.
@@ -1171,8 +1440,11 @@ class Editor(Gtk.Window):
         listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
         for item in layouts:
             row = Gtk.ListBoxRow()
-            holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            holder = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             holder.set_border_width(6)
+            picture = self._gallery_zones(item["id"])
+            holder.pack_start(self._thumb(picture, GALLERY_THUMB), False, False, 0)
+            text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             head = Gtk.Label(
                 label=_("{} — {} zones").format(item["title"], len(item["zones"])),
                 xalign=0,
@@ -1182,11 +1454,13 @@ class Editor(Gtk.Window):
             weight = Pango.AttrList()
             weight.insert(Pango.attr_weight_new(Pango.Weight.BOLD))
             head.set_attributes(weight)
-            holder.pack_start(head, False, False, 0)
+            text.pack_start(head, False, False, 0)
             desc = Gtk.Label(label=item["description"], xalign=0)
             desc.set_line_wrap(True)
+            desc.set_max_width_chars(54)
             desc.get_style_context().add_class("dim-label")
-            holder.pack_start(desc, False, False, 0)
+            text.pack_start(desc, False, False, 0)
+            holder.pack_start(text, True, True, 0)
             row.add(holder)
             listbox.add(row)
         listbox.select_row(listbox.get_row_at_index(0))
@@ -1311,16 +1585,13 @@ class Editor(Gtk.Window):
             return
         self.set_zones([z.copy() for z in zones])
         self.selected = 0 if self.zones else None
-        if rules:
-            self.extra_sections["rules"] = rules
-        else:
-            self.extra_sections.pop("rules", None)
-        if ignore:
-            self.extra_sections["ignore"] = ignore
-        else:
-            self.extra_sections.pop("ignore", None)
+        self._set_extra("rules", rules)
+        self._set_extra("ignore", ignore)
         self.select(self.selected)
         self.set_dirty(True)
+        # A draft of this profile, not somebody's own layout: the Profiles menu marks it
+        # until the first edit (set_dirty above cleared the mark, so set it afterwards).
+        self.profile_source = name
         self.canvas.queue_draw()
         self.set_status(
             _("profile \"{}\": {} zones (don't forget to save)").format(name, len(self.zones))

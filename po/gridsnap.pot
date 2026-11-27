@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-27 14:26+0300\n"
+"POT-Creation-Date: 2026-11-28 02:29+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1379,6 +1379,38 @@ msgid "Gridsnap - window grid"
 msgstr ""
 
 #: zone-editor.py
+msgid "Zones: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "Monitor sets: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "Rules: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "Workspaces: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "Monitors: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "Monitor's own set"
+msgstr ""
+
+#: zone-editor.py
+msgid "own set not read: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "monitor's own set: {} zones"
+msgstr ""
+
+#: zone-editor.py
 msgid "Layout"
 msgstr ""
 
@@ -1415,7 +1447,7 @@ msgid "Save to zones.conf (Ctrl+S)"
 msgstr ""
 
 #: zone-editor.py
-msgid "More: gallery, theme, hotkeys, placement, clear"
+msgid "More: gallery, theme, placement, bindings, clear"
 msgstr ""
 
 #: zone-editor.py
@@ -1439,7 +1471,19 @@ msgid "Reload theme.conf"
 msgstr ""
 
 #: zone-editor.py
+msgid "Placement"
+msgstr ""
+
+#: zone-editor.py
 msgid "Place the window on another monitor…"
+msgstr ""
+
+#: zone-editor.py
+msgid "Place the active window into the selected zone"
+msgstr ""
+
+#: zone-editor.py
+msgid "Bindings"
 msgstr ""
 
 #: zone-editor.py
@@ -1452,10 +1496,6 @@ msgstr ""
 
 #: zone-editor.py
 msgid "Apply hotkeys in Cinnamon"
-msgstr ""
-
-#: zone-editor.py
-msgid "Place the active window into the selected zone"
 msgstr ""
 
 #: zone-editor.py
@@ -1540,6 +1580,10 @@ msgstr ""
 
 #: zone-editor.py
 msgid "template \"{}\": {} zones (don't forget to save)"
+msgstr ""
+
+#: zone-editor.py
+msgid "{} — the file cannot be read"
 msgstr ""
 
 #: zone-editor.py

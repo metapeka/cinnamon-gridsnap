@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-27 14:26+0300\n"
+"POT-Creation-Date: 2026-11-28 02:29+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -1612,6 +1612,38 @@ msgid "Gridsnap - window grid"
 msgstr "Gridsnap — 窗口网格"
 
 #: zone-editor.py
+msgid "Zones: {}"
+msgstr "区域：{}"
+
+#: zone-editor.py
+msgid "Monitor sets: {}"
+msgstr "显示器方案：{}"
+
+#: zone-editor.py
+msgid "Rules: {}"
+msgstr "规则：{}"
+
+#: zone-editor.py
+msgid "Workspaces: {}"
+msgstr "工作区：{}"
+
+#: zone-editor.py
+msgid "Monitors: {}"
+msgstr "显示器：{}"
+
+#: zone-editor.py
+msgid "Monitor's own set"
+msgstr "显示器自己的方案"
+
+#: zone-editor.py
+msgid "own set not read: {}"
+msgstr "没有读到自己的方案：{}"
+
+#: zone-editor.py
+msgid "monitor's own set: {} zones"
+msgstr "显示器自己的方案（区域：{}）"
+
+#: zone-editor.py
 msgid "Layout"
 msgstr "布局"
 
@@ -1648,8 +1680,8 @@ msgid "Save to zones.conf (Ctrl+S)"
 msgstr "保存到 zones.conf（Ctrl+S）"
 
 #: zone-editor.py
-msgid "More: gallery, theme, hotkeys, placement, clear"
-msgstr "更多：布局库、主题、快捷键、放置、清空"
+msgid "More: gallery, theme, placement, bindings, clear"
+msgstr "更多：布局库、主题、放置、绑定、清空"
 
 #: zone-editor.py
 msgid "From the gallery…"
@@ -1672,8 +1704,20 @@ msgid "Reload theme.conf"
 msgstr "重新读取 theme.conf"
 
 #: zone-editor.py
+msgid "Placement"
+msgstr "放置"
+
+#: zone-editor.py
 msgid "Place the window on another monitor…"
 msgstr "把窗口放到另一台显示器…"
+
+#: zone-editor.py
+msgid "Place the active window into the selected zone"
+msgstr "把活动窗口放进选中的区域"
+
+#: zone-editor.py
+msgid "Bindings"
+msgstr "绑定"
 
 #: zone-editor.py
 msgid "Workspace profiles…"
@@ -1686,10 +1730,6 @@ msgstr "显示器方案…"
 #: zone-editor.py
 msgid "Apply hotkeys in Cinnamon"
 msgstr "在 Cinnamon 中应用快捷键"
-
-#: zone-editor.py
-msgid "Place the active window into the selected zone"
-msgstr "把活动窗口放进选中的区域"
 
 #: zone-editor.py
 msgid "Clear all…"
@@ -1776,6 +1816,10 @@ msgstr "{} % × {} % · {} × {} 像素"
 #: zone-editor.py
 msgid "template \"{}\": {} zones (don't forget to save)"
 msgstr "模板「{}」：{} 个区域（别忘了保存）"
+
+#: zone-editor.py
+msgid "{} — the file cannot be read"
+msgstr "{} — 文件无法读取"
 
 #: zone-editor.py
 msgid "Save the current layout as a profile…"
@@ -3168,7 +3212,9 @@ msgstr "影院"
 msgid ""
 "One zone over the whole work area and a rule for players (mpv, VLC, "
 "Celluloid): the video fills the screen without a taskbar."
-msgstr "一个占据整个工作区的区域，外加播放器规则（mpv、VLC、Celluloid）：视频铺满屏幕，不显示任务栏。"
+msgstr ""
+"一个占据整个工作区的区域，外加播放器规则（mpv、VLC、Celluloid）：视频铺满屏"
+"幕，不显示任务栏。"
 
 #: gallery/dev.conf
 msgid "Development"
@@ -3179,7 +3225,9 @@ msgid ""
 "The terminal on the left, the editor top right, the documentation bottom "
 "right. Rules put terminals left, code editors on top, the browser and the "
 "reference below."
-msgstr "左侧终端，右上编辑器，右下文档。规则把终端放在左侧，代码编辑器放在上方，浏览器和参考文档放在下方。"
+msgstr ""
+"左侧终端，右上编辑器，右下文档。规则把终端放在左侧，代码编辑器放在上方，浏览"
+"器和参考文档放在下方。"
 
 #: gallery/grid-2x2.conf
 msgid "2×2 grid"
@@ -3208,7 +3256,9 @@ msgid ""
 "The game or scene on the left, the chat top right, your own stream bottom "
 "right. Rules put OBS into the scene, Discord and Telegram into the chat, the "
 "browser into the monitor."
-msgstr "左侧游戏或场景，右上聊天，右下自己的直播。规则把 OBS 放进场景，Discord 和 Telegram 放进聊天，浏览器放进监视器。"
+msgstr ""
+"左侧游戏或场景，右上聊天，右下自己的直播。规则把 OBS 放进场景，Discord 和 "
+"Telegram 放进聊天，浏览器放进监视器。"
 
 #: gallery/three-columns.conf
 msgid "Three columns"
@@ -3238,5 +3288,5 @@ msgid ""
 "notes on the right. Rules put Firefox into the editor, Thunderbird and "
 "Telegram by the mail, terminals at the bottom."
 msgstr ""
-"左侧邮件和聊天，中间编辑器，下方终端，右侧笔记。规则把 Firefox 放进编辑器，Thunderbird 和 Telegram "
-"放在邮件旁，终端放到底部。"
+"左侧邮件和聊天，中间编辑器，下方终端，右侧笔记。规则把 Firefox 放进编辑器，"
+"Thunderbird 和 Telegram 放在邮件旁，终端放到底部。"

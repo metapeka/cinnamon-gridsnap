@@ -768,5 +768,77 @@ class ShippedConfigTest(unittest.TestCase):
         self.assertEqual(zc.load_monitor_map(self.path), {})
 
 
+class ProfilesOverviewTest(ConfMixin, unittest.TestCase):
+    """The Profiles menu in one pass: the shape, the counts and the bindings of every profile.
+
+    The menu cannot read eight profile files itself and stay honest about `[rules]` pairs and
+    `[workspaces]` bindings; `zone_config.profiles_overview` does it without GTK, so the data
+    behind the rows is checked here, and the editor only draws it.
+    """
+
+    def conf_with_profiles(self):
+        path = self.conf(BASE_GRID + RECT_ZONES)
+        zc.save_profile(
+            "work",
+            [
+                zc.Zone("main", 0, 0, 0.5, 1, ""),
+                zc.Zone("top", 0.5, 0, 0.5, 0.5, "<Super><Alt>2"),
+            ],
+            rules=["Chrome = main", "re:^(Navigator|firefox) = top"],
+            conf_path=path,
+            monitor_sets={"HDMI-1": [zc.Zone("wide", 0, 0, 1, 1, "")]},
+        )
+        zc.save_profile("cinema", [zc.Zone("video", 0, 0, 1, 1, "")], conf_path=path)
+        return path
+
+    def test_shape_and_counts_of_a_profile(self):
+        path = self.conf_with_profiles()
+        rows = {row["name"]: row for row in zc.profiles_overview(path)}
+        work = rows["work"]
+        self.assertEqual([zone.name for zone in work["zones"]], ["main", "top"])
+        self.assertEqual(work["monitors"], 1)
+        self.assertEqual(work["total"], 3)
+        self.assertEqual(work["rules"], 2)
+        self.assertFalse(work["broken"])
+
+    def test_rules_count_pairs_not_lines(self):
+        path = self.conf_with_profiles()
+        cinema = {row["name"]: row for row in zc.profiles_overview(path)}["cinema"]
+        self.assertEqual(cinema["rules"], 0)
+        self.assertEqual(cinema["total"], 1)
+
+    def test_order_follows_list_profiles(self):
+        path = self.conf_with_profiles()
+        self.assertEqual(
+            [row["name"] for row in zc.profiles_overview(path)], zc.list_profiles(path)
+        )
+
+    def test_bindings_come_from_the_config(self):
+        path = self.conf_with_profiles()
+        zc.save_workspace_map(path, {1: "work", 2: "work", 4: "cinema"})
+        zc.save_monitor_map(path, {"HDMI-1": "work"})
+        rows = {row["name"]: row for row in zc.profiles_overview(path)}
+        self.assertEqual(rows["work"]["workspaces"], [1, 2])
+        self.assertEqual(rows["cinema"]["workspaces"], [4])
+        # ConfigParser lowercases option names, so an output comes back as `hdmi-1`; the
+        # editor restores the real spelling from its own monitor list.
+        self.assertEqual([name.casefold() for name in rows["work"]["outputs"]], ["hdmi-1"])
+
+    def test_no_profiles_is_an_empty_list(self):
+        path = self.conf(BASE_GRID + RECT_ZONES)
+        self.assertEqual(zc.profiles_overview(path), [])
+
+    def test_broken_profile_is_kept_not_dropped(self):
+        path = self.conf_with_profiles()
+        broken = os.path.join(zc.profiles_dir(path), "broken.conf")
+        with open(broken, "w", encoding="utf-8") as fh:
+            fh.write("[zones]\n")
+        with contextlib.redirect_stderr(io.StringIO()):
+            rows = {row["name"]: row for row in zc.profiles_overview(path)}
+        self.assertTrue(rows["broken"]["broken"])
+        self.assertEqual(rows["broken"]["total"], 0)
+        self.assertIn("work", rows)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

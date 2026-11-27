@@ -28,11 +28,26 @@ hotkey registration.
   "not on screen" and is never deleted.
 - The header keeps the common path: the monitor chip, **Templates**, **Profiles**, a filled
   **Save** (insensitive while nothing is dirty) and a **…** menu. Save is also `Ctrl+S`.
-- The **…** menu holds everything else: **From the gallery…**; the **Theme** group (**From the
-  wallpaper…**, **Window controls…**, **Reload theme.conf**); **Place the window on another
-  monitor…** (monitor → zone, through `apply --monitor <output>`, after saving unsaved edits);
-  **Workspace profiles…**; **Monitor profiles…**; **Apply hotkeys in Cinnamon**; **Place the active
-  window into the selected zone**; and **Clear all…**, which asks for confirmation first.
+- The **…** menu holds everything else, grouped by what it does: **From the gallery…**; **Theme**
+  (**From the wallpaper…**, **Window controls…**, **Reload theme.conf**); **Placement** (**Place
+  the window on another monitor…** — monitor → zone, through `apply --monitor <output>`, after
+  saving unsaved edits — and **Place the active window into the selected zone**); **Bindings**
+  (**Workspace profiles…**, **Monitor profiles…**, **Apply hotkeys in Cinnamon**). **Clear all…**
+  stands behind its own gap, in the danger colour with a warning icon, and asks for confirmation
+  first; it is never the row under a pointer that was aiming at a harmless item.
+- **Templates** is a two-column grid of tiles: each tile draws the template's zone rectangles
+  (`zone_menu.thumb_rects`) above its name, and "blank slate" is a dashed frame. The picture is
+  built from the same `templates()` list that applies the layout, so it cannot drift from the
+  result; a choice closes the menu.
+- **Profiles** starts with **Monitor's own set** — the file's set for the chip's monitor, the way
+  back from a draft — then one row per saved profile: a thumbnail of its default set, the name,
+  one line of totals (**Zones**, **Monitor sets**) and one of bindings (**Rules**, **Workspaces**,
+  **Monitors** from `[workspaces]`/`[monitors]`). The row the canvas was loaded from carries a ✓
+  and an accent tint until the first edit, and a choice closes the menu. The rows come from
+  `zone_config.profiles_overview`; an unreadable profile file stays listed as "— the file cannot
+  be read" instead of disappearing.
+- The **Layout gallery** dialog shows each card with the shape of its layout beside the title and
+  description — the card's default set, or its first non-empty monitor set.
 - Dragging a zone and resizing it by an edge or corner; the cursor names the side.
 - Snapping within `SNAP_PX = 9` px to the screen edges, to neighbouring zones and to the lines
   `0, 1/4, 1/3, 1/2, 2/3, 3/4, 1`.
@@ -54,9 +69,10 @@ hotkey registration.
   (`zone_config.save_workspace_map`) and re-read into the foreign sections so the next `Ctrl+S`
   does not roll it back; a profile missing on disk is shown as a warning, the mapping is not
   deleted.
-- The **Profiles** menu: the saved profiles, "Save the current layout as a profile…" and deletion;
-  choosing a profile loads its zones, rules and keys into the canvas as a draft (saved with the
-  usual `Ctrl+S`).
+- The **Profiles** menu header (the list of stored profiles, its thumbnails and counts) is
+  described above; choosing a profile loads its zones, rules and exclusions into the canvas as a
+  draft, saved with the usual `Ctrl+S`, and does not touch the running session by itself.
+  **Monitor's own set** puts the file's set back and drops the unsaved edits of that monitor.
 - A zone name is sanitized (`[^0-9A-Za-zА-Яа-я_.-]+ → '-'`) and must stay unique.
 - Saving (`Ctrl+S`, the button or the menu) writes the canonical `zones.conf` with a header
   comment; foreign sections (`[rules]`, `[daemon]`, …) are carried over **verbatim**, with their

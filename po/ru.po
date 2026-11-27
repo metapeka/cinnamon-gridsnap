@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-27 14:26+0300\n"
+"POT-Creation-Date: 2026-11-28 02:29+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: русский текст — прежний язык исходника\n"
 "Language-Team: \n"
@@ -1662,6 +1662,38 @@ msgid "Gridsnap - window grid"
 msgstr "Gridsnap — сетка окон"
 
 #: zone-editor.py
+msgid "Zones: {}"
+msgstr "Зоны: {}"
+
+#: zone-editor.py
+msgid "Monitor sets: {}"
+msgstr "Наборы экранов: {}"
+
+#: zone-editor.py
+msgid "Rules: {}"
+msgstr "Правила: {}"
+
+#: zone-editor.py
+msgid "Workspaces: {}"
+msgstr "Столы: {}"
+
+#: zone-editor.py
+msgid "Monitors: {}"
+msgstr "Экраны: {}"
+
+#: zone-editor.py
+msgid "Monitor's own set"
+msgstr "Свой набор экрана"
+
+#: zone-editor.py
+msgid "own set not read: {}"
+msgstr "свой набор не прочитан: {}"
+
+#: zone-editor.py
+msgid "monitor's own set: {} zones"
+msgstr "свой набор экрана (зон: {})"
+
+#: zone-editor.py
 msgid "Layout"
 msgstr "Раскладка"
 
@@ -1698,8 +1730,8 @@ msgid "Save to zones.conf (Ctrl+S)"
 msgstr "Сохранить в zones.conf (Ctrl+S)"
 
 #: zone-editor.py
-msgid "More: gallery, theme, hotkeys, placement, clear"
-msgstr "Ещё: галерея, тема, сочетания, укладка, очистка"
+msgid "More: gallery, theme, placement, bindings, clear"
+msgstr "Ещё: галерея, тема, размещение, привязки, очистка"
 
 #: zone-editor.py
 msgid "From the gallery…"
@@ -1722,8 +1754,20 @@ msgid "Reload theme.conf"
 msgstr "Перечитать theme.conf"
 
 #: zone-editor.py
+msgid "Placement"
+msgstr "Размещение"
+
+#: zone-editor.py
 msgid "Place the window on another monitor…"
 msgstr "Уложить окно на другом мониторе…"
+
+#: zone-editor.py
+msgid "Place the active window into the selected zone"
+msgstr "Вложить активное окно в выделенную зону"
+
+#: zone-editor.py
+msgid "Bindings"
+msgstr "Привязки"
 
 #: zone-editor.py
 msgid "Workspace profiles…"
@@ -1736,10 +1780,6 @@ msgstr "Профили экранов…"
 #: zone-editor.py
 msgid "Apply hotkeys in Cinnamon"
 msgstr "Применить сочетания клавиш в Cinnamon"
-
-#: zone-editor.py
-msgid "Place the active window into the selected zone"
-msgstr "Вложить активное окно в выделенную зону"
 
 #: zone-editor.py
 msgid "Clear all…"
@@ -1830,6 +1870,10 @@ msgstr "{} % × {} % · {} × {} пикс."
 #: zone-editor.py
 msgid "template \"{}\": {} zones (don't forget to save)"
 msgstr "шаблон «{}»: {} зон (не забудьте сохранить)"
+
+#: zone-editor.py
+msgid "{} — the file cannot be read"
+msgstr "{} — файл не читается"
 
 #: zone-editor.py
 msgid "Save the current layout as a profile…"
@@ -3261,9 +3305,8 @@ msgid ""
 "right. Rules put terminals left, code editors on top, the browser and the "
 "reference below."
 msgstr ""
-"Терминал слева, редактор справа сверху, документация справа снизу. "
-"Правила ставят терминалы влево, редакторы кода — наверх, браузер и "
-"справку — вниз."
+"Терминал слева, редактор справа сверху, документация справа снизу. Правила "
+"ставят терминалы влево, редакторы кода — наверх, браузер и справку — вниз."
 
 #: gallery/grid-2x2.conf
 msgid "2×2 grid"
@@ -3272,8 +3315,8 @@ msgstr "Сетка 2×2"
 #: gallery/grid-2x2.conf
 msgid "Four equal windows: for keeping several documents in sight at once."
 msgstr ""
-"Четыре равных окна: когда нужно держать перед глазами сразу "
-"несколько документов."
+"Четыре равных окна: когда нужно держать перед глазами сразу несколько "
+"документов."
 
 #: gallery/main-stack.conf
 msgid "Main + stack"
@@ -3284,8 +3327,8 @@ msgid ""
 "A large window on the left and three stacked on the right: for working with "
 "one document and a reference beside it."
 msgstr ""
-"Большое окно слева и три окна стопкой справа: для работы с одним "
-"документом и справкой рядом."
+"Большое окно слева и три окна стопкой справа: для работы с одним документом "
+"и справкой рядом."
 
 #: gallery/stream.conf
 msgid "Stream"
@@ -3297,9 +3340,8 @@ msgid ""
 "right. Rules put OBS into the scene, Discord and Telegram into the chat, the "
 "browser into the monitor."
 msgstr ""
-"Игра или сцена слева, чат справа сверху, свой стрим справа снизу. "
-"Правила ставят OBS в сцену, Discord и Telegram — в чат, браузер — в "
-"монитор."
+"Игра или сцена слева, чат справа сверху, свой стрим справа снизу. Правила "
+"ставят OBS в сцену, Discord и Telegram — в чат, браузер — в монитор."
 
 #: gallery/three-columns.conf
 msgid "Three columns"
@@ -3318,8 +3360,7 @@ msgid ""
 "Two equal full-height columns: the main document on the left, the second one "
 "on the right."
 msgstr ""
-"Две равные колонки на всю высоту: слева основной документ, справа "
-"второй."
+"Две равные колонки на всю высоту: слева основной документ, справа второй."
 
 #: gallery/work.conf
 msgid "Work"
@@ -3331,6 +3372,6 @@ msgid ""
 "notes on the right. Rules put Firefox into the editor, Thunderbird and "
 "Telegram by the mail, terminals at the bottom."
 msgstr ""
-"Почта и чат слева, редактор в центре, терминал снизу, заметки "
-"справа. Правила кладут Firefox в редактор, Thunderbird и Telegram — "
-"к почте, терминалы — вниз."
+"Почта и чат слева, редактор в центре, терминал снизу, заметки справа. "
+"Правила кладут Firefox в редактор, Thunderbird и Telegram — к почте, "
+"терминалы — вниз."

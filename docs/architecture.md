@@ -37,6 +37,7 @@ graph TD
   tiler[zone-tiler]
   config[zone_config]
   geom[zone_geom]
+  menu[zone_menu]
   theme[zone_theme]
   actions[zone_actions]
   tabs[zone_tabs]
@@ -64,6 +65,7 @@ graph TD
   actions --> i18n
   editor --> config
   editor --> geom
+  editor --> menu
   editor --> theme
   editor --> tiler
   editor --> i18n
@@ -143,6 +145,10 @@ graph TD
 - **Editor geometry `zone_geom.py`** — pure editor arithmetic without GTK or X: the "screen" scale
   on the canvas, fractions ↔ pixels, snapping, drag/resize, bounds, hit testing. Only the editor
   depends on it.
+- **Menu thumbnails `zone_menu.py`** — the pure half of the layout menus: `thumb_rects` turns a
+  zone set into the rectangles of a small box (the inset frame and the hair between neighbours
+  included), `compact_ranges` renders workspace numbers as `1–4, 7`. No GTK, no X, no config: the
+  editor paints what it gets, and the geometry is checked without a display.
 - **Config layer `zone_config.py`** — pure work with `zones.conf` without GTK: the zone model,
   loading (`load_zones`), canonical saving (`save_zones`/`save_zone_sets` — all sets in one pass,
   `[keys]` without duplicates), verbatim carriage of "foreign" sections (`[rules]`, `[ignore]`,
@@ -203,10 +209,10 @@ graph TD
 
 Dependency arrows go one way only: the editor, the zone picker, the hotkeys and the daemon know about
 the tiler; the tiler does not know about them; everything that moves windows goes through
-`window_backend.py`, not through X11 directly. `zone_geom.py`, `zone_picker_nav.py`,
-`zone_reflow.py`, `zone_units.py` and the pure half of `zone_theme.py` are computations (editor
-geometry, picker navigation, reflow, unit conversion, palette arithmetic) and know neither the config
-nor X. `zone_config.py` is the pure layer between the editor/picker and the tiler.
+`window_backend.py`, not through X11 directly. `zone_geom.py`, `zone_menu.py`,
+`zone_picker_nav.py`, `zone_reflow.py`, `zone_units.py` and the pure half of `zone_theme.py` are
+computations (editor geometry, menu thumbnails, picker navigation, reflow, unit conversion, palette
+arithmetic) and know neither the config nor X. `zone_config.py` is the pure layer between the editor/picker and the tiler.
 
 ## Decisions
 
