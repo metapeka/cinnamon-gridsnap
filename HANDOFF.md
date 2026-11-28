@@ -1,10 +1,12 @@
 # HANDOFF — current state of GridSnap
 
 Entry point for a fresh session. Read this first, then `AGENTS.md`. The per-wave history lives in
-`docs/HANDOFF-<date>-<slug>.md`; the newest is `docs/HANDOFF-2026-11-28-ui-surfaces.md` — the picker
-and the HUD neutral with hue dots, rounded tabs, the quiet gallery selection — before it
+`docs/HANDOFF-<date>-<slug>.md`; the newest is `docs/HANDOFF-2026-11-28-desktop-grid.md` — the zone
+grid over the live desktop, `--toggle`, `[overlay]` and the `Super+g` key — before it
+`docs/HANDOFF-2026-11-28-ui-surfaces.md` (the picker and the HUD neutral with hue dots, rounded tabs,
+the quiet gallery selection), then
 `docs/HANDOFF-2026-11-28-layout-menus.md` (the layout menus as pictures, the grouped “…” menu and
-the way back from a draft), then
+the way back from a draft), and
 `docs/HANDOFF-2026-11-27-editor-rework.md` (the editor's neutral chrome plus the translated gallery
 cards, #53 and #54), then `docs/HANDOFF-2026-11-26-demo-scene.md`,
 `docs/HANDOFF-2026-11-26-screenshots.md`, `docs/HANDOFF-2026-11-26-docs.md`,
@@ -22,25 +24,28 @@ its own, a Windows port and browser automation are out of scope (`SPEC.md`, `doc
 
 | What | Value |
 |---|---|
-| Code | `main` = `79be393e` (Re-render the stills and the demo for the new surfaces) over `58b5768` (Give the window surfaces one accent — the wave record is `docs/HANDOFF-2026-11-28-ui-surfaces.md`), then this record; before them `f2cc24f` (Record the layout menus in the handoff), `8339094` (Show the layout menus as pictures, not names), `38aa2de` (the tutorial draft and the deferred scope) and `34551a2` (the editor wave record); before them `60c1087` Merge #54: the gallery cards translated through the catalogs, work `a81889c`, and `4dc7b16` Merge #53: the editor's neutral chrome and one header, work `119791f`; before the editor waves `fafac1d` — the HANDOFF section rename for the OAW quality gate; the theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`; the AUR checksum pin `a3de4c2`) — the UI surfaces wave is local; `origin/main` = `f2cc24f` |
+| Code | `main` = `73fcf7c5` (Put the zone grid on the live desktop — the wave record is `docs/HANDOFF-2026-11-28-desktop-grid.md`), then this record; before them `45d9454` (Record the UI surfaces wave), `79be393e` (Re-render the stills and the demo for the new surfaces) and `58b5768` (Give the window surfaces one accent — `docs/HANDOFF-2026-11-28-ui-surfaces.md`); before them `f2cc24f` (Record the layout menus in the handoff), `8339094` (Show the layout menus as pictures, not names), `38aa2de` (the tutorial draft and the deferred scope) and `34551a2` (the editor wave record); before them `60c1087` Merge #54: the gallery cards translated through the catalogs, work `a81889c`, and `4dc7b16` Merge #53: the editor's neutral chrome and one header, work `119791f`; before the editor waves `fafac1d` — the HANDOFF section rename for the OAW quality gate; the theme waves: palette `8b61c61`, wallpaper `ea2dc1e`, refresh `32b6aa5`, man page `60f288d`, GTK controls `575d601`, docs `7f8201d`, screenshots `3d61d20`, demo scene `65ad946`, release `47f8003`; the AUR checksum pin `a3de4c2`) — the three waves since `f2cc24f` are local; `origin/main` = `f2cc24f` |
 | Version | `0.3.0`, tag `v0.3.0` + GitHub Release with `gridsnap-0.3.0.tar.gz`; AUR `sha256sums` is the tag archive (`031c2e3…`), which is not the attached tarball: the tag archive is what `source` names |
 | Repo | `metapeka/cinnamon-gridsnap` (`gh` is authed as `metapeka`) |
 | Language | Everything in the repo is **English**; talk to the owner in Russian |
-| Tests | `1536` unit tests, `OK` in ~18 s without X (9 skipped once `make man` has run, 15 in a fresh checkout) |
-| Smoke | `13` scenarios under `tests/smoke*.sh`, each on its own Xvfb display |
-| CI | Green on `main` at `f2cc24f` (run `46084884631`, 114 s), 5 jobs; the UI surfaces wave (`58b5768`, `79be393e`) is local, so CI has not run on it; `pages.yml` fires only on `site/**` changes and last deployed from `4dc7b16` (run `45990574013`), so the live site still shows the previous stills until the push |
+| Tests | `1556` unit tests, `OK` in ~18 s without X (9 skipped once `make man` has run, 15 in a fresh checkout) |
+| Smoke | `14` scenarios under `tests/smoke*.sh`, each on its own Xvfb display (`smoke-grid.sh` also runs `picom`) |
+| CI | Green on `main` at `f2cc24f` (run `46084884631`, 114 s), 5 jobs; the UI surfaces wave (`58b5768`, `79be393e`, `45d9454`) and the desktop grid wave (`73fcf7c5`) are local, so CI has not run on them; `pages.yml` fires only on `site/**` changes and last deployed from `4dc7b16` (run `45990574013`), so the live site still shows the previous stills until the push |
 | Open PRs | None |
 | Live install | This checkout **is** the installed copy. The owner's desktop layout lives in `~/.config/gridsnap/zones.conf` (profiles in `~/.config/gridsnap/templates/`), which `zone-tiler.default_conf` finds first; the tracked root `zones.conf` is the shipped starting layout |
 
 ### The tree
 
-Working tree clean apart from this record. The window surfaces now speak the editor's language: the
-picker and the HUD paint zones neutral with the hue as a 7 px identity dot, the tab strip rounds its
-tabs on top, the gallery selects with a tint instead of an accent slab, and derived hues alternate
-lightness so neighbours stay apart. Before them the layout menus — thumbnails in Templates and
-Profiles, the grouped “…” menu, the “Monitor's own set” way back — and the editor rework. Wave
-records: `docs/HANDOFF-2026-11-28-ui-surfaces.md` and
-`docs/HANDOFF-2026-11-28-layout-menus.md`.
+Working tree clean apart from this record. The zone grid can now live on the desktop itself:
+`zone-picker.py --grid` draws neutral frames and plates over whatever is open, marks the zone under
+the pointer, and `--toggle` (bound to `<Super>g` from `[overlay]`, or the editor's **… → Placement →
+Show the zones on the desktop**) shows and hides it per desktop. Before it the window surfaces took
+the editor's language: the picker and the HUD paint zones neutral with the hue as a 7 px identity dot,
+the tab strip rounds its tabs on top, the gallery selects with a tint instead of an accent slab, and
+derived hues alternate lightness so neighbours stay apart. Before them the layout menus — thumbnails
+in Templates and Profiles, the grouped “…” menu, the “Monitor's own set” way back — and the editor
+rework. Wave records: `docs/HANDOFF-2026-11-28-desktop-grid.md`,
+`docs/HANDOFF-2026-11-28-ui-surfaces.md` and `docs/HANDOFF-2026-11-28-layout-menus.md`.
 
 Live side, outside git: `~/.config/gridsnap/theme.conf` is a marked neutral file (`bg #1c1c1e`,
 `panel #232325`, accent `#3793be` from the wallpaper); the daemon runs `0.3.0` on the merged code —
@@ -74,14 +79,14 @@ Smoke scripts raise their own `:89`–`:99`, so they are safe on a live desktop,
 |---|---|---|
 | `zone-tiler.py` | 4077 | the core: config → zone model → EWMH placement; `list/apply/arrange/stack/undo/focus/profile/tabs-next/action` |
 | `zone-daemon.py` | 3300 | optional long-lived daemon: `[rules]` auto-placement, reflow, tabs, IPC server, event subscriptions, the wallpaper poll and the controls-theme follow |
-| `zone_config.py` | 2293 | pure `zones.conf` model: load/save canonically, per-monitor and per-workspace sets, profiles, `profiles_overview` for the Profiles menu; no GTK |
-| `zone-editor.py` | 2019 | GTK zone editor: header (monitor chip, Templates tiles, Profiles rows with thumbnails, Save, grouped “…” menu), zone list + inspector sidebar, canvas, gallery with shapes, the “Monitor's own set” row, hotkey registration, **Theme** menu (wallpaper palette, controls theme, reload) |
+| `zone_config.py` | 2327 | pure `zones.conf` model: load/save canonically, per-monitor and per-workspace sets, profiles, `profiles_overview` for the Profiles menu, the `[focus]`/`[tabs]`/`[overlay]`/`[action:*]` sections; no GTK |
+| `zone-editor.py` | 2048 | GTK zone editor: header (monitor chip, Templates tiles, Profiles rows with thumbnails, Save, grouped “…” menu), zone list + inspector sidebar, canvas, gallery with shapes, the “Monitor's own set” row, hotkey registration, **Theme** menu (wallpaper palette, controls theme, reload), the **Show the zones on the desktop** row |
 | `zone-hotcorners.py` | 1186 | drag watcher over XInput2 raw events → HUD → place on drop |
-| `zone-picker.py` | 1021 | overlay zone picker / `--hud` passive grid: neutral zone surfaces, the hue as an identity dot, one accent for the chosen zone |
+| `zone-picker.py` | 1418 | overlay zone picker / `--hud` passive grid / `--grid` desktop grid with `--toggle`: neutral zone surfaces, the hue as an identity dot, one accent for the zone under the pointer |
 | `window_backend.py` | 740 | the single seam to the window system (X11/EWMH today; Wayland later) |
 | `zone_ipc.py` | 587 | JSON-line IPC framing, command dispatch, UNIX socket |
 | `zone-tabstrip.py` | 553 | tab strip window for a zone (daemon spawns it); tabs rounded on top, the accent stripe clipped to the path |
-| `setup-hotkeys.py` | 376 | `gsettings` registration of Cinnamon custom keybindings |
+| `setup-hotkeys.py` | 389 | `gsettings` registration of Cinnamon custom keybindings: zone keys, moves, focus, tabs, the desktop grid toggle, actions |
 | `zone_actions.py` | 348 | `[action:<name>]`: built-ins and external commands with `GRIDSNAP_*` |
 | `zone_i18n.py` | 333 | gettext wrapper: source `en`, catalogs `ru`, `zh_CN` |
 | `zone_theme.py` | 982 | one palette for the picker, the HUD, the tab strip and the editor: optional `theme.conf` next to `zones.conf`, five presets, a neutral chrome with one accent (a wallpaper chooses only the accent), zone-hue derivation as identity dots with alternating lightness, the editor's GTK sheet (tiles, rows, the current mark, the gallery's quiet selection), wallpaper sampling (GdkPixbuf), the generated GTK controls theme and its refresh (daemon poll and editor actions) |
@@ -96,7 +101,7 @@ Behaviour contracts live in `docs/specs/` (19 files, one per module feature). Ar
 
 | Item | State |
 |---|---|
-| Push the UI surfaces wave | Local `main` is ahead of `origin/main` (`f2cc24f`): `58b5768` (code, specs, catalogs, the wave record), `79be393e` (re-rendered stills and demo) and this record. CI has not run on them; the push also redeploys the site (`site/assets/` changed). |
+| Push the local waves | Local `main` is ahead of `origin/main` (`f2cc24f`): `58b5768` (the surfaces), `79be393e` (re-rendered stills and demo), `45d9454` (their record), `73fcf7c5` (the desktop grid, its record included) and this record. CI has not run on them; the push also redeploys the site (`site/assets/` changed in the surfaces wave). |
 | Wayland backend | Open, but the cheap part is done: the three compatibility fixes landed in PR #46 (`5c8d79c` — `current_workspace_or_first`/`x_alive` for the missing `_NET_CURRENT_DESKTOP`, `prefer_x11_gdk`, and `window_iconic` with callers that switch the desktop instead of trusting `Iconic`), held by `tests/test_wayland_compat.py`. What remains: the Cinnamon extension for Wayland-native windows (owner decision, not started), a live-session check of the three fixes, and the per-output fractional scale model. Cinnamon 6.8 / Mint 23 (~Christmas 2026) makes the Wayland session official. Measurements: `docs/RESEARCH-wayland-recon.md`. |
 | Debian archive | `.deb` builds, license declared, lintian clean; missing ITP bug, sponsor, review. |
 | Docs in Russian | `SPEC.md`, `docs/**` (except `zone-i18n`/`man-i18n`), `README.ru.md`, site, `Makefile`, `install.sh`, `PKGBUILD`, `debian/**`, `tools/**`, `tests/smoke*.sh` were written before the language inversion. Translate them **as they are touched**, not in one sweep. Done so far: `docs/architecture.md` (English, with a Mermaid module graph), `docs/specs/theme.md`, `tools/shoot-screens.sh`, `tools/record-demo.sh`; the site and both translated READMEs carry §3.4 (theme). The rest is still Russian. |
@@ -113,6 +118,11 @@ Behaviour contracts live in `docs/specs/` (19 files, one per module feature). Ar
 | Derived hues alternate lightness | `derive_zones` steps 0.56/0.66 at the same saturation: hues 73° and 118° at one lightness read as the same green at 7 px, and a dot that names nothing is worse than no dot. A user's own `zones` list is taken as written — the editor's dot is the only place a bad pair shows. |
 | The gallery's tall cards are the one quiet selection | `row:selected` stays a full accent fill for the 24 px zone list; the 60 px gallery cards take `.gallery-list row:selected` — an `accent` 0.16 tint with a 0.50 hairline and `fg` text, because a slab turned the layout shape orange and flattened the description. Its `.dim-label` must be reset to `fg_muted`, since the global `*:selected .dim-label` rule would otherwise follow the accent. The primary action is `button.suggested-action`; **Add to profiles…** carries the ellipsis because it opens a name prompt. |
 | Tab tops are rounded, the stripe is clipped | `_tab_path` rounds the top corners (`TAB_RADIUS` 5 px, divided by the strip scale) and squares the bottom edge on the panel; the active tab's `accent` stripe is drawn inside that path, not as a rectangle, or the corners show square orange bites. |
+| The desktop grid is a picker mode, not a binary of its own | `--grid`/`--toggle` live in `zone-picker.py`: a separate `gridsnap-grid` would need its own entry in four packaging lists, the man page, the CI and the docs for one `os.kill`. The toggle trusts a pid only when `/proc/<pid>/cmdline` names `zone-picker` and `--grid`, so a stale file or a recycled pid cannot kill an unrelated process. |
+| One pid file per desktop | `$XDG_RUNTIME_DIR/gridsnap/grid-<desktop>.pid`: a toggle on another desktop must neither kill nor hide the grid of this one. The grid window is not sticky; switching the desktop hides it, and the toggle there shows that desktop's grid. |
+| The grid refuses without a compositor | Without one the window has no alpha visual, the transparent clear turns opaque and a persistent window blacks out the desktop. `--grid` fails with code 1 before creating a window and names the compositor; Cinnamon always composites. `tests/smoke-grid.sh` starts `picom` and checks the refusal first, on the bare Xvfb screen. |
+| The grid's frame carries its own contrast | A light hairline vanishes on a bright window and a dark one on a dark terminal: each frame is a `bg` 0.45 under-stroke with an `fg` 0.55 line on top, and the labels sit on a `bg` 0.66 plate. Screenshot over the cream wallpaper showed the bare hairline disappearing. The surface respects the theme tokens; nothing is hard-coded white. |
+| `[overlay]` is the grid key, `[grid]` is not | `[grid]` is the editor's reserved section (`cols`/`rows`); the shortcut lives in the optional `[overlay]` (default `<Super>g`, an empty `key` turns it off), carried verbatim by the editor and registered as `zone-tiler: desktop grid`. gTile (README §2) also takes `Super+G`: the READMEs say to change `[overlay] key` when both are installed. |
 | Gallery card text is data, not a literal | `gallery/*.conf` carries the English source (`title`, `description`); `gallery_layouts()` and `load_gallery_layout()` translate it through the catalog, and the menu sorts by the **source** title. `make pot` gets the cards from `tools/gallery-pot.py` and merges them with `msgcat`, so editing a card changes the `msgid`: run `make pot`, `msgmerge` both catalogs, translate the new entry. `make check-i18n` catches a stale template, `tests/test_i18n_catalogs.py` a missing `msgstr`, and `profile gallery` runs under `en`/`ru` there. The empty title never reaches gettext — the empty `msgid` is the catalog header. |
 | The root `zones.conf` is the **shipped** layout, not the live one | The owner's desktop layout lives in `~/.config/gridsnap/zones.conf` (found first by `zone-tiler.default_conf`); the tracked file is only the starting layout for a new installation, and it ships through `Makefile`, `install.sh`, `PKGBUILD` and `debian/install`. Twice the live layout reached the tracked file by accident; the last time (`2c6a247`, dropped before push) it carried `[workspaces] 1 = ws1`, and `ws1.conf` lives in `templates/`, which is gitignored and shipped nowhere. `tests/test_zone_config.py::ShippedConfigTest` now refuses any `[workspaces]`/`[monitors]` binding in the shipped file. |
 | Every smoke writes its own config | `smoke-arrange.sh` was the last scenario reading the root `zones.conf`; a `[workspaces]` entry in the live layout made the tiler resolve a profile the scenario's expectations did not read, and the smoke failed on a clean tree. All 13 scenarios now write a config into their own temp directory (`smoke.sh` still reads the root file by design — it is the only scenario that checks the shipped default layout, and it passes `--conf`-less on purpose). |
