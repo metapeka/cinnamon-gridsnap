@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-28 03:07+0300\n"
+"POT-Creation-Date: 2026-11-28 03:37+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1483,6 +1483,10 @@ msgid "Place the active window into the selected zone"
 msgstr ""
 
 #: zone-editor.py
+msgid "Show the zones on the desktop"
+msgstr ""
+
+#: zone-editor.py
 msgid "Bindings"
 msgstr ""
 
@@ -1797,6 +1801,14 @@ msgid "choose a zone"
 msgstr ""
 
 #: zone-editor.py
+msgid "the desktop grid did not start: {}"
+msgstr ""
+
+#: zone-editor.py
+msgid "the desktop grid shows the saved layout — save to update it"
+msgstr ""
+
+#: zone-editor.py
 msgid "Gridsnap - visual zone grid editor"
 msgstr ""
 
@@ -1844,6 +1856,11 @@ msgstr ""
 #: zone_config.py
 #, python-brace-format
 msgid "zone_config: in [{section}] direction '{direction}' has an empty shortcut"
+msgstr ""
+
+#: zone_config.py
+#, python-brace-format
+msgid "zone_config: in [{section}] unknown key '{field}': available key"
 msgstr ""
 
 #: zone_config.py
@@ -2228,6 +2245,10 @@ msgid "screen coordinates X,Y are required, not {!r}"
 msgstr ""
 
 #: zone-picker.py
+msgid "Gridsnap - zones"
+msgstr ""
+
+#: zone-picker.py
 msgid "Gridsnap - grid"
 msgstr ""
 
@@ -2249,6 +2270,26 @@ msgstr ""
 
 #: zone-picker.py
 msgid "zone-picker: cannot read stdin: {}"
+msgstr ""
+
+#: zone-picker.py
+msgid "zone-picker: cannot start the desktop grid: {}"
+msgstr ""
+
+#: zone-picker.py
+msgid "zone-picker: the desktop grid needs a compositing window manager (Cinnamon's own): without one the grid would cover the desktop"
+msgstr ""
+
+#: zone-picker.py
+msgid "zone-picker: no monitor {}"
+msgstr ""
+
+#: zone-picker.py
+msgid "zone-picker: the config has no zones to show on the desktop"
+msgstr ""
+
+#: zone-picker.py
+msgid "zone-picker: the desktop grid is shown on desktop {} ({} windows, input: {})"
 msgstr ""
 
 #: zone-picker.py
@@ -2300,11 +2341,27 @@ msgid "passive grid with the zone under the pointer highlighted (for dragging: n
 msgstr ""
 
 #: zone-picker.py
+msgid "live grid over the desktop: zone frames and labels, the zone under the pointer marked, no input"
+msgstr ""
+
+#: zone-picker.py
+msgid "show the desktop grid, or hide it again if this desktop already shows one"
+msgstr ""
+
+#: zone-picker.py
 msgid "--hud: highlight point in screen coordinates (one frame and exit)"
 msgstr ""
 
 #: zone-picker.py
 msgid "--hud: read \"X Y\" points from stdin and redraw the highlight (EOF/SIGTERM - exit)"
+msgstr ""
+
+#: zone-picker.py
+msgid "zone-picker: --toggle is incompatible with {}: it only shows or hides the desktop grid"
+msgstr ""
+
+#: zone-picker.py
+msgid "zone-picker: --grid is incompatible with {}: the desktop grid only draws"
 msgstr ""
 
 #: zone-picker.py
@@ -2340,7 +2397,7 @@ msgid "zone-picker: failed to get monitor work areas"
 msgstr ""
 
 #: zone-picker.py
-msgid "zone-picker: no monitor {}"
+msgid "zone-picker: desktop grid snapshot written to {} ({}x{}) - {}"
 msgstr ""
 
 #: zone-picker.py

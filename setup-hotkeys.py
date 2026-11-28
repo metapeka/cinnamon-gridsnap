@@ -5,12 +5,14 @@ setup-hotkeys.py — registers the zone hotkeys from zones.conf in Cinnamon.
 
 Reads the [keys] section (zone = binding), the optional [move] (direction =
 binding), [focus] (the binding of the "this zone only" mode), [tabs] (the binding
-of "the next window of the zone") and [action:<name>] (an action with a non-empty
+of "the next window of the zone"), [overlay] (the binding that shows the zone grid
+over the live desktop) and [action:<name>] (an action with a non-empty
 `key`) and creates Cinnamon custom keybindings of the form:
     zone-tiler: main          ->  python3 .../zone-tiler.py apply main --quiet
     zone-tiler: move left     ->  python3 .../zone-tiler.py move left --quiet
     zone-tiler: focus         ->  python3 .../zone-tiler.py focus main --quiet
     zone-tiler: tabs-next     ->  python3 .../zone-tiler.py tabs-next --quiet
+    zone-tiler: desktop grid ->  python3 .../zone-picker.py --toggle --quiet
     zone-tiler: action mirror ->  python3 .../zone-tiler.py action mirror --quiet
 
     python3 setup-hotkeys.py            # install/update
@@ -46,6 +48,7 @@ from zone_i18n import _  # noqa: E402  (interface strings and their translation)
 EXIT_FAIL = 1
 
 ZONEBIN = os.path.join(HERE, "zone-tiler.py")
+PICKERBIN = os.path.join(HERE, "zone-picker.py")
 LIST_SCHEMA = "org.cinnamon.desktop.keybindings"
 CB_SCHEMA = "org.cinnamon.desktop.keybindings.custom-keybinding"
 BASE = "/org/cinnamon/desktop/keybindings/custom-keybindings/"
@@ -175,6 +178,16 @@ def planned(conf=None):
             "tabs-next",
             tabs["key"],
             with_conf(f"{sys.executable} {ZONEBIN} tabs-next --quiet", conf),
+        ))
+    overlay_key = zone_config.load_overlay_key(path)
+    if overlay_key:
+        # The desktop grid: the picker draws it, and the same command hides it again.
+        # The name keeps the `zone-tiler: ` prefix of every GridSnap shortcut, so `--remove`
+        # and a reinstall own it together with the rest.
+        items.append((
+            "desktop grid",
+            overlay_key,
+            with_conf(f"{sys.executable} {PICKERBIN} --toggle --quiet", conf),
         ))
     for name, record in zone_config.load_actions(path).items():
         if not record.get("key"):

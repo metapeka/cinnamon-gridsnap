@@ -132,7 +132,9 @@ graph TD
   it draws the zones, owns the keyboard, and on arrows/`Enter`/`Esc` places the active window through
   `zone-tiler.apply_zone`/`Grid.rect`. Zones come from `zone_config.load_zones`, navigation from
   `zone_picker_nav.py`, colours from `zone_theme.py`. Started by a user hotkey (`Super+Z`) as a
-  separate process.
+  separate process. The same module is the passive grid: `--hud` for the drag watcher and `--grid`
+  (toggled by `--toggle`, bound from `[overlay]`) as the zone grid left on the live desktop, which
+  needs a compositor and takes no input.
 - **Picker navigation `zone_picker_nav.py`** — pure computations without GTK or X: initial
   selection, arrow movement through zone geometry (perpendicular overlap first), the zone under the
   cursor, edges, an empty list. Knows neither the config nor X; only `zone-picker.py` and the hot

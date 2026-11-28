@@ -77,6 +77,35 @@ class WithConfTest(unittest.TestCase):
         for _name, _binding, command in items:
             self.assertTrue(command.endswith(want), command)
 
+    def planned_with_overlay(self, key):
+        """The plan with no zones and no other sections, only the `[overlay]` binding."""
+        with mock.patch.object(
+            self.mod, "zone_pairs", lambda conf=None, *flags: []
+        ), mock.patch.object(
+            self.mod.zone_config, "load_focus_keys", lambda path: None
+        ), mock.patch.object(
+            self.mod.zone_config,
+            "load_tabs_config",
+            lambda path: {"key": None, "height": 22},
+        ), mock.patch.object(
+            self.mod.zone_config, "load_overlay_key", lambda path: key
+        ), mock.patch.object(
+            self.mod.zone_config, "load_actions", lambda path: {}
+        ):
+            return self.mod.planned("zones.conf")
+
+    def test_the_desktop_grid_runs_the_picker(self):
+        items = self.planned_with_overlay("<Super>g")
+        self.assertEqual(len(items), 1, items)
+        name, binding, command = items[0]
+        self.assertEqual(name, "desktop grid")
+        self.assertEqual(binding, "<Super>g")
+        self.assertIn("zone-picker.py", command)
+        self.assertIn("--toggle", command)
+
+    def test_an_empty_overlay_key_plans_no_shortcut(self):
+        self.assertEqual(self.planned_with_overlay(None), [])
+
 
 class InstallWriteTest(unittest.TestCase):
     """What is written to `gsettings` on install, and in which order."""
@@ -229,6 +258,8 @@ class PlannedActionsTest(unittest.TestCase):
             self.mod.zone_config,
             "load_tabs_config",
             lambda path: {"key": None, "height": 22},
+        ), mock.patch.object(
+            self.mod.zone_config, "load_overlay_key", lambda path: None
         ), mock.patch.object(
             self.mod.zone_config, "load_actions", lambda path: actions
         ):

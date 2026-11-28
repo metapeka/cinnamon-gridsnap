@@ -688,10 +688,35 @@ python3 zone-picker.py --select bottom    # 初始选中指定的区域名
 窗口的摆放走同一个布局器（`zone-tiler.apply_zone`/`Grid.rect`），所以范围
 和区域像素级一致，而且按 `Enter` 之后 `undo` 也能用。
 
+<!-- section: grid-overlay -->
+### 桌面上的同一张网格：`Super+g`
+
+选择区域会占满整个屏幕；网格也可以留在活动桌面上而不遮住它：区域边框和标牌画在任何已打开的窗口
+之上，只有指针下的区域带强调色，覆盖层不接收点击 —— 桌面在它下面照常可用。需要合成窗口管理器
+—— Cinnamon 始终开启它。
+
+```bash
+python3 zone-picker.py --toggle        # 显示网格，或再次隐藏它
+python3 zone-picker.py --grid          # 同上，但在前台运行直到被停止
+python3 zone-picker.py --grid --shot grid.png   # 网格的透明快照
+```
+
+`setup-hotkeys.py` 把切换键设为 `<Super>g`，或设为可选 `[overlay]` 段中的组合：
+
+```ini
+[overlay]
+key = <Super>g   ; 同一组合再次隐藏网格；空值关闭快捷键
+```
+
+§2 里的 gTile 也占用 `Super+G` —— 若两者都要，请在 `[overlay]` 里换个组合。
+
+编辑器里有同样的动作：**… → 放置 → 在桌面上显示区域**。网格显示的是已保存的布局，因此请先保存
+画布（有未保存修改时该行会提示）。
+
 <!-- section: picker-hotkey -->
 ### 如何在 Cinnamon 中绑定 `Super+Z`
 
-这个组合不会自动创建（`setup-hotkeys.py` 只装 `[keys]` 里的区域按键）——
+这个组合不会自动创建（`setup-hotkeys.py` 装 `[keys]` 的区域按键和网格切换键，但不装这个组合）——
 请手动设置一次：**系统设置 → 键盘 → 快捷键 →「添加自定义快捷键」**，然后填写：
 
 | 字段 | 值 |

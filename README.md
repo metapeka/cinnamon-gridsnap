@@ -747,12 +747,38 @@ python3 zone-picker.py --select bottom    # initial selection by zone name
 The window is applied through the same tiler (`zone-tiler.apply_zone`/`Grid.rect`), so the frame
 matches the zone pixel for pixel and `undo` works after `Enter`.
 
+<!-- section: grid-overlay -->
+### The same grid on the live desktop: `Super+g`
+
+The picker takes the screen; the grid can also stay on the desktop without hiding it. The zone
+frames and their plates are drawn over whatever windows are open, the zone under the pointer is the
+only accented one, and the overlay takes no clicks: the desktop stays usable under it. A compositing
+window manager is required — Cinnamon's own always is.
+
+```bash
+python3 zone-picker.py --toggle        # show the grid, or hide it again
+python3 zone-picker.py --grid          # the same, in the foreground until stopped
+python3 zone-picker.py --grid --shot grid.png   # a transparent snapshot
+```
+
+`setup-hotkeys.py` binds the toggle to `<Super>g`, or to the key of the optional `[overlay]` section:
+
+```ini
+[overlay]
+key = <Super>g   ; the same key hides the grid again; an empty value turns the shortcut off
+```
+
+The editor has the same action: **… → Placement → Show the zones on the desktop**. The grid shows
+the saved layout, so save the canvas first (the row says so when there are unsaved edits).
+
+gTile from §2 also takes `Super+G` — if you run both, change the key in `[overlay]`.
+
 <!-- section: picker-hotkey -->
 ### How to bind `Super+Z` in Cinnamon
 
-The shortcut is not created automatically (`setup-hotkeys.py` installs only the zone keys from
-`[keys]`) — set it up once by hand: **Settings → Keyboard → Shortcuts → “Add custom shortcut”** and
-fill in:
+The shortcut is not created automatically (`setup-hotkeys.py` installs the zone keys from `[keys]`
+and the grid toggle, not the picker's own shortcut) — set it up once by hand:
+**Settings → Keyboard → Shortcuts → “Add custom shortcut”** and fill in:
 
 | Field | Value |
 |---|---|

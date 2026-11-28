@@ -40,7 +40,10 @@ import argparse
 import math
 import os
 import signal
+import subprocess
 import sys
+import tempfile
+import time
 
 import cairo
 
@@ -76,6 +79,13 @@ HINT = _("arrows - select · Enter - place · Esc - cancel")
 # the desktop, while the process itself does not hang after the frame.
 HUD_ALPHA = 0.25
 HUD_HOLD_MS = 500
+
+# The desktop grid overlay (`--grid`): the pointer is polled so the zone under it lights up
+# on the live screen, and the process is toggled by a second call (`--toggle`).
+GRID_TICK_MS = 66
+# The plate behind a zone name: the grid draws over whatever windows are open, so the text
+# carries its own surface instead of a full-screen wash.
+GRID_PLATE_ALPHA = 0.66
 
 EXIT_OK = 0
 EXIT_FAIL = 1
@@ -287,6 +297,115 @@ def draw_zones(cr, width, height, zones, selected, caption="", hint=HINT):
         _label(cr, 16, height - (48 if hint else 30), caption, 11, True, (*THEME.rgb("accent"), 0.92))
     if hint:
         _label(cr, 16, height - 30, hint, 11, False, (*THEME.rgb("fg"), 0.72))
+
+
+def _text_size(cr, text, size, bold=False):
+    """Pixel size of a label in the theme font: the plate behind it has to fit."""
+    layout = PangoCairo.create_layout(cr)
+    layout.set_text(text, -1)
+    layout.set_font_description(Pango.FontDescription(THEME.font_desc(size, bold)))
+    return layout.get_pixel_size()
+
+
+def _plate(cr, x, y, w, h):
+    """A rounded plate for a label over the desktop: the text, not the screen, carries it."""
+    _rounded(cr, x, y, w, h, min(8.0, h / 2.0))
+    cr.set_source_rgba(*THEME.rgb("bg"), GRID_PLATE_ALPHA)
+    cr.fill_preserve()
+    cr.set_line_width(1.0)
+    cr.set_source_rgba(*THEME.rgb("fg"), 0.12)
+    cr.stroke()
+
+
+def draw_grid(cr, width, height, zones, selected, caption=""):
+    """The zone grid over the live desktop: frames and label plates, no wash over the windows.
+
+    Unlike the picker and the HUD, nothing here covers the desktop wholesale: a person keeps
+    seeing the windows underneath, which is the reason to put the grid on the screen at all.
+    The zone under the pointer is the only accent; its light fill is the feedback that moves.
+    """
+    order = sorted(range(len(zones)), key=lambda i: zones[i].w * zones[i].h, reverse=True)
+    for i in order:
+        z = zones[i]
+        x, y, w, h = z.x * width, z.y * height, z.w * width, z.h * height
+        _rounded(cr, x + 2, y + 2, max(1, w - 4), max(1, h - 4), THEME.radius)
+        # A dark under-stroke first: the light hairline alone disappears on a bright window,
+        # and the grid has to read over whatever is open.
+        cr.set_line_width(3.0)
+        cr.set_source_rgba(*THEME.rgb("bg"), 0.45)
+        cr.stroke_preserve()
+        cr.set_line_width(1.3)
+        cr.set_source_rgba(*THEME.rgb("fg"), 0.55)
+        cr.stroke()
+
+    if selected is not None and 0 <= selected < len(zones):
+        z = zones[selected]
+        x, y, w, h = z.x * width, z.y * height, z.w * width, z.h * height
+        _rounded(cr, x + 2, y + 2, max(1, w - 4), max(1, h - 4), THEME.radius)
+        cr.set_source_rgba(*THEME.rgb("accent"), 0.08)
+        cr.fill_preserve()
+        cr.set_line_width(2.2)
+        cr.set_source_rgba(*THEME.rgb("accent"), 1.0)
+        cr.stroke()
+
+    for i in order:
+        z = zones[i]
+        x, y, w, h = z.x * width, z.y * height, z.w * width, z.h * height
+        # A plate in a zone narrower than it is wider than the zone: better no label than one
+        # hanging over the neighbour. The sizes line goes only where it fits too.
+        if w < 80 or h < 44:
+            continue
+        col = THEME.zone_rgb(i)
+        name_w, name_h = _text_size(cr, z.name, 12, True)
+        sub = f"{z.w:.0%} × {z.h:.0%}"
+        if getattr(z, "binding", ""):
+            sub += f" · {z.binding}"
+        has_sub = h >= 64
+        sub_w, sub_h = _text_size(cr, sub, 9) if has_sub else (0, 0)
+        dot = 3.5
+        pad = 6
+        gap = 4
+        text_w = int(max(name_w, sub_w))
+        plate_w = min(int(w - 16), pad + 2 * dot + gap + text_w + pad)
+        plate_h = pad + int(name_h) + (int(sub_h) + 2 if has_sub else 0) + pad - 2
+        px, py = x + 8, y + 8
+        _plate(cr, px, py, plate_w, plate_h)
+        cr.save()
+        cr.rectangle(px + 1, py + 1, max(1, plate_w - 2), max(1, plate_h - 2))
+        cr.clip()
+        cr.arc(px + pad + dot, py + pad + name_h / 2.0, dot, 0, 2 * math.pi)
+        cr.set_source_rgba(col[0], col[1], col[2], 0.95)
+        cr.fill()
+        text_x = px + pad + 2 * dot + gap
+        _label(cr, text_x, py + pad - 1, z.name, 12, True, (*THEME.rgb("fg"), 0.96))
+        if has_sub:
+            _label(
+                cr,
+                text_x,
+                py + pad + name_h + 1,
+                sub,
+                9,
+                False,
+                (*THEME.rgb("fg_muted"), 0.95),
+            )
+        cr.restore()
+
+    if caption:
+        cap_w, cap_h = _text_size(cr, caption, 11, True)
+        _plate(cr, 16, height - 34, cap_w + 16, cap_h + 10)
+        _label(cr, 24, height - 34 + 5, caption, 11, True, (*THEME.rgb("accent"), 0.98))
+
+
+def write_grid_shot(path, width, height, zones, caption=""):
+    """Render the desktop grid into a transparent PNG: what the compositor would lay over the screen."""
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(width), int(height))
+    cr = cairo.Context(surface)
+    cr.set_operator(cairo.OPERATOR_SOURCE)
+    cr.set_source_rgba(0, 0, 0, 0)
+    cr.paint()
+    cr.set_operator(cairo.OPERATOR_OVER)
+    draw_grid(cr, width, height, zones, None, caption)
+    surface.write_to_png(path)
 
 
 def draw_overlay(cr, width, height, zones, selected, caption=""):
@@ -624,19 +743,22 @@ class Hud:
     The backdrop is translucent so that the grid does not cover the window being dragged.
     """
 
-    def __init__(self, zones, wa, caption="", scale=1):
+    def __init__(self, zones, wa, caption="", scale=1, style="hud"):
         self.zones = zones
         # The monitor work area is in physical X pixels: both the points from the watcher
         # (`set_point`) and the `--shot` snapshot come in them.
         self.wa = wa
         self.scale = zu.scale_value(scale)  # the monitor scale: the window is logical
         self.caption = caption
+        # "hud" — the drag surface: a quarter backdrop over the whole screen;
+        # "grid" — the desktop grid: no wash at all, the windows stay visible.
+        self.style = style
         self.selected = None
         self._buf = ""
         self.input_mode = _("none")
 
         self.win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
-        title = _("Gridsnap - grid")
+        title = _("Gridsnap - zones") if style == "grid" else _("Gridsnap - grid")
         if caption:
             title += f" ({caption})"
         self.win.set_title(title)
@@ -737,6 +859,14 @@ class Hud:
 
     def on_draw(self, widget, cr):
         alloc = widget.get_allocation()
+        if self.style == "grid":
+            # Clear to transparent: with a compositor the desktop shows through everywhere.
+            cr.set_operator(cairo.OPERATOR_SOURCE)
+            cr.set_source_rgba(0, 0, 0, 0)
+            cr.paint()
+            cr.set_operator(cairo.OPERATOR_OVER)
+            draw_grid(cr, alloc.width, alloc.height, self.zones, self.selected, self.caption)
+            return False
         # OPERATOR_SOURCE: the backdrop replaces the window contents entirely. With a compositor
         # the desktop shows through HUD_ALPHA, without one — an even dark backdrop
         # rather than the leftovers of the previous frame.
@@ -779,6 +909,207 @@ def follow_stdin(hud):
 
     for signum in (signal.SIGTERM, signal.SIGINT):
         GLib.unix_signal_add(GLib.PRIORITY_HIGH, signum, on_quit)
+
+
+# ------------------------------------------------------- desktop grid overlay
+
+
+def grid_pid_path(workspace):
+    """The pid file of the desktop grid of one workspace.
+
+    ``$XDG_RUNTIME_DIR/gridsnap/grid-<desktop>.pid`` — per desktop, not per user: the overlay
+    shows the grid of the desktop it was asked on, so a toggle on another desktop neither
+    kills it nor hides the grid just asked for.
+    """
+    base = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+    directory = os.path.join(base, "gridsnap")
+    try:
+        os.makedirs(directory, exist_ok=True)
+    except OSError:
+        directory = tempfile.gettempdir()
+    return os.path.join(directory, "grid-%s.pid" % ("conf" if workspace is None else workspace))
+
+
+def grid_pid(path):
+    """The pid of the running desktop grid from its file, or ``None``.
+
+    A stale file (the process died) and a pid that belongs to something else are ``None``:
+    the command line is checked for ``zone-picker`` and ``--grid``, so a recycled pid cannot
+    make the toggle kill an unrelated program.
+    """
+    try:
+        with open(path, encoding="utf-8") as handle:
+            pid = int(handle.read().strip())
+    except (OSError, ValueError):
+        return None
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return None
+    try:
+        with open("/proc/%d/cmdline" % pid, "rb") as handle:
+            cmdline = handle.read().decode("utf-8", "replace")
+    except OSError:
+        return pid  # no /proc: the pid answered, and there is nothing better to ask
+    if "zone-picker" in cmdline and "--grid" in cmdline:
+        return pid
+    return None
+
+
+def stop_grid(path):
+    """Stop the desktop grid recorded in `path`; ``True`` when a process was asked to stop."""
+    pid = grid_pid(path)
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+    if pid is None:
+        return False
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        return False
+    for _attempt in range(25):
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            break
+        time.sleep(0.02)
+    return True
+
+
+def start_grid(conf, workspace, monitor=None, path=None, spawn=None):
+    """Start the desktop grid detached; the pid written to the file, or ``None``."""
+    command = [sys.executable, os.path.abspath(__file__), "--grid", "--conf", conf]
+    if workspace is not None:
+        command += ["--workspace", str(workspace)]
+    if monitor is not None:
+        command += ["--monitor", str(monitor)]
+    path = path or grid_pid_path(workspace)
+    try:
+        if spawn is None:
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        else:
+            process = spawn(command)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(str(process.pid))
+    except OSError as exc:
+        print(
+            _("zone-picker: cannot start the desktop grid: {}").format(exc),
+            file=sys.stderr,
+        )
+        return None
+    return process.pid
+
+
+def toggle_grid(conf, workspace, monitor=None, path=None, spawn=None):
+    """``--toggle``: hide the grid of this desktop if it is shown, otherwise show it."""
+    path = path or grid_pid_path(workspace)
+    if stop_grid(path):
+        return EXIT_OK
+    if start_grid(conf, workspace, monitor, path, spawn) is None:
+        return EXIT_FAIL
+    return EXIT_OK
+
+
+class GridOverlay:
+    """The desktop grid: one window per monitor, the zone under the pointer marked.
+
+    The pointer is polled instead of fed from outside: the desktop grid runs on its own
+    (the picker, the editor and the hot corners are not involved), and a global position
+    is the one thing X11 gives cheaply here.
+    """
+
+    def __init__(self, windows, monitors, scales):
+        self.windows = windows
+        self.monitors = monitors
+        self.scales = scales
+
+    def start(self, interval=GRID_TICK_MS):
+        self.tick()
+        GLib.timeout_add(interval, self.tick)
+
+    def tick(self):
+        point = pointer_point()
+        if point is not None:
+            physical = pointer_physical(point, self.monitors, self.scales)
+            for hud in self.windows:
+                hud.set_point(physical)
+        return True
+
+
+def run_desktop_grid(conf, workspace, outputs, monitors, scales, monitor=None):
+    """The ``--grid`` process: build a grid window per monitor and keep it until SIGTERM."""
+    # Without a compositor the window has no alpha visual: the "transparent" clear turns
+    # opaque and the grid covers the desktop instead of drawing over it. A persistent window
+    # that blacks out the screen is worse than no grid, so it is refused, not degraded.
+    screen = Gdk.Screen.get_default()
+    if screen is not None and not screen.is_composited():
+        fail(
+            _(
+                "zone-picker: the desktop grid needs a compositing window manager (Cinnamon's own): without one the grid would cover the desktop"
+            )
+        )
+    if monitor is not None and not 0 <= monitor < len(outputs):
+        fail(_("zone-picker: no monitor {}").format(monitor))
+    indices = range(len(outputs)) if monitor is None else [monitor]
+    windows = []
+    for index in indices:
+        output, wa = outputs[index]
+        grid, screen_profile, desk_profile = screen_grid(conf, output, workspace)
+        zones = zones_from_grid(grid, output)
+        if not zones:
+            continue
+        windows.append(
+            Hud(
+                zones,
+                wa,
+                hud_caption(desk_profile, output, screen_profile),
+                zu.scale_at(scales, index),
+                style="grid",
+            )
+        )
+    if not windows:
+        fail(_("zone-picker: the config has no zones to show on the desktop"))
+    path = grid_pid_path(workspace)
+    try:
+        # Our own pid: the toggle's file may hold the parent's guess, and this is the truth.
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(str(os.getpid()))
+    except OSError:
+        pass
+
+    def on_quit(_signum=None):
+        Gtk.main_quit()
+        return False
+
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        GLib.unix_signal_add(GLib.PRIORITY_HIGH, signum, on_quit)
+    GridOverlay(windows, monitors, scales).start()
+    print(
+        _(
+            "zone-picker: the desktop grid is shown on desktop {} ({} windows, input: {})"
+        ).format(
+            workspace if workspace is not None else "?",
+            len(windows),
+            windows[0].input_mode,
+        ),
+        file=sys.stderr,
+    )
+    Gtk.main()
+    # Only our own file: a newer grid of the same desktop may have taken it over already.
+    if grid_pid(path) == os.getpid():
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    return EXIT_OK
 
 
 # ------------------------------------------------------------------------- CLI
@@ -844,6 +1175,20 @@ def parse_args(argv):
         ),
     )
     ap.add_argument(
+        "--grid",
+        action="store_true",
+        help=_(
+            "live grid over the desktop: zone frames and labels, the zone under the pointer marked, no input"
+        ),
+    )
+    ap.add_argument(
+        "--toggle",
+        action="store_true",
+        help=_(
+            "show the desktop grid, or hide it again if this desktop already shows one"
+        ),
+    )
+    ap.add_argument(
         "--at",
         metavar="X,Y",
         type=point_spec,
@@ -865,16 +1210,42 @@ def parse_args(argv):
 # Interactive-mode flags: in the HUD they make no sense — the HUD selects nothing,
 # places nothing and prints nothing about placing (--quiet only keeps silent, so it is harmless).
 HUD_INCOMPATIBLE = ("select", "window", "dry_run", "verify")
+# The desktop grid is passive too; a snapshot is its one extra (`--grid --shot`).
+GRID_INCOMPATIBLE = HUD_INCOMPATIBLE + ("hud", "at", "follow")
+# The toggle starts or stops a process: nothing else may come with it (a stray `--grid`
+# is harmless and means the same).
+TOGGLE_INCOMPATIBLE = GRID_INCOMPATIBLE + ("shot",)
 
 
 def validate_args(ap, args):
     """Check the combinations of modes; a bad one is an argument error (code 2).
 
-    ``--hud`` is a separate passive mode: it does not move windows (hence there is no
-    ``--select``/``--window``/``--dry-run``/``--verify``) and does not work without
-    a point source. ``ap.error`` prints usage and exits with code 2 — the same
-    contract as the other parse errors.
+    ``--hud`` and ``--grid`` are passive modes: they move no windows (hence no
+    ``--select``/``--window``/``--dry-run``/``--verify``), and ``--at``/``--follow`` belong
+    to the HUD alone. ``--toggle`` only starts or stops the desktop grid, so a snapshot,
+    a window or a point make no sense with it. ``ap.error`` prints usage and exits with
+    code 2 — the same contract as the other parse errors.
     """
+    if args.toggle:
+        bad = [name for name in TOGGLE_INCOMPATIBLE if getattr(args, name)]
+        if bad:
+            flags = ", ".join("--" + name.replace("_", "-") for name in bad)
+            ap.error(
+                _(
+                    "zone-picker: --toggle is incompatible with {}: it only shows or hides the desktop grid"
+                ).format(flags)
+            )
+        return
+    if args.grid:
+        bad = [name for name in GRID_INCOMPATIBLE if getattr(args, name)]
+        if bad:
+            flags = ", ".join("--" + name.replace("_", "-") for name in bad)
+            ap.error(
+                _(
+                    "zone-picker: --grid is incompatible with {}: the desktop grid only draws"
+                ).format(flags)
+            )
+        return
     if not args.hud:
         if args.at is not None or args.follow:
             ap.error(_("zone-picker: --at and --follow only work together with --hud"))
@@ -918,6 +1289,11 @@ def main(argv=None):
     # and the grid shown do not diverge.
     workspace = zt.resolve_workspace(args.workspace)
 
+    if args.toggle:
+        # No window of our own: the toggle either stops the grid of this desktop or starts
+        # one detached, so nothing here needs GTK or a main loop.
+        return toggle_grid(conf, workspace, args.monitor)
+
     try:
         Gtk.init()
     except Exception as exc:
@@ -930,6 +1306,27 @@ def main(argv=None):
         fail(_("zone-picker: failed to get monitor work areas"))
     # The scales are in the same order as the areas (an empty list without GDK = scale 1).
     scales = zt.monitor_scales()
+    if args.grid:
+        if args.shot:
+            # A still of the desktop grid: a transparent PNG, so it can be laid over any
+            # picture to show what the overlay adds (tests and the docs use it that way).
+            index = 0 if args.monitor is None else args.monitor
+            if not 0 <= index < len(outputs):
+                fail(_("zone-picker: no monitor {}").format(index))
+            output, wa = outputs[index]
+            grid, screen_profile, desk_profile = screen_grid(conf, output, workspace)
+            zones = zones_from_grid(grid, output)
+            if not zones:
+                fail(_("zone-picker: the config has no zones to show on the desktop"))
+            caption = hud_caption(desk_profile, output, screen_profile)
+            write_grid_shot(args.shot, wa[2], wa[3], zones, caption)
+            print(
+                _("zone-picker: desktop grid snapshot written to {} ({}x{}) - {}").format(
+                    args.shot, wa[2], wa[3], describe_grid(zones, caption)
+                )
+            )
+            return EXIT_OK
+        return run_desktop_grid(conf, workspace, outputs, monitors, scales, args.monitor)
     win_id = args.window
     if win_id is None and not args.shot and not args.hud:
         win_id = active_window_quiet()

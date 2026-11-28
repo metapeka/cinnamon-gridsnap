@@ -490,7 +490,9 @@ class HotkeyNamesTest(unittest.TestCase):
         def fake_pairs(conf=None, *flags):
             return pairs[flags]
 
-        with mock.patch.object(self.mod, "zone_pairs", fake_pairs):
+        with mock.patch.object(self.mod, "zone_pairs", fake_pairs), mock.patch.object(
+            self.mod.zone_config, "load_overlay_key", lambda path: None
+        ):
             items = self.mod.planned("/tmp/zones.conf")
         self.assertEqual([name for name, _binding, _cmd in items], ["main", "move left"])
         self.assertIn(" move left --quiet", items[1][2])

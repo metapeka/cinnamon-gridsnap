@@ -161,6 +161,8 @@ class FocusHotkeyPlanTest(unittest.TestCase):
         }
         with mock.patch.object(
             self.mod, "zone_pairs", lambda conf=None, *flags: pairs[flags]
+        ), mock.patch.object(
+            self.mod.zone_config, "load_overlay_key", lambda path: None
         ):
             return self.mod.planned(self.path)
 

@@ -31,10 +31,13 @@ hotkey registration.
 - The **…** menu holds everything else, grouped by what it does: **From the gallery…**; **Theme**
   (**From the wallpaper…**, **Window controls…**, **Reload theme.conf**); **Placement** (**Place
   the window on another monitor…** — monitor → zone, through `apply --monitor <output>`, after
-  saving unsaved edits — and **Place the active window into the selected zone**); **Bindings**
+  saving unsaved edits — **Place the active window into the selected zone**, and **Show the zones on
+  the desktop**, which runs the picker's `--toggle` with this config: the grid the editor draws on
+  its canvas, over the live desktop, until the same row or `<Super>g` hides it again); **Bindings**
   (**Workspace profiles…**, **Monitor profiles…**, **Apply hotkeys in Cinnamon**). **Clear all…**
   stands behind its own gap, in the danger colour with a warning icon, and asks for confirmation
-  first; it is never the row under a pointer that was aiming at a harmless item.
+  first; it is never the row under a pointer that was aiming at a harmless item. The desktop grid
+  reads the saved config, so the row says so when the canvas has unsaved edits.
 - **Templates** is a two-column grid of tiles: each tile draws the template's zone rectangles
   (`zone_menu.thumb_rects`) above its name, and "blank slate" is a dashed frame. The picture is
   built from the same `templates()` list that applies the layout, so it cannot drift from the

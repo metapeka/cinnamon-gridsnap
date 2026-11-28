@@ -187,7 +187,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            xvfb muffin x11-utils xdotool dbus cinnamon-settings-daemon \
+            xvfb muffin picom x11-utils xdotool dbus cinnamon-settings-daemon \
             python3-gi gir1.2-gtk-3.0 gir1.2-pango-1.0 python3-cairo python3-gi-cairo
       # Дымовые сценарии поднимают Xvfb и muffin: в CI окно иногда не успевает
       # получить геометрию от оконного менеджера, и проверка падает на тайминге,
@@ -201,6 +201,11 @@ jobs:
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-picker.sh
       - name: Дымовой тест горячих краёв
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-hotcorners.sh
+      # Сетка на живом рабочем столе: свой Xvfb, picom как композитор и белое окно вместо
+      # рабочего стола. Проверяется прозрачность (окно видно сквозь сетку), подсветка зоны
+      # под курсором и --toggle (окно, pid-файл, процесс).
+      - name: Дымовой тест сетки на рабочем столе
+        run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-grid.sh
       - name: Дымовой тест двух мониторов
         run: dbus-run-session -- sh tests/run-smoke.sh tests/smoke-monitors.sh
       - name: Дымовой тест исключений окон

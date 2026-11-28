@@ -7,7 +7,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2026-11-26 13:03+0300\n"
+"POT-Creation-Date: 2026-11-28 03:35+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -88,8 +88,8 @@ msgstr ""
 msgid ""
 "B<gridsnap-picker> [B<--conf> I<PATH>] [B<--monitor> I<N>] [B<--window> "
 "I<XID>] [B<--select> I<ZONE>] [B<--workspace> I<N>|current|conf] [B<--hud> "
-"[B<--at> I<X,Y> | B<--follow>]] [B<--dry-run>] [B<--verify>] [B<--quiet>] "
-"[B<--shot> I<FILE.png>]"
+"[B<--at> I<X,Y> | B<--follow>]] [B<--grid> | B<--toggle>] [B<--dry-run>] "
+"[B<--verify>] [B<--quiet>] [B<--shot> I<FILE.png>]"
 msgstr ""
 
 #. type: Plain text
@@ -188,7 +188,7 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:72 man/gridsnap.1:390
+#: man/gridsnap.1:72 man/gridsnap.1:407
 #, no-wrap
 msgid "B<apply >I<ZONE>"
 msgstr ""
@@ -207,7 +207,7 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:82 man/gridsnap.1:395
+#: man/gridsnap.1:82 man/gridsnap.1:412
 #, no-wrap
 msgid "B<focus [>I<ZONE>B<]>"
 msgstr ""
@@ -772,14 +772,43 @@ msgid ""
 "overlay to PNG and exits without interaction."
 msgstr ""
 
+#. type: Plain text
+#: man/gridsnap.1:366
+msgid ""
+"B<--hud> is the passive grid of the drag watcher: B<--at> I<X,Y> marks one "
+"point and exits, B<--follow> reads I<X Y> lines from standard input until "
+"end of file or B<SIGTERM>. It takes no focus and no input."
+msgstr ""
+
+#. type: Plain text
+#: man/gridsnap.1:376
+msgid ""
+"B<--grid> leaves the zone grid on the live desktop: the frames and the label "
+"plates are drawn over whatever windows are open, so the desktop and the "
+"windows stay visible; the zone under the pointer is the only accented "
+"one. The window takes no input, and nothing is placed. A compositing window "
+"manager is required — without one the window has no alpha and would cover "
+"the desktop, so the command refuses with code 1. B<--toggle> shows that "
+"grid, or hides it again if this desktop already shows one; the grid of "
+"another desktop is left alone. B<setup-hotkeys> binds the toggle to the key "
+"from B<[overlay]>."
+msgstr ""
+
+#. type: Plain text
+#: man/gridsnap.1:379
+msgid ""
+"B<--grid --shot> I<FILE.png> writes the grid as a transparent PNG: the same "
+"frames and plates without a background, for checks and pictures."
+msgstr ""
+
 #. type: SS
-#: man/gridsnap.1:362
+#: man/gridsnap.1:379
 #, no-wrap
 msgid "gridsnap-hotcorners — zone highlighting while dragging a window"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:367
+#: man/gridsnap.1:384
 msgid ""
 "Dragging a window by its title bar highlights the zone under the cursor, and "
 "releasing drops the window into it. It is a separate process: not needed for "
@@ -788,7 +817,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:376
+#: man/gridsnap.1:393
 msgid ""
 "X11 does not report “a window is being dragged”, so the watcher listens to "
 "XInput2 raw events on the root window (they arrive even when the device is "
@@ -801,7 +830,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:381
+#: man/gridsnap.1:398
 msgid ""
 "B<--no-hud> turns the highlighting off (the window is still dropped on "
 "release, I<edge-tiling> is not touched), B<--dry-run> prints what the "
@@ -810,26 +839,26 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:381
+#: man/gridsnap.1:398
 #, no-wrap
 msgid "gridsnap-ctl — the daemon's IPC client"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:384
+#: man/gridsnap.1:401
 msgid ""
 "Talks to the UNIX socket of B<gridsnap-daemon>: one JSON command per "
 "connection, the reply is also a JSON line. Commands:"
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:384
+#: man/gridsnap.1:401
 #, no-wrap
 msgid "B<status>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:390
+#: man/gridsnap.1:407
 msgid ""
 "The daemon's state: I<conf>, I<version>, I<reflow>, I<profile> (I<null> for "
 "now), I<monitors> (work areas), I<zones> (fractions 0..1), I<zones_px> "
@@ -838,7 +867,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:395
+#: man/gridsnap.1:412
 msgid ""
 "Put a window into a zone: B<--window> I<XID> (the active window by default), "
 "B<--monitor> I<N>. A success is recorded in the daemon's tracker, so closing "
@@ -846,7 +875,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:402
+#: man/gridsnap.1:419
 msgid ""
 "\"Only this zone\" mode: minimize all windows of the same workspace and "
 "monitor except the target (B<--window> I<XID>, the active one by default)  "
@@ -856,35 +885,35 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:402
+#: man/gridsnap.1:419
 #, no-wrap
 msgid "B<reload>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:405
+#: man/gridsnap.1:422
 msgid "Re-read I<zones.conf> (grid, rules, reflow); the monitor cache is dropped."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:405
+#: man/gridsnap.1:422
 #, no-wrap
 msgid "B<quit>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:408
+#: man/gridsnap.1:425
 msgid "Ask the daemon to terminate after the current event."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:408
+#: man/gridsnap.1:425
 #, no-wrap
 msgid "B<watch>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:422
+#: man/gridsnap.1:439
 msgid ""
 "Subscribe to the daemon's events and print them: one JSON line per event on "
 "stdout until the connection is closed (B<Ctrl-C> — exit code 0). The "
@@ -901,20 +930,20 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:425
+#: man/gridsnap.1:442
 msgid ""
 "B<--socket> I<PATH> sets the socket path, B<--raw> prints the reply on one "
 "line, B<--quiet> prints nothing on success."
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:425
+#: man/gridsnap.1:442
 #, no-wrap
 msgid "setup-hotkeys — Cinnamon hotkeys"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:442
+#: man/gridsnap.1:459
 msgid ""
 "Reads B<[keys]> through B<gridsnap-tiler keys> (and B<[move]> — through "
 "B<keys --move>) and creates Cinnamon custom hotkeys (the "
@@ -936,37 +965,37 @@ msgid ""
 msgstr ""
 
 #. type: SH
-#: man/gridsnap.1:442
+#: man/gridsnap.1:459
 #, no-wrap
 msgid "OPTIONS"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:445
+#: man/gridsnap.1:462
 msgid ""
 "Keys of B<gridsnap-tiler> (common to all its commands unless stated "
 "otherwise):"
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:445
+#: man/gridsnap.1:462
 #, no-wrap
 msgid "B<-h, --help>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:448
+#: man/gridsnap.1:465
 msgid "Help on the arguments and exit."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:448
+#: man/gridsnap.1:465
 #, no-wrap
 msgid "B<--conf>I< PATH>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:453
+#: man/gridsnap.1:470
 msgid ""
 "The configuration file. By default I<$XDG_CONFIG_HOME/gridsnap/zones.conf>, "
 "and if it does not exist — I<zones.conf> next to the code. The flag carries "
@@ -974,13 +1003,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:453
+#: man/gridsnap.1:470
 #, no-wrap
 msgid "B<--monitor>I< N>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:458
+#: man/gridsnap.1:475
 msgid ""
 "The monitor number (0 by default). Used by the B<list>, B<apply>, B<stack> "
 "and B<action> commands (for an action — the screen on which the zone is "
@@ -988,85 +1017,85 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:458
+#: man/gridsnap.1:475
 #, no-wrap
 msgid "B<--window>I< XID>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:462
+#: man/gridsnap.1:479
 msgid ""
 "The window identifier for B<apply>, B<focus> and B<action>: decimal or "
 "I<0x…>. The active window by default."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:462
+#: man/gridsnap.1:479
 #, no-wrap
 msgid "B<--off>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:466
+#: man/gridsnap.1:483
 msgid ""
 "B<focus>: explicitly leave \"only this zone\" mode (restore what the mode "
 "minimized) instead of entering it."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:466
+#: man/gridsnap.1:483
 #, no-wrap
 msgid "B<--by>I< auto|rules|order>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:469
+#: man/gridsnap.1:486
 msgid "How windows are chosen for B<arrange> (I<auto> by default), see above."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:469
+#: man/gridsnap.1:486
 #, no-wrap
 msgid "B<--all>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:472
+#: man/gridsnap.1:489
 msgid "B<undo>: roll back the whole history instead of the last operation."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:472
+#: man/gridsnap.1:489
 #, no-wrap
 msgid "B<--no-hotkeys>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:475
+#: man/gridsnap.1:492
 msgid "B<profile use>: do not register hotkeys after activating the profile."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:475
+#: man/gridsnap.1:492
 #, no-wrap
 msgid "B<--json>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:478
+#: man/gridsnap.1:495
 msgid ""
 "B<profile export>: print JSON to stdout instead of writing a file. B<profile "
 "gallery>: the same JSON instead of a table."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:478
+#: man/gridsnap.1:495
 #, no-wrap
 msgid "B<--name>I< NAME>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:483
+#: man/gridsnap.1:500
 msgid ""
 "B<profile import>: the profile name; taken from the JSON by "
 "default. B<profile from-gallery>: the name of the profile to copy the layout "
@@ -1074,66 +1103,66 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:483
+#: man/gridsnap.1:500
 #, no-wrap
 msgid "B<--dry-run>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:486
+#: man/gridsnap.1:503
 msgid "Only compute the frame: do not move the window, write no history."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:486
+#: man/gridsnap.1:503
 #, no-wrap
 msgid "B<--verify>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:490
+#: man/gridsnap.1:507
 msgid ""
 "Re-read the real window geometry after the layout and compare it with the "
 "zone."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:490
+#: man/gridsnap.1:507
 #, no-wrap
 msgid "B<--quiet>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:493
+#: man/gridsnap.1:510
 msgid "Do not print success messages (in B<--help> the description is not shown)."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:493
+#: man/gridsnap.1:510
 #, no-wrap
 msgid "B<--version>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:496
+#: man/gridsnap.1:513
 msgid "Prints I<zone-tiler 0.3.0> and exits."
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:499
+#: man/gridsnap.1:516
 msgid ""
 "The keys of the other commands are listed in the COMMANDS section; each of "
 "them also has B<-h> and B<--version>."
 msgstr ""
 
 #. type: SH
-#: man/gridsnap.1:499
+#: man/gridsnap.1:516
 #, no-wrap
 msgid "CONFIGURATION"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:507
+#: man/gridsnap.1:524
 msgid ""
 "The configuration is a single UTF-8 INI file, I<zones.conf>. By default "
 "I<$XDG_CONFIG_HOME/gridsnap/zones.conf> is taken (usually "
@@ -1145,13 +1174,13 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:507
+#: man/gridsnap.1:524
 #, no-wrap
 msgid "[grid]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:511
+#: man/gridsnap.1:528
 msgid ""
 "Grid lines: B<cols> and B<rows> — increasing lists of fractions separated by "
 "a comma, a space or a semicolon; the last line must be I<1.0>. Needed only "
@@ -1159,26 +1188,26 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:511
+#: man/gridsnap.1:528
 #, no-wrap
 msgid "[zones]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:514
+#: man/gridsnap.1:531
 msgid ""
 "Zone name = one of two forms (zone names are lowercased — that is how "
 "ConfigParser works):"
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:515
+#: man/gridsnap.1:532
 #, no-wrap
 msgid "B<x, y, w, h>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:518
+#: man/gridsnap.1:535
 msgid ""
 "A free rectangle as fractions of the work area: I<0 E<lt>= x E<lt> 1>, I<0 "
 "E<lt>= y E<lt> 1>, I<w E<gt> 0>, I<h E<gt> 0>, I<x+w E<lt>= 1>, I<y+h E<lt>= "
@@ -1186,31 +1215,31 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:518
+#: man/gridsnap.1:535
 #, no-wrap
 msgid "B<c0:c1, r0:r1>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:521
+#: man/gridsnap.1:538
 msgid ""
 "A range of grid cells: indices of the B<cols> and B<rows> lines (I<0 E<lt>= "
 "c0 E<lt> c1 E<lt>= number of columns>). Read for compatibility."
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:524
+#: man/gridsnap.1:541
 msgid "At least one zone is required."
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:524
+#: man/gridsnap.1:541
 #, no-wrap
 msgid "[rules]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:532
+#: man/gridsnap.1:549
 msgid ""
 "The section is optional. Auto-tiling rules: I<selector = zone name>. A "
 "selector is a case-insensitive glob on I<WM_CLASS> or I<re:E<lt>regexE<gt>> "
@@ -1222,13 +1251,13 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:532
+#: man/gridsnap.1:549
 #, no-wrap
 msgid "[ignore]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:540
+#: man/gridsnap.1:557
 msgid ""
 "The section is optional. Exclusion windows: I<selector = note>. The "
 "selectors are the same as in B<[rules]> (a glob on I<WM_CLASS> or "
@@ -1240,26 +1269,26 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:540
+#: man/gridsnap.1:557
 #, no-wrap
 msgid "[keys]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:543
+#: man/gridsnap.1:560
 msgid ""
 "Hotkeys: I<zone name = Cinnamon hotkey>, for example "
 "I<E<lt>SuperE<gt>E<lt>AltE<gt>1>."
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:543
+#: man/gridsnap.1:560
 #, no-wrap
 msgid "[move]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:548
+#: man/gridsnap.1:565
 msgid ""
 "The section is optional. Moving a window into a neighbouring zone: "
 "I<direction = Cinnamon hotkey>, the directions are I<left>, I<right>, I<up>, "
@@ -1268,13 +1297,13 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:548
+#: man/gridsnap.1:565
 #, no-wrap
 msgid "[focus]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:556
+#: man/gridsnap.1:573
 msgid ""
 "The section is optional. B<key> — the hotkey of \"only this zone\" mode in "
 "Cinnamon syntax; B<zone> — the zone the window is put into "
@@ -1286,13 +1315,13 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:556
+#: man/gridsnap.1:573
 #, no-wrap
 msgid "[tabs]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:567
+#: man/gridsnap.1:584
 msgid ""
 "The section is optional. B<key> — the hotkey for \"the next window of the "
 "zone\" (the B<tabs-next> command) in Cinnamon syntax; B<height> — the tab "
@@ -1307,26 +1336,45 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:567
+#: man/gridsnap.1:584
+#, no-wrap
+msgid "[overlay]"
+msgstr ""
+
+#. type: Plain text
+#: man/gridsnap.1:593
+msgid ""
+"The section is optional. B<key> — the Cinnamon hotkey that shows the zone "
+"grid over the live desktop and hides it again (the B<gridsnap-picker "
+"--toggle> command). Without the section the default I<E<lt>SuperE<gt>g> is "
+"registered; an empty value turns the shortcut off, and the grid stays "
+"reachable by hand. An unknown key in the section is a config error (code "
+"3). The section is carried over by B<setup-hotkeys> (the name \"zone-tiler: "
+"desktop grid\") and by the editor verbatim; it is not part of layout "
+"profiles."
+msgstr ""
+
+#. type: SS
+#: man/gridsnap.1:593
 #, no-wrap
 msgid "[action:E<lt>nameE<gt>]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:570
+#: man/gridsnap.1:596
 msgid ""
 "The section is optional: one section is one instance of an action, the name "
 "from I<[a-z0-9_-]> (the B<action E<lt>nameE<gt>> command). Fields:"
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:571
+#: man/gridsnap.1:597
 #, no-wrap
 msgid "B<run>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:576
+#: man/gridsnap.1:602
 msgid ""
 "Required: I<builtin:E<lt>nameE<gt>> (I<minimize-others>, I<show-window>, "
 "I<mirror>, I<terminal>) or a custom command — it is parsed by B<shlex>, "
@@ -1334,13 +1382,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:576
+#: man/gridsnap.1:602
 #, no-wrap
 msgid "B<zone>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:581
+#: man/gridsnap.1:607
 msgid ""
 "The subject zone: the window is looked for in it (the active one if it is "
 "there, otherwise the topmost by I<_NET_CLIENT_LIST>). Without the field the "
@@ -1348,46 +1396,46 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:581
+#: man/gridsnap.1:607
 #, no-wrap
 msgid "B<key>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:585
+#: man/gridsnap.1:611
 msgid ""
 "The Cinnamon hotkey for B<setup-hotkeys>; the hotkey name is \"zone-tiler: "
 "action E<lt>nameE<gt>\"."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:585
+#: man/gridsnap.1:611
 #, no-wrap
 msgid "B<command>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:589
+#: man/gridsnap.1:615
 msgid ""
 "Only for I<builtin:terminal>: what to start the terminal with "
 "(I<x-terminal-emulator> by default)."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:589
+#: man/gridsnap.1:615
 #, no-wrap
 msgid "B<axis>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:593
+#: man/gridsnap.1:619
 msgid ""
 "Only for I<builtin:mirror>: the mirror axis, I<horizontal> (the default) or "
 "I<vertical>."
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:600
+#: man/gridsnap.1:626
 msgid ""
 "An empty field, an unknown field of the section, B<command> or B<axis> not "
 "with its own action, an axis that is not in the list, a section name that is "
@@ -1397,13 +1445,13 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:600
+#: man/gridsnap.1:626
 #, no-wrap
 msgid "[workspaces]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:605
+#: man/gridsnap.1:631
 msgid ""
 "The section is optional. A grid of its own per Cinnamon workspace: "
 "I<workspace number = profile name> (EWMH numbering, from zero). The daemon "
@@ -1412,13 +1460,13 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:605
+#: man/gridsnap.1:631
 #, no-wrap
 msgid "[monitors]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:612
+#: man/gridsnap.1:638
 msgid ""
 "The section is optional. A grid of its own per screen: I<output name = "
 "profile name> (I<HDMI-1>, I<eDP-1>). The screen beats the workspace: "
@@ -1430,13 +1478,13 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:612
+#: man/gridsnap.1:638
 #, no-wrap
 msgid "[daemon]"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:616
+#: man/gridsnap.1:642
 msgid ""
 "The section is optional. B<reflow = off | neighbors> (I<off> by default; "
 "case and spaces do not matter, an unknown value is treated as I<off>). The "
@@ -1444,13 +1492,13 @@ msgid ""
 msgstr ""
 
 #. type: SS
-#: man/gridsnap.1:616
+#: man/gridsnap.1:642
 #, no-wrap
 msgid "theme.conf"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:624
+#: man/gridsnap.1:650
 msgid ""
 "An optional second INI file next to I<zones.conf>: one palette for the "
 "surfaces GridSnap draws itself — the picker overlay, the hot-corners HUD, "
@@ -1462,7 +1510,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:632
+#: man/gridsnap.1:658
 msgid ""
 "Colours are I<#RRGGBB>: I<bg> (behind everything), I<bg_panel> (the tab "
 "strip, the editor canvas), I<bg_card> (a tab, a button, an entry), "
@@ -1473,7 +1521,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:638
+#: man/gridsnap.1:664
 msgid ""
 "In B<[theme]>: B<preset> is one of I<43pr>, I<nord>, I<tokyo-night>, "
 "I<catppuccin-mocha>, I<graphite> (the B<[colors]> values override whatever "
@@ -1482,7 +1530,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:644
+#: man/gridsnap.1:670
 msgid ""
 "The editor's “From the wallpaper…” action writes this file from the desktop "
 "picture and marks its first line as generated; the running daemon then "
@@ -1492,7 +1540,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:650
+#: man/gridsnap.1:676
 msgid ""
 "The file does not theme window decorations: Muffin never reads a metacity "
 "theme, so the borders of server-side decorated windows stay as it draws "
@@ -1503,13 +1551,13 @@ msgid ""
 msgstr ""
 
 #. type: SH
-#: man/gridsnap.1:650
+#: man/gridsnap.1:676
 #, no-wrap
 msgid "EXAMPLES"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:679
+#: man/gridsnap.1:706
 #, no-wrap
 msgid ""
 "gridsnap-tiler list\n"
@@ -1537,18 +1585,19 @@ msgid ""
 "gridsnap-ctl watch\n"
 "setup-hotkeys --list\n"
 "gridsnap-picker --select top-right\n"
+"gridsnap-picker --toggle\n"
 "gridsnap-hotcorners --dry-run --verbose\n"
 "gridsnap-editor --conf ~/.config/gridsnap/zones.conf\n"
 msgstr ""
 
 #. type: SH
-#: man/gridsnap.1:680
+#: man/gridsnap.1:707
 #, no-wrap
 msgid "HOTKEYS"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:686
+#: man/gridsnap.1:713
 msgid ""
 "Hotkeys are set in the B<[keys]> section of I<zones.conf> and registered in "
 "Cinnamon by the B<setup-hotkeys> command (or by a button in the editor) as "
@@ -1559,7 +1608,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:692
+#: man/gridsnap.1:719
 msgid ""
 "The shipped I<zones.conf> has four zones and four hotkeys: I<main> — "
 "I<E<lt>SuperE<gt>E<lt>AltE<gt>1>, I<top-right> — "
@@ -1569,7 +1618,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:696
+#: man/gridsnap.1:723
 msgid ""
 "The optional B<[focus]> section gives the key of \"only this zone\" mode "
 "(B<gridsnap-tiler focus>): it is registered under the name \"zone-tiler: "
@@ -1578,7 +1627,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:701
+#: man/gridsnap.1:728
 msgid ""
 "The optional B<[tabs]> section gives the \"next window of the zone\" key "
 "(B<gridsnap-tiler tabs-next>) under the name \"zone-tiler: tabs-next\". The "
@@ -1587,7 +1636,16 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:707
+#: man/gridsnap.1:733
+msgid ""
+"The optional B<[overlay]> section gives the key that shows the zone grid "
+"over the live desktop (B<gridsnap-picker --toggle>) under the name "
+"\"zone-tiler: desktop grid\"; without the section the default "
+"I<E<lt>SuperE<gt>g> is registered. The same key hides the grid again."
+msgstr ""
+
+#. type: Plain text
+#: man/gridsnap.1:739
 msgid ""
 "B<[action:E<lt>nameE<gt>]> sections with a non-empty B<key> give action keys "
 "under the name \"zone-tiler: action E<lt>nameE<gt>\": the command is "
@@ -1597,7 +1655,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:713
+#: man/gridsnap.1:745
 msgid ""
 "Switching a profile with one key is an ordinary Cinnamon custom hotkey that "
 "calls B<gridsnap-tiler profile use E<lt>nameE<gt>>: the project does not "
@@ -1607,19 +1665,19 @@ msgid ""
 msgstr ""
 
 #. type: SH
-#: man/gridsnap.1:713
+#: man/gridsnap.1:745
 #, no-wrap
 msgid "FILES"
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:714
+#: man/gridsnap.1:746
 #, no-wrap
 msgid "I<~/.config/gridsnap/zones.conf>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:719
+#: man/gridsnap.1:751
 msgid ""
 "The active config (honouring I<$XDG_CONFIG_HOME>). If the file does not "
 "exist, I<zones.conf> next to the code (I</usr/lib/gridsnap/zones.conf>) is "
@@ -1627,13 +1685,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:719
+#: man/gridsnap.1:751
 #, no-wrap
 msgid "I<~/.config/gridsnap/theme.conf>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:725
+#: man/gridsnap.1:757
 msgid ""
 "The optional palette of the GridSnap surfaces, in the directory of the "
 "active I<zones.conf>. The editor writes it from the wallpaper and the daemon "
@@ -1642,13 +1700,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:725
+#: man/gridsnap.1:757
 #, no-wrap
 msgid "I<~/.themes/Gridsnap>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:731
+#: man/gridsnap.1:763
 msgid ""
 "The GTK 3 controls theme the editor writes (B<Window controls…> in the "
 "B<Theme> menu). The daemon refreshes it from the current palette while its "
@@ -1657,52 +1715,52 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:731
+#: man/gridsnap.1:763
 #, no-wrap
 msgid "I<~/.local/state/gridsnap/history.json>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:735
+#: man/gridsnap.1:767
 msgid ""
 "The layout history (honouring I<$XDG_STATE_HOME>): JSON, the last 20 "
 "operations, written atomically. Needed by B<undo> in a separate process."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:735
+#: man/gridsnap.1:767
 #, no-wrap
 msgid "I<$XDG_RUNTIME_DIR/gridsnap/daemon.sock>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:739
+#: man/gridsnap.1:771
 msgid ""
 "The daemon's UNIX socket (mode 0600, directory 0700). Without "
 "I<$XDG_RUNTIME_DIR> — I</tmp/gridsnap-E<lt>uidE<gt>/daemon.sock>."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:739
+#: man/gridsnap.1:771
 #, no-wrap
 msgid "I<~/.config/gridsnap/templates/*.conf>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:743
+#: man/gridsnap.1:775
 msgid ""
 "Layout profiles (honouring I<$XDG_CONFIG_HOME>; with B<--conf> I<PATH> — the "
 "I<templates> directory next to that file)."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:743
+#: man/gridsnap.1:775
 #, no-wrap
 msgid "I</usr/share/gridsnap/gallery/*.conf>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:748
+#: man/gridsnap.1:780
 msgid ""
 "Ready-made layouts shipped with the package (in a checkout — I<gallery/> "
 "next to the code). The I<$GRIDSNAP_GALLERY> variable sets a custom "
@@ -1711,13 +1769,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:748
+#: man/gridsnap.1:780
 #, no-wrap
 msgid "I</usr/lib/gridsnap>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:753
+#: man/gridsnap.1:785
 msgid ""
 "The package code: I<zone-tiler.py>, I<zone-daemon.py>, I<zone-editor.py>, "
 "I<zone-picker.py>, I<zone-tabstrip.py>, I<gridsnap-ctl>, I<setup-hotkeys.py> "
@@ -1725,13 +1783,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:753
+#: man/gridsnap.1:785
 #, no-wrap
 msgid "I</usr/bin/gridsnap-tiler>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:758
+#: man/gridsnap.1:790
 msgid ""
 "The command launchers (I<gridsnap-tiler>, I<gridsnap-daemon>, "
 "I<gridsnap-editor>, I<gridsnap-picker>, I<gridsnap-ctl>, I<setup-hotkeys>) — "
@@ -1739,32 +1797,32 @@ msgid ""
 msgstr ""
 
 #. type: SH
-#: man/gridsnap.1:758
+#: man/gridsnap.1:790
 #, no-wrap
 msgid "EXIT STATUS"
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:759
+#: man/gridsnap.1:791
 #, no-wrap
 msgid "B<0>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:763
+#: man/gridsnap.1:795
 msgid ""
 "Success. B<arrange> and B<stack> with no suitable windows and B<undo> with "
 "an empty history are 0 too."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:763
+#: man/gridsnap.1:795
 #, no-wrap
 msgid "B<1>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:769
+#: man/gridsnap.1:801
 msgid ""
 "A runtime error: no display or no active window, I<_NET_CLIENT_LIST> not "
 "read, the IPC socket could not be raised (daemon), no connection to the "
@@ -1773,26 +1831,26 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:769
+#: man/gridsnap.1:801
 #, no-wrap
 msgid "B<2>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:773
+#: man/gridsnap.1:805
 msgid ""
 "An argument error: an unknown command or zone, a bad profile name, a wrong "
 "flag.  It is reported by B<argparse> or by the command itself."
 msgstr ""
 
 #. type: TP
-#: man/gridsnap.1:773
+#: man/gridsnap.1:805
 #, no-wrap
 msgid "B<3>"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:779
+#: man/gridsnap.1:811
 msgid ""
 "A config error: the file is missing, there is no zone at all, broken "
 "numbers, fractions outside 0..1, a rule for an unknown zone, a missing or "
@@ -1801,7 +1859,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:783
+#: man/gridsnap.1:815
 msgid ""
 "B<gridsnap-ctl> has codes 0, 1 and 2; B<gridsnap-daemon> — 0, 1 (socket) and "
 "3 (config); B<gridsnap-editor> and B<gridsnap-picker> — 0 and 1 (plus 2 from "
@@ -1809,13 +1867,13 @@ msgid ""
 msgstr ""
 
 #. type: SH
-#: man/gridsnap.1:783
+#: man/gridsnap.1:815
 #, no-wrap
 msgid "SEE ALSO"
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:788
+#: man/gridsnap.1:820
 msgid ""
 "B<gridsnap-tiler>(1), B<gridsnap-daemon>(1), B<gridsnap-editor>(1), "
 "B<gridsnap-picker>(1), B<gridsnap-hotcorners>(1), B<gridsnap-ctl>(1), "
@@ -1824,7 +1882,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: man/gridsnap.1:790
+#: man/gridsnap.1:822
 msgid ""
 "The package documentation is in I</usr/share/doc/gridsnap/> (README, SPEC "
 "and I<docs/>)."

@@ -2,76 +2,114 @@
 id: zone-picker
 type: module-design
 status: active
-title: "Модуль: визуальный выбор зоны zone-picker"
+title: "Module: the visual zone picker zone-picker"
 parent: gridsnap-architecture
 depends-on: [zone-tiler, zone_config, zone_picker_nav, zone-units]
 ---
 
-_Описано вместе с реализацией (волна 2); владельцем не сверено._
+_Described together with the implementation (wave 2); not reviewed by the owner._
 
-## Ответственность
+## Responsibility
 
-`zone-picker.py` — GTK-3 оверлей визуального выбора зоны (как gTile): по горячей клавише показать рабочую
-область монитора с зонами, дать выбрать зону стрелками/мышью и вложить в неё активное окно по `Enter`.
-Окно двигается не сам, а через `zone-tiler.apply_zone`/`Grid.rect` — раскладка не дублируется.
+`zone-picker.py` is a GTK-3 overlay for visual zone selection (like gTile): a hotkey shows the
+monitor's work area with the zones, arrows or the mouse choose a zone, and `Enter` places the active
+window into it. It moves no window itself: placement goes through `zone-tiler.apply_zone`/`Grid.rect`,
+so the layout is not duplicated.
 
-## Возможности
+## Capabilities
 
-- оверлей без рамки на всю рабочую область монитора (`workarea` из `zt.monitors()`); монитор берётся по
-  активному окну, иначе под курсором, и может быть задан флагом `--monitor`;
-- арифметика зон — в **физических** пикселях X (видно на `Grid.rect` и `apply_zone`), а окно GTK —
-  логическое: `move`/`set_default_size` получают `zone_units.logical_rect`, иначе на масштабе 2 оверлей
-  вырастает вдвое и накрывает соседний экран. Точка указателя от GDK тоже логическая — перед поиском
-  монитора и начальным выделением она переводится в физические (`zone_units.physical_point`);
-- зоны читаются из `zones.conf` (`zone_config.load_zones`), рисуются в долях рабочей области с цветом из
-  палитры и подписью имени/размера/сочетания;
-- зона под курсором и текущее выделение подсвечиваются акцентом;
-- **стрелки** двигают выделение по геометрии зон, **`Enter`** вкладывает активное окно, **`Esc`** отменяет,
-  клик левой кнопкой — вложить, правой — отмена;
-- клавиатуру оверлей берёт сам (`Gdk.Seat.grab`): окно типа `DOCK` muffin держит сверху, но фокус WM ему
-  не отдаёт, поэтому без захвата стрелки ушли бы в другое окно;
-- применение окна идёт через `apply_zone`, поэтому рамка окна совпадает с зоной пиксель в пиксель, а `Enter`
-  записывает операцию в историю раскладок (работает `undo`), как обычный `zone-tiler.py apply`;
-- исключённое окно (`[ignore]` или служебный тип `_NET_WM_WINDOW_TYPE`) `Enter` не двигает: оверлей
-  сообщает в stderr и выходит с кодом 1 — та же проверка `window_excluded`, что у демона и `arrange`;
-- `--dry-run` — посчитать и напечатать целевую рамку, окно не двигать; `--conf` — другой конфиг;
-- `--shot FILE.png` — отрисовать оверлей в PNG (cairo `ImageSurface`) и выйти, без интерактива.
+- an undecorated overlay over the monitor's work area (`workarea` from `zt.monitors()`); the monitor
+  comes from the active window, otherwise from the pointer, and can be set with `--monitor`;
+- zone arithmetic is in **physical** X pixels (`Grid.rect`, `apply_zone`), while the GTK window is
+  logical: `move`/`set_default_size` get `zone_units.logical_rect`, or at scale 2 the overlay grows
+  twice and covers the neighbouring screen. The pointer point from GDK is logical too: it is
+  converted to physical before the monitor and the initial selection are chosen
+  (`zone_units.physical_point`);
+- zones come from `zones.conf` (`zone_config.load_zones`) and are drawn in fractions of the work area
+  with the palette colour and a label of name, size and key;
+- the zone under the cursor and the current selection are highlighted with the accent;
+- **arrows** move the selection by the zone geometry, **`Enter`** places the active window, **`Esc`**
+  cancels; a left click places, a right click cancels;
+- the overlay grabs the keyboard itself (`Gdk.Seat.grab`): muffin keeps a `DOCK` window above, but the
+  WM does not give it focus, so without the grab the arrows would go to another window;
+- placement goes through `apply_zone`, so the window frame matches the zone pixel for pixel, and
+  `Enter` records the operation in the layout history (`undo` works), like an ordinary
+  `zone-tiler.py apply`;
+- an excluded window (`[ignore]` or a utility `_NET_WM_WINDOW_TYPE`) is not moved by `Enter`: the
+  overlay writes to stderr and exits with code 1 — the same `window_excluded` check the daemon and
+  `arrange` use;
+- `--dry-run` computes and prints the target frame without moving the window; `--conf` takes another
+  config;
+- `--shot FILE.png` draws the overlay into a PNG (cairo `ImageSurface`) and exits, without interaction.
 
-## Режим HUD (`--hud`) для горячих краёв
+## HUD mode (`--hud`) for the hot corners
 
-Тот же оверлей, но **пассивный** — им управляет `zone-hotcorners`: во время перетаскивания клавиатуру
-держит muffin, поэтому HUD не берёт `Gdk.Seat.grab`, не просит фокус (`set_accept_focus(False)`,
-`set_focus_on_map(False)`) и прозрачен для ввода.
+The same overlay, but **passive** — `zone-hotcorners` drives it: during a drag muffin holds the
+keyboard, so the HUD takes no `Gdk.Seat.grab`, asks for no focus (`set_accept_focus(False)`,
+`set_focus_on_map(False)`) and is transparent for input.
 
-- `--hud --at X,Y` — одна отрисовка и выход (для тестов и `--shot`); точка — **физические** координаты
-  X, как её присылает `zone-hotcorners` (`XQueryPointer`), поэтому сравнивается с физической областью
-  монитора (`Hud.set_point` → `zone_at_point`); окно HUD при этом логическое (`zone_units.logical_rect`);
-- `--hud --follow` — окно живёт, читает строки `X Y` из stdin и перерисовывает подсветку без перезапуска
-  (перезапуск на каждый кадр давал бы мигание); выходит на EOF или `SIGTERM`;
-- рисуется вся сетка, подсвечивается зона под точкой (`zone_picker_nav.zone_at`); если `[workspaces]`
-  сопоставил стол профилю, в углу подпись профиля;
-- прозрачность ввода: пустой input shape (`Gdk.Window.input_shape_combine_region`) **и** флаг
-  `set_pass_through` — проверено, что одного флага мало: GDK ставит его, а X-сервер продолжает отдавать
-  окну события.
+- `--hud --at X,Y` — one frame and exit (for tests and `--shot`); the point is in **physical** X
+  coordinates as `zone-hotcorners` sends it (`XQueryPointer`), so it is compared with the monitor's
+  physical area (`Hud.set_point` → `zone_at_point`); the HUD window itself is logical
+  (`zone_units.logical_rect`);
+- `--hud --follow` — the window lives, reads `X Y` lines from stdin and redraws the highlight
+  without a restart (a restart per frame would flicker); it exits on EOF or `SIGTERM`;
+- the whole grid is drawn and the zone under the point is highlighted
+  (`zone_picker_nav.zone_at`); if `[workspaces]` binds a desktop to a profile, the profile is named
+  in the corner;
+- input transparency: an empty input shape (`Gdk.Window.input_shape_combine_region`) **and** the
+  `set_pass_through` flag — measured that the flag alone is not enough: GDK sets it while the X
+  server keeps delivering events to the window.
 
+## Desktop grid (`--grid`) and its toggle
 
-## Навигация (чистая, `zone_picker_nav.py`)
+`--grid` leaves the grid on the live desktop: the frames and the label plates are drawn over whatever
+windows are open, and the zone under the pointer is the only accented one. Nothing covers the desktop
+wholesale — a screen-wide wash would hide the windows the grid is read against.
 
-Выделение — индекс в списке зон. Вся арифметика вынесена из GTK и покрыта `tests/test_picker_nav.py`:
+- the geometry follows the editor canvas: a neutral frame (`fg` 0.55 over a `bg` 0.45 under-stroke, so
+  the line reads over a bright window), a rounded plate (`bg` 0.66) behind the name, the size and the
+  key, a 7 px hue dot as identity; the selected zone gets an `accent` 0.08 fill and a 2.2 px `accent`
+  frame;
+- one window per monitor (`Hud` with `style="grid"`), each monitor's grid resolved by the same
+  `screen_grid` (so a `[zones:<output>]` set counts); the pointer is polled every `GRID_TICK_MS`
+  (~15 Hz) and every window gets the same physical point, so the mark follows the pointer across
+  screens;
+- the window takes no input (the HUD's empty input shape and `set_pass_through`), uses a `DOCK` type
+  hint and `keep_above`, and takes no focus: the desktop stays usable under it;
+- **a compositor is required**: without one the window has no alpha visual, the transparent clear
+  turns opaque and the grid would cover the desktop — `--grid` refuses with code 1 before creating a
+  window;
+- `--grid --shot FILE.png` writes the grid as a transparent PNG: a still for checks and pictures;
+- `--toggle` starts the grid of the current desktop detached, or stops the one already shown. The pid
+  file is `$XDG_RUNTIME_DIR/gridsnap/grid-<desktop>.pid`, one per desktop, so a toggle on one desktop
+  neither kills nor hides the grid of another. A pid is trusted only when its command line names
+  `zone-picker` and `--grid`: a stale file or a recycled pid never costs an unrelated process its
+  life;
+- the grid reads the saved config once, when it starts: after editing zones, toggle it again — the
+  editor's **Show the zones on the desktop** row is the same command.
 
-- `first_index` / `clamp_index` — начальное выделение и нормализация индекса (в т.ч. пустой список → `None`);
-- `move_selection(zones, index, direction)` — сосед в направлении; кандидат — только зона, центр которой
-  лежит в нужную сторону; победитель выбирается по ключу `(нет_перекрытия_по_перпендикуляру, перпендикуляр,
-  расстояние_по_оси, индекс)`. Поэтому «вправо» из широкой `main` ведёт в правую полосу, а не в `bottom`;
-  на краю списка индекс не меняется;
-- `zone_at(zones, fx, fy)` — зона под точкой в долях; в «щели» между свободными прямоугольниками — `None`,
-  перекрывающиеся зоны — побеждает последняя нарисованная (как в редакторе).
+## Navigation (pure, `zone_picker_nav.py`)
 
-## Границы
+The selection is an index into the zone list. All arithmetic lives outside GTK and is covered by
+`tests/test_picker_nav.py`:
 
-- Только X11/EWMH и GTK 3; новых рантайм-зависимостей нет (`python3-cairo` уже нужен проекту).
-- Геометрию зон не дублирует: зоны — через `zone_config`, пиксельные рамки — через `Grid.rect`, применение —
-  через `apply_zone`.
-- Чистая логика — без GTK и X (инвариант проекта); GTK/cairo живут только в `zone-picker.py`.
-- Регистрация сочетания `Super+Z` — забота пользователя (README); `setup-hotkeys.py` ставит только клавиши
-  зон из `[keys]`.
+- `first_index` / `clamp_index` — the initial selection and index normalisation (an empty list gives
+  `None`);
+- `move_selection(zones, index, direction)` — the neighbour in a direction; the candidate must have
+  its centre on that side, and the winner is chosen by `(no_perpendicular_overlap, perpendicular,
+  axial_distance, index)`. That is why "right" from a wide `main` leads into the right column and not
+  into `bottom`; at the edge of the list the index does not move;
+- `zone_at(zones, fx, fy)` — the zone under a point in fractions; `None` in a gap between free
+  rectangles, and for overlapping zones the last one drawn wins (as in the editor).
+
+## Boundaries
+
+- X11/EWMH and GTK 3 only; no new runtime dependencies (`python3-cairo` is already required by the
+  project).
+- Zone geometry is not duplicated: zones through `zone_config`, pixel frames through `Grid.rect`,
+  placement through `apply_zone`.
+- Pure logic stays without GTK and X (a project invariant); GTK and cairo live only in
+  `zone-picker.py`.
+- The picker's own hotkey (`Super+Z` in the README) is the user's business: `setup-hotkeys.py`
+  registers the zone keys from `[keys]` and the desktop grid toggle from `[overlay]`.

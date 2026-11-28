@@ -68,6 +68,14 @@ FOCUS_SECTION = "focus"
 TABS_SECTION = "tabs"
 TABS_FIELDS = ("key", "height")
 
+# The desktop grid overlay: ``[overlay]``, ``key`` is the Cinnamon binding that shows the
+# zone grid over the live desktop and hides it again. The default applies without the
+# section, so the grid works out of the box; an empty ``key`` turns the shortcut off (the
+# overlay stays reachable as ``zone-picker.py --toggle``). Like ``[focus]``/``[tabs]`` the
+# section is not in :data:`RESERVED_SECTIONS`: the editor carries it verbatim as foreign.
+OVERLAY_SECTION = "overlay"
+DEFAULT_OVERLAY_KEY = "<Super>g"
+
 # Actions: one section is one action instance, ``[action:<name>]`` (like
 # ``[zones:<output>]`` is one set per screen). The section is not in
 # :data:`RESERVED_SECTIONS`: the editor does not edit it but carries it verbatim,
@@ -264,6 +272,32 @@ def load_move_keys(path):
             )
         keys[direction] = combo
     return keys
+
+
+def load_overlay_key(path):
+    """The ``[overlay]`` binding: the shortcut that shows the desktop grid, or ``None``.
+
+    No file or no section — :data:`DEFAULT_OVERLAY_KEY`, so the grid has a key out of the
+    box; an empty ``key`` turns the shortcut off (the overlay stays reachable by hand:
+    ``zone-picker.py --toggle``). An unknown key in the section is a config error
+    (code 3): a typo would leave a person without the shortcut and with no idea why.
+    """
+    cp = _read_conf(path, missing_ok=True)
+    if cp is None or not cp.has_section(OVERLAY_SECTION):
+        return DEFAULT_OVERLAY_KEY
+    key = DEFAULT_OVERLAY_KEY
+    for name, value in cp.items(OVERLAY_SECTION):
+        # ConfigParser lowercases the keys, so ``Key`` in the file counts too.
+        field = str(name).strip().lower()
+        if field != "key":
+            zt.fail(
+                _(
+                    "zone_config: in [{section}] unknown key '{field}': available key"
+                ).format(section=OVERLAY_SECTION, field=field),
+                zt.EXIT_CONFIG,
+            )
+        key = str(value).strip() or None
+    return key
 
 
 def load_focus_keys(path):

@@ -812,6 +812,7 @@ class Editor(Gtk.Window):
         heading(_("Placement"))
         item(_("Place the window on another monitor…"), self.open_target_menu)
         item(_("Place the active window into the selected zone"), self.on_test)
+        item(_("Show the zones on the desktop"), self.on_show_grid)
         heading(_("Bindings"))
         item(_("Workspace profiles…"), self.workspace_profiles_dialog)
         item(_("Monitor profiles…"), self.monitor_profiles_dialog)
@@ -1932,6 +1933,34 @@ class Editor(Gtk.Window):
         if not self.on_save():
             return
         self._apply(self.zones[self.selected].name)
+
+    def on_show_grid(self):
+        """Show (or hide) the zone grid over the live desktop: the picker owns that window.
+
+        The grid reads the saved config, so unsaved canvas edits are not on it — the status
+        line says so instead of leaving the difference to be discovered later.
+        """
+        command = [
+            sys.executable,
+            os.path.join(HERE, "zone-picker.py"),
+            "--toggle",
+            "--quiet",
+            "--conf",
+            os.path.abspath(self.conf_path),
+        ]
+        try:
+            subprocess.Popen(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            self.set_status(_("the desktop grid did not start: {}").format(exc))
+            return
+        if self.dirty:
+            self.set_status(_("the desktop grid shows the saved layout — save to update it"))
 
 
 # ---------------------------------------------------------------------- main

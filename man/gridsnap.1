@@ -25,7 +25,7 @@ for Cinnamon/X11
 .br
 \fBgridsnap\-picker\fP [\fB\-\-conf\fP \fIPATH\fP] [\fB\-\-monitor\fP \fIN\fP] [\fB\-\-window\fP
 \fIXID\fP] [\fB\-\-select\fP \fIZONE\fP] [\fB\-\-workspace\fP \fIN\fP|current|conf] [\fB\-\-hud\fP
-[\fB\-\-at\fP \fIX,Y\fP | \fB\-\-follow\fP]] [\fB\-\-dry\-run\fP] [\fB\-\-verify\fP] [\fB\-\-quiet\fP]
+[\fB\-\-at\fP \fIX,Y\fP | \fB\-\-follow\fP]] [\fB\-\-grid\fP | \fB\-\-toggle\fP] [\fB\-\-dry\-run\fP] [\fB\-\-verify\fP] [\fB\-\-quiet\fP]
 [\fB\-\-shot\fP \fIFILE.png\fP]
 .br
 \fBgridsnap\-hotcorners\fP [\fB\-\-conf\fP \fIPATH\fP] [\fB\-\-no\-hud\fP] [\fB\-\-dry\-run\fP]
@@ -359,6 +359,23 @@ cursor), \fB\-\-window\fP \fIXID\fP — the window to place, \fB\-\-dry\-run\fP 
 the target frame, \fB\-\-verify\fP checks the frame after placing, \fB\-\-quiet\fP
 does not print the line about the placement, \fB\-\-shot\fP \fIFILE.png\fP draws the
 overlay to PNG and exits without interaction.
+.PP
+\fB\-\-hud\fP is the passive grid of the drag watcher: \fB\-\-at\fP \fIX,Y\fP marks
+one point and exits, \fB\-\-follow\fP reads \fIX Y\fP lines from standard input
+until end of file or \fBSIGTERM\fP. It takes no focus and no input.
+.PP
+\fB\-\-grid\fP leaves the zone grid on the live desktop: the frames and the
+label plates are drawn over whatever windows are open, so the desktop and
+the windows stay visible; the zone under the pointer is the only accented
+one. The window takes no input, and nothing is placed. A compositing window
+manager is required — without one the window has no alpha and would cover
+the desktop, so the command refuses with code 1. \fB\-\-toggle\fP shows that
+grid, or hides it again if this desktop already shows one; the grid of
+another desktop is left alone. \fBsetup\-hotkeys\fP binds the toggle to the
+key from \fB[overlay]\fP.
+.PP
+\fB\-\-grid \-\-shot\fP \fIFILE.png\fP writes the grid as a transparent PNG: the
+same frames and plates without a background, for checks and pictures.
 .SS "gridsnap\-hotcorners — zone highlighting while dragging a window"
 Dragging a window by its title bar highlights the zone under the cursor, and
 releasing drops the window into it. It is a separate process: not needed for
@@ -564,6 +581,15 @@ is invisible, and the tabs would silently become invisible.  The section is
 carried over by \fBsetup\-hotkeys\fP (the name "zone\-tiler: tabs\-next") and by
 the editor — verbatim, as a foreign section; it is not part of layout
 profiles.
+.SS [overlay]
+The section is optional. \fBkey\fP — the Cinnamon hotkey that shows the zone
+grid over the live desktop and hides it again (the \fBgridsnap\-picker
+\-\-toggle\fP command). Without the section the default \fI<Super>g\fP is
+registered; an empty value turns the shortcut off, and the grid stays
+reachable by hand. An unknown key in the section is a config error (code
+3). The section is carried over by \fBsetup\-hotkeys\fP (the name
+"zone\-tiler: desktop grid") and by the editor verbatim; it is not part of
+layout profiles.
 .SS [action:<name>]
 The section is optional: one section is one instance of an action, the name
 from \fI[a\-z0\-9_\-]\fP (the \fBaction <name>\fP command). Fields:
@@ -674,6 +700,7 @@ gridsnap\-ctl focus \-\-off
 gridsnap\-ctl watch
 setup\-hotkeys \-\-list
 gridsnap\-picker \-\-select top\-right
+gridsnap\-picker \-\-toggle
 gridsnap\-hotcorners \-\-dry\-run \-\-verbose
 gridsnap\-editor \-\-conf ~/.config/gridsnap/zones.conf
 .fi
@@ -698,6 +725,11 @@ The optional \fB[tabs]\fP section gives the "next window of the zone" key
 (\fBgridsnap\-tiler tabs\-next\fP) under the name "zone\-tiler: tabs\-next". The
 key switches tabs in the zone of the active window; without a running daemon
 there is nothing to switch.
+.PP
+The optional \fB[overlay]\fP section gives the key that shows the zone grid
+over the live desktop (\fBgridsnap\-picker \-\-toggle\fP) under the name
+"zone\-tiler: desktop grid"; without the section the default \fI<Super>g\fP is
+registered. The same key hides the grid again.
 .PP
 \fB[action:<name>]\fP sections with a non\-empty \fBkey\fP give action keys
 under the name "zone\-tiler: action <name>": the command is

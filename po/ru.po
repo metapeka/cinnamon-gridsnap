@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-28 03:07+0300\n"
+"POT-Creation-Date: 2026-11-28 03:37+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: русский текст — прежний язык исходника\n"
 "Language-Team: \n"
@@ -1766,6 +1766,10 @@ msgid "Place the active window into the selected zone"
 msgstr "Вложить активное окно в выделенную зону"
 
 #: zone-editor.py
+msgid "Show the zones on the desktop"
+msgstr "Показать зоны на рабочем столе"
+
+#: zone-editor.py
 msgid "Bindings"
 msgstr "Привязки"
 
@@ -2104,6 +2108,14 @@ msgid "choose a zone"
 msgstr "выберите зону"
 
 #: zone-editor.py
+msgid "the desktop grid did not start: {}"
+msgstr "сетка рабочего стола не запустилась: {}"
+
+#: zone-editor.py
+msgid "the desktop grid shows the saved layout — save to update it"
+msgstr "сетка рабочего стола показывает сохранённую раскладку — сохраните, чтобы обновить"
+
+#: zone-editor.py
 msgid "Gridsnap - visual zone grid editor"
 msgstr "Gridsnap — визуальный редактор сетки зон"
 
@@ -2162,6 +2174,11 @@ msgid ""
 "zone_config: in [{section}] direction '{direction}' has an empty shortcut"
 msgstr ""
 "zone_config: в [{section}] у направления '{direction}' пустое сочетание"
+
+#: zone_config.py
+#, python-brace-format
+msgid "zone_config: in [{section}] unknown key '{field}': available key"
+msgstr "zone_config: в [{section}] неизвестный ключ '{field}': доступен key"
 
 #: zone_config.py
 #, python-brace-format
@@ -2603,6 +2620,10 @@ msgid "screen coordinates X,Y are required, not {!r}"
 msgstr "нужны экранные координаты X,Y, а не {!r}"
 
 #: zone-picker.py
+msgid "Gridsnap - zones"
+msgstr "Gridsnap - зоны"
+
+#: zone-picker.py
 msgid "Gridsnap - grid"
 msgstr "Gridsnap — сетка"
 
@@ -2625,6 +2646,32 @@ msgstr "мимо зон"
 #: zone-picker.py
 msgid "zone-picker: cannot read stdin: {}"
 msgstr "zone-picker: stdin не читается: {}"
+
+#: zone-picker.py
+msgid "zone-picker: cannot start the desktop grid: {}"
+msgstr "zone-picker: сетка рабочего стола не запускается: {}"
+
+#: zone-picker.py
+msgid ""
+"zone-picker: the desktop grid needs a compositing window manager (Cinnamon's "
+"own): without one the grid would cover the desktop"
+msgstr ""
+"zone-picker: сетке рабочего стола нужен композирующий оконный менеджер "
+"(свой у Cinnamon): без него сетка закрыла бы рабочий стол"
+
+#: zone-picker.py
+msgid "zone-picker: no monitor {}"
+msgstr "zone-picker: монитора {} нет"
+
+#: zone-picker.py
+msgid "zone-picker: the config has no zones to show on the desktop"
+msgstr "zone-picker: в конфиге нет зон, чтобы показать их на рабочем столе"
+
+#: zone-picker.py
+msgid ""
+"zone-picker: the desktop grid is shown on desktop {} ({} windows, input: {})"
+msgstr ""
+"zone-picker: сетка рабочего стола показана на столе {} (окон: {}, ввод: {})"
 
 #: zone-picker.py
 msgid "Visual zone picker overlay: arrows, Enter - place, Esc - cancel."
@@ -2685,6 +2732,21 @@ msgstr ""
 "и ввода)"
 
 #: zone-picker.py
+msgid ""
+"live grid over the desktop: zone frames and labels, the zone under the "
+"pointer marked, no input"
+msgstr ""
+"живая сетка на рабочем столе: рамки зон и подписи, отмечена зона под "
+"курсором, ввода нет"
+
+#: zone-picker.py
+msgid ""
+"show the desktop grid, or hide it again if this desktop already shows one"
+msgstr ""
+"показать сетку рабочего стола или снова скрыть её, если на этом столе она "
+"уже показана"
+
+#: zone-picker.py
 msgid "--hud: highlight point in screen coordinates (one frame and exit)"
 msgstr "--hud: точка подсветки в экранных координатах (один кадр и выход)"
 
@@ -2695,6 +2757,19 @@ msgid ""
 msgstr ""
 "--hud: читать точки «X Y» из stdin и перерисовывать подсветку (EOF/SIGTERM — "
 "выход)"
+
+#: zone-picker.py
+msgid ""
+"zone-picker: --toggle is incompatible with {}: it only shows or hides the "
+"desktop grid"
+msgstr ""
+"zone-picker: --toggle несовместим с {}: он только показывает или скрывает "
+"сетку рабочего стола"
+
+#: zone-picker.py
+msgid ""
+"zone-picker: --grid is incompatible with {}: the desktop grid only draws"
+msgstr "zone-picker: --grid несовместим с {}: сетка рабочего стола только рисует"
 
 #: zone-picker.py
 msgid "zone-picker: --at and --follow only work together with --hud"
@@ -2736,8 +2811,8 @@ msgid "zone-picker: failed to get monitor work areas"
 msgstr "zone-picker: не удалось получить рабочие области мониторов"
 
 #: zone-picker.py
-msgid "zone-picker: no monitor {}"
-msgstr "zone-picker: монитора {} нет"
+msgid "zone-picker: desktop grid snapshot written to {} ({}x{}) - {}"
+msgstr "zone-picker: снимок сетки рабочего стола записан в {} ({}x{}) — {}"
 
 #: zone-picker.py
 msgid "zone-picker: the config has no zones for monitor {}"
