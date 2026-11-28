@@ -1424,20 +1424,25 @@ class Editor(Gtk.Window):
             return
         dlg = Gtk.Dialog(title=_("Layout gallery"), transient_for=self, modal=True)
         dlg.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
-        dlg.add_button(_("Add to profiles"), Gtk.ResponseType.OK)
+        add = dlg.add_button(_("Add to profiles…"), Gtk.ResponseType.OK)
+        add.get_style_context().add_class("suggested-action")
+        add.set_can_default(True)
         dlg.set_default_response(Gtk.ResponseType.OK)
         box = dlg.get_content_area()
         box.set_border_width(10)
-        box.add(
-            Gtk.Label(
-                label=_(
-                    "A ready-made layout is zones, hotkeys and application rules. Choosing it creates a profile; from then on you edit the profile as your own."
-                ),
-                xalign=0,
-            )
+        intro = Gtk.Label(
+            label=_(
+                "A ready-made layout is zones, hotkeys and application rules. Choosing it creates a profile; from then on you edit the profile as your own."
+            ),
+            xalign=0,
         )
+        intro.set_line_wrap(True)
+        intro.set_max_width_chars(64)
+        intro.get_style_context().add_class("dim-label")
+        box.add(intro)
         listbox = Gtk.ListBox()
         listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        listbox.get_style_context().add_class("gallery-list")
         for item in layouts:
             row = Gtk.ListBoxRow()
             holder = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)

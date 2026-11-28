@@ -42,6 +42,7 @@ the tabs are not visible.
 
 import argparse
 import importlib.util
+import math
 import os
 import signal
 import socket
@@ -76,6 +77,8 @@ DAEMON_TIMEOUT = 1.0
 # with the theme next to the config (an absent theme keeps exactly the colours the strip had).
 THEME = zone_theme.default_theme()
 ACCENT_H = 2
+# Tabs are rounded on top only: the bottom edge sits on the panel, as in a browser tab bar.
+TAB_RADIUS = 5
 
 # GTK/cairo are pulled in lazily (`load_gtk`) so that without them one can tell
 # "no library" from "no display" and tell the user exactly what is missing.
@@ -85,6 +88,19 @@ Gtk = Gdk = GLib = Pango = PangoCairo = cairo = None
 def fail(message, code=EXIT_FAIL):
     print(message, file=sys.stderr)
     sys.exit(code)
+
+
+def _tab_path(cr, x, y, w, h, radius):
+    """A tab outline: rounded on top, square at the bottom where it meets the panel."""
+    r = max(0.0, min(radius, w / 2.0, h))
+    cr.new_sub_path()
+    cr.move_to(x, y + h)
+    cr.line_to(x, y + r)
+    cr.arc(x + r, y + r, r, math.pi, 1.5 * math.pi)
+    cr.line_to(x + w - r, y)
+    cr.arc(x + w - r, y + r, r, 1.5 * math.pi, 2 * math.pi)
+    cr.line_to(x + w, y + h)
+    cr.close_path()
 
 
 def tabs_module():
@@ -365,14 +381,19 @@ class Strip:
         cr.set_operator(cairo.OPERATOR_OVER)
         for row in self.rows:
             x, y, w, h = self.local_rect(row)
+            radius = TAB_RADIUS / self.scale
+            _tab_path(cr, x, y, w, h, radius)
             cr.set_source_rgb(*(THEME.rgb("bg_hover") if row["active"] else THEME.rgb("bg_card")))
-            cr.rectangle(x, y, w, h)
             cr.fill()
             if row["active"]:
                 # The active tab is not marked by colour alone: an accent stripe on top.
+                cr.save()
+                _tab_path(cr, x, y, w, h, radius)
+                cr.clip()
                 cr.set_source_rgb(*THEME.rgb("accent"))
                 cr.rectangle(x, y, w, min(ACCENT_H / self.scale, h))
                 cr.fill()
+                cr.restore()
             self.draw_label(cr, row)
         return False
 

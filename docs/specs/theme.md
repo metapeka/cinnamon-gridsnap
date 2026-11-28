@@ -111,8 +111,9 @@ zones    = #0a84ff, #30d158, #5e5ce6, #ff9f0a, #ff375f, #bf5af2, #ff453a, #64d2f
 | `font` | Pango family for labels and tab titles | `Sans` |
 
 The default palette is neutral on purpose: grey steps for surfaces, one blue accent, and the eight
-zone hues as **identity dots** (the list, the picker, the HUD) rather than as the fill of the whole
-canvas. Measured against `bg`: `fg` 15.3:1, `fg_muted` 6.6:1, `accent` 3.7:1 (white on the accent
+zone hues as **identity dots** (the zone list, and beside every zone name in the picker and the HUD)
+rather than as the fill of a zone: the picker paints its zones with the same neutral surface as the
+editor canvas. Measured against `bg`: `fg` 15.3:1, `fg_muted` 6.6:1, `accent` 3.7:1 (white on the accent
 4.6:1 — AA for the 11 px labels), `danger` 5.0:1, `ok` 8.4:1. The zone hues are `#0a84ff`,
 `#30d158`, `#5e5ce6`, `#ff9f0a`, `#ff375f`, `#bf5af2`, `#ff453a`, `#64d2ff`; the worst of them
 reads 3.36:1 on `bg`, the 3:1 floor for non-text graphics. An installation without `theme.conf`
@@ -147,10 +148,11 @@ grid:
 * an accent with HSL saturation below 0.15 (the monochrome presets: `43pr` has a white accent,
   `graphite` a grey one) is replaced by hue 210°, because eight identical greys would make the grid
   unreadable;
-* the ring is eight steps of 45°, at fixed lightness 0.56 and saturation 0.58. A theme changes the
-  hues and the chrome, not the contrast of a caption on a zone; the hues are identity dots and the
-  picker's fills, not the canvas — the editor paints zones neutral and marks the selection with the
-  accent.
+* the ring is eight steps of 45°, at saturation 0.58 with lightness alternating 0.56 and 0.66:
+  adjacent hues must stay apart in the 7 px identity dot, where two greens of one lightness read
+  as the same colour. A theme changes the hues and the chrome, not the contrast of a caption on a
+  zone; the hues are identity dots only — the picker, the HUD and the editor canvas all paint zones
+  neutral and mark the selection with the accent.
 
 ## Validation: a broken theme never breaks the desktop
 
@@ -175,12 +177,13 @@ so the tools that draw never exit because of the theme.
 | Surface | Tokens |
 |---|---|
 | picker overlay and HUD backdrop | `bg` (0.90 opaque in the overlay, `HUD_ALPHA` 0.25 in the HUD) |
-| picker zone fill and outline | `zones[i]` (fill 0.20, outline 0.75) |
-| picker selection | `accent` (fill 0.16, 3 px outline), corner radius `radius` |
+| picker zone surface | neutral: `bg` 0.55 scrim then `fg` 0.05 fill, `fg` 0.22 outline — legible over a bright wallpaper under the HUD's quarter backdrop |
+| picker zone identity | a 7 px dot of `zones[i]` beside the name; the hue never fills the zone |
+| picker selection | `accent` (fill 0.10, 2.5 px outline), corner radius `radius`, drawn between the surfaces and the labels |
 | picker caption and hint | `accent` 0.92 for the caption, `fg` 0.72 for the hint |
-| picker labels | `font` through `Theme.font_desc` |
-| tab strip background / tab / active tab | `bg_panel` / `bg_card` / `bg_hover` |
-| tab strip captions / accent stripe | `fg_muted` and `fg` / `accent` |
+| picker labels | `font` through `Theme.font_desc`: name `fg` 0.96, sizes and key `fg_muted` |
+| tab strip background / tab / active tab | `bg_panel` / `bg_card` / `bg_hover`, tabs rounded on top (`TAB_RADIUS` 5 px) |
+| tab strip captions / accent stripe | `fg_muted` and `fg` / `accent`, the stripe clipped to the rounded corners |
 | tab strip titles | `font` at size 8 |
 | editor canvas / "screen" | `bg` / `bg_panel`, outlined with `border` |
 | editor zones | neutral: `fg` 0.04 fill with a `border` 0.9 outline |
@@ -188,6 +191,8 @@ so the tools that draw never exit because of the theme.
 | editor guides, frame, legend | `fg` 0.05 / `border` 0.9 / `fg_muted` |
 | editor labels | `font` at 11 bold (name) and 9 (key); legend at 9 |
 | editor zone list | dot `zones[i]`, name `fg`, key `fg_muted` |
+| gallery dialog selection | `accent` 0.16 tint with a 0.50 hairline, name `fg`, description `fg_muted`; the card's shape stays neutral |
+| gallery dialog primary action | `accent` fill through `button.suggested-action` |
 | editor GTK chrome | the sheet below |
 
 `zone-hotcorners.py` needs no change: it runs `zone-picker.py --hud --conf ...`, so the HUD picks
@@ -217,6 +222,9 @@ the theme up from the same path as the overlay.
 * `row:selected, list row:selected, .view:selected, *:selected` — `accent` with the contrasting text;
   a `.dim-label` inside a selected row takes the same colour (at 0.85 opacity), so the key hint in
   the zone list does not turn grey-on-blue;
+* `.gallery-list row:selected` — the gallery's tall cards are the exception: an `accent` 0.16 tint
+  with a 0.50 hairline and `fg` text, so the layout shape and the description stay readable; its
+  `.dim-label` keeps `fg_muted`. `button.suggested-action` paints the dialog's primary action;
 * `popover, popover.background, menu, .menu` — `bg_panel`, a `border` frame, radius 10;
   `menuitem, modelbutton` — padding 6×10 and radius 6, `:hover` — `bg_hover`;
 * `tooltip` — `bg_card` / `fg` / `border`;

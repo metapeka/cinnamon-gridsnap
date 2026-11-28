@@ -230,45 +230,63 @@ def draw_zones(cr, width, height, zones, selected, caption="", hint=HINT):
     """
     # large zones first, small ones on top — as in the editor
     order = sorted(range(len(zones)), key=lambda i: zones[i].w * zones[i].h, reverse=True)
+    # Surfaces first, labels last: the selection wash would otherwise tint the text it marks.
+    # The zones are neutral (`fg` at 5 %, the editor canvas's rate) — a fill in each zone's
+    # hue turned one grid into four competing colours and took the accent's meaning away.
+    # The hue stays an identity dot beside the name; the accent marks the zone the keys act on.
     for i in order:
         z = zones[i]
         x, y, w, h = z.x * width, z.y * height, z.w * width, z.h * height
-        col = THEME.zone_rgb(i)
         _rounded(cr, x + 2, y + 2, max(1, w - 4), max(1, h - 4), THEME.radius)
-        cr.set_source_rgba(col[0], col[1], col[2], 0.20)
+        # A scrim of the window colour under the faint surface: the picker's backdrop is
+        # almost opaque, the HUD's is a quarter — without the scrim the grid would get lost
+        # on a bright wallpaper.
+        cr.set_source_rgba(*THEME.rgb("bg"), 0.55)
         cr.fill_preserve()
-        cr.set_line_width(1.4)
-        cr.set_source_rgba(col[0], col[1], col[2], 0.75)
+        cr.set_source_rgba(*THEME.rgb("fg"), 0.05)
+        cr.fill_preserve()
+        cr.set_line_width(1.2)
+        cr.set_source_rgba(*THEME.rgb("fg"), 0.22)
         cr.stroke()
-
-        cr.save()
-        cr.rectangle(x + 3, y + 3, max(1, w - 6), max(1, h - 6))
-        cr.clip()
-        pad = 10
-        if w > 40 and h > 24:
-            _label(cr, x + pad, y + pad - 3, z.name, 12, True, (1, 1, 1, 0.94), w - 2 * pad)
-        if w > 40 and h > 48:
-            sub = f"{z.w:.0%} × {z.h:.0%}"
-            if getattr(z, "binding", ""):
-                sub += f" · {z.binding}"
-            _label(cr, x + pad, y + pad + 15, sub, 9, False, (1, 1, 1, 0.62), w - 2 * pad)
-        cr.restore()
 
     if selected is not None and 0 <= selected < len(zones):
         z = zones[selected]
         x, y, w, h = z.x * width, z.y * height, z.w * width, z.h * height
         _rounded(cr, x + 2, y + 2, max(1, w - 4), max(1, h - 4), THEME.radius)
-        cr.set_source_rgba(*THEME.rgb("accent"), 0.16)
+        cr.set_source_rgba(*THEME.rgb("accent"), 0.10)
         cr.fill_preserve()
-        cr.set_line_width(3.0)
+        cr.set_line_width(2.5)
         cr.set_source_rgba(*THEME.rgb("accent"), 1.0)
         cr.stroke()
+
+    for i in order:
+        z = zones[i]
+        x, y, w, h = z.x * width, z.y * height, z.w * width, z.h * height
+        col = THEME.zone_rgb(i)
+        cr.save()
+        cr.rectangle(x + 3, y + 3, max(1, w - 6), max(1, h - 6))
+        cr.clip()
+        pad = 10
+        dot = 3.5
+        text_x = x + pad + 2 * dot + 4
+        inner = w - pad - (text_x - x)
+        if w > 40 and h > 24:
+            cr.arc(x + pad + dot, y + pad + 6.5, dot, 0, 2 * math.pi)
+            cr.set_source_rgba(col[0], col[1], col[2], 0.95)
+            cr.fill()
+            _label(cr, text_x, y + pad - 3, z.name, 12, True, (*THEME.rgb("fg"), 0.96), inner)
+        if w > 40 and h > 48:
+            sub = f"{z.w:.0%} × {z.h:.0%}"
+            if getattr(z, "binding", ""):
+                sub += f" · {z.binding}"
+            _label(cr, text_x, y + pad + 15, sub, 9, False, (*THEME.rgb("fg_muted"), 0.95), inner)
+        cr.restore()
 
     # why the grid is such: the workspace and its profile from `[workspaces]`
     if caption:
         _label(cr, 16, height - (48 if hint else 30), caption, 11, True, (*THEME.rgb("accent"), 0.92))
     if hint:
-        _label(cr, 16, height - 30, hint, 11, False, (1, 1, 1, 0.72))
+        _label(cr, 16, height - 30, hint, 11, False, (*THEME.rgb("fg"), 0.72))
 
 
 def draw_overlay(cr, width, height, zones, selected, caption=""):

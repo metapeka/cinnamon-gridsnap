@@ -47,7 +47,9 @@ hotkey registration.
   `zone_config.profiles_overview`; an unreadable profile file stays listed as "— the file cannot
   be read" instead of disappearing.
 - The **Layout gallery** dialog shows each card with the shape of its layout beside the title and
-  description — the card's default set, or its first non-empty monitor set.
+  description — the card's default set, or its first non-empty monitor set. A chosen card is a tint
+  rather than a filled slab: the shape and the description stay on the dialog's surface, and the
+  dialog's primary action (**Add to profiles…**) carries the accent.
 - Dragging a zone and resizing it by an edge or corner; the cursor names the side.
 - Snapping within `SNAP_PX = 9` px to the screen edges, to neighbouring zones and to the lines
   `0, 1/4, 1/3, 1/2, 2/3, 3/4, 1`.

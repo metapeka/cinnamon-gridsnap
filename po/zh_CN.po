@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gridsnap 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-28 02:29+0300\n"
+"POT-Creation-Date: 2026-11-28 03:07+0300\n"
 "PO-Revision-Date: 2026-11-22 00:00+0000\n"
 "Last-Translator: машинный перевод, носителем не вычитано\n"
 "Language-Team: \n"
@@ -1846,8 +1846,8 @@ msgid "Cancel"
 msgstr "取消"
 
 #: zone-editor.py
-msgid "Add to profiles"
-msgstr "添加到方案"
+msgid "Add to profiles…"
+msgstr "添加到方案…"
 
 #: zone-editor.py
 msgid ""

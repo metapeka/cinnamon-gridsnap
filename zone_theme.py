@@ -114,11 +114,12 @@ DEFAULT_FONT = "Sans"
 MAX_ZONES = 16
 MAX_RADIUS = 64
 
-# Autolightness of a derived zone: mid tones that read on every dark theme, and that keep the
-# caption (white, 0.94 alpha) legible on the fill (the same hue at 0.20 alpha). With the neutral
-# chrome the ring is a little darker and more saturated than the old pastel one: the hues are
-# identity dots and picker fills, not the colour of the whole canvas.
+# Lightness of a derived zone: mid tones that read on every dark theme, and that keep the caption
+# legible on the accent. Adjacent hues alternate between the two steps: at the 7 px identity dot
+# two greens of one lightness read as the same colour, and the dot stops naming anything. The
+# neutral chrome keeps the ring a little darker and more saturated than the old pastel one.
 DERIVED_LIGHTNESS = 0.56
+DERIVED_LIGHTNESS_ALT = 0.66
 DERIVED_SATURATION = 0.58
 # The hue a monochrome accent is replaced with: eight identical greys would make the grid
 # unreadable, and a monochrome accent is exactly what the 43PR presets carry.
@@ -243,15 +244,22 @@ def derive_zones(accent, count=len(DEFAULT_ZONES)):
     """Eight zone colours from the accent when the theme names none.
 
     The hue of a saturated accent starts the ring; a monochrome accent would give eight
-    identical greys, so the ring starts at blue instead. Lightness and saturation are fixed:
-    a theme changes the hues and the chrome, not the readability of the grid.
+    identical greys, so the ring starts at blue instead. Saturation is fixed and lightness
+    alternates between two mid steps: that keeps adjacent hues apart in the 7 px identity
+    dot, where hue alone reads as two greens.
     """
     red, green, blue = rgb(accent)
     hue, _lightness, saturation = colorsys.rgb_to_hls(red, green, blue)
     if saturation < 0.15:
         hue = MONOCHROME_HUE
     return tuple(
-        hex_of(colorsys.hls_to_rgb((hue + step / count) % 1.0, DERIVED_LIGHTNESS, DERIVED_SATURATION))
+        hex_of(
+            colorsys.hls_to_rgb(
+                (hue + step / count) % 1.0,
+                DERIVED_LIGHTNESS if step % 2 == 0 else DERIVED_LIGHTNESS_ALT,
+                DERIVED_SATURATION,
+            )
+        )
         for step in range(count)
     )
 
@@ -381,6 +389,31 @@ class Theme:
                 "row:selected .dim-label, list row:selected .dim-label,"
                 " .view:selected .dim-label, *:selected .dim-label",
                 f"color: {on_accent}; opacity: 0.85;",
+            ),
+            # The gallery rows carry a picture and two lines of text: a full accent slab there
+            # swallows the thumbnail and the description, so the selection is a tint plus a
+            # hairline — the marker the editor's layout rows already use.
+            (
+                ".gallery-list row",
+                "padding: 4px; border-radius: 8px;",
+            ),
+            (
+                ".gallery-list row:hover",
+                f"background-color: {colors['bg_hover']};",
+            ),
+            (
+                ".gallery-list row:selected",
+                "background-color: %s; color: %s;"
+                " border: 1px solid %s;"
+                % (
+                    css_rgba(colors["accent"], 0.16),
+                    colors["fg"],
+                    css_rgba(colors["accent"], 0.50),
+                ),
+            ),
+            (
+                ".gallery-list row:selected .dim-label",
+                f"color: {colors['fg_muted']}; opacity: 1;",
             ),
             (
                 "button.layout-tile, button.layout-row, button.menu-row",
